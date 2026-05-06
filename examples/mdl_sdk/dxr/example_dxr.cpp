@@ -470,6 +470,8 @@ bool Example_dxr::load()
     scene_data.enable_animiation = 0;
     scene_data.aov_index_to_render = options->aov_to_render.empty() ? -1 : 0;
     scene_data.bsdf_data_flags = options->allowed_scatter_mode;
+    scene_data.spectral_min_wavelength = options->spectral_min_wavelength;
+    scene_data.spectral_max_wavelength = options->spectral_max_wavelength;
 
     /// UV transformations
     scene_data.uv_scale = options->uv_scale;
@@ -555,7 +557,7 @@ bool Example_dxr::load()
             this, gui, &m_scene_constants->data(), options));
 
         gui->get_panel("right")->add("Camera", new Gui_section_camera(
-            this, gui, &m_scene_constants->data(), m_camera_controls));
+            this, gui, &m_scene_constants->data(), m_camera_controls, options));
 
         gui->get_panel("right")->add("Light", new Gui_section_light(
             this, gui, &m_scene_constants->data(), options));
@@ -1125,6 +1127,14 @@ bool Example_dxr::update_rendering_pipeline()
         std::map<std::string, std::string> defines;
         if (options->enable_auxiliary)
             defines["ENABLE_AUXILIARY"] = std::to_string(1);
+        if (options->enable_spectral)
+        {
+            defines["MDL_SPECTRAL_RENDERING"] = std::to_string(1);
+            // Propagate the C++ value of MDL_DF_SPECTRAL_SAMPLES (which can be configured
+            // via the CMake option MDL_DF_SPECTRAL_SAMPLES_OVERRIDE) to the HLSL compiler
+            // so that the host-side payload size and the device-side payload struct match.
+            defines["MDL_DF_SPECTRAL_SAMPLES"] = std::to_string(MDL_DF_SPECTRAL_SAMPLES);
+        }
 
         Shader_compiler compiler(this);
 
@@ -1153,7 +1163,7 @@ bool Example_dxr::update_rendering_pipeline()
         std::vector<Shader_library> miss_libraries = compiler.compile_shader_library(
             get_options(),
             mi::examples::mdl::find_resource_file(MDL_EXAMPLE_RELATIVE_DIRECTORY, "content/miss_programs.hlsl"),
-            nullptr, { "RadianceMissProgram", "ShadowMissProgram" });
+            &defines, { "RadianceMissProgram", "ShadowMissProgram" });
         // add miss programs to the pipeline
         for (const auto& it : miss_libraries)
             if (!miss_collection.add_library(it))
@@ -1280,7 +1290,15 @@ bool Example_dxr::update_rendering_pipeline()
         })) return after_cleanup();
 
         // ray tracing settings
-        pipeline->set_max_payload_size(13 * sizeof(float) + 2 * sizeof(uint32_t));
+        size_t payload_size = 10 * sizeof(float) + 2 * sizeof(uint32_t);
+        if (options->enable_spectral) {
+            // spectral weight and wavelengths, and the spectral PDF ratios
+            payload_size += (2 * MDL_DF_SPECTRAL_SAMPLES + (MDL_DF_SPECTRAL_SAMPLES - 1)) * sizeof(float);
+        } else {
+            // float3 weight
+            payload_size += 3 * sizeof(float);
+        }
+        pipeline->set_max_payload_size(payload_size);
         pipeline->set_max_attribute_size(2 * sizeof(float));
 
         // we don't use recursion, only direct ray + next event estimation in a loop

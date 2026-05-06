@@ -191,7 +191,7 @@ public:
 
     /// Sets an argument identified by name.
     ///
-    /// This index-based overload #set_argument(const char*,const IExpression*) is faster than this
+    /// The index-based overload #set_argument(mi::Size,const IExpression*) is faster than this
     /// name-based overload and should be preferred if the index is known.
     ///
     /// \param name         The name of the parameter.
@@ -260,12 +260,20 @@ public:
     /// \return \c true, if this function call is a default, \c false otherwise.
     virtual bool is_default() const = 0;
 
-    /// Returns \c true if this function call and all its arguments point to valid
-    /// material and function definitions, \c false otherwise.
+    /// Returns \c true if this function call is valid, \c false otherwise.
     ///
-    /// Material and function definitions can become invalid due to a module reload.
+    /// A function call is valid if the call itself and all its arguments point to valid definitions.
+    /// It can become invalid if one of the involved modules or their (direct or indirect) imports
+    /// has been reloaded.
     ///
-    /// \see #mi::neuraylib::IModule::reload(), #mi::neuraylib::IFunction_call::repair()
+    /// \note This method does not return a static property, but performs a potentially expensive
+    ///       computation.
+    ///
+    /// \see #mi::neuraylib::IModule::is_valid(),
+    ///      #mi::neuraylib::IModule::reload(),
+    ///      #mi::neuraylib::IModule::reload_from_string(),
+    ///      #mi::neuraylib::IFunction_definition::is_valid(),
+    ///      #mi::neuraylib::IFunction_call::repair()
     ///
     /// \param context  Execution context that can be queried for error messages
     ///                 after the operation has finished. Can be \c nullptr.

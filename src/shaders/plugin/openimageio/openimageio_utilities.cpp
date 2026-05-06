@@ -201,9 +201,9 @@ mi::Float32 get_gamma_from_metadata( const OIIO::ImageSpec& spec)
     if( cs == "linear" || cs == "lin_srgb" || cs == "lin_rec709")
         return 1.0f;
     if( cs == "srgb")
-        return 2.2;
+        return 2.2f;
     if( cs == "rec709")
-        return 2.4;
+        return 2.4f;
     if( cs.substr( 0, 5) == "gamma") {
         char* end = nullptr;
         float f = std::strtof( cs.data()+5, &end);
@@ -428,7 +428,7 @@ const mi::neuraylib::ITile* associate_alpha(
 
     // Convert back to pixel type "Rgbea" if necessary.
     if( pixel_type_enum == IMAGE::PT_RGBEA)
-        tile2 = image_api->convert( tile, pixel_type);
+        tile2 = image_api->convert( tile2.get(), pixel_type);
 
     return tile2.extract();
 }
@@ -485,7 +485,7 @@ mi::neuraylib::ITile* unassociate_alpha(
 
     // Convert back to pixel type "Rgbea" if necessary.
     if( pixel_type_enum == IMAGE::PT_RGBEA)
-        tile2 = image_api->convert( tile, pixel_type);
+        tile2 = image_api->convert( tile2.get(), pixel_type);
 
     return tile2.extract();
 }
@@ -546,11 +546,17 @@ size_t Input_proxy::pread( void* buf, size_t size, int64_t offset)
 {
     mi::base::Lock::Block block( &m_lock);
     mi::Sint64 pos = m_reader->tell_absolute();
-    bool success = pos != offset ? m_reader->seek_absolute( offset) : true;
-    assert( success);
-    (void) success;
+    if( pos < 0)
+        return 0;
+
+    auto read_pos = static_cast<mi::Sint64>( offset);
+    if( pos != read_pos && !m_reader->seek_absolute( read_pos))
+        return 0;
+
     size_t result = read( buf, size);
-    m_reader->seek_absolute( pos);
+    if( !m_reader->seek_absolute( pos))
+        return 0;
+
     return result;
 }
 
@@ -566,14 +572,23 @@ OIIO::Filesystem::IOProxy* create_input_proxy(
     if( use_buffer) {
         assert( buffer);
         constexpr size_t chunk = 65536;
-        size_t size = 0;
-        do {
+        mi::Size size = 0;
+        while( true) {
             buffer->resize( size + chunk);
-            size_t result = reader->read( &(*buffer)[size], chunk);
-            size += result;
-        } while( !reader->eof());
+            mi::Sint64 result = reader->read( buffer->data() + size, chunk);
+            if( result < 0) {
+                buffer->clear();
+                return nullptr;
+            }
+
+            size += static_cast<mi::Size>( result);
+            if( result == 0 || reader->eof())
+                break;
+        }
+
         buffer->resize( size);
-        return new OIIO::Filesystem::IOMemReader( &(*buffer)[0], buffer->size());
+        return new OIIO::Filesystem::IOMemReader(
+            buffer->empty() ? nullptr : buffer->data(), buffer->size());
     }
 
     return new Input_proxy( reader);
@@ -641,11 +656,17 @@ size_t Output_proxy::pwrite( const void* buf, size_t size, int64_t offset)
 {
     mi::base::Lock::Block block( &m_lock);
     mi::Sint64 pos = m_writer->tell_absolute();
-    bool success = pos != offset ? m_writer->seek_absolute( offset) : true;
-    assert( success);
-    (void) success;
+    if( pos < 0)
+        return 0;
+
+    auto write_pos = static_cast<mi::Sint64>( offset);
+    if( pos != write_pos && !m_writer->seek_absolute( write_pos))
+        return 0;
+
     size_t result = write( buf, size);
-    m_writer->seek_absolute( pos);
+    if( !m_writer->seek_absolute( pos))
+        return 0;
+
     return result;
 }
 
@@ -817,6 +838,8 @@ bool compute_properties(
     mi::Sint32& channel_start,
     mi::Sint32& channel_end)
 {
+    assert( input);
+
     // No selector, use first subimage.
     if( !selector) {
         subimage      = 0;
@@ -831,7 +854,7 @@ bool compute_properties(
         return (pixel_type != IMAGE::PT_UNDEF) && (gamma != 0.0f);
     }
 
-    std::string selector_prefix = std::string( selector) + ".";
+    std::string selector_prefix = std::string( selector) + '.';
 
     // Loop over subimages.
     subimage = 0;
@@ -842,7 +865,7 @@ bool compute_properties(
         // Check whether the part name (if available) is a prefix of the selector.
         std::string part_prefix = spec.get_string_attribute( "oiio:subimagename");
         if( !part_prefix.empty())
-            part_prefix += ".";
+            part_prefix += '.';
         if( selector_prefix.substr( 0, part_prefix.size()) == part_prefix) {
 
             // Check whether selector matches exactly one particular channel name
@@ -918,9 +941,10 @@ bool option_to_flag(
     if( !v)
         return true;
 
-    bool tmp = false; // avoid warning, never used
+    bool tmp = false;
     std::stringstream s;
     s << v->get_c_str();
+    s >> std::boolalpha >> tmp;
     if( s.fail() || !s.eof())
         return false;
 

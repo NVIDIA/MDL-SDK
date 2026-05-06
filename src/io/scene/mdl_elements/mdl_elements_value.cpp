@@ -134,7 +134,11 @@ Value_vector::Value_vector( const Type* type, const IValue_factory* value_factor
     mi::base::Handle<const IType_atomic> element_type(
         type->get_element_type<IType_atomic>());
     ASSERT( M_SCENE, element_type);
-    for( mi::Size i = 0; i < get_size(); ++i) {
+
+    mi::Size n = get_size();
+    ASSERT( M_SCENE, n <= MAX_SIZE);
+
+    for( mi::Size i = 0; i < n; ++i) {
         m_values[i] = value_factory->create<IValue_atomic>( element_type.get());
         ASSERT( M_SCENE, m_values[i]);
     }
@@ -188,7 +192,11 @@ Value_matrix::Value_matrix( const Type* type, const IValue_factory* value_factor
     mi::base::Handle<const IType_vector> element_type(
         type->get_element_type<IType_vector>());
     ASSERT( M_SCENE, element_type);
-    for( mi::Size i = 0; i < get_size(); ++i) {
+
+    mi::Size n = get_size();
+    ASSERT( M_SCENE, n <= MAX_SIZE);
+
+    for( mi::Size i = 0; i < n; ++i) {
         m_values[i] = value_factory->create<IValue_vector>( element_type.get());
         ASSERT( M_SCENE, m_values[i]);
     }
@@ -449,13 +457,14 @@ std::string Value_texture::get_file_path( DB::Transaction* transaction) const
     if( !m_value && !m_unresolved_file_path.empty())
         return m_unresolved_file_path.c_str();
 
-    if( !m_value || transaction->get_class_id( m_value) != TEXTURE::ID_TEXTURE)
-        return {};
     DB::Access<TEXTURE::Texture> texture( m_value, transaction);
+    if( !texture)
+        return {};
+
     DB::Tag image_tag = texture->get_image();
-    if( image_tag && transaction->get_class_id(image_tag) == DBIMAGE::ID_IMAGE) {
+    if( image_tag) {
         DB::Access<DBIMAGE::Image> image( image_tag, transaction);
-        return image->get_mdl_file_path();
+        return image ? image->get_mdl_file_path() : std::string();
     }
     return {};
 }
@@ -471,9 +480,10 @@ std::string Value_light_profile::get_file_path( DB::Transaction* transaction) co
     if( !m_value && !m_unresolved_file_path.empty())
         return m_unresolved_file_path.c_str();
 
-    if( !m_value || transaction->get_class_id( m_value) != LIGHTPROFILE::ID_LIGHTPROFILE)
-        return {};
     DB::Access<LIGHTPROFILE::Lightprofile> light_profile( m_value, transaction);
+    if( !light_profile)
+        return {};
+
     return light_profile->get_mdl_file_path();
 }
 
@@ -488,9 +498,10 @@ std::string Value_bsdf_measurement::get_file_path( DB::Transaction* transaction)
     if( !m_value && !m_unresolved_file_path.empty())
         return m_unresolved_file_path.c_str();
 
-    if( !m_value || transaction->get_class_id( m_value) != BSDFM::ID_BSDF_MEASUREMENT)
-        return {};
     DB::Access<BSDFM::Bsdf_measurement> bsdf_measurement( m_value, transaction);
+    if( !bsdf_measurement)
+        return {};
+
     return bsdf_measurement->get_mdl_file_path();
 }
 

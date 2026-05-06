@@ -97,6 +97,21 @@ namespace multiscatter
         return (r * (res - 1.0f) + 0.5f) / res;
     }
 
+    template<typename Data>
+    BSDF_INLINE float get_eta(const bool has_refraction, Data *data)
+    {
+        if (!has_refraction)
+            return -1.0f;
+        else
+        {
+#ifdef MDL_DF_SPECTRAL_ENABLE
+            return average(data->ior1) / average(data->ior2); //!! TODO SPECTRAL
+#else
+            return math::average(data->ior1) / math::average(data->ior2);
+#endif
+        }
+    }
+
     BSDF_INLINE float compute_lookup_coordinate_z(
         BSDF_type type, 
         float eta) // -1 or between 1.0/max_ior and ior_min or ior_min and max_ior
@@ -133,12 +148,12 @@ namespace multiscatter
         const unsigned texture_id,
         BSDF_sample_data *data,
         const Geometry &g,
-        const float3 &tint,
-        const float3 &multiscatter_tint,
+        const color_sample &tint,
+        const color_sample &multiscatter_tint,
         const scatter_mode mode)
     {
         // assuming the glossy BSDF was sampled before
-        float w = (data->event_type != BSDF_EVENT_ABSORB) ? math::average(data->bsdf_over_pdf) : 0.0f;
+        float w = (data->event_type != BSDF_EVENT_ABSORB) ? average(data->bsdf_over_pdf) : 0.0f;
 
         // compute rho1, needed in all cases
         const float2 clamp = make<float2>(0.0f, 1.0f);
@@ -171,10 +186,13 @@ namespace multiscatter
                 data->pdf *= rho1;
 
                 // currently, no transmission
-                if(data->event_type != BSDF_EVENT_GLOSSY_TRANSMISSION)
-                    data->pdf += (1.0f - rho1) * (float)(1.0 / M_PI) + math::dot(data->k2, g.n.shading_normal);
+                if (data->event_type != BSDF_EVENT_GLOSSY_TRANSMISSION)
+                    data->pdf += make_pdf_sample(
+                        (1.0f - rho1) * (float)(1.0 / M_PI) +
+                        math::dot(data->k2, g.n.shading_normal));
             }
 
+            // TODO SPECTRAL: Validate!
             data->bsdf_over_pdf *= tint / accept_prob;
             return -1.0f;
 
@@ -208,7 +226,7 @@ namespace multiscatter
 
             w = (1.0f - rho2) / nrm * (float)M_PI;
 
-            data->bsdf_over_pdf = multiscatter_tint * make<float3>(w);
+            data->bsdf_over_pdf = multiscatter_tint * make<color_sample>(w);
             return rho1; // for updating the pdf after recomputing the single scatter probability
         }
     }
@@ -217,12 +235,12 @@ namespace multiscatter
     // the new k2 with respect to the glossy BSDF
     BSDF_INLINE void sample_update_single_scatter_probability(
         BSDF_sample_data *data,
-        const float pdf,  // updated pdf after sample has returned a non-negative rho1 
+        const pdf_sample pdf,  // updated pdf after sample has returned a non-negative rho1
         const float rho1, // the value returned by sample
         const float nk2)
     {
         // incorporate multi-scatter part to pdf
-        data->pdf = rho1 * pdf + (1.0f - rho1) * (float)(1.0 / M_PI) * nk2;
+        data->pdf = rho1 * pdf + make_pdf_sample((1.0f - rho1) * (float)(1.0 / M_PI) * nk2);
     }
 
     BSDF_INLINE float2 evaluate(
@@ -256,8 +274,8 @@ namespace multiscatter
         return make<float2>(rho1, (1.0f - rho1) * (1.0f - rho2) / nrm * nk2);
     }
 
-    BSDF_INLINE float pdf(
-        const float pdf,
+    BSDF_INLINE pdf_sample pdf(
+        const pdf_sample pdf,
         const State *state,
         const BSDF_type type,
         const float roughness_u,
@@ -276,7 +294,7 @@ namespace multiscatter
         const float rho1 =
             state->tex_lookup_float3_3d(texture_id, coord, 0, 0, 0, clamp, clamp, clamp, 0.0f).x;
 
-        return rho1 * pdf + (1.0f - rho1) * (float)(1.0 / M_PI) * nk2;
+        return rho1 * pdf + make_pdf_sample((1.0f - rho1) * (float)(1.0 / M_PI) * nk2);
     }
 
 }

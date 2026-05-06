@@ -49,7 +49,6 @@ add_subdirectory(${MDL_SRC_FOLDER}/base/hal/link)
 add_subdirectory(${MDL_SRC_FOLDER}/base/hal/thread)
 add_subdirectory(${MDL_SRC_FOLDER}/base/hal/time)
 add_subdirectory(${MDL_SRC_FOLDER}/base/lib/config)
-add_subdirectory(${MDL_SRC_FOLDER}/base/lib/cont)
 add_subdirectory(${MDL_SRC_FOLDER}/base/lib/log)
 add_subdirectory(${MDL_SRC_FOLDER}/base/lib/mem)
 add_subdirectory(${MDL_SRC_FOLDER}/base/lib/path)
@@ -75,7 +74,6 @@ set(LINKER_DEPENDENCIES_BASE
     base-hal-thread
     base-hal-time
     base-lib-config
-    base-lib-cont
     base-lib-libzip
     base-lib-log
     base-lib-mem

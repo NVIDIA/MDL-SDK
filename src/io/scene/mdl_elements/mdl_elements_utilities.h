@@ -284,7 +284,7 @@ mi::neuraylib::Material_opacity core_opacity_to_ext_opacity(
     mi::mdl::IMaterial_instance::Opacity opacity);
 
 /// Converts mi::neuraylib::Material_slot to core material instance slots.
-mi::mdl::IMaterial_instance::Slot ext_slot_to_core_lost(
+mi::mdl::IMaterial_instance::Slot ext_slot_to_core_slot(
     mi::neuraylib::Material_slot slot);
 
 // ********** Conversion from mi::mdl to MI::MDL ***************************************************

@@ -106,11 +106,16 @@ void DAG_dumper::node(
     node_name(node);
     m_printer->print(" [label=\"");
 
+    char const *label_prefix = get_node_label_prefix(node);
+    if (label_prefix != NULL) {
+        m_printer->print(label_prefix);
+    }
+
     if (ISymbol const *sym = m_dag_unit->get_node_name(node)) {
         m_printer->print(sym);
         m_printer->print(" = ");
     }
-    
+
     switch (node->get_kind()) {
     case DAG_node::EK_CONSTANT:
         {

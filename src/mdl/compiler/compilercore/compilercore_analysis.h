@@ -120,7 +120,9 @@ protected:
         /// \param expr    the erroneous expression
         /// \param index   additional parameter for ER_INDEX_OUT_OF_BOUND
         /// \param length  additional parameter for ER_INDEX_OUT_OF_BOUND
-        void exception(
+        ///
+        /// \return true if the exception results in an error, false otherwise
+        bool exception(
             Reason            r,
             IExpression const *expr,
             int               index = 0,
@@ -233,11 +235,12 @@ public:
     /// \param code    the error code
     /// \param loc     location of the error
     /// \param params  warning message parameter inserts
-    void warning(
+    ///
+    /// \return true if the warning was promoted to an error, false otherwise
+    bool warning(
         int                code,
         Err_location const &loc,
         Error_params const &params);
-
 
     /// Add a note to the last error/warning.
     ///

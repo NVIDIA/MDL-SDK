@@ -68,6 +68,7 @@ Unified_database_access::Unified_database_access()
 
 Unified_database_access::~Unified_database_access()
 {
+    m_database->prepare_close();
     m_database->close();
     m_database = nullptr;
 }

@@ -1283,6 +1283,122 @@ public:
         void const      *bm_data,
         void            *thread_data,
         const float     theta_phi[2]) const = 0;
+
+    /// Handle mdl_rgb_to_spectral_ior(state,float3).
+    ///
+    /// \param result           the result of mdl_rgb_to_spectral_ior
+    /// \param thread_data      extra per-thread data that was passed to the lambda function
+    /// \param state            the state of the shader
+    /// \param rgb              the rgb parameter
+    virtual void mdl_rgb_to_spectral_ior(
+        tct_spectral_sample    *result,
+        void                   *thread_data,
+        Shading_state_material *state,
+        float const            rgb[3]) const = 0;
+
+    /// Handle mdl_rgb_to_spectral_ior(state,float3) with derivative state.
+    ///
+    /// \param result           the result of mdl_rgb_to_spectral_ior
+    /// \param thread_data      extra per-thread data that was passed to the lambda function
+    /// \param state            the state of the shader
+    /// \param rgb              the rgb parameter
+    virtual void mdl_rgb_to_spectral_ior_deriv(
+        tct_spectral_sample                *result,
+        void                               *thread_data,
+        Shading_state_material_with_derivs *state,
+        float const                        rgb[3]) const = 0;
+
+    /// Handle mdl_rgb_to_spectral_reflectance(state,float3).
+    ///
+    /// \param result           the result of mdl_rgb_to_spectral_reflectance
+    /// \param thread_data      extra per-thread data that was passed to the lambda function
+    /// \param state            the state of the shader
+    /// \param rgb              the rgb parameter
+    virtual void mdl_rgb_to_spectral_reflectance(
+        tct_spectral_sample    *result,
+        void                   *thread_data,
+        Shading_state_material *state,
+        float const            rgb[3]) const = 0;
+
+    /// Handle mdl_rgb_to_spectral_reflectance(state,float3) with derivative state.
+    ///
+    /// \param result           the result of mdl_rgb_to_spectral_reflectance
+    /// \param thread_data      extra per-thread data that was passed to the lambda function
+    /// \param state            the state of the shader
+    /// \param rgb              the rgb parameter
+    virtual void mdl_rgb_to_spectral_reflectance_deriv(
+        tct_spectral_sample                *result,
+        void                               *thread_data,
+        Shading_state_material_with_derivs *state,
+        float const                        rgb[3]) const = 0;
+
+    /// Handle mdl_rgb_to_spectral_luminance(state,float3).
+    ///
+    /// \param result           the result of mdl_rgb_to_spectral_luminance
+    /// \param thread_data      extra per-thread data that was passed to the lambda function
+    /// \param state            the state of the shader
+    /// \param rgb              the rgb parameter
+    virtual void mdl_rgb_to_spectral_luminance(
+        tct_spectral_sample    *result,
+        void                   *thread_data,
+        Shading_state_material *state,
+        float const            rgb[3]) const = 0;
+
+    /// Handle mdl_rgb_to_spectral_luminance(state,float3) with derivative state.
+    ///
+    /// \param result           the result of mdl_rgb_to_spectral_luminance
+    /// \param thread_data      extra per-thread data that was passed to the lambda function
+    /// \param state            the state of the shader
+    /// \param rgb              the rgb parameter
+    virtual void mdl_rgb_to_spectral_luminance_deriv(
+        tct_spectral_sample                *result,
+        void                               *thread_data,
+        Shading_state_material_with_derivs *state,
+        float const                        rgb[3]) const = 0;
+
+    /// Handle mdl_rgb_to_spectral_volume_coefficient(state,float3).
+    ///
+    /// \param result           the result of mdl_rgb_to_spectral_volume_coefficient
+    /// \param thread_data      extra per-thread data that was passed to the lambda function
+    /// \param state            the state of the shader
+    /// \param rgb              the rgb parameter
+    virtual void mdl_rgb_to_spectral_volume_coefficient(
+        tct_spectral_sample    *result,
+        void                   *thread_data,
+        Shading_state_material *state,
+        float const            rgb[3]) const = 0;
+
+    /// Handle mdl_rgb_to_spectral_volume_coefficient(state,float3) with derivative state.
+    ///
+    /// \param result           the result of mdl_rgb_to_spectral_volume_coefficient
+    /// \param thread_data      extra per-thread data that was passed to the lambda function
+    /// \param state            the state of the shader
+    /// \param rgb              the rgb parameter
+    virtual void mdl_rgb_to_spectral_volume_coefficient_deriv(
+        tct_spectral_sample                *result,
+        void                               *thread_data,
+        Shading_state_material_with_derivs *state,
+        float const                        rgb[3]) const = 0;
+
+    /// Handle mdl_get_wavelengths(state).
+    ///
+    /// \param result           the result of mdl_get_wavelengths
+    /// \param thread_data      extra per-thread data that was passed to the lambda function
+    /// \param state            the state of the shader
+    virtual void mdl_get_wavelengths(
+        tct_spectral_sample    *result,
+        void                   *thread_data,
+        Shading_state_material *state) const = 0;
+
+    /// Handle mdl_get_wavelengths(state) with derivative state.
+    ///
+    /// \param result           the result of mdl_get_wavelengths
+    /// \param thread_data      extra per-thread data that was passed to the lambda function
+    /// \param state            the state of the shader
+    virtual void mdl_get_wavelengths_deriv(
+        tct_spectral_sample                *result,
+        void                               *thread_data,
+        Shading_state_material_with_derivs *state) const = 0;
 };
 
 /// Executable code of a compiled lambda function.

@@ -36,12 +36,16 @@ Message::Message(mi::mdl::Memory_arena *arena,
                  const char *filename,
                  int line,
                  int column,
-                 const char *message)
+                 const char *message,
+                 const char *source_line,
+                 const char *source_underline)
     : m_severity(severity)
     , m_filename(mi::mdl::Arena_strdup(*arena, filename))
     , m_line(line)
     , m_column(column)
     , m_message(mi::mdl::Arena_strdup(*arena, message))
+    , m_source_line(source_line ? mi::mdl::Arena_strdup(*arena, source_line) : nullptr)
+    , m_source_underline(source_underline ? mi::mdl::Arena_strdup(*arena, source_underline) : nullptr)
 {
 }
 

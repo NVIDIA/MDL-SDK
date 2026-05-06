@@ -111,6 +111,10 @@ static void fill_default_cg_options(
         "true",
         "Link libdevice into PTX module");
     options.add_option(
+        MDL_JIT_OPTION_ENABLE_LIBBSDF_SPECTRAL,
+        "false",
+        "Enable spectral rendering in libbsdf");
+    options.add_option(
         MDL_JIT_OPTION_LINK_LIBBSDF_DF_HANDLE_SLOT_MODE,
         "none",
         "Defines the libbsdf version to link into the output");
@@ -138,6 +142,10 @@ static void fill_default_cg_options(
         MDL_JIT_OPTION_LAMBDA_RETURN_MODE,
         "default",
         "The return mode for generated lambda functions (default, sret or value)");
+    options.add_option(
+        MDL_JIT_OPTION_ENABLE_INIT_LOOP_GENERATION,
+        "true",
+        "Enable generation of a loop in the init function to reduce code size and compile times");
     options.add_option(
         MDL_JIT_OPTION_MAP_STRINGS_TO_IDS,
         "false",
@@ -351,6 +359,12 @@ static void fill_default_cg_options(
         "",
         "GLSL: If non-empty, the set index of the SSBO buffer for uniform initializers");
 
+    options.add_option(
+        MDL_JIT_OPTION_GLSL_INCLUDE_FOR_API_TYPES,
+        "",
+        "GLSL: If non-empty, emit an #include directive with this path instead of inlining the "
+        "API type definitions");
+
     options.add_binary_option(
         MDL_JIT_BINOPTION_LLVM_STATE_MODULE,
         "Use this user-specified LLVM implementation for the MDL state module");
@@ -414,7 +428,7 @@ Generated_code_source *Code_generator_jit::compile_module_to_llvm(
 
     llvm::LLVMContext llvm_context;
 
-    Generated_code_source::Source_res_manag res_manag(get_allocator(), NULL);
+    Source_res_manag res_manag(get_allocator(), NULL);
 
     LLVM_code_generator llvm_generator(
         m_jitted_code.get(),
@@ -473,7 +487,7 @@ Generated_code_source *Code_generator_jit::compile_module_to_ptx(
 
     llvm::LLVMContext llvm_context;
 
-    Generated_code_source::Source_res_manag res_manag(get_allocator(), NULL);
+    Source_res_manag res_manag(get_allocator(), NULL);
 
     unsigned sm_version = 20;
     LLVM_code_generator llvm_generator(
@@ -537,7 +551,7 @@ Generated_code_source *Code_generator_jit::compile_module_to_sl(
     SLOptPassGate opt_pass_gate;
     llvm_context.setOptPassGate(opt_pass_gate);
 
-    Generated_code_source::Source_res_manag res_manag(get_allocator(), NULL);
+    Source_res_manag res_manag(get_allocator(), NULL);
 
     LLVM_code_generator llvm_generator(
         m_jitted_code.get(),
@@ -1074,7 +1088,7 @@ IGenerated_code_executable *Code_generator_jit::compile_into_switch_function_for
         }
     }
 
-    Generated_code_source::Source_res_manag res_manag(alloc, &lambda->get_resource_attribute_map());
+    Source_res_manag res_manag(alloc, &lambda->get_resource_attribute_map());
 
     llvm::LLVMContext llvm_context;
     mi::base::Handle<MDL> compiler(lambda->get_compiler());
@@ -1300,7 +1314,7 @@ IGenerated_code_executable *Code_generator_jit::compile_into_llvm_ir(
     Generated_code_source *code = builder.create<Generated_code_source>(
         alloc, IGenerated_code_executable::CK_LLVM_IR);
 
-    Generated_code_source::Source_res_manag res_manag(alloc, &lambda->get_resource_attribute_map());
+    Source_res_manag res_manag(alloc, &lambda->get_resource_attribute_map());
 
     llvm::LLVMContext llvm_context;
     mi::base::Handle<MDL> compiler(lambda->get_compiler());
@@ -1444,7 +1458,7 @@ IGenerated_code_executable *Code_generator_jit::compile_distribution_function_cp
         resolver,
         llvm_funcs,
         /*next_arg_block_index=*/0,
-        /*main_function_indices=*/NULL);
+        /*req_function_indices=*/NULL);
 
     if (module != NULL) {
         MDL_JIT_module_key module_key = code_gen.jit_compile(module);
@@ -1531,7 +1545,7 @@ IGenerated_code_executable *Code_generator_jit::compile_distribution_function_gp
 
     Generated_code_source *code = builder.create<Generated_code_source>(alloc, code_kind);
 
-    Generated_code_source::Source_res_manag res_manag(
+    Source_res_manag res_manag(
         alloc, &dist_func->get_resource_attribute_map());
 
     llvm::LLVMContext llvm_context;
@@ -1574,7 +1588,7 @@ IGenerated_code_executable *Code_generator_jit::compile_distribution_function_gp
         resolver,
         llvm_funcs,
         /*next_arg_block_index=*/0,
-        /*main_function_indices=*/NULL);
+        /*req_function_indices=*/NULL);
 
     if (mod != NULL) {
         if (llvm_ir_output) {
@@ -1896,7 +1910,7 @@ IGenerated_code_executable *Code_generator_jit::compile_into_source(
         }
     }
 
-    Generated_code_source::Source_res_manag res_manag(alloc, &lambda->get_resource_attribute_map());
+    Source_res_manag res_manag(alloc, &lambda->get_resource_attribute_map());
 
     llvm::LLVMContext llvm_context;
     SLOptPassGate opt_pass_gate;
@@ -2406,8 +2420,8 @@ Link_unit_jit::~Link_unit_jit()
     case ICode_generator::TL_GLSL:
     case ICode_generator::TL_LLVM_IR:
         {
-            Generated_code_source::Source_res_manag *res_manag =
-                static_cast<Generated_code_source::Source_res_manag *>(m_res_manag);
+            Source_res_manag *res_manag =
+                static_cast<Source_res_manag *>(m_res_manag);
 
             builder.destroy(res_manag);
         }
@@ -2464,7 +2478,7 @@ IResource_manager *Link_unit_jit::create_resource_manager(
     case ICode_generator::TL_HLSL:
     case ICode_generator::TL_GLSL:
     case ICode_generator::TL_LLVM_IR:
-        return builder.create<Generated_code_source::Source_res_manag>(
+        return builder.create<Source_res_manag>(
             get_allocator(), (mi::mdl::Resource_attr_map const *)NULL);
     }
     MDL_ASSERT(!"unsupported target kind");
@@ -2489,8 +2503,8 @@ void Link_unit_jit::update_resource_attribute_map(
     case ICode_generator::TL_GLSL:
     case ICode_generator::TL_LLVM_IR:
         {
-            Generated_code_source::Source_res_manag *res_manag =
-                static_cast<Generated_code_source::Source_res_manag *>(m_res_manag);
+            Source_res_manag *res_manag =
+                static_cast<Source_res_manag *>(m_res_manag);
 
             res_manag->import_resource_attribute_map(&lambda->get_resource_attribute_map());
         }
@@ -2676,19 +2690,17 @@ bool Link_unit_jit::add(
     IModule_cache                *module_cache,
     ICall_name_resolver const    *resolver,
     size_t                       *arg_block_index,
-    size_t                       *main_function_indices,
-    size_t                        num_main_function_indices)
+    size_t                       *req_function_indices,
+    size_t                        num_req_function_indices)
 {
     Distribution_function const *dist_func = impl_cast<Distribution_function>(idist_func);
     if (dist_func == NULL) {
         return false;
     }
 
-    // Wrong size of main_function_indices array?
-    // Must be number of main functions + init function
-    if (main_function_indices != NULL &&
-        num_main_function_indices != dist_func->get_main_function_count() + 1)
-    {
+    // If function indices are requested, check whether it matches the number of explictly requested
+    // nodes plus one for the init function
+    if (num_req_function_indices != dist_func->get_explicit_requested_node_count() + 1) {
         return false;
     }
 
@@ -2712,7 +2724,7 @@ bool Link_unit_jit::add(
         resolver,
         llvm_funcs,
         next_arg_block_index,
-        main_function_indices);
+        req_function_indices);
 
     if (module == NULL) {
         return false;
@@ -2740,34 +2752,50 @@ size_t Link_unit_jit::get_function_count() const
 // Get the name of the i'th function inside this link unit.
 char const *Link_unit_jit::get_function_name(size_t i) const
 {
-    return m_code->get_function_name(i);
+    LLVM_code_generator::Exported_function *func = m_code_gen.get_current_exported_function(i);
+    if (func == nullptr) {
+        return nullptr;
+    }
+    return func->name.c_str();
 }
 
 // Returns the distribution kind of the i'th function inside this link unit.
 IGenerated_code_executable::Distribution_kind Link_unit_jit::get_distribution_kind(size_t i) const
 {
-    return m_code->get_distribution_kind(i);
+    LLVM_code_generator::Exported_function *func = m_code_gen.get_current_exported_function(i);
+    if (func == nullptr) {
+        return IGenerated_code_executable::DK_INVALID;
+    }
+    return func->distribution_kind;
 }
 
 // Returns the function kind of the i'th function inside this link unit.
 IGenerated_code_executable::Function_kind Link_unit_jit::get_function_kind(size_t i) const
 {
-    return m_code->get_function_kind(i);
+    LLVM_code_generator::Exported_function *func = m_code_gen.get_current_exported_function(i);
+    if (func == nullptr) {
+        return IGenerated_code_executable::FK_INVALID;
+    }
+    return func->function_kind;
 }
 
 // Get the index of the target argument block layout for the i'th function inside this link
 // unit if used.
 size_t Link_unit_jit::get_function_arg_block_layout_index(size_t i) const
 {
-    return m_code->get_function_arg_block_layout_index(i);
+    LLVM_code_generator::Exported_function *func = m_code_gen.get_current_exported_function(i);
+    if (func == nullptr) {
+        return ~0;
+    }
+    return func->arg_block_index;
 }
 
 // Get the LLVM function of the i'th function inside this link unit.
 llvm::Function *Link_unit_jit::get_function(size_t i) const
 {
     LLVM_code_generator::Exported_function *exp_func = m_code_gen.get_current_exported_function(i);
-    if (exp_func == NULL) {
-        return NULL;
+    if (exp_func == nullptr) {
+        return nullptr;
     }
 
     return exp_func->func;
@@ -2775,10 +2803,14 @@ llvm::Function *Link_unit_jit::get_function(size_t i) const
 
 // Returns the prototype of the i'th function inside this link unit.
 char const *Link_unit_jit::get_function_prototype(
-    size_t index,
+    size_t i,
     IGenerated_code_executable::Prototype_language lang) const
 {
-    return m_code->get_function_prototype(index, lang);
+    LLVM_code_generator::Exported_function *func = m_code_gen.get_current_exported_function(i);
+    if (func == nullptr || lang >= func->prototypes.size()) {
+        return nullptr;
+    }
+    return func->prototypes[lang].c_str();
 }
 
 // Get the number of target argument block layouts used by this link unit.

@@ -51,6 +51,7 @@
 #include <mi/neuraylib/factory.h>
 #include <mi/neuraylib/idebug_configuration.h>
 #include <mi/neuraylib/idatabase.h>
+#include <mi/neuraylib/iextension_api.h>
 #include <mi/neuraylib/ifactory.h>
 #include <mi/neuraylib/iimage_api.h>
 #include <mi/neuraylib/ilogging_configuration.h>
@@ -94,6 +95,7 @@ void check( mi::neuraylib::INeuray* neuray, bool result)
 void test_always_available( mi::neuraylib::INeuray* neuray)
 {
     check<mi::neuraylib::IDebug_configuration>( neuray, true);
+    check<mi::neuraylib::IExtension_api>( neuray, true);
     check<mi::neuraylib::IFactory>( neuray, true);
     check<mi::neuraylib::ILogging_configuration>( neuray, true);
     check<mi::neuraylib::IMdl_compiler>( neuray, true);
@@ -156,7 +158,7 @@ MI_TEST_AUTO_FUNCTION( test_neuray )
     run_tests( neuray.get());
     run_tests( neuray.get());
 
-    neuray = nullptr;
+    neuray.reset();
     MI_CHECK( unload());
 }
 

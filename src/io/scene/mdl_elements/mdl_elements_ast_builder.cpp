@@ -181,6 +181,8 @@ mi::mdl::IType_name* type_to_type_name(
     case mi::mdl::IType::TK_AUTO:
     case mi::mdl::IType::TK_ERROR:
     case mi::mdl::IType::TK_FUNCTION:
+    case mi::mdl::IType::TK_SPECTRAL_SAMPLE:
+    case mi::mdl::IType::TK_SPECTRUM:
         ASSERT(M_SCENE, !"unexpected MDL type kind");
         return nullptr;
 
@@ -1189,13 +1191,12 @@ const mi::mdl::IExpression* Mdl_ast_builder::transform_expr( const IExpression* 
             bool named_args = false;
             mi::Size n_params = 0;
 
-            SERIAL::Class_id class_id = m_trans->get_class_id( tag);
-            if( class_id != ID_MDL_FUNCTION_CALL) {
+            DB::Access<Mdl_function_call> fcall( tag, m_trans);
+            if( !fcall) {
                 ASSERT( M_SCENE, !"invalid type of DB element referenced by indirect call");
                 return m_ef.create_invalid();
             }
 
-            DB::Access<Mdl_function_call> fcall( tag, m_trans);
             DB::Tag def_tag = fcall->get_function_definition( m_trans);
             if( !def_tag)
                 return m_ef.create_invalid();
@@ -1311,27 +1312,24 @@ std::string get_texture_resource_name_gamma_selector(
     gamma_mode = mi::mdl::IValue_texture::gamma_default;
     selector = "";
 
-    SERIAL::Class_id class_id = trans->get_class_id( tag);
-    if( class_id != TEXTURE::Texture::id) {
+    DB::Access<TEXTURE::Texture> texture( tag, trans);
+    if( !texture) {
         const char* name = trans->tag_to_name( tag);
         LOG::mod_log->error( M_SCENE, LOG::Mod_log::C_DATABASE,
             "Incorrect type for texture resource \"%s\".", name ? name : "");
         return {};
     }
 
-    DB::Access<TEXTURE::Texture> texture( tag, trans);
     DB::Tag image_tag( texture->get_image());
 
-    if( image_tag.is_valid()) {
-        class_id = trans->get_class_id( image_tag);
-        if( class_id != DBIMAGE::Image::id) {
+    if( image_tag) {
+        DB::Access<DBIMAGE::Image> image( image_tag, trans);
+        if( !image) {
             const char* name = trans->tag_to_name( image_tag);
             LOG::mod_log->error( M_SCENE, LOG::Mod_log::C_DATABASE,
                 "Incorrect type for image resource \"%s\".", name ? name : "");
             return {};
         }
-
-        DB::Access<DBIMAGE::Image> image( image_tag, trans);
 
         // try to convert gamma value into the MDL enum
         gamma_mode = convert_gamma_float_to_enum( texture->get_gamma());
@@ -1359,14 +1357,14 @@ std::string get_light_profile_resource_name(
     DB::Transaction* trans,
     DB::Tag tag)
 {
-    SERIAL::Class_id class_id = trans->get_class_id( tag);
-    if( class_id != LIGHTPROFILE::Lightprofile::id) {
+    DB::Access<LIGHTPROFILE::Lightprofile> lightprofile( tag, trans);
+    if( !lightprofile) {
         const char* name = trans->tag_to_name( tag);
         LOG::mod_log->error( M_SCENE, LOG::Mod_log::C_DATABASE,
             "Incorrect type for light profile resource \"%s\".", name ? name : "");
         return {};
     }
-    DB::Access<LIGHTPROFILE::Lightprofile> lightprofile( tag, trans);
+
     const std::string& s1 = lightprofile->get_mdl_file_path();
     if( !s1.empty())
         return s1;
@@ -1385,14 +1383,14 @@ std::string get_bsdf_measurement_resource_name(
     DB::Transaction* trans,
     DB::Tag tag)
 {
-    SERIAL::Class_id class_id = trans->get_class_id( tag);
-    if( class_id != BSDFM::Bsdf_measurement::id) {
+    DB::Access<BSDFM::Bsdf_measurement> bsdf_measurement( tag, trans);
+    if( !bsdf_measurement) {
         const char* name = trans->tag_to_name( tag);
         LOG::mod_log->error( M_SCENE, LOG::Mod_log::C_DATABASE,
             "Incorrect type for BSDF measurement resource \"%s\".", name ? name : "");
         return {};
     }
-    DB::Access<BSDFM::Bsdf_measurement> bsdf_measurement( tag, trans);
+
     const std::string& s1 = bsdf_measurement->get_mdl_file_path();
     if( !s1.empty())
         return s1;
@@ -1557,10 +1555,7 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_value( const IValue* valu
             mi::mdl::IExpression_call      *call = m_ef.create_call(ref);
 
             DB::Tag tag = v->get_value();
-            SERIAL::Class_id class_id = tag ? m_trans->get_class_id( tag) : 0;
-
-            // neuray sometimes creates wrong textures with TAG 0, handle them
-            if (tag.is_invalid() || class_id != TEXTURE::Texture::id) {
+            if (!tag || (m_trans->get_class_id( tag) != TEXTURE::ID_TEXTURE)) {
                 auto const *r_tp = cast<mi::mdl::IType_reference>(transform_type(type.get()));
                 mi::mdl::IValue_invalid_ref const *vv = m_vf.create_invalid_ref(r_tp);
                 return m_ef.create_literal(vv);
@@ -1652,9 +1647,8 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_value( const IValue* valu
             mi::mdl::IExpression_reference *ref  = m_ef.create_reference(tn);
             mi::mdl::IExpression_call      *call = m_ef.create_call(ref);
 
-            // neuray sometimes creates invalid resources with TAG 0, handle them
             DB::Tag tag = v->get_value();
-            if (tag.is_invalid()) {
+            if (!tag) {
                 auto const *r_tp = cast<mi::mdl::IType_reference>(transform_type(type.get()));
                 mi::mdl::IValue_invalid_ref const *vv = m_vf.create_invalid_ref(r_tp);
                 return m_ef.create_literal(vv);

@@ -36,7 +36,7 @@
 #define MI_TEST_IMPLEMENT_TEST_MAIN_INSTEAD_OF_MAIN
 
 #include <map>
-#include <sstream>
+#include <string>
 
 #include <base/system/test/i_test_auto_driver.h>
 #include <base/system/test/i_test_auto_case.h>
@@ -56,10 +56,9 @@
 #include <mi/neuraylib/istring.h>
 #include <mi/neuraylib/itransaction.h>
 
+#include <mi/neuraylib/iattribute_container.h>
 
 #include "test_shared.h"
-
-#define GET_REFCOUNT(X) ((X) ? (X)->retain(), (X)->release() : 999)
 
 bool skip_identity_checks = false;
 
@@ -72,19 +71,23 @@ const char* get_key( mi::Size key_id)
 {
     if( key_id >= N)
         return nullptr;
-    std::ostringstream s;
-    s << "key_" << key_id;
-    g_key = s.str();
+    g_key = "key_" + std::to_string( key_id);
     return g_key.c_str();
 }
 
+// set value property
+void set_value_property( mi::neuraylib::IAttribute_container* value, mi::Size i)
+{
+    mi::base::Handle<mi::ISint32> attribute( value->create_attribute<mi::ISint32>( "value"));
+    MI_CHECK( attribute);
+    attribute->set_value( static_cast<mi::Sint32>( i));
+}
 
 // set value property
 void set_value_property( mi::IString* value, mi::Size i)
 {
-    std::ostringstream str;
-    str << i;
-    value->set_c_str( str.str().c_str());
+    std::string str = std::to_string( i);
+    value->set_c_str( str.c_str());
 }
 
 // set value property
@@ -93,13 +96,22 @@ void set_value_property( mi::ISint32* value, mi::Size i)
     value->set_value( static_cast<mi::Sint32>( i));
 }
 
+// check value property
+bool check_value_property( const mi::neuraylib::IAttribute_container* value, mi::Size i)
+{
+    mi::base::Handle<const mi::ISint32> attribute( value->access_attribute<mi::ISint32>( "value"));
+    if( !attribute)
+        return false;
+    mi::Sint32 tmp;
+    attribute->get_value( tmp);
+    return tmp == static_cast<mi::Sint32>( i);
+}
 
 // check value property
 bool check_value_property( const mi::IString* value, mi::Size i)
 {
-    std::ostringstream str;
-    str << i;
-    return strcmp( value->get_c_str(), str.str().c_str()) == 0;
+    std::string str = std::to_string( i);
+    return strcmp( value->get_c_str(), str.c_str()) == 0;
 }
 
 // check value property
@@ -110,10 +122,7 @@ bool check_value_property( const mi::ISint32* value, mi::Size i)
     return tmp == static_cast<mi::Sint32>( i);
 }
 
-// Does not work if T is derived from mi::IVoid or mi::neuraylib::IGroup because these are
-// hard-coded interfaces to test some expected failures.
-//
-// This test modifies that the map such that it contains exactly the keys ...
+// Uses mi::IVoid and IAttribute_container as hard-coded probe types for some expected failures.
 template<class T>
 void test_interface_IMap(
     mi::neuraylib::ITransaction* transaction,
@@ -137,20 +146,24 @@ void test_interface_IMap(
         mi::base::Handle<T> value( transaction->create<T>( value_type_name));
         set_value_property( value.get(), i);
         stl_map[ get_key( i)] = value;
-        value = nullptr;
-        MI_CHECK_EQUAL( 1, GET_REFCOUNT( stl_map[ get_key( i)].get()));
+        value.reset();
+        MI_CHECK_EQUAL( 1, get_refcount( stl_map[ get_key( i)]));
     }
     mi::base::Handle<mi::IVoid> void_( transaction->create<mi::IVoid>( "Void"));
     MI_CHECK( void_);
-    MI_CHECK_EQUAL( 1, GET_REFCOUNT( void_.get()));
+    MI_CHECK_EQUAL( 1, get_refcount( void_));
+    mi::base::Handle<mi::neuraylib::IAttribute_container> attribute_container_(
+        transaction->create<mi::neuraylib::IAttribute_container>( "Attribute_container"));
+    MI_CHECK( attribute_container_);
+    MI_CHECK_EQUAL( 1, get_refcount( attribute_container_));
 
     // insert map contents (via key)
     for( mi::Size i=0; i < N; ++i) {
         MI_CHECK_EQUAL( 0, map->insert( get_key( i), stl_map[ get_key( i)].get()));
-        MI_CHECK_EQUAL( 2, GET_REFCOUNT( stl_map[ get_key( i)].get()));
+        MI_CHECK_EQUAL( 2, get_refcount( stl_map[ get_key( i)]));
         MI_CHECK_EQUAL( i+1, map->get_length());
         MI_CHECK_EQUAL( -2, map->insert( get_key( i), stl_map[ get_key( i)].get()));
-        MI_CHECK_EQUAL( 2, GET_REFCOUNT( stl_map[ get_key( i)].get()));
+        MI_CHECK_EQUAL( 2, get_refcount( stl_map[ get_key( i)]));
         MI_CHECK_EQUAL( i+1, map->get_length());
         MI_CHECK( !map->empty());
     }
@@ -178,7 +191,7 @@ void test_interface_IMap(
         MI_CHECK( check_value_property( value, i));
         value->release();
         iinterface->release();
-        MI_CHECK_EQUAL( 2, GET_REFCOUNT( stl_map[ get_key( i)].get()));
+        MI_CHECK_EQUAL( 2, get_refcount( stl_map[ get_key( i)]));
     }
 
     // verify const map contents via key, decreasing index sequence (uncached)
@@ -192,7 +205,7 @@ void test_interface_IMap(
         MI_CHECK( check_value_property( value, i-1));
         value->release();
         iinterface->release();
-        MI_CHECK_EQUAL( 2, GET_REFCOUNT( stl_map[ get_key( i-1)].get()));
+        MI_CHECK_EQUAL( 2, get_refcount( stl_map[ get_key( i-1)]));
     }
 
     // set map contents via index
@@ -200,7 +213,7 @@ void test_interface_IMap(
         MI_CHECK_EQUAL( 0, map->set_value( i, stl_map[ get_key( i)].get()));
     }
     for( mi::Size i=0; i < N; ++i) {
-        MI_CHECK_EQUAL( 2, GET_REFCOUNT( stl_map[ get_key( i)].get()));
+        MI_CHECK_EQUAL( 2, get_refcount( stl_map[ get_key( i)]));
     }
 
     // verify map contents via key, increasing index sequence (cached)
@@ -214,7 +227,7 @@ void test_interface_IMap(
         MI_CHECK( check_value_property( value, i));
         value->release();
         iinterface->release();
-        MI_CHECK_EQUAL( 2, GET_REFCOUNT( stl_map[ get_key( i)].get()));
+        MI_CHECK_EQUAL( 2, get_refcount( stl_map[ get_key( i)]));
     }
 
     // verify const map contents via key, decreasing index sequence (uncached)
@@ -228,7 +241,7 @@ void test_interface_IMap(
         MI_CHECK( check_value_property( value, i-1));
         value->release();
         iinterface->release();
-        MI_CHECK_EQUAL( 2, GET_REFCOUNT( stl_map[ get_key( i-1)].get()));
+        MI_CHECK_EQUAL( 2, get_refcount( stl_map[ get_key( i-1)]));
     }
 
     // check that set_value() fails with invalid key/index/value
@@ -250,21 +263,33 @@ void test_interface_IMap(
     if( untyped) {
         // check that untyped maps accept any types
         MI_CHECK_EQUAL( 0, map->set_value( zero_size, void_.get()));
-        MI_CHECK_EQUAL( 2, GET_REFCOUNT( void_.get()));
+        MI_CHECK_EQUAL( 2, get_refcount( void_));
+        MI_CHECK_EQUAL( 0, map->set_value( 1, attribute_container_.get()));
+        MI_CHECK_EQUAL( 2, get_refcount( attribute_container_));
         MI_CHECK_EQUAL( 0, map->set_value( zero_size, stl_map[ get_key( 0)].get()));
-        MI_CHECK_EQUAL( 1, GET_REFCOUNT( void_.get()));
+        MI_CHECK_EQUAL( 1, get_refcount( void_));
+        MI_CHECK_EQUAL( 0, map->set_value( 1, stl_map[ get_key( 1)].get()));
+        MI_CHECK_EQUAL( 1, get_refcount( attribute_container_));
 
         MI_CHECK_EQUAL( 0, map->insert( "bar", void_.get()));
-        MI_CHECK_EQUAL( 2, GET_REFCOUNT( void_.get()));
+        MI_CHECK_EQUAL( 2, get_refcount( void_));
+        MI_CHECK_EQUAL( 0, map->insert( "baz", attribute_container_.get()));
+        MI_CHECK_EQUAL( 2, get_refcount( attribute_container_));
         MI_CHECK_EQUAL( 0, map->erase( "bar"));
-        MI_CHECK_EQUAL( 1, GET_REFCOUNT( void_.get()));
+        MI_CHECK_EQUAL( 1, get_refcount( void_));
+        MI_CHECK_EQUAL( 0, map->erase( "baz"));
+        MI_CHECK_EQUAL( 1, get_refcount( attribute_container_));
     } else {
         // check that typed maps reject other types
         MI_CHECK_EQUAL( -3, map->set_value( zero_size, void_.get()));
-        MI_CHECK_EQUAL( 1, GET_REFCOUNT( void_.get()));
+        MI_CHECK_EQUAL( 1, get_refcount( void_));
+        MI_CHECK_EQUAL( -3, map->set_value( 1, attribute_container_.get()));
+        MI_CHECK_EQUAL( 1, get_refcount( attribute_container_));
 
         MI_CHECK_EQUAL( -3, map->insert( "bar", void_.get()));
-        MI_CHECK_EQUAL( 1, GET_REFCOUNT( void_.get()));
+        MI_CHECK_EQUAL( 1, get_refcount( void_));
+        MI_CHECK_EQUAL( -3, map->insert( "baz", attribute_container_.get()));
+        MI_CHECK_EQUAL( 1, get_refcount( attribute_container_));
     }
 
     // set map contents via key
@@ -272,13 +297,13 @@ void test_interface_IMap(
         MI_CHECK_EQUAL( 0, map->set_value( get_key( i), stl_map[ get_key( i)].get()));
     }
     for( mi::Size i=0; i < N; ++i) {
-        MI_CHECK_EQUAL( 2, GET_REFCOUNT( stl_map[ get_key( i)].get()));
+        MI_CHECK_EQUAL( 2, get_refcount( stl_map[ get_key( i)]));
     }
 
     // erase some map contents (via key)
     for( mi::Size i=0; i < N/2; ++i) {
         MI_CHECK_EQUAL( 0, map->erase( get_key( i)));
-        MI_CHECK_EQUAL( 1, GET_REFCOUNT( stl_map[ get_key( i)].get()));
+        MI_CHECK_EQUAL( 1, get_refcount( stl_map[ get_key( i)]));
         MI_CHECK_EQUAL( N-i-1, map->get_length());
         MI_CHECK( !map->empty());
     }
@@ -293,12 +318,11 @@ void test_interface_IMap(
 
     // only the STL vector now holds a reference
     for( mi::Size i=0; i < N; ++i) {
-        MI_CHECK_EQUAL( 1, GET_REFCOUNT( stl_map[ get_key( i)].get()));
+        MI_CHECK_EQUAL( 1, get_refcount( stl_map[ get_key( i)]));
     }
 }
 
-// Does not work if T is derived from mi::IVoid or mi::neuraylib::IGroup because these are
-// hard-coded interfaces to test some expected failures.
+// Uses mi::IVoid and IAttribute_container as hard-coded probe types for some expected failures.
 template<class T>
 void test(
     mi::neuraylib::ITransaction* transaction,
@@ -330,6 +354,7 @@ void run_tests( mi::neuraylib::INeuray* neuray)
 
         test<mi::ISint32>( transaction.get(), "Sint32");
         test<mi::IString>( transaction.get(), "String");
+        test<mi::neuraylib::IAttribute_container>( transaction.get(), "Attribute_container");
 
         MI_CHECK_EQUAL( 0, transaction->commit());
     }
@@ -353,7 +378,7 @@ MI_TEST_AUTO_FUNCTION( test_types_map )
         run_tests( neuray.get());
     }
 
-    neuray = nullptr;
+    neuray.reset();
     MI_CHECK( unload());
 }
 

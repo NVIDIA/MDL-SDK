@@ -109,11 +109,7 @@ mi_static_assert( sizeof(Float64) == 8);
 ///     mi::Sint64 x = ...;
 ///     printf( "x equals %" MI_BASE_FMT_MI_SINT64 " \n", x);
 /// \endcode
-#ifdef MI_ARCH_64BIT
 #define MI_BASE_FMT_MI_SINT64 "lld"
-#else // MI_ARCH_64BIT
-#define MI_BASE_FMT_MI_SINT64 "d"
-#endif // MI_ARCH_64BIT
 
 /// The \c printf format specifier for #mi::Uint64.
 ///
@@ -121,70 +117,41 @@ mi_static_assert( sizeof(Float64) == 8);
 ///     mi::Uint64 x = ...;
 ///     printf( "x equals %" MI_BASE_FMT_MI_UINT64 " \n", x);
 /// \endcode
-#ifdef MI_ARCH_64BIT
-#define MI_BASE_FMT_MI_UINT64       "llu"
-#else // MI_ARCH_64BIT
-#define MI_BASE_FMT_MI_UINT64       "u"
-#endif // MI_ARCH_64BIT
+#define MI_BASE_FMT_MI_UINT64 "llu"
 
 /// Unsigned integral type that is large enough to hold the size of all types. This type is for
 /// example used for dimensions and indices of vectors.
 ///
 /// It corresponds to a 32-bit unsigned integer on 32-bit architectures and a 64-bit unsigned
 /// integer on 64-bit architectures.
-#ifdef MI_ARCH_64BIT
 using Size = Uint64;
-#else // MI_ARCH_64BIT
-using Size = Uint32;
-#endif // MI_ARCH_64BIT
 
 /// Signed integral type that is large enough to hold the difference of two pointers.
 ///
 /// It corresponds to a 32-bit signed integer on 32-bit architectures and a 64-bit signed integer on
 /// 64-bit architectures.
-#ifdef MI_ARCH_64BIT
 using Difference = Sint64;
-#else // MI_ARCH_64BIT
-using Difference = Sint32;
-#endif // MI_ARCH_64BIT
 
-#ifdef MI_ARCH_64BIT
 mi_static_assert( sizeof(Size)       == 8);
 mi_static_assert( sizeof(Difference) == 8);
-#else // MI_ARCH_64BIT
-mi_static_assert( sizeof(Size)       == 4);
-mi_static_assert( sizeof(Difference) == 4);
-#endif // MI_ARCH_64BIT
 
 /// The maximum value for \c %Size.
 ///
 /// \note The actual value of this constant depends on the architecture. Possible values are
 ///       18446744073709551615 on 64-bit architectures and 4294967295 on 32-bit architectures.
-#ifdef MI_ARCH_64BIT
 static const Size       SIZE_MAX_VALUE       = 18446744073709551615ULL;
-#else // MI_ARCH_64BIT
-static const Size       SIZE_MAX_VALUE       =  4294967295U;
-#endif // MI_ARCH_64BIT
 
 /// The minimum value for \c %Difference.
 ///
 /// \note The actual value of this constant depends on the architecture. Possible values are
 ///       -9223372036854775808 on 64-bit architectures and -2147483648 on 32-bit architectures.
-#ifdef MI_ARCH_64BIT
 static const Difference DIFFERENCE_MIN_VALUE = -9223372036854775807LL - 1LL;
-#else // MI_ARCH_64BIT
-static const Difference DIFFERENCE_MIN_VALUE = -2147483647 - 1;
-#endif // MI_ARCH_64BIT
 
 /// The maximum value for \c %Difference.
 ///
 /// \note The actual value of this constant depends on the architecture. Possible values are
 ///       9223372036854775807 on 64-bit architectures and 2147483647 on 32-bit architectures.
-#ifdef MI_ARCH_64BIT
 static const Difference DIFFERENCE_MAX_VALUE =  9223372036854775807LL;
-#else // MI_ARCH_64BIT
-static const Difference DIFFERENCE_MAX_VALUE =  2147483647;
-#endif // MI_ARCH_64BIT
 
 /// The \c printf format specifier for #mi::Size.
 ///
@@ -192,11 +159,7 @@ static const Difference DIFFERENCE_MAX_VALUE =  2147483647;
 ///     mi::Size x = ...;
 ///     printf( "x equals %" MI_BASE_FMT_MI_SIZE " \n", x);
 /// \endcode
-#ifdef MI_ARCH_64BIT
-#define MI_BASE_FMT_MI_SIZE       "llu"
-#else // MI_ARCH_64BIT
-#define MI_BASE_FMT_MI_SIZE       "u"
-#endif // MI_ARCH_64BIT
+#define MI_BASE_FMT_MI_SIZE "llu"
 
 /// The \c printf format specifier for #mi::Difference.
 ///
@@ -204,11 +167,7 @@ static const Difference DIFFERENCE_MAX_VALUE =  2147483647;
 ///     mi::Difference x = ...;
 ///     printf( "x equals %" MI_BASE_FMT_MI_DIFFERENCE " \n", x);
 /// \endcode
-#ifdef MI_ARCH_64BIT
 #define MI_BASE_FMT_MI_DIFFERENCE "lld"
-#else // MI_ARCH_64BIT
-#define MI_BASE_FMT_MI_DIFFERENCE "d"
-#endif // MI_ARCH_64BIT
 
 // primitive types related constants
 

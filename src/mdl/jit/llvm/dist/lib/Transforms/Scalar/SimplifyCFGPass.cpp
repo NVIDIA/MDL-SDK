@@ -309,12 +309,24 @@ PreservedAnalyses SimplifyCFGPass::run(Function &F,
   DominatorTree *DT = nullptr;
   if (RequireAndPreserveDomTree)
     DT = &AM.getResult<DominatorTreeAnalysis>(F);
+
+  bool restoreOptions = false;
+  bool oldSimplifyCondBranch, oldFoldTwoEntryPHINode;
   if (F.hasFnAttribute(Attribute::OptForFuzzing)) {
+    restoreOptions = true;
+    oldSimplifyCondBranch = Options.SimplifyCondBranch;
+    oldFoldTwoEntryPHINode = Options.FoldTwoEntryPHINode;
     Options.setSimplifyCondBranch(false).setFoldTwoEntryPHINode(false);
-  } else {
-    Options.setSimplifyCondBranch(true).setFoldTwoEntryPHINode(true);
   }
-  if (!simplifyFunctionCFG(F, TTI, DT, Options))
+
+  bool changed = simplifyFunctionCFG(F, TTI, DT, Options);
+
+  if (restoreOptions) {
+    Options.setSimplifyCondBranch(oldSimplifyCondBranch)
+           .setFoldTwoEntryPHINode(oldFoldTwoEntryPHINode);
+  }
+
+  if (!changed)
     return PreservedAnalyses::all();
   PreservedAnalyses PA;
   if (RequireAndPreserveDomTree)
@@ -347,16 +359,26 @@ struct CFGSimplifyPass : public FunctionPass {
     DominatorTree *DT = nullptr;
     if (RequireAndPreserveDomTree)
       DT = &getAnalysis<DominatorTreeWrapperPass>().getDomTree();
+
+    bool restoreOptions = false;
+    bool oldSimplifyCondBranch, oldFoldTwoEntryPHINode;
     if (F.hasFnAttribute(Attribute::OptForFuzzing)) {
+      restoreOptions = true;
+      oldSimplifyCondBranch = Options.SimplifyCondBranch;
+      oldFoldTwoEntryPHINode = Options.FoldTwoEntryPHINode;
       Options.setSimplifyCondBranch(false)
              .setFoldTwoEntryPHINode(false);
-    } else {
-      Options.setSimplifyCondBranch(true)
-             .setFoldTwoEntryPHINode(true);
     }
 
     auto &TTI = getAnalysis<TargetTransformInfoWrapperPass>().getTTI(F);
-    return simplifyFunctionCFG(F, TTI, DT, Options);
+    bool changed = simplifyFunctionCFG(F, TTI, DT, Options);
+
+    if (restoreOptions) {
+      Options.setSimplifyCondBranch(oldSimplifyCondBranch)
+             .setFoldTwoEntryPHINode(oldFoldTwoEntryPHINode);
+    }
+
+    return changed;
   }
   void getAnalysisUsage(AnalysisUsage &AU) const override {
     AU.addRequired<AssumptionCacheTracker>();

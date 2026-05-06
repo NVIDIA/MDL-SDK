@@ -2541,17 +2541,18 @@ void check_module_transformer(
     // check upgrade_mdl_version() w.r.t. updated function signatures
 
     struct Data { const char* from; const char* to; mi::neuraylib::Mdl_version to_enum; };
-    Data data[] = { { "1_0", "1_3",  mi::neuraylib::MDL_VERSION_1_3 },
-                    { "1_0", "1_4",  mi::neuraylib::MDL_VERSION_1_4 },
-                    { "1_0", "1_5",  mi::neuraylib::MDL_VERSION_1_5 },
-                    { "1_0", "1_6",  mi::neuraylib::MDL_VERSION_1_6 },
-                    { "1_3", "1_4",  mi::neuraylib::MDL_VERSION_1_4 },
-                    { "1_3", "1_5",  mi::neuraylib::MDL_VERSION_1_5 },
-                    { "1_3", "1_6",  mi::neuraylib::MDL_VERSION_1_6 },
-                    { "1_4", "1_5",  mi::neuraylib::MDL_VERSION_1_5 },
-                    { "1_4", "1_6",  mi::neuraylib::MDL_VERSION_1_6 },
-                    { "1_5", "1_6",  mi::neuraylib::MDL_VERSION_1_6 },
-                    { "1_9", "1_10", mi::neuraylib::MDL_VERSION_1_10 }
+    Data data[] = { { "1_0",  "1_3",  mi::neuraylib::MDL_VERSION_1_3 },
+                    { "1_0",  "1_4",  mi::neuraylib::MDL_VERSION_1_4 },
+                    { "1_0",  "1_5",  mi::neuraylib::MDL_VERSION_1_5 },
+                    { "1_0",  "1_6",  mi::neuraylib::MDL_VERSION_1_6 },
+                    { "1_3",  "1_4",  mi::neuraylib::MDL_VERSION_1_4 },
+                    { "1_3",  "1_5",  mi::neuraylib::MDL_VERSION_1_5 },
+                    { "1_3",  "1_6",  mi::neuraylib::MDL_VERSION_1_6 },
+                    { "1_4",  "1_5",  mi::neuraylib::MDL_VERSION_1_5 },
+                    { "1_4",  "1_6",  mi::neuraylib::MDL_VERSION_1_6 },
+                    { "1_5",  "1_6",  mi::neuraylib::MDL_VERSION_1_6 },
+                    { "1_9",  "1_10", mi::neuraylib::MDL_VERSION_1_10 },
+                    { "1_10", "1_11", mi::neuraylib::MDL_VERSION_1_11 }
                 };
 
     for( const auto& d: data) {
@@ -3279,7 +3280,7 @@ MI_TEST_AUTO_FUNCTION( test_imodule_creation )
         run_tests( neuray.get());
     }
 
-    neuray = nullptr;
+    neuray.reset();
     MI_CHECK( unload());
 }
 

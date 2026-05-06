@@ -31,14 +31,10 @@
 #include "mdltlc_symbols.h"
 
 #undef FMT_SIZE_T
-#if defined(MI_ARCH_64BIT) || defined(MI_PLATFORM_MACOSX)
 #ifdef MI_PLATFORM_WINDOWS
 #  define FMT_SIZE_T        "llu"
 #else
 #  define FMT_SIZE_T        "zu"
-#endif
-#else
-#  define FMT_SIZE_T        "u"
 #endif
 
 // ------------------------------- symbols ------------------------------------

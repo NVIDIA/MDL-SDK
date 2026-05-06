@@ -94,18 +94,12 @@ The final function names that are generated will be suffixed by \c _init, \c _sa
 For expressions that are not DFs, such as \c thin_walled and \c geometry.cutout_opacity the \c base_fname is simply the
 final name of the generated function.
 
-Lastly, the three functions have a parameter \c include_geometry_normal that can be specified using the execution context
-to make the initialization function replace \c state->normal by the result of the expression connected to \c geometry.normal
-of the material. By default \c include_geometry_normal is set to true.
-
 \code
 std::vector<mi::neuraylib::Target_function_description> function_descs;
 function_descs.emplace_back("surface.scattering", "mdl_bsdf"); // Generate BSDF
 function_descs.emplace_back("surface.emission.emission", "mdl_emission"); // Generate EDF
 function_descs.emplace_back("thin_walled", "mdl_thin_walled"); // non-DF expression
 ...
-
-context->set_option("include_geometry_normal", true); // Optional, defaults to true anyway
 
 link_unit->add_material(compiled_material, function_descs.data(), function_descs.size(), context);
 

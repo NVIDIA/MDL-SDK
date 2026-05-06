@@ -40,6 +40,11 @@ static char *utf16_strdup(const char *string);
 
 /* clang-format off */
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wincompatible-function-pointer-types"
+#endif
+
 zip_win32_file_operations_t ops_utf16 = {
     utf16_allocate_tempname,
     utf16_create_file,
@@ -51,6 +56,10 @@ zip_win32_file_operations_t ops_utf16 = {
     SetFileAttributesW,
     utf16_strdup
 };
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
 /* clang-format on */
 

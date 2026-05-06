@@ -158,8 +158,8 @@ void Attr_module_impl::build_name_to_code_map()
     // Two special cases (see attr_type.cpp) :
     // - TYPE_RGBA_FP is an alias for TYPE_COLOR.
     // - TYPE_MATRIX4X4 is an alias for TYPE_MATRIX.
-    m_map_name_to_code["rgba_fp"] = ATTR::TYPE_RGBA_FP;
-    m_map_name_to_code["matrix4x4"] = ATTR::TYPE_MATRIX4X4;
+    m_map_name_to_code["rgba_fp"] = ATTR::TYPE_COLOR;
+    m_map_name_to_code["matrix4x4"] = ATTR::TYPE_MATRIX;
 }
 
 const Attr_module_impl::Custom_attr_filters& Attr_module_impl::get_custom_attr_filters() const

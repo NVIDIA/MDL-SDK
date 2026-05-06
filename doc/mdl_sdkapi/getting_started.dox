@@ -90,7 +90,7 @@ The following third-party dependencies are used by several and/or major
 examples. Installation is strongly recommended unless the corresponding group
 of examples is of no interest to you.
 
--   <a name="vcpkg">**vcpkg**</a> *(git commit ID 5fac54d)*
+-   <a name="vcpkg">**vcpkg**</a> *(git commit ID 7853666)*
     [Vcpkg](https://vcpkg.io/en/getting-started.html) is the recommended way to
     install other dependencies like GLEW and GLFW. The
     vcpkg version mentioned above corresponds to the versions mentioned for
@@ -114,7 +114,7 @@ of examples is of no interest to you.
     Download and extract the pre-compiled x64 binaries from
     [github](https://github.com/microsoft/DirectXShaderCompiler/releases).
 
--   **GLEW** *(2.2.0)* \n
+-   **GLEW** *(2.3.1)* \n
     This dependency is required for all OpenGL-based examples. \n
     Installation via [vcpkg](#vcpkg) is strongly recommended. Install the vcpkg
     package *glew*.

@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
- // examples/mdl_sdk/dxr/example_dxr.h
+// examples/mdl_sdk/dxr/example_dxr.h
 
 #ifndef MDL_D3D12_EXAMPLE_DXR_H
 #define MDL_D3D12_EXAMPLE_DXR_H
@@ -135,6 +135,10 @@ namespace mi { namespace examples { namespace dxr
 
         /// for counting SSS steps separate from 'max_ray_depth'
         uint32_t max_sss_depth;
+
+        /// spectral wavelength range [nm]
+        float spectral_min_wavelength;
+        float spectral_max_wavelength;
 
         /// resets the progressive iteration counter to restart the rendering in the next frame.
         void restart_progressive_rendering();

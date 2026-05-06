@@ -205,7 +205,12 @@ The following examples cover topics and use cases that may be important to your 
   
   \subpage mi_neuray_example_axf_to_mdl 
   shows how to convert an <a href="https://www.xrite.com/axf"> X-Rite AxF</a> file to MDL
-
+  
+- **Spectral rendering:**
+  
+  \subpage mi_neuray_example_spectral_rendering
+  shows how to integrate spectral rendering support into your rendering application
+  
 \subpage mi_neuray_example_topics
 
 */

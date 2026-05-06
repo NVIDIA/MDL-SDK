@@ -160,7 +160,6 @@ public:
 private:
 };
 
-
 /// Implementation of the IMDL interface.
 class MDL : public Allocator_interface_implement<IMDL>
 {
@@ -616,7 +615,7 @@ public:
     /// Resolve an import (module) name to the corresponding absolute module name.
     ///
     /// \param resolver                The file resolver to be used
-    /// \param import_name             The relative module name to import.
+    /// \param import_name             The module name to import.
     /// \param owner_module            The owner MDL module that tries to resolve the import.
     ///                                This may be NULL for the top-level import.
     /// \param pos                     The position where the import must be resolved for an

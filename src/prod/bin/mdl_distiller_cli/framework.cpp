@@ -335,6 +335,8 @@ const ICompiled_material* mdl_distill( INeuray* neuray,
         case mdl_spec_1_7: std::cerr << "1.7.\n"; break;
         case mdl_spec_1_8: std::cerr << "1.8.\n"; break;
         case mdl_spec_1_9: std::cerr << "1.9.\n"; break;
+        case mdl_spec_1_10: std::cerr << "1.10.\n"; break;
+        case mdl_spec_1_11: std::cerr << "1.11.\n"; break;
         default: std::cerr << "<UNKNOWN>.\n";  break; // cannot happen
         }
     }

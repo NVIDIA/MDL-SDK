@@ -26,9 +26,9 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
- // examples/mdl_sdk/df_vulkan/example_df_vulkan.cpp
- //
- // Simple Vulkan renderer using compiled BSDFs with a material parameter editor GUI.
+// examples/mdl_sdk/df_vulkan/example_df_vulkan.cpp
+//
+// Simple Vulkan renderer using compiled BSDFs with a material parameter editor GUI.
 
 #include "example_shared.h"
 #include "example_materialx_shared.h"
@@ -113,6 +113,9 @@ struct Options
     bool dump_glsl = false;
     bool hide_gui = false;
     bool enable_bsdf_flags = false;
+    bool enable_spectral = false;
+    float spectral_min_wavelength = 400.0f;
+    float spectral_max_wavelength = 700.0f;
     mi::neuraylib::Df_flags allowed_scatter_mode =
         mi::neuraylib::DF_FLAGS_ALLOW_REFLECT_AND_TRANSMIT;
     bool nostdpath = false;
@@ -431,6 +434,10 @@ private:
         uint32_t stretch_texcoord_u;
         uint32_t flip_texcoord_v;
         uint32_t bsdf_data_flags;
+
+        // Spectral rendering
+        float spectral_min_wavelength;
+        float spectral_max_wavelength;
     };
 
 private:
@@ -515,7 +522,7 @@ private:
     mi::base::Handle<mi::neuraylib::ITarget_argument_block> m_argument_block;
 
     Render_params m_render_params;
-    bool m_camera_moved = true; // Force a clear in first frame
+    bool m_restart_progressive = true; // Restart progressive rendering in the next frame
     bool m_material_changed = false; // If the argument buffer needs to be updated
     uint32_t m_display_buffer_index = 0; // Which buffer to display
     bool m_show_gui = true;
@@ -645,6 +652,8 @@ void Df_vulkan_app::init_resources()
     m_render_params.environment_rotation = m_options.hdr_rotate;
     m_render_params.background_color = m_options.background_color;
     m_render_params.background_color_enabled = m_options.background_color_enabled ? 1 : 0;
+    m_render_params.spectral_min_wavelength = m_options.spectral_min_wavelength;
+    m_render_params.spectral_max_wavelength = m_options.spectral_max_wavelength;
 
     const float fov = m_options.cam_fov;
     const float to_radians = static_cast<float>(M_PI / 180.0);
@@ -781,7 +790,7 @@ void Df_vulkan_app::update(float elapsed_seconds, uint32_t frame_index)
     if (!m_options.no_window && m_show_gui)
         do_settings_and_stats_gui();
 
-    if (m_camera_moved)
+    if (m_restart_progressive)
         m_render_params.progressive_iteration = 0;
 
     // Update current frame's render params uniform buffer
@@ -817,13 +826,13 @@ void Df_vulkan_app::render(VkCommandBuffer command_buffer, uint32_t frame_index,
         m_path_trace_pipeline_layout, 0, 1, &m_path_trace_descriptor_sets[frame_index],
         0, nullptr);
 
-    if (m_camera_moved)
+    if (m_restart_progressive)
     {
-        m_camera_moved = false;
+        m_restart_progressive = false;
 
         for (const Vulkan_texture& accum_image : m_accum_images)
         {
-            VkClearColorValue clear_color = { 0.0f, 0.0f, 0.0f, 0.0f };
+            VkClearColorValue clear_color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
 
             VkImageSubresourceRange clear_range;
             clear_range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -902,7 +911,7 @@ void Df_vulkan_app::key_callback(int key, int action, int mods)
             m_show_gui = !m_show_gui;
 
         if (key == GLFW_KEY_R)
-            m_camera_moved = true;
+            m_restart_progressive = true;
 
         if (key >= GLFW_KEY_1 && key <= GLFW_KEY_6)
             m_display_buffer_index = key - GLFW_KEY_1;
@@ -936,7 +945,7 @@ void Df_vulkan_app::mouse_scroll_callback(float offset_x, float offset_y)
             m_camera_state.zoom += 1.0f;
 
         update_camera_render_params(m_camera_state);
-        m_camera_moved = true;
+        m_restart_progressive = true;
     }
 
     ImGui_ImplGlfw_ScrollCallback(m_window, offset_x, offset_y);
@@ -959,14 +968,14 @@ void Df_vulkan_app::mouse_move_callback(float pos_x, float pos_y)
             m_camera_state.theta, static_cast<float>(1.0f * M_PI));
 
         update_camera_render_params(m_camera_state);
-        m_camera_moved = true;
+        m_restart_progressive = true;
     }
 }
 
 // Gets called when the window is resized.
 void Df_vulkan_app::resized_callback(uint32_t width, uint32_t height)
 {
-    m_camera_moved = true;
+    m_restart_progressive = true;
 }
 
 void Df_vulkan_app::do_settings_and_stats_gui()
@@ -1173,8 +1182,27 @@ void Df_vulkan_app::do_settings_and_stats_gui()
     else
         ImGui::Text("Parameter editing requires class compilation.");
 
+    if (m_options.enable_spectral)
+    {
+        ImGui::Spacing();
+        ImGui::Text("Spectral Rendering:");
+        ImGui::Separator();
+        if (ImGui::SliderFloat("Min Wavelength (nm)", &m_render_params.spectral_min_wavelength, 380.0f, 780.0f))
+        {
+            changed = true;
+            if (m_render_params.spectral_max_wavelength < m_render_params.spectral_min_wavelength)
+                m_render_params.spectral_max_wavelength = m_render_params.spectral_min_wavelength;
+        }
+        if (ImGui::SliderFloat("Max Wavelength (nm)", &m_render_params.spectral_max_wavelength, 380.0f, 780.0f))
+        {
+            changed = true;
+            if (m_render_params.spectral_min_wavelength > m_render_params.spectral_max_wavelength)
+                m_render_params.spectral_min_wavelength = m_render_params.spectral_max_wavelength;
+        }
+    }
+
     if (changed)
-        m_camera_moved = true;
+        m_restart_progressive = true;
 
     ImGui::End();
     ImGui::Render();
@@ -1303,6 +1331,12 @@ VkShaderModule Df_vulkan_app::create_path_trace_shader_module()
 
     if (m_options.enable_ro_segment)
         defines.push_back("USE_RO_DATA_SEGMENT");
+
+    if (m_options.enable_spectral)
+    {
+        defines.push_back("MDL_SPECTRAL_RENDERING");
+        defines.push_back("MDL_DF_SPECTRAL_SAMPLES=" MI_BASE_STRINGIZE(MDL_DF_SPECTRAL_SAMPLES));
+    }
 
     // Check if functions for backface were generated
     for (mi::Size i = 0; i < m_target_code->get_callable_function_count(); i++)
@@ -2123,6 +2157,8 @@ const mi::neuraylib::ITarget_code* generate_glsl_code(
         mdl_backend_api->get_backend(mi::neuraylib::IMdl_backend_api::MB_GLSL));
 
     check_success(be_glsl->set_option("glsl_version", "450") == 0);
+    check_success(be_glsl->set_option(
+        "glsl_include_for_api_types", "mdl_target_code_types.glsl") == 0);
     if (!options.disable_ssbo && !options.enable_ro_segment)
     {
         check_success(be_glsl->set_option("glsl_place_uniforms_into_ssbo", "on") == 0);
@@ -2147,6 +2183,8 @@ const mi::neuraylib::ITarget_code* generate_glsl_code(
     check_success(be_glsl->set_option("df_handle_slot_mode", "none") == 0);
     check_success(be_glsl->set_option("libbsdf_flags_in_bsdf_data",
         options.enable_bsdf_flags ? "on" : "off") == 0);
+    if (options.enable_spectral)
+        check_success(be_glsl->set_option("libbsdf_enable_spectral", "on") == 0);
 
     mi::base::Handle<mi::neuraylib::ILink_unit> link_unit(
         be_glsl->create_link_unit(transaction, context));
@@ -2335,7 +2373,7 @@ void print_usage(char const* prog_name)
 {
     std::cout
 #ifdef MDL_ENABLE_MATERIALX
-        << "Usage: " << prog_name << " [options] [<material_name|absolute_mdle_path>|relative_mtlx_path]\n"
+        << "Usage: " << prog_name << " [options] [<material_name|absolute_mdle_path|relative_mtlx_path>]\n"
 #else
         << "Usage: " << prog_name << " [options] [<material_name|absolute_mdle_path>]\n"
 #endif
@@ -2350,7 +2388,7 @@ void print_usage(char const* prog_name)
         << "                              (default: output.exr)\n"
         << "  --spp <num>                 samples per pixel, only used for --no_window (default: 4096)\n"
         << "  --spi <num>                 samples per render loop iteration (default: 8)\n"
-        << "  --max_path_length <num>     maximum path length (default: 4)\n"
+        << "  --max_path_length <num>     maximum path length (default: 4, clamped to 2..100)\n"
         << "  --max_sss_steps <num>       maximum number of volume scattering steps in addition to \n"
         << "                              'max_path_length' (default: 256)\n"
         << "  -f|--fov <fov>              the camera field of view in degrees (default: 96.0)\n"
@@ -2401,6 +2439,13 @@ void print_usage(char const* prog_name)
         << "  --allowed_scatter_mode <m>  limits the allowed scatter mode to \"none\", \"reflect\",\n"
         << "                              \"transmit\" or \"reflect_and_transmit\"\n"
         << "                              (default: restriction disabled)\n"
+        << "  --spectral                  enable spectral rendering mode\n"
+        << "  --spectral_min_wavelength <nm>\n"
+        << "                              minimum wavelength for spectral rendering in nm\n"
+        << "                              (default: 400, range: 380-780)\n"
+        << "  --spectral_max_wavelength <nm>\n"
+        << "                              maximum wavelength for spectral rendering in nm\n"
+        << "                              (default: 700, range: 380-780)\n"
         << "  --fatal, --error, --warning, --info, --verbose, --debug\n"
         << "                              sets the log level accordingly (default: info)"
         << std::endl;
@@ -2442,7 +2487,7 @@ void parse_command_line(
             else if (arg == "--spi" && i < argc - 1)
                 options.samples_per_iteration = std::atoi(argv[++i]);
             else if (arg == "--max_path_length" && i < argc - 1)
-                options.max_path_length = std::atoi(argv[++i]);
+                options.max_path_length = std::min(std::max(atoi(argv[++i]), 2), 100);
             else if ((arg == "-f" || arg == "--fov") && i < argc - 1)
                 options.cam_fov = static_cast<float>(std::atof(argv[++i]));
             else if (arg == "--camera" && i < argc - 6)
@@ -2559,6 +2604,12 @@ void parse_command_line(
                     print_usage(argv[0]);
                 }
             }
+            else if (arg == "--spectral")
+                options.enable_spectral = true;
+            else if (arg == "--spectral_min_wavelength" && i < argc - 1)
+                options.spectral_min_wavelength = static_cast<float>(std::atof(argv[++i]));
+            else if (arg == "--spectral_max_wavelength" && i < argc - 1)
+                options.spectral_max_wavelength = static_cast<float>(std::atof(argv[++i]));
             else if (arg == "--fatal")
                 mdl_configure_options.log_level = mi::base::MESSAGE_SEVERITY_FATAL;
             else if (arg == "--error")
@@ -2674,7 +2725,7 @@ int MAIN_UTF8(int argc, char* argv[])
 
 #ifdef MDL_ENABLE_MATERIALX
             // Check if the selected material is a MaterialX material
-            if (options.material_name.find(".mtlx") != std::string::npos)
+            if (mi::examples::materialx::is_materialx_resource(options.material_name))
             {
                 // Set up MDL generator
                 mi::examples::materialx::Mdl_generator generator(MDL_EXAMPLE_RELATIVE_DIRECTORY);

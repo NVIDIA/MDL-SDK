@@ -41,7 +41,6 @@
 
 #include "pch.h"
 
-#include <base/lib/mem/i_mem_allocatable.h>
 #include <base/lib/log/i_log_stream.h>
 
 #include "i_serial_buffer_serializer.h"

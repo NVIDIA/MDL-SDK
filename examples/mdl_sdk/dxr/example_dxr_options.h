@@ -56,7 +56,10 @@ namespace mi { namespace examples { namespace dxr
             , firefly_clamp(true)
             , tone_mapping_burn_out(1.0f)
             , exposure_compensation(0.0f)
+            , spectral_min_wavelength(400.0f)
+            , spectral_max_wavelength(700.0f)
             , material_overrides()
+            , show_camera(false)
         {
             hdr_environment = mi::examples::mdl::find_resource_file(
                 MDL_EXAMPLE_RELATIVE_DIRECTORY, "content/hdri/hdrihaven_teufelsberg_inner_2k.exr");
@@ -77,7 +80,13 @@ namespace mi { namespace examples { namespace dxr
         float tone_mapping_burn_out;
         float exposure_compensation;
 
+        float spectral_min_wavelength; // min spectral wavelength in [nm]
+        float spectral_max_wavelength; // max spectral wavelength in [nm]
+
         std::vector<Material_override> material_overrides;
+
+        /// When true, the Camera panel lists world-space pose and a copy-ready `--camera` line.
+        bool show_camera;
     };
 
     inline void print_options()
@@ -138,6 +147,9 @@ namespace mi { namespace examples { namespace dxr
         << "                                        has no camera. Parameters specify position and\n"
         << "                                        focus point.\n"
 
+        << "--show_camera             In the Camera panel, show world-space position and focus\n"
+        << "                          (same convention as `--camera`) and a copy-ready command line.\n"
+
         << "-p|--mdl_path <path>      MDL search path, can occur multiple times.\n"
 
         << "--mdl_next                Enable features from upcoming MDL version.\n"
@@ -146,8 +158,8 @@ namespace mi { namespace examples { namespace dxr
            "                          search path(s) to the MDL search path. Only the scene path\n"
            "                          and paths explicitly stated using '-p|--mdl_path' are added.\n"
 
-        << "--max_path_length <num>   Maximum path length (up to one total internal reflection),\n"
-        << "                          minimum of 2, default " << defaults.ray_depth << "\n"
+        << "--max_path_length <num>   Maximum path length, clamped to 2..100,\n"
+        << "                          default " << defaults.ray_depth << "\n"
 
         << "--max_sss_steps <num>     Maximum number of volume scattering steps in addition to \n"
         << "                          'max_path_length', default " << defaults.sss_depth << "\n"
@@ -221,6 +233,9 @@ namespace mi { namespace examples { namespace dxr
 
         << "--distill <target>        Distill the material before running the code generation.\n"
         << "--distill_debug           Dumps the original and distilled material (default is 'false').\n"
+        
+        << "--load_plugin <library_name>    Load the specified plugin on application startup,\n"
+        << "                                can occur multiple times.\n"
 
         << "--slot_mode <mode>        Slot mode for BSDF handles, one of 'none', '1', '2', '4', '8'.\n"
            "                          (default: 'none')\n"
@@ -238,6 +253,16 @@ namespace mi { namespace examples { namespace dxr
         << "--allowed_scatter_mode <m>      Limits the allowed scatter mode to \"none\", \"reflect\", \n"
            "                                \"transmit\" or \"reflect_and_transmit\"\n"
            "                                (default: restriction disabled)\n"
+
+        << "--init_loop               Enable loop generation in init function to reduce code size and\n"
+           "                          compilation time (default is on).\n"
+
+        << "--no_init_loop            Disable loop generation in init function to reduce code size and\n"
+           "                          compilation time (default is on).\n"
+
+        << "--spectral                Enable spectral rendering mode.\n"
+        << "--spectral_min_wavelength <nm>  Min spectral wavelength (default: 400nm).\n"
+        << "--spectral_max_wavelength <nm>  Max spectral wavelength (default: 700nm).\n"
 
         #if MDL_ENABLE_MATERIALX
         << "--mtlx_path <path>        Specify an additional absolute search path location\n"
@@ -305,6 +330,10 @@ namespace mi { namespace examples { namespace dxr
                 else if (wcscmp(opt, L"--hide_gui") == 0)
                 {
                     options.hide_gui = true;
+                }
+                else if (wcscmp(opt, L"--show_camera") == 0)
+                {
+                    options.show_camera = true;
                 }
                 else if (wcscmp(opt, L"--nothreads") == 0)
                 {
@@ -528,7 +557,7 @@ namespace mi { namespace examples { namespace dxr
                 }
                 else if (wcscmp(opt, L"--max_path_length") == 0 && i < argc - 1)
                 {
-                    options.ray_depth = std::max(2, _wtoi(argv[++i]));
+                    options.ray_depth = std::min(std::max(2, _wtoi(argv[++i])), 100);
                 }
                 else if (wcscmp(opt, L"--max_sss_steps") == 0 && i < argc - 1)
                 {
@@ -631,6 +660,10 @@ namespace mi { namespace examples { namespace dxr
                 {
                     options.distill_debug = true;
                 }
+                else if (wcscmp(opt, L"--load_plugin") == 0 && i < argc - 1)
+                {
+                    options.plugins.push_back(mi::examples::strings::wstr_to_str(argv[++i]));
+                }
                 else if (wcscmp(opt, L"--use_slang") == 0)
                 {
                     #if MDL_ENABLE_SLANG
@@ -695,7 +728,26 @@ namespace mi { namespace examples { namespace dxr
                         return false;
                     }
                 }
-
+                else if (wcscmp(opt, L"--init_loop") == 0)
+                {
+                    options.init_loop = true;
+                }
+                else if (wcscmp(opt, L"--no_init_loop") == 0)
+                {
+                    options.init_loop = false;
+                }
+                else if (wcscmp(opt, L"--spectral") == 0)
+                {
+                    options.enable_spectral = true;
+                }
+                else if (wcscmp(opt, L"--spectral_min_wavelength") == 0 && i < argc - 1)
+                {
+                    options.spectral_min_wavelength = static_cast<float>(_wtof(argv[++i]));
+                }
+                else if (wcscmp(opt, L"--spectral_max_wavelength") == 0 && i < argc - 1)
+                {
+                    options.spectral_max_wavelength = static_cast<float>(_wtof(argv[++i]));
+                }
                 #if MDL_ENABLE_MATERIALX
                     else if (wcscmp(opt, L"--mtlx_path") == 0 && i < argc - 1)
                     {

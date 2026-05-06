@@ -64,6 +64,7 @@ namespace NEURAY {
 class Class_factory;
 class Database_impl;
 class Debug_configuration_impl;
+class Extension_api_impl;
 class Factory_impl;
 class Image_api_impl;
 class Logging_configuration_impl;
@@ -156,6 +157,7 @@ private:
     NEURAY::Factory_impl* m_factory_impl;
     NEURAY::Database_impl* m_database_impl;
     NEURAY::Debug_configuration_impl* m_debug_configuration_impl;
+    NEURAY::Extension_api_impl* m_extension_api_impl;
     NEURAY::Image_api_impl* m_image_api_impl;
     NEURAY::Logging_configuration_impl* m_logging_configuration_impl;
     Mdl_compiler_impl* m_mdl_compiler_impl;

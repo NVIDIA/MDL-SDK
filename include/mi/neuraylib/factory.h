@@ -34,7 +34,7 @@
 #include <mi/base/types.h>
 #include <mi/base/uuid.h>
 #include <mi/base/handle.h>
-#include <mi/neuraylib/version.h> // for MI_NEURAYLIB_DEPRECATED_ENUM_VALUE
+#include <mi/neuraylib/version.h> // for MI_NEURAYLIB_API_VERSION
 
 namespace mi {
 
@@ -125,12 +125,14 @@ T* mi_factory( void* symbol)
     auto* factory = reinterpret_cast<INeuray_factory*>( symbol);
     mi::base::Handle<mi::base::IInterface> iinterface( factory( typename T::IID()));
     if( !iinterface)
-        return 0;
+        return nullptr;
     return iinterface->get_interface<T>();
-}
 }
 
 }
+
+}
+
 /**
 @}
 */ // end group mi_neuray_ineuray

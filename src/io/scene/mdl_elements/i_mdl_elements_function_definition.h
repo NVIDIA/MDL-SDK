@@ -334,10 +334,8 @@ public:
     /// Return a function hash if available.
     mi::base::Uuid get_function_hash() const { return m_function_hash; }
 
-    /// Returns true if the definition still exists in the module.
-    bool is_valid(
-        DB::Transaction* transaction,
-        Execution_context* context) const;
+    /// Returns true if the definition still exists in the module and has valid defaults.
+    bool is_valid( DB::Transaction* transaction, Execution_context* context) const;
 
     /// Checks if this definition is compatible to the given definition.
     bool is_compatible(const Mdl_function_definition& other) const;

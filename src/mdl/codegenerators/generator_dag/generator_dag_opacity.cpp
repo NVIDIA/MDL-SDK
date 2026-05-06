@@ -32,6 +32,7 @@
 #include "generator_dag_tools.h"
 #include "mdl/compiler/compilercore/compilercore_allocator.h"
 #include "mdl/compiler/compilercore/compilercore_array_ref.h"
+#include "mdl/compiler/stdmodule/enums.h"
 
 namespace mi {
 namespace mdl {
@@ -40,25 +41,16 @@ namespace {
 
 /// Helper class to check the opacity of a material instance.
 class Opacity_analyzer {
-    // Must be kept in sync with ::df module
-    enum scatter_mode {
-        scatter_reflect,
-        scatter_transmit,
-        scatter_reflect_transmit
-    };
 
 public:
     typedef IMaterial_instance::Opacity Result;
 
     /// Constructor.
     ///
-    /// \param alloc     the allocator
     /// \param material  the material instance construction
     Opacity_analyzer(
-        IAllocator     *alloc,
         DAG_call const *material)
-    : m_alloc(alloc)
-    , m_constructor(material)
+    : m_constructor(material)
     {
     }
 
@@ -163,6 +155,9 @@ private:
             return IMaterial_instance::OPACITY_UNKNOWN;
         }
 
+        bool first = true;
+        Result first_result = IMaterial_instance::OPACITY_OPAQUE;
+
         int n = arr->get_argument_count();
         for (int i = 0; i < n; ++i) {
             DAG_node const *elem = skip_temp(arr->get_argument(i));
@@ -181,14 +176,54 @@ private:
                 return IMaterial_instance::OPACITY_UNKNOWN;
             }
 
+            DAG_node const *w = elem_const->get_argument("weight");
+            if (is_zero_const(w)) {
+                // filter out zero components, these will not add anything, ignore them
+                continue;
+            }
+
             DAG_node const *bsdf = elem_const->get_argument("component");
             Result res = analyze_bsdf(bsdf);
-            if (res != IMaterial_instance::OPACITY_OPAQUE)
+            if (first) {
+                first_result = res;
+                first = false;
+            } else if (res != first_result) {
+                // different components have different opacity, cannot decide
                 return IMaterial_instance::OPACITY_UNKNOWN;
+            }
         }
 
-        // all good
-        return IMaterial_instance::OPACITY_OPAQUE;
+        // all identical
+        return first_result;
+    }
+
+    /// Check if the given DAG IR node represents a call to state::normal().
+    static bool is_state_normal_call(DAG_node const *node)
+    {
+        if (is<DAG_call>(node)) {
+            return cast<DAG_call>(node)->get_semantic() == IDefinition::DS_INTRINSIC_STATE_NORMAL;
+        }
+        return false;
+    }
+
+    /// Check if the given DAG IR node is non-null and represents a zero constant.
+    static bool is_zero_const(DAG_node const *node)
+    {
+        if (node != NULL && is<DAG_constant>(node)) {
+            IValue const *v = cast<DAG_constant>(node)->get_value();
+            return v->is_zero();
+        }
+        return false;
+    }
+
+    /// Check if the given DAG IR node is non-null and represents a one constant.
+    static bool is_one_const(DAG_node const *node)
+    {
+        if (node != NULL && is<DAG_constant>(node)) {
+            IValue const *v = cast<DAG_constant>(node)->get_value();
+            return v->is_one();
+        }
+        return false;
     }
 
     /// Analyze if a bsdf layerer is opaque or transparent.
@@ -200,6 +235,126 @@ private:
     ///          unknown     otherwise (might depend on parameters)
     Result analyze_bsdf_layerer(DAG_call const *bsdf)
     {
+        // Note: we cannot assume that all optimizations are applied to the DAG,
+        // so we try to handle some special cases here. This is especially usefull for the
+        // distiller, where the structure of the *df part is "shaped" by the distiller rules.
+        DAG_node const *weight = skip_temp(bsdf->get_argument("weight"));
+        if (is<DAG_constant>(weight)) {
+            IValue const *v = cast<DAG_constant>(weight)->get_value();
+            if (v->is_zero()) {
+                // df::fresnel_layer(weight: 0.0, base: x) ==> x
+                // df::color_fresnel_layer(weight: color(0.0), base: x) ==> x
+                // df::weighted_layer(weight: 0.0f, base: x) ==> x
+                // df::custom_curve_layer(weight: 0.0, base: x) ==> x
+                // df::color_weighted_layer(weight: color(0.0f), base: x) ==> x
+                // df::custom_curve_layer(weight: color(0.0), base: x) ==> x
+                switch (bsdf->get_semantic()) {
+                case IDefinition::DS_INTRINSIC_DF_FRESNEL_LAYER:
+                case IDefinition::DS_INTRINSIC_DF_COLOR_FRESNEL_LAYER:
+                case IDefinition::DS_INTRINSIC_DF_WEIGHTED_LAYER:
+                case IDefinition::DS_INTRINSIC_DF_CUSTOM_CURVE_LAYER:
+                case IDefinition::DS_INTRINSIC_DF_COLOR_WEIGHTED_LAYER:
+                case IDefinition::DS_INTRINSIC_DF_COLOR_CUSTOM_CURVE_LAYER:
+                    {
+                        DAG_node const *base = skip_temp(bsdf->get_argument("base"));
+                        return analyze_bsdf(base);
+                    }
+                    break;
+                default:
+                    break;
+                }
+            } else if (v->is_one()) {
+                switch (bsdf->get_semantic()) {
+                case IDefinition::DS_INTRINSIC_DF_WEIGHTED_LAYER:
+                case IDefinition::DS_INTRINSIC_DF_COLOR_WEIGHTED_LAYER:
+                    {
+                        // df::weighted_layer(
+                        //      weight: 1.0f, layer: x, normal: state::normal()) ==> x
+                        // df::color_weighted_layer(
+                        //      weight: color(1.0f), layer: x, normal: state::normal()) ==> x
+                        DAG_node const *normal = skip_temp(bsdf->get_argument("normal"));
+                        if (is_state_normal_call(normal)) {
+                            DAG_node const *layer = skip_temp(bsdf->get_argument("layer"));
+                            return analyze_bsdf(layer);
+                        }
+                    }
+                    break;
+                case IDefinition::DS_INTRINSIC_DF_CUSTOM_CURVE_LAYER:
+                    {
+                        DAG_node const *normal = skip_temp(bsdf->get_argument("normal"));
+                        if (is_state_normal_call(normal)) {
+                            DAG_node const *exponent = skip_temp(bsdf->get_argument("exponent"));
+                            if (is_zero_const(exponent)) {
+                                // df::custom_curve_layer(
+                                //      weight: 1.0,
+                                //      exponent: 0.0,
+                                //      layer: x,
+                                //      normal: state::normal()) ==> x
+                                DAG_node const *layer = skip_temp(bsdf->get_argument("layer"));
+                                return analyze_bsdf(layer);
+                            }
+
+                            DAG_node const *normal_reflectivity  =
+                                skip_temp(bsdf->get_argument("normal_reflectivity"));
+                            DAG_node const *grazing_reflectivity =
+                                skip_temp(bsdf->get_argument("grazing_reflectivity"));
+                            if (is_one_const(normal_reflectivity) &&
+                                is_one_const(grazing_reflectivity))
+                            {
+                                // df::custom_curve_layer(
+                                //      weight: 1.0,
+                                //      normal_reflectivity: 1.0,
+                                //      grazing_reflectivity: 1.0,
+                                //      layer: x,
+                                //      normal: state::normal()) ==> x
+                                DAG_node const *layer = skip_temp(bsdf->get_argument("layer"));
+                                return analyze_bsdf(layer);
+                            }
+                        }
+                    }
+                    break;
+                case IDefinition::DS_INTRINSIC_DF_COLOR_CUSTOM_CURVE_LAYER:
+                    {
+                        DAG_node const *normal     = skip_temp(bsdf->get_argument("normal"));
+                        DAG_node const *f82_factor = skip_temp(bsdf->get_argument("f82_factor"));
+                        if (is_state_normal_call(normal) && is_one_const(f82_factor)) {
+                            DAG_node const *exponent = skip_temp(bsdf->get_argument("exponent"));
+                            if (is_zero_const(exponent)) {
+                                // df::color_custom_curve_layer(
+                                //      weight: color(1.0),
+                                //      f82_factor: color(1.0)
+                                //      exponent: 0.0,
+                                //      layer: x,
+                                //      normal: state::normal()) ==> x
+                                DAG_node const *layer = skip_temp(bsdf->get_argument("layer"));
+                                return analyze_bsdf(layer);
+                            }
+                            DAG_node const *normal_reflectivity  =
+                                skip_temp(bsdf->get_argument("normal_reflectivity"));
+                            DAG_node const *grazing_reflectivity =
+                                skip_temp(bsdf->get_argument("grazing_reflectivity"));
+                            if (is_one_const(normal_reflectivity) &&
+                                is_one_const(grazing_reflectivity))
+                            {
+                                // df::color_custom_curve_layer(
+                                //      weight: color(1.0),
+                                //      f82_factor: color(1.0)
+                                //      normal_reflectivity: 1.0,
+                                //      grazing_reflectivity: 1.0,
+                                //      layer: x,
+                                //      normal: state::normal()) ==> x
+                                DAG_node const *layer = skip_temp(bsdf->get_argument("layer"));
+                                return analyze_bsdf(layer);
+                            }
+                        }
+                    }
+                    break;
+                default:
+                    break;
+                }
+            }
+        }
+
         DAG_node const *lower_layer = skip_temp(bsdf->get_argument("base"));
         DAG_node const *upper_layer = skip_temp(bsdf->get_argument("layer"));
 
@@ -234,7 +389,7 @@ private:
     Result analyze_glossy_bsdf(DAG_call const *bsdf)
     {
         // MaterialLayerBSDF_DBSDF
-        int refl_type = scatter_reflect;
+        df::scatter_mode refl_type = df::scatter_reflect;
         bool has_mode = false;
 
         switch (bsdf->get_semantic()) {
@@ -266,10 +421,10 @@ private:
                 return IMaterial_instance::OPACITY_UNKNOWN;
             }
             IValue_int_valued const *i_v = cast<IValue_int_valued>(v);
-            refl_type = static_cast<scatter_mode>(i_v->get_value());
+            refl_type = static_cast<df::scatter_mode>(i_v->get_value());
         }
 
-        if (refl_type == scatter_transmit || refl_type == scatter_reflect_transmit) {
+        if (refl_type == df::scatter_transmit || refl_type == df::scatter_reflect_transmit) {
             return IMaterial_instance::OPACITY_TRANSPARENT;
         }
         return IMaterial_instance::OPACITY_OPAQUE;
@@ -453,9 +608,6 @@ private:
     }
 
 private:
-    /// The allocator.
-    IAllocator     *m_alloc;
-
     /// The material instance construction.
     DAG_call const *m_constructor;
 };
@@ -473,7 +625,7 @@ Generated_code_dag::Material_instance::get_opacity() const
 
     DAG_call const *expr = get_constructor();
 
-    return Opacity_analyzer(get_allocator(), expr).analyze(/*skip_cutout=*/false);
+    return Opacity_analyzer(expr).analyze(/*skip_cutout=*/false);
 }
 
 /// Returns the opacity of this instance.
@@ -487,7 +639,7 @@ Generated_code_dag::Material_instance::get_surface_opacity() const
 
     DAG_call const *expr = get_constructor();
 
-    return Opacity_analyzer(get_allocator(), expr).analyze(/*skip_cutout=*/true);
+    return Opacity_analyzer(expr).analyze(/*skip_cutout=*/true);
 }
 
 // Returns the cutout opacity of this instance if it is constant.
@@ -500,7 +652,7 @@ IValue_float const *Generated_code_dag::Material_instance::get_cutout_opacity() 
 
     DAG_call const *expr = get_constructor();
 
-    return Opacity_analyzer(get_allocator(), expr).get_cutout_opacity();
+    return Opacity_analyzer(expr).get_cutout_opacity();
 }
 
 }  // mdl

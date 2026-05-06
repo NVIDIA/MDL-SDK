@@ -40,6 +40,7 @@ typedef mi::neuraylib::tct_deriv_float2                    tct_deriv_float2;
 typedef mi::neuraylib::tct_deriv_arr_float_2               tct_deriv_arr_float_2;
 typedef mi::neuraylib::tct_deriv_arr_float_3               tct_deriv_arr_float_3;
 typedef mi::neuraylib::tct_deriv_arr_float_4               tct_deriv_arr_float_4;
+typedef mi::neuraylib::tct_spectral_sample                 tct_spectral_sample;
 typedef mi::neuraylib::Shading_state_material_with_derivs  Shading_state_material_with_derivs;
 typedef mi::neuraylib::Shading_state_material              Shading_state_material;
 typedef mi::neuraylib::Texture_handler_base                Texture_handler_base;
@@ -680,7 +681,223 @@ void adapt_normal(
     result[2] = normal[2];
 }
 
+// Implementation of adapt_normal() with derivative state.
+void adapt_normal_deriv(
+    float                                  result[3],
+    Texture_handler_base const            *self_base,
+    Shading_state_material_with_derivs    *state,
+    float const                            normal[3])
+{
+    // just return original normal
+    result[0] = normal[0];
+    result[1] = normal[1];
+    result[2] = normal[2];
+}
+
 #endif  // TEX_SUPPORT_NO_DUMMY_ADAPTNORMAL
+
+
+// ------------------------------------------------------------------------------------------------
+// Spectral support
+//
+// Can be enabled via backend option "libbsdf_enable_spectral".
+// ------------------------------------------------------------------------------------------------
+
+#ifndef TEX_SUPPORT_NO_SPECTRAL
+
+// D65 spectral power distribution (from 360 to 830 nm)
+// (scaled such that if converted to CIE XYZ the luminance value, Y, is one)
+constexpr unsigned int D65_RESOLUTION = 95;
+static const float s_cie_d65[D65_RESOLUTION] = {
+    6.462114e-06f, 6.839740e-06f, 7.217367e-06f, 7.070938e-06f,
+    6.924510e-06f, 7.248223e-06f, 7.571951e-06f, 9.519149e-06f,
+    1.146636e-05f, 1.207124e-05f, 1.267613e-05f, 1.281093e-05f,
+    1.294573e-05f, 1.247813e-05f, 1.201053e-05f, 1.327021e-05f,
+    1.452989e-05f, 1.537108e-05f, 1.621241e-05f, 1.626811e-05f,
+    1.632381e-05f, 1.611929e-05f, 1.591492e-05f, 1.598850e-05f,
+    1.606207e-05f, 1.556936e-05f, 1.507664e-05f, 1.511419e-05f,
+    1.515188e-05f, 1.504436e-05f, 1.493684e-05f, 1.472817e-05f,
+    1.451950e-05f, 1.472027e-05f, 1.492118e-05f, 1.469367e-05f,
+    1.446616e-05f, 1.444122e-05f, 1.441642e-05f, 1.413611e-05f,
+    1.385581e-05f, 1.360185e-05f, 1.334788e-05f, 1.331004e-05f,
+    1.327220e-05f, 1.278016e-05f, 1.228811e-05f, 1.237960e-05f,
+    1.247109e-05f, 1.244288e-05f, 1.241468e-05f, 1.228302e-05f,
+    1.215136e-05f, 1.184583e-05f, 1.154031e-05f, 1.156876e-05f,
+    1.159720e-05f, 1.134278e-05f, 1.108836e-05f, 1.110137e-05f,
+    1.111438e-05f, 1.125732e-05f, 1.140026e-05f, 1.112358e-05f,
+    1.084691e-05f, 1.025367e-05f, 9.660451e-06f, 9.791236e-06f,
+    9.922021e-06f, 1.011183e-05f, 1.030166e-05f, 9.418694e-06f,
+    8.535733e-06f, 9.109474e-06f, 9.683216e-06f, 1.004356e-05f,
+    1.040391e-05f, 9.607591e-06f, 8.811283e-06f, 7.621443e-06f,
+    6.431617e-06f, 7.844023e-06f, 9.256429e-06f, 9.019315e-06f,
+    8.782200e-06f, 8.846020e-06f, 8.909840e-06f, 8.573684e-06f,
+    8.237542e-06f, 7.718434e-06f, 7.199340e-06f, 7.579100e-06f,
+    7.958860e-06f, 8.157816e-06f, 8.356785e-06f
+};
+static inline float lookup_d65(const float lambda)
+{
+    float f = (lambda - 360.0f) / (830.0f - 360.0f);
+    if (f < 0.0f || f > 1.0f)
+        return 0.0f;
+
+    f *= float(D65_RESOLUTION - 1);
+    const unsigned int b0 = std::min((unsigned int)(floorf(f)), D65_RESOLUTION - 1);
+    const unsigned int b1 = (b0 < (D65_RESOLUTION - 1)) ? (b0 + 1) : b0;
+
+    const float w1 = f - float(b0);
+    return s_cie_d65[b0] * (1.0f - w1) + s_cie_d65[b1] * w1;
+}
+
+static inline tct_spectral_sample get_wavelengths(const Shading_state_material *state)
+{
+    return (static_cast<const mi::neuraylib::Shading_state_material_spectral *>(state))->spectral_wavelengths;
+}
+
+static inline tct_spectral_sample get_wavelengths(const Shading_state_material_with_derivs *state)
+{
+    return (static_cast<const mi::neuraylib::Shading_state_material_spectral_with_derivs *>(state))->spectral_wavelengths;
+}
+
+template <bool is_emission>
+static inline tct_spectral_sample rgb_to_spectral(
+    const tct_spectral_sample lambdas,
+    const float rgb[3])
+{
+    tct_spectral_sample s;
+    for (unsigned int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+    {
+        const float lambda = lambdas.values[i];
+        // construct simple spectral reflectivity
+        // (using Jendersie - "Fast Spectral Upsampling of Volume Attenuation Coefficients")
+        s.values[i] = (lambda < 485.0f) ? rgb[2] : ((lambda < 595.9f) ? rgb[1] : rgb[0]);
+
+        // for emission, apply spectral illuminant
+        if (is_emission)
+            s.values[i] *= lookup_d65(lambda);
+    }
+    return s;
+}
+
+static inline tct_spectral_sample rgb_to_spectral_ior(
+    const tct_spectral_sample lambdas,
+    const float rgb[3])
+{
+    tct_spectral_sample s;
+    for (unsigned int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+    {
+        // piecewise-linear spectrum for IOR assuming point samples at 435, 546, and 700 nm for blue, green, and red
+        const float lambda = lambdas.values[i];
+        if (lambda > 546.0f) {
+            const float t = std::min((lambda - 546.0f) *  float(1.0 / (700.0 - 546.0)), 1.0f);
+            s.values[i] = t * rgb[0] + (1.0f - t) * rgb[1];
+        } else {
+            const float t = std::max((lambda - 435.0f) *  float(1.0 / (546.0 - 435.0)), 0.0f);
+            s.values[i] = t * rgb[1] + (1.0f - t) * rgb[2];
+        }
+    }
+    return s;
+}
+
+// Implementation of rgb_to_spectral_ior().
+void rgb_to_spectral_ior(
+    tct_spectral_sample                   *result,
+    Texture_handler_base const            *self_base,
+    Shading_state_material                *state,
+    float const                            rgb[3])
+{
+    *result = rgb_to_spectral_ior(get_wavelengths(state), rgb);
+}
+
+// Implementation of rgb_to_spectral_ior() with derivative state.
+void rgb_to_spectral_ior_deriv(
+    tct_spectral_sample                   *result,
+    Texture_handler_base const            *self_base,
+    Shading_state_material_with_derivs    *state,
+    float const                            rgb[3])
+{
+    *result = rgb_to_spectral_ior(get_wavelengths(state), rgb);
+
+}
+
+// Implementation of rgb_to_spectral_reflectance().
+void rgb_to_spectral_reflectance(
+    tct_spectral_sample                   *result,
+    Texture_handler_base const            *self_base,
+    Shading_state_material                *state,
+    float const                            rgb[3])
+{
+    *result = rgb_to_spectral<false>(get_wavelengths(state), rgb);
+}
+
+// Implementation of rgb_to_spectral_reflectance() with derivative state.
+void rgb_to_spectral_reflectance_deriv(
+    tct_spectral_sample                   *result,
+    Texture_handler_base const            *self_base,
+    Shading_state_material_with_derivs    *state,
+    float const                            rgb[3])
+{
+    *result = rgb_to_spectral<false>(get_wavelengths(state), rgb);
+}
+
+// Implementation of rgb_to_spectral_luminance().
+void rgb_to_spectral_luminance(
+    tct_spectral_sample                   *result,
+    Texture_handler_base const            *self_base,
+    Shading_state_material                *state,
+    float const                            rgb[3])
+{
+    *result = rgb_to_spectral<true>(get_wavelengths(state), rgb);
+}
+
+// Implementation of rgb_to_spectral_luminance() with derivative state.
+void rgb_to_spectral_luminance_deriv(
+    tct_spectral_sample                   *result,
+    Texture_handler_base const            *self_base,
+    Shading_state_material_with_derivs    *state,
+    float const                            rgb[3])
+{
+    *result = rgb_to_spectral<true>(get_wavelengths(state), rgb);
+}
+
+// Implementation of rgb_to_spectral_volume_coefficient().
+void rgb_to_spectral_volume_coefficient(
+    tct_spectral_sample                   *result,
+    Texture_handler_base const            *self_base,
+    Shading_state_material                *state,
+    float const                            rgb[3])
+{
+    *result = rgb_to_spectral<false>(get_wavelengths(state), rgb);
+}
+
+// Implementation of rgb_to_spectral_volume_coefficient() with derivative state.
+void rgb_to_spectral_volume_coefficient_deriv(
+    tct_spectral_sample                   *result,
+    Texture_handler_base const            *self_base,
+    Shading_state_material_with_derivs    *state,
+    float const                            rgb[3])
+{
+    *result = rgb_to_spectral<false>(get_wavelengths(state), rgb);
+}
+
+// Implementation of get_wavelengths().
+void get_wavelengths(
+    tct_spectral_sample                   *result,
+    Texture_handler_base const            *self_base,
+    Shading_state_material                *state)
+{
+    *result = get_wavelengths(state);
+}
+
+// Implementation of get_wavelengths() with derivative state.
+void get_wavelengths_deriv(
+    tct_spectral_sample                   *result,
+    Texture_handler_base const            *self_base,
+    Shading_state_material_with_derivs    *state)
+{
+    *result = get_wavelengths(state);
+}
+
+#endif  // TEX_SUPPORT_NO_SPECTRAL
 
 
 // ------------------------------------------------------------------------------------------------
@@ -941,6 +1158,11 @@ mi::neuraylib::Texture_handler_vtable tex_vtable = {
     df_bsdf_measurement_pdf,
     df_bsdf_measurement_albedos,
     adapt_normal,
+    rgb_to_spectral_ior,
+    rgb_to_spectral_reflectance,
+    rgb_to_spectral_luminance,
+    rgb_to_spectral_volume_coefficient,
+    get_wavelengths,
     scene_data_isvalid,
     scene_data_lookup_float,
     scene_data_lookup_float2,
@@ -986,7 +1208,12 @@ mi::neuraylib::Texture_handler_deriv_vtable tex_deriv_vtable = {
     df_bsdf_measurement_sample,
     df_bsdf_measurement_pdf,
     df_bsdf_measurement_albedos,
-    adapt_normal,
+    adapt_normal_deriv,
+    rgb_to_spectral_ior_deriv,
+    rgb_to_spectral_reflectance_deriv,
+    rgb_to_spectral_luminance_deriv,
+    rgb_to_spectral_volume_coefficient_deriv,
+    get_wavelengths_deriv,
     scene_data_isvalid,
     scene_data_lookup_float,
     scene_data_lookup_float2,

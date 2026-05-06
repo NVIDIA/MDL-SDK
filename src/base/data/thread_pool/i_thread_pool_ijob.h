@@ -173,7 +173,8 @@ public:
     /// Empty in default implementation. Can be overridden if desired.
     virtual void job_finished() { }
 
-    //@{ Default implementation of some methods of THREAD_POOL::IJob
+    /// \name Default implementation of some methods of THREAD_POOL::IJob
+    //@{
 
     /// Do not change/override this implementation unless you really know what you are doing.
     void pre_execute( const mi::neuraylib::IJob_execution_context* context) final
@@ -225,11 +226,11 @@ private:
     /// The number of fragments of this fragmented job.
     size_t m_count;
     /// The next fragment that will be executed.
-    std::atomic_uint32_t m_next_fragment;
+    std::atomic_size_t m_next_fragment;
     /// The number of fragments not yet completed.
-    std::atomic_uint32_t m_outstanding_fragments;
+    std::atomic_size_t m_outstanding_fragments;
     /// The number of threads in #execute().
-    std::atomic_uint32_t m_threads;
+    std::atomic_size_t m_threads;
 };
 
 } // namespace THREAD_POOL

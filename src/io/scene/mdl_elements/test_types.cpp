@@ -1143,41 +1143,221 @@ void test_is_compatible()
     }
 }
 
-// Thread that repeatedly creates, queries, and destroys enum types.
-class Enum_types_thread : public THREAD::Thread
+// Helper function to register and create sine struct category, including a variant.
+const IStruct_category* create_struct_category(
+    IType_factory* tf, const char* symbol, bool variant = false)
+{
+    mi::base::Handle<const IAnnotation_block> annotations;
+    mi::Sint32 errors = 0;
+
+    const IStruct_category* result = tf->create_struct_category(
+        symbol,
+        variant ? IStruct_category::CID_MATERIAL_CATEGORY : IStruct_category::CID_USER,
+        annotations,
+        &errors);
+
+    MI_CHECK_EQUAL( errors, 0);
+    MI_CHECK( result);
+    return result;
+}
+
+// Helper function to register and create some enum type, including a variant.
+const IType_enum* create_enum_type( IType_factory* tf, const char* symbol, bool variant = false)
+{
+    mi::base::Handle<const IAnnotation_block> annotations;
+    IType_enum::Value_annotations value_annotations;
+    mi::Sint32 errors = 0;
+
+    const IType_enum* result = tf->create_enum(
+        symbol,
+        IType_enum::EID_USER,
+        {{variant ? "my_enumerator2" : "my_enumerator", variant ? 43 : 42}},
+        annotations,
+        value_annotations,
+        &errors);
+
+    MI_CHECK_EQUAL( errors, 0);
+    MI_CHECK( result);
+    return result;
+}
+
+// Helper function to register and create some struct type, including a variant.
+const IType_struct* create_struct_type( IType_factory* tf, const char* symbol, bool variant = false)
+{
+    mi::base::Handle<const IType> field_type( variant
+        ? static_cast<const IType*>( tf->create_float())
+        : static_cast<const IType*>( tf->create_int()));
+    mi::base::Handle<const IAnnotation_block> annotations;
+    IType_struct::Field_annotations field_annotations;
+    mi::Sint32 errors = 0;
+
+    const IType_struct* result = tf->create_struct(
+        symbol,
+        IType_struct::SID_USER,
+        {{field_type, variant ? "my_field2" : "my_field"}},
+        annotations,
+        field_annotations,
+        /*is_declarative*/ false,
+        /*struct_category*/ nullptr,
+        &errors);
+
+    MI_CHECK_EQUAL( errors, 0);
+    MI_CHECK( result);
+    return result;
+}
+
+void test_type_changes()
+{
+    Type_factory tf;
+    const char* symbol = "::my_type";
+    const bool variant = true;
+
+    {
+        // Register struct category and create another instance by symbol lookup
+        mi::base::Handle<const IStruct_category> c1( create_struct_category( &tf, symbol));
+        mi::base::Handle<const IStruct_category> c2( tf.create_struct_category( symbol));
+        MI_CHECK( c2);
+        c2.reset();
+        c1.reset();
+
+        // Dead, no creation by symbol lookup possible
+        mi::base::Handle<const IStruct_category> c3( tf.create_struct_category( symbol));
+        MI_CHECK( !c3);
+
+        // Register different struct category
+        mi::base::Handle<const IStruct_category> c4( create_struct_category( &tf, symbol, variant));
+        c4.reset();
+
+        // Register different entities
+        mi::base::Handle<const IType_enum> e( create_enum_type( &tf, symbol));
+        e.reset();
+        mi::base::Handle<const IType_struct> s( create_struct_type( &tf, symbol));
+        s.reset();
+    }
+    {
+        // Register enum type and create another instance by symbol lookup
+        mi::base::Handle<const IType_enum> e1( create_enum_type( &tf, symbol));
+        mi::base::Handle<const IType_enum> e2( tf.create_enum( symbol));
+        MI_CHECK( e2);
+        e2.reset();
+        e1.reset();
+
+        // Dead, no creation by symbol lookup possible
+        mi::base::Handle<const IType_enum> e3( tf.create_enum( symbol));
+        MI_CHECK( !e3);
+
+        // Register different enum type
+        mi::base::Handle<const IType_enum> e4( create_enum_type( &tf, symbol, variant));
+        e4.reset();
+
+        // Register different entities
+        mi::base::Handle<const IType_struct> s( create_struct_type( &tf, symbol));
+        s.reset();
+        mi::base::Handle<const IStruct_category> c( create_struct_category( &tf, symbol));
+        c.reset();
+    }
+    {
+        // Register struct type and create another instance by symbol lookup
+        mi::base::Handle<const IType_struct> s1( create_struct_type( &tf, symbol));
+        mi::base::Handle<const IType_struct> s2( tf.create_struct( symbol));
+        MI_CHECK( s2);
+        s2.reset();
+        s1.reset();
+
+        // Dead, no creation by symbol lookup possible
+        mi::base::Handle<const IType_struct> s3( tf.create_struct( symbol));
+        MI_CHECK( !s3);
+
+        // Register different struct type
+        mi::base::Handle<const IType_struct> s4( create_struct_type( &tf, symbol, variant));
+        s4.reset();
+
+        // Register different entities
+        mi::base::Handle<const IStruct_category> c( create_struct_category( &tf, symbol));
+        c.reset();
+        mi::base::Handle<const IType_enum> e( create_enum_type( &tf, symbol));
+        e.reset();
+    }
+}
+
+// Thread that repeatedly creates, queries, and destroys struct categories.
+class Struct_categories_thread : public THREAD::Thread
 {
 public:
-    void initialize( IType_factory* itf, mi::Size iteration_count)
+    void initialize( IType_factory* itf, const char* symbol, mi::Size iteration_count)
     {
         m_itf = itf;
+        m_symbol = symbol;
         m_iteration_count = iteration_count;
     }
 
     void run() final
     {
-        mi::base::Handle<const IAnnotation_block> annotations;
-        IType_enum::Value_annotations value_annotations;
-        mi::Sint32 errors = 0;
-
         for( mi::Size i = 0; i < m_iteration_count; ++i) {
 
-            mi::base::Handle<const IType_enum> e1( m_itf->create_enum(
-                "::my_enum4",
-                IType_enum::EID_USER,
-                {{"my_enumerator", 42}},
-                annotations,
-                value_annotations,
-                &errors));
-            MI_CHECK_EQUAL( errors, 0);
-            MI_CHECK( e1);
+            mi::base::Handle<const IStruct_category> sc1( create_struct_category( m_itf, m_symbol));
+            mi::base::Handle<const IStruct_category> sc2( m_itf->create_struct_category( m_symbol));
+            MI_CHECK( sc2);
+            sc2.reset();
+            sc1.reset();
 
-            mi::base::Handle<const IType_enum> e2( m_itf->create_enum( "::my_enum4"));
+            mi::base::Handle<const IStruct_category> sc3( m_itf->create_struct_category( m_symbol));
+            // Can succeed (other threads kept the struct category registered) or fail.
+            sc3.reset();
+        }
+    }
+
+private:
+    IType_factory* m_itf;
+    const char* m_symbol;
+    mi::Size m_iteration_count;
+};
+
+void test_struct_category_multithreaded()
+{
+    Type_factory tf;
+    const char* symbol = "::my_struct_category";
+    mi::Size thread_count = 10;
+    mi::Size iteration_count = 100;
+
+    auto* threads = new Struct_categories_thread[thread_count];
+    for( mi::Size i = 0; i < thread_count; ++i) {
+        threads[i].initialize( &tf, symbol, iteration_count);
+        threads[i].start();
+    }
+    for( mi::Size i = 0; i < thread_count; ++i) {
+        threads[i].join();
+    }
+
+    delete[] threads;
+
+    // Check that the registered struct category is dead.
+    mi::base::Handle<const IStruct_category> sc( tf.create_struct_category( symbol));
+    MI_CHECK( !sc);
+}
+
+// Thread that repeatedly creates, queries, and destroys enum types.
+class Enum_types_thread : public THREAD::Thread
+{
+public:
+    void initialize( IType_factory* itf, const char* symbol, mi::Size iteration_count)
+    {
+        m_itf = itf;
+        m_symbol = symbol;
+        m_iteration_count = iteration_count;
+    }
+
+    void run() final
+    {
+        for( mi::Size i = 0; i < m_iteration_count; ++i) {
+
+            mi::base::Handle<const IType_enum> e1( create_enum_type( m_itf, m_symbol));
+            mi::base::Handle<const IType_enum> e2( m_itf->create_enum( m_symbol));
             MI_CHECK( e2);
             e2.reset();
-
             e1.reset();
 
-            mi::base::Handle<const IType_enum> e3( m_itf->create_enum( "::my_enum4"));
+            mi::base::Handle<const IType_enum> e3( m_itf->create_enum( m_symbol));
             // Can succeed (other threads kept the enum registered) or fail.
             e3.reset();
         }
@@ -1185,18 +1365,20 @@ public:
 
 private:
     IType_factory* m_itf;
+    const char* m_symbol;
     mi::Size m_iteration_count;
 };
 
 void test_enum_type_multithreaded()
 {
     Type_factory tf;
+    const char* symbol = "::my_enum";
     mi::Size thread_count = 10;
     mi::Size iteration_count = 100;
 
     auto* threads = new Enum_types_thread[thread_count];
     for( mi::Size i = 0; i < thread_count; ++i) {
-        threads[i].initialize( &tf, iteration_count);
+        threads[i].initialize( &tf, symbol, iteration_count);
         threads[i].start();
     }
     for( mi::Size i = 0; i < thread_count; ++i) {
@@ -1204,46 +1386,34 @@ void test_enum_type_multithreaded()
     }
 
     delete[] threads;
+
+    // Check that the registered enum type is dead.
+    mi::base::Handle<const IType_enum> e( tf.create_enum( symbol));
+    MI_CHECK( !e);
 }
 
 // Thread that repeatedly creates, queries, and destroys struct types.
 class Struct_types_thread : public THREAD::Thread
 {
 public:
-    void initialize( IType_factory* itf, mi::Size iteration_count)
+    void initialize( IType_factory* itf, const char* symbol, mi::Size iteration_count)
     {
         m_itf = itf;
+        m_symbol = symbol;
         m_iteration_count = iteration_count;
     }
 
     void run() final
     {
-        mi::base::Handle<const IType> int_type( m_itf->create_int());
-        mi::base::Handle<const IAnnotation_block> annotations;
-        IType_struct::Field_annotations field_annotations;
-        mi::Sint32 errors = 0;
-
         for( mi::Size i = 0; i < m_iteration_count; ++i) {
 
-            mi::base::Handle<const IType_struct> s1( m_itf->create_struct(
-                "::my_struct4",
-                IType_struct::SID_USER,
-                {{int_type, "my_field"}},
-                annotations,
-                field_annotations,
-                /*is_declarative*/ false,
-                /*struct_category*/ nullptr,
-                &errors));
-            MI_CHECK_EQUAL( errors, 0);
-            MI_CHECK( s1);
-
-            mi::base::Handle<const IType_struct> s2( m_itf->create_struct( "::my_struct4"));
+            mi::base::Handle<const IType_struct> s1( create_struct_type( m_itf, m_symbol));
+            mi::base::Handle<const IType_struct> s2( m_itf->create_struct( m_symbol));
             MI_CHECK( s2);
             s2.reset();
-
             s1.reset();
 
-            mi::base::Handle<const IType_struct> s3( m_itf->create_struct( "::my_struct4"));
+            mi::base::Handle<const IType_struct> s3( m_itf->create_struct( m_symbol));
             // Can succeed (other threads kept the struct registered) or fail.
             s3.reset();
         }
@@ -1251,18 +1421,20 @@ public:
 
 private:
     IType_factory* m_itf;
+    const char* m_symbol;
     mi::Size m_iteration_count;
 };
 
 void test_struct_type_multithreaded()
 {
     Type_factory tf;
+    const char* symbol = "::my_struct";
     mi::Size thread_count = 10;
     mi::Size iteration_count = 100;
 
     auto* threads = new Struct_types_thread[thread_count];
     for( mi::Size i = 0; i < thread_count; ++i) {
-        threads[i].initialize( &tf, iteration_count);
+        threads[i].initialize( &tf, symbol, iteration_count);
         threads[i].start();
     }
     for( mi::Size i = 0; i < thread_count; ++i) {
@@ -1270,6 +1442,10 @@ void test_struct_type_multithreaded()
     }
 
     delete[] threads;
+
+    // Check that the registered struct type is dead.
+    mi::base::Handle<const IType_struct> s( tf.create_struct( symbol));
+    MI_CHECK( !s);
 }
 
 MI_TEST_AUTO_FUNCTION( test )
@@ -1285,9 +1461,10 @@ MI_TEST_AUTO_FUNCTION( test )
     test_compare_list();
     test_is_compatible();
 
-    // TODO MDL-957 IType_enum::release() and IType_struct::release() are not thread-safe.
-    // test_enum_type_multithreaded();
-    // test_struct_type_multithreaded();
+    test_type_changes();
+    test_struct_category_multithreaded();
+    test_enum_type_multithreaded();
+    test_struct_type_multithreaded();
 }
 
 MI_TEST_MAIN_CALLING_TEST_MAIN();

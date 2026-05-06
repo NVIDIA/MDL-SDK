@@ -490,7 +490,7 @@ mi::Sint32 Mdle_api_impl::export_mdle(
 
         DB::Access<MDL::Mdl_function_call> func_call( prototype_tag, db_transaction);
         prototype_tag = func_call->get_function_definition( db_transaction);
-        if( !prototype_tag.is_valid())
+        if( !prototype_tag)
             return add_error_message( mdl_context, "Function call is invalid.", -1);
         if( !defaults_int)
             defaults_int = func_call->get_arguments();
@@ -682,7 +682,7 @@ mi::Sint32 Mdle_api_impl::export_mdle(
     author.append(VERSION::get_platform_date());
     author.append(", ");
     author.append(VERSION::get_platform_os());
-    author.append(")");
+    author.append(1,')');
     desc.authoring_tool_name_and_version = author.c_str();
 
     // write module to disk

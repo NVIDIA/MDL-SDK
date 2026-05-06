@@ -35,6 +35,8 @@
 
 #include <mi/mdl/mdl_distiller_node_types.h>
 
+#include <string>
+
 #include "mdltlc_message.h"
 #include "mdltlc_pprint.h"
 #include "mdltlc_symbols.h"
@@ -78,12 +80,17 @@ class Compilation_unit : public mi::mdl::Allocator_interface_implement<ICompilat
     };
 
 public:
+    enum Match_context {
+        Rule_match,
+        Attribute_check,
+        Attribute_match,
+    };
+
     /// Get the relative name of the file from which this unit was
     /// loaded.
     ///
     /// \returns The relative name of the file from which the module
     ///          was loaded, or null if no such file exists.
-
     char const *get_filename() const;
 
     /// Get the expression factory.
@@ -100,6 +107,9 @@ public:
 
     /// Get the rule factory.
     Rule_factory &get_rule_factory();
+
+    /// Get the parsed rulesets.
+    Ruleset_list const &get_rulesets() const;
 
     /// Load mdltl definitions from the given input stream.
     ///
@@ -333,6 +343,7 @@ private:
         size_t fail_node_index,
         size_t cont_index,
         Expr const *node,
+        Compilation_unit::Match_context match_context,
         size_t &tmp_index);
 
     /// Helper function for output_cpp. Outputs the matcher function
@@ -456,9 +467,14 @@ private:
     Compilation_unit &operator=(Compilation_unit const &) = delete;
 
     bool is_material_struct(Type const *t);
-    bool is_material_or_bsdf(Type const *t);
+    bool is_valid_rule_type(Type const *t);
 
     void dump_env(Environment &env);
+
+    void add_message(
+        Message::Severity severity,
+        Location const &location,
+        char const *msg);
 
 private:
     /// The memory arena of for the global compilation process, used
@@ -484,6 +500,9 @@ private:
 
     /// The file name of the loaded module without any directories.
     char const *m_filename_only;
+
+    /// Source text of this compilation unit, used for diagnostic excerpts.
+    std::string m_source_text;
 
     /// Options for the compiler.
     Compiler_options const *m_comp_options;

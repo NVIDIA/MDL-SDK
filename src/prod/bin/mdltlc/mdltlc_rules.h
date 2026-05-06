@@ -264,6 +264,7 @@ public:
     Rule_list const &get_rules() const;
     Rule_list &get_rules();
     Postcond &get_postcond();
+    Postcond const &get_postcond() const;
 
     void set_postcond_expr(Expr *expr);
     void add_import(Import *import);

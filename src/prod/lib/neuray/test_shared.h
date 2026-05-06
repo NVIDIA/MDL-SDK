@@ -31,7 +31,9 @@
 #ifndef PROD_LIB_NEURAY_TEST_SHARED_H
 #define PROD_LIB_NEURAY_TEST_SHARED_H
 
+#include <mi/base/handle.h>
 #include <mi/base/config.h>
+#include <mi/base/types.h>
 #include <mi/neuraylib/factory.h>
 #include <mi/neuraylib/ineuray.h>
 
@@ -195,6 +197,7 @@ bool unload()
             LocalFree( buffer);
         return false;
     }
+    g_dso_handle = nullptr;
     return true;
 #else
     int result = dlclose( g_dso_handle);
@@ -202,6 +205,7 @@ bool unload()
         printf( "%s\n", dlerror());
         return false;
     }
+    g_dso_handle = nullptr;
     return true;
 #endif
 }
@@ -219,6 +223,20 @@ void sleep_seconds( mi::Float32 seconds)
 // Type constants to avoid overload ambiguities with 0 and nullptr.
 const char* zero_string = 0;
 const mi::Size zero_size = 0;
+
+// Returns the reference count of an interface, or 999 if invalid.
+template <class I>
+mi::Uint32 get_refcount( I* ptr)
+{
+    return ptr ? (ptr->retain(), ptr->release()) : 999;
+}
+
+// Returns the reference count of a handle, or 999 if invalid.
+template <class I>
+mi::Uint32 get_refcount( const mi::base::Handle<I>& handle)
+{
+    return get_refcount( handle.get());
+}
 
 // Constant to avoid writing down the static cast.
 const mi::Size minus_one_size = static_cast<mi::Size>( -1);

@@ -750,6 +750,15 @@ public:
         /// The result of the dependence analysis.
         struct Dependence_result {
             /// Constructor.
+            ///
+            /// \param depends_on_transform       True if depends on the object transforms.
+            /// \param depends_on_object_id       True if depends of the object id.
+            /// \param edf_global_distribution    True, if depends on global distribution (edf).
+            /// \param depends_on_uniform_scene_data True, if depends on uniform scene data.
+            /// \param scene_name_is_non_const    True, if not all scene::data_lookup() functions
+            ///                                   operate on a literal.
+            /// \param referenced_scene_data      Set of scene data names referenced by the entity.
+            /// \param referenced_strings         Set of string literals referenced by the entity.
             Dependence_result(
                 bool             depends_on_transform,
                 bool             depends_on_object_id,
@@ -769,6 +778,8 @@ public:
             }
 
             /// Empty constructor.
+            ///
+            /// \param alloc  The allocator.
             explicit Dependence_result(IAllocator *alloc)
             : m_depends_on_transform(false)
             , m_depends_on_object_id(false)
@@ -820,6 +831,110 @@ public:
 
         typedef ptr_hash_map<IDefinition const, Dependence_result>::Type Dep_analysis_cache;
 
+        /// Helper class for analyzing instance dependencies (properties, scene data, etc.).
+        class Instance_analyzer : protected IDAG_ir_visitor {
+        public:
+            typedef IMaterial_instance::Property   Property;
+            typedef IMaterial_instance::Properties Properties;
+
+            /// Constructor.
+            ///
+            /// \param resolver   Call name resolver.
+            /// \param allocator  Allocator for cache, sets, and analysis.
+            Instance_analyzer(
+                ICall_name_resolver &resolver,
+                IAllocator          *allocator);
+
+            // Analyze an material instance for dependencies.
+            ///
+            /// \param instance  the material instance to analyze
+            void analyze_instance(
+                IMaterial_instance const *instance);
+
+            /// Analyze a created call for dependencies.
+            ///
+            /// \param call  the call to analyze
+            void analyze_call(
+                DAG_call const *call);
+
+            /// Analyze a function AST for dependencies.
+            ///
+            /// \param owner  the owner module of the function to analyze
+            /// \param def    the definition of the function to analyze
+            void analyze_function_ast(
+                Module const      *owner,
+                IDefinition const *def);
+
+            /// Set property if enable is true.
+            void add_property(Property prop, bool enable) {
+                if (enable) {
+                    m_properties |= prop;
+                }
+            }
+
+            /// Get the instance properties.
+            Properties get_properties() const { return m_properties; }
+
+            /// Get the set of scene data names referenced by this instance.
+            String_set const &get_referenced_scene_data() const { return m_referenced_scene_data; }
+
+            /// Get the set of referenced strings by this instance.
+            String_set const &get_referenced_strings() const { return m_referenced_strings; }
+
+            /// Returns true if this instance uses non-const scene data.
+            bool uses_non_const_scene_data() const { return m_scene_name_is_non_const; }
+
+            /// Add a string to the set of referenced strings (used during instantiation).
+            void add_referenced_string(string const &s) { m_referenced_strings.insert(s); }
+
+            /// Get whether referenced strings are currently ignored.
+            bool get_ignore_referenced_strings() const { return m_ignore_referenced_strings; }
+
+            /// Set whether to ignore referenced strings (e.g. during elemental constructor "handle" argument).
+            void set_ignore_referenced_strings(bool ignore) { m_ignore_referenced_strings = ignore; }
+
+            /// Process all string constants that are part of the value v and v itself if v
+            /// is a string constant.
+            void process_string_constants(IValue const *v);
+
+        protected:
+            /// Post-visit a Constant.
+            ///
+            /// \param cnst  the constant that is visited
+            void visit(DAG_constant *cnst) MDL_FINAL;
+
+            /// Post-visit a Temporary.
+            ///
+            /// \param tmp  the temporary that is visited
+            void visit(DAG_temporary *tmp) MDL_FINAL;
+
+            /// Post-visit a call.
+            ///
+            /// \param call  the call that is visited
+            void visit(DAG_call *call) MDL_FINAL;
+
+            /// Post-visit a Parameter.
+            ///
+            /// \param param  the parameter that is visited
+            void visit(DAG_parameter *param) MDL_FINAL;
+
+            /// Post-visit a temporary initializer.
+            ///
+            /// \param index  the index of the temporary
+            /// \param init   the initializer expression of this temporary
+            void visit(int index, DAG_node *init) MDL_FINAL;
+
+        private:
+            ICall_name_resolver &m_resolver;
+            IAllocator         *m_allocator;
+            Dep_analysis_cache  m_cache;
+            Properties         m_properties;
+            String_set         m_referenced_scene_data;
+            String_set         m_referenced_strings;
+            bool               m_ignore_referenced_strings;
+            bool               m_scene_name_is_non_const;
+        };
+
     public:
         // Acquires a const interface.
         mi::base::IInterface const *get_interface(
@@ -833,8 +948,11 @@ public:
 
         /// Create a constant.
         /// \param value   The value of the constant.
+        /// \param         The debug info for this constant if any.
         /// \returns       The created constant.
-        DAG_constant const *create_constant(IValue const *value) MDL_FINAL;
+        DAG_constant const *create_constant(
+            IValue const *value,
+            DAG_DbgInfo  dbg_info) MDL_FINAL;
 
         /// Create a call.
         /// \param name            The absolute name of the called function.
@@ -965,6 +1083,10 @@ public:
             DAG_node const *&node_result,
             IValue const   *&value_result) const MDL_FINAL;
 
+        /// Determine the spectral conversion intrinsic to apply to the sub-expression at
+        /// the given path.
+        IDefinition::Semantics get_spectral_conversion(char const *path) const MDL_FINAL;
+
         /// Calculate the hash for the node determined by the path, starting from the root
         /// expression of the material instance.
         ///
@@ -1085,7 +1207,20 @@ public:
         /// Set the material constructor.
         void set_constructor(DAG_call const *call) { m_constructor = call; }
 
-        /// Get the instance properties.
+        /// Set a property.
+        ///
+        /// \param p       the property
+        /// \param enable  if true, set the property, else remove it
+        void set_property(Property p, bool enable)
+        {
+            if (enable) {
+                m_properties |= p;
+            } else {
+                m_properties &= ~p;
+            }
+        }
+
+        /// Set the instance properties.
         void set_properties(Properties prop) { m_properties = prop; }
 
         /// Set temporaries from an iterator range.
@@ -1110,6 +1245,20 @@ public:
                 m_default_param_values[i] = params.get_value(i);
                 m_param_names[i]          = params.get_name(i);
             }
+        }
+
+        /// Set the referenced scene data.
+        ///
+        /// \param scene_data_set  the set of scene data names to set
+        void set_referenced_scene_data(String_set const &scene_data_set) {
+            m_referenced_scene_data.clear();
+            m_referenced_scene_data.insert(
+                m_referenced_scene_data.end(),
+                scene_data_set.begin(),
+                scene_data_set.end());
+
+            // make sure, the observable state is deterministic
+            std::sort(m_referenced_scene_data.begin(), m_referenced_scene_data.end());
         }
 
         /// Calculate the hash values for this instance.
@@ -1241,19 +1390,6 @@ public:
         /// Access messages.
         Messages &access_messages() { return m_messages; }
 
-        /// Set a property.
-        ///
-        /// \param p       the property
-        /// \param enable  if true, set the property, else remove it
-        void set_property(Property p, bool enable)
-        {
-            if (enable) {
-                m_properties |= p;
-            } else {
-                m_properties &= ~p;
-            }
-        }
-
         /// Creates a new error message.
         ///
         /// \param code  the error code
@@ -1382,16 +1518,22 @@ public:
             }
 
             /// Get the instance properties.
-            Properties get_properties() const { return m_properties; }
+            Properties get_properties() const { return m_analyzer.get_properties(); }
 
             /// Get the set of scene data names referenced by this instance.
-            String_set const &get_referenced_scene_data() const { return m_referenced_scene_data; }
+            String_set const &get_referenced_scene_data() const {
+                return m_analyzer.get_referenced_scene_data();
+            }
 
             /// Get the set of referenced strings by this instance.
-            String_set const &get_referenced_strings() const { return m_referenced_strings; }
+            String_set const &get_referenced_strings() const {
+                return m_analyzer.get_referenced_strings();
+            }
 
             /// Returns true if this instance uses non-const scene data.
-            bool uses_non_const_scene_data() const { return m_scene_name_is_non_const; }
+            bool uses_non_const_scene_data() const {
+                return m_analyzer.uses_non_const_scene_data();
+            }
 
         private:
             /// Get the allocator.
@@ -1478,7 +1620,7 @@ public:
             ///
             /// \param call  the call to analyze
             void analyze_call(
-                DAG_call const *call);
+                DAG_call const *call) { m_analyzer.analyze_call(call); }
 
             /// Analyze a function AST for dependencies.
             ///
@@ -1486,13 +1628,11 @@ public:
             /// \param def    the definition of the function to analyze
             void analyze_function_ast(
                 Module const      *owner,
-                IDefinition const *def);
+                IDefinition const *def) { m_analyzer.analyze_function_ast(owner, def); }
 
             /// Set property if enable is true.
             void add_property(Property prop, bool enable) {
-                if (enable) {
-                    m_properties |= prop;
-                }
+                m_analyzer.add_property(prop, enable);
             }
 
             /// Skip temporaries.
@@ -1502,12 +1642,12 @@ public:
             /// \return expr if the node is not a temporary, its argument otherwise
             DAG_node const *skip_temporaries(DAG_node const *expr);
 
-            /// Get a DAG node from a value by an absolute path.
+            /// Get a DAG node from a constant by an absolute path.
             ///
-            /// \param value  a value
+            /// \param cnst   a constant
             /// \param path   the path
             DAG_node const *get_value(
-                IValue const                  *value,
+                DAG_constant const            *cnst,
                 Array_ref<char const *> const &path);
 
             /// Get a DAG node from an expression by absolute path.
@@ -1558,14 +1698,10 @@ public:
             bool is_layer_qualified(
                 DAG_node const *expr);
 
-            /// Process string constants.
-            ///
-            /// \param v  a value to process
-            ///
-            /// Process all string constants that are part of the value v and v itself if v
-            /// is a string constant.
-            void process_string_constants(
-                IValue const *v);
+            /// Process string constants (forwards to the analyzer).
+            void process_string_constants(IValue const *v) {
+                m_analyzer.process_string_constants(v);
+            }
 
             /// Copy the debug info.
             ///
@@ -1636,23 +1772,8 @@ public:
             /// The current canonical parameter name.
             string m_curr_param_name;
 
-            /// The analysis cache for dependency analysis.
-            Dep_analysis_cache m_cache;
-
-            /// Properties of the generated instance.
-            Properties m_properties;
-
-            /// Set of scene data names referenced by this instance.
-            String_set m_referenced_scene_data;
-
-            /// Set of referenced strings by this instance.
-            String_set m_referenced_strings;
-
-            /// True, if referenced strings should be ignored .
-            bool m_ignore_referenced_strings;
-
-            /// True, if not all scene::data_lookup() functions operate on a literal.
-            bool m_scene_name_is_non_const;
+            /// Analyzer for instance dependencies (properties, scene data, etc.).
+            Instance_analyzer m_analyzer;
 
             /// If true, instantiate arguments.
             bool m_instantiate_args;
@@ -2586,13 +2707,13 @@ public:
     /// Get the resource tagger for this code DAG.
     IResource_tagger *get_resource_tagger() const MDL_FINAL;
 
+    /// Get the DAG unit of this code DAG.
+    DAG_unit &get_dag_unit() MDL_FINAL;
+
+    /// Get the DAG unit of this code DAG.
+    DAG_unit const &get_dag_unit() const MDL_FINAL;
+
     // --------------------------- non interface methods ---------------------------
-
-    /// Get the DAG unit of this code DAG.
-    DAG_unit &get_dag_unit() { return m_dag_unit; }
-
-    /// Get the DAG unit of this code DAG.
-    DAG_unit const &get_dag_unit() const { return m_dag_unit; }
 
     /// Get the type factory of this generated code.
     Type_factory *get_type_factory() { return &m_dag_unit.get_type_factory(); }
@@ -2707,7 +2828,7 @@ private:
         size_t annotation_index,
         size_t parameter_index) const;
 
-    /// Get the user struct category info for a given category index or NULL if the index is 
+    /// Get the user struct category info for a given category index or NULL if the index is
     /// out of range.
     ///
     /// \param cat_index  the type index
@@ -2885,10 +3006,12 @@ private:
 
     /// Compile an annotation (declaration).
     ///
-    /// \param module   The owner module of the annotation to compile.
-    /// \param a_node   The dependence graph node of the annotation.
+    /// \param module       the owner module of the annotation to compile
+    /// \param dag_builder  the DAG builder to be used
+    /// \param a_node       the dependence graph node of the annotation
     void compile_annotation(
         Module const          *module,
+        DAG_builder           &dag_builder,
         Dependence_node const *a_node);
 
     /// Compile a local annotation (declaration).
@@ -2903,10 +3026,12 @@ private:
 
     /// Compile a function.
     ///
-    /// \param owner    The owner module of the function to compile.
-    /// \param f_node   The dependence graph node of the function.
+    /// \param owner        the owner module of the function to compile
+    /// \param dag_builder  the DAG builder to be used
+    /// \param f_node       the dependence graph node of the function
     void compile_function(
         Module const          *owner,
+        DAG_builder           &dag_builder,
         Dependence_node const *f_node);
 
     /// Compile a local function.

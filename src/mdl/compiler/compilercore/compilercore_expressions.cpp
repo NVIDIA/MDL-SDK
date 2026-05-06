@@ -45,6 +45,49 @@
 namespace mi {
 namespace mdl {
 
+/// Check if a signed integer division or modulo would overflow.
+static bool is_int_division_overflow(IValue const *lhs, IValue const *rhs)
+{
+    if (IValue_int const *l = as<IValue_int>(lhs)) {
+        if (IValue_int const *r = as<IValue_int>(rhs)) {
+            return l->get_value() == 0x80000000 && r->get_value() == 0xFFFFFFFF;
+        }
+
+        if (IValue_vector const *rv = as<IValue_vector>(rhs)) {
+           for (int i = 0, n = rv->get_component_count(); i < n; ++i) {
+                if (is_int_division_overflow(l, rv->get_value(i))) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    if (IValue_vector const *lv = as<IValue_vector>(lhs)) {
+        if (IValue_int const *r = as<IValue_int>(rhs)) {
+            for (int i = 0, n = lv->get_component_count(); i < n; ++i) {
+                if (is_int_division_overflow(lv->get_value(i), r)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        if (IValue_vector const *rv = as<IValue_vector>(rhs)) {
+            int n = lv->get_component_count();
+            if (n != rv->get_component_count()) {
+                return false;
+            }
+            for (int i = 0; i < n; ++i) {
+                if (is_int_division_overflow(lv->get_value(i), rv->get_value(i))) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
 /// A mixin for all base expression methods.
 template <typename Interface>
 class Expr_base : public Interface
@@ -500,22 +543,44 @@ public:
         case OK_MULTIPLY:
             return lhs->multiply(factory, rhs);
         case OK_DIVIDE:
-            if (is<IValue_int>(rhs) && handler != NULL) {
-                int divisor = cast<IValue_int>(rhs)->get_value();
+            if (handler != NULL) {
+                if (is<IValue_int>(rhs)) {
+                    int divisor = cast<IValue_int>(rhs)->get_value();
 
-                if (divisor == 0) {
-                    handler->exception(IConst_fold_handler::ER_INT_DIVISION_BY_ZERO, m_rhs);
-                    return factory->create_bad();
+                    if (divisor == 0) {
+                        handler->exception(IConst_fold_handler::ER_INT_DIVISION_BY_ZERO, m_rhs);
+                        return factory->create_bad();
+                    }
+                }
+                if (is_int_division_overflow(lhs, rhs)) {
+                    bool is_error = handler->exception(
+                        IConst_fold_handler::ER_INT_DIVISION_OVERFLOW, this);
+                    if (is_error) {
+                        return factory->create_bad();
+                    }
+                    // computes the right thing
+                    return lhs->divide(factory, rhs);
                 }
             }
             return lhs->divide(factory, rhs);
         case OK_MODULO:
-            if (is<IValue_int>(rhs) && handler != NULL) {
-                int divisor = cast<IValue_int>(rhs)->get_value();
+            if (handler != NULL) {
+                if (is<IValue_int>(rhs)) {
+                    int divisor = cast<IValue_int>(rhs)->get_value();
 
-                if (divisor == 0) {
-                    handler->exception(IConst_fold_handler::ER_INT_DIVISION_BY_ZERO, m_rhs);
-                    return factory->create_bad();
+                    if (divisor == 0) {
+                        handler->exception(IConst_fold_handler::ER_INT_DIVISION_BY_ZERO, m_rhs);
+                        return factory->create_bad();
+                    }
+                }
+                if (is_int_division_overflow(lhs, rhs)) {
+                    bool is_error = handler->exception(
+                        IConst_fold_handler::ER_INT_DIVISION_OVERFLOW, this);
+                    if (is_error) {
+                        return factory->create_bad();
+                    }
+                    // computes the right thing
+                    return lhs->modulo(factory, rhs);
                 }
             }
             return lhs->modulo(factory, rhs);

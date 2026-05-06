@@ -55,6 +55,8 @@ public:
     {
     }
 
+    virtual ~IncludeHandler() = default;
+
     // ---------------------------------------------------------------------------------------------
 
     HRESULT STDMETHODCALLTYPE LoadSource(
@@ -336,7 +338,7 @@ std::vector<Shader_library> Shader_compiler::compile_shader_library_from_string_
     // since there are only a few defines, copying them seems okay
     std::vector<std::wstring> wstrings;
     if (defines) {
-        for (const auto d : *defines) {
+        for (const auto &d : *defines) {
             arguments.push_back(L"-D");
             wstrings.push_back(mi::examples::strings::str_to_wstr(d.first + "=" + d.second));
             arguments.push_back(wstrings.back().c_str());
@@ -1085,8 +1087,8 @@ ID3D12RootSignature* Root_signature::get_signature()
 
 Shader_binding_tables::Shader_record::Shader_record()
     : m_shader_id(nullptr)
-    , m_mapped_table_pointer(nullptr)
     , m_local_root_arguments(0)
+    , m_mapped_table_pointer(nullptr)
 {
 }
 
@@ -1101,9 +1103,9 @@ Shader_binding_tables::Shader_handle::Shader_handle(
     Kind kind,
     void* shader_id)
 
-    : m_kind(kind)
-    , m_shader_binding_table(binding_table)
+    : m_shader_binding_table(binding_table)
     , m_shader_id(shader_id)
+    , m_kind(kind)
 {
 }
 
@@ -1117,8 +1119,8 @@ Shader_binding_tables::Shader_binding_tables(
     const std::string& debug_name)
 
     : m_app(pipeline->m_app)
-    , m_is_finalized(false)
     , m_debug_name(debug_name)
+    , m_is_finalized(false)
     , m_pipeline(pipeline)
     , m_ray_type_count(ray_type_count)
     , m_hit_record_count(hit_record_count)

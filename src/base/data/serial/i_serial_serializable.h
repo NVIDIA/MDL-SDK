@@ -32,7 +32,6 @@
 #define BASE_DATA_SERIAL_I_SERIAL_SERIALIZABLE_H
 
 #include "i_serial_classid.h"
-#include <base/lib/mem/i_mem_allocatable.h>
 
 namespace MI
 {
@@ -43,7 +42,7 @@ class Serializer;
 class Deserializer;
 
 /// All serializable objects have to be derived from this.
-class Serializable : public MI::MEM::Allocatable
+class Serializable
 {
   public:
 

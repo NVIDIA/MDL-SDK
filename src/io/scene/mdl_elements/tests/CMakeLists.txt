@@ -30,10 +30,18 @@
 set(PROJECT_NAME io-scene-mdl_elements)
 
 function(CREATE_UNIT_TEST_TEMPLATE)
-    set(options)
+    set(options JIT)
     set(oneValueArgs NAME)
     set(multiValueArgs)
     cmake_parse_arguments(CREATE_UNIT_TEST_TEMPLATE "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+
+    if(CREATE_UNIT_TEST_TEMPLATE_JIT)
+        set(_JIT_OR_NO_JIT ${LINKER_DEPENDENCIES_MDL_JIT})
+        set(_LLVM_OR_NO_LLVM llvm)
+    else()
+        set(_JIT_OR_NO_JIT ${LINKER_DEPENDENCIES_MDL_NO_JIT})
+        set(_LLVM_OR_NO_LLVM "")
+    endif()
 
     create_unit_test(
         NAME
@@ -45,10 +53,10 @@ function(CREATE_UNIT_TEST_TEMPLATE)
         DEPENDS
             ${LINKER_START_GROUP}
             ${LINKER_DEPENDENCIES_IO}
-            ${LINKER_DEPENDENCIES_MDL_JIT}
+            ${_JIT_OR_NO_JIT}
             ${LINKER_DEPENDENCIES_BASE}
             ${LINKER_END_GROUP}
-            llvm
+            ${_LLVM_OR_NO_LLVM}
             boost
         # Only used ty test_misc.
         RUNTIME_DEPENDS
@@ -63,4 +71,4 @@ endfunction()
 create_unit_test_template(NAME test_types)
 create_unit_test_template(NAME test_values)
 create_unit_test_template(NAME test_expressions)
-create_unit_test_template(NAME test_misc)
+create_unit_test_template(NAME test_misc JIT)

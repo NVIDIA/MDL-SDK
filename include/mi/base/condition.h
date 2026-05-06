@@ -124,6 +124,7 @@ public:
             if( result != EINTR)
                 break;
         }
+        timed_out = timed_out && !m_signaled;
         m_signaled = false;
         pthread_mutex_unlock( &m_mutex);
         return timed_out;

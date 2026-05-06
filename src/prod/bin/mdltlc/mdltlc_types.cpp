@@ -823,6 +823,7 @@ Type_function::Type_function(Type *return_type)
     , m_semantics(mi::mdl::IDefinition::Semantics::DS_UNKNOWN)
     , m_selector(nullptr)
     , m_node_type(nullptr)
+    , m_signature(nullptr)
 {
 }
 
@@ -1529,6 +1530,10 @@ Type *Type_factory::builtin_type_for(const char *type_name) {
         return create_enum(m_symtab.get_symbol("::df::scatter_mode"));
     if (!strcmp(type_name, "::df::scatter_mode"))
         return create_enum(m_symtab.get_symbol("::df::scatter_mode"));
+    if (!strcmp(type_name, "backscatter_modifier"))
+        return create_enum(m_symtab.get_symbol("::df::backscatter_modifier"));
+    if (!strcmp(type_name, "::df::backscatter_modifier"))
+        return create_enum(m_symtab.get_symbol("::df::backscatter_modifier"));
 
     char const *brack = strstr(type_name, "[<N>]");
     if (brack) {
@@ -1539,4 +1544,3 @@ Type *Type_factory::builtin_type_for(const char *type_name) {
     MDL_ASSERT(!"unknown type in builtin_type_for");
     return nullptr;
 }
-

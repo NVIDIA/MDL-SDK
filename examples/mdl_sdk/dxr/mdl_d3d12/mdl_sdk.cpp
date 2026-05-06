@@ -105,6 +105,17 @@ Mdl_sdk::Mdl_sdk(Base_application* app)
         log_error("Failed to load the 'mdl_distiller' plugin. Continue without distilling support.");
     }
 
+    // load additional plugins, e.g. custom distiller plugins
+    for (const auto& name : app->get_options()->plugins)
+    {
+        std::string file_name = name + MI_BASE_DLL_FILE_EXT;
+        log_info("Load '" + name + "' plugin.");
+        if (mi::examples::mdl::load_plugin(m_neuray.get(), file_name.c_str()) != 0)
+        {
+            log_error("Failed to load the '" + name + "' plugin.", SRC);
+            return;
+        }
+    }
 
     // Start the MDL SDK
     mi::Sint32 result = m_neuray->start();
@@ -152,6 +163,17 @@ Mdl_sdk::Mdl_sdk(Base_application* app)
     if (app->get_options()->enable_bsdf_flags)
     {
         if (m_hlsl_backend->set_option("libbsdf_flags_in_bsdf_data", "on") != 0)
+            return;
+    }
+
+    if (m_hlsl_backend->set_option("enable_init_loop_generation",
+        m_app->get_options()->init_loop ? "on" : "off") != 0) {
+        return;
+    }
+
+    if (m_app->get_options()->enable_spectral)
+    {
+        if (m_hlsl_backend->set_option("libbsdf_enable_spectral", "on") != 0)
             return;
     }
 

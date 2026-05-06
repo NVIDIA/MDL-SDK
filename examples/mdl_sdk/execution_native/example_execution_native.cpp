@@ -74,11 +74,11 @@ struct Options {
 
 
 // The last row is always implied to be (0, 0, 0, 1).
-const mi::Float32_3_4 identity(
-    1.0f, 0.0f, 0.0f, 0.0f,
-    0.0f, 1.0f, 0.0f, 0.0f,
-    0.0f, 0.0f, 1.0f, 0.0f
-);
+const mi::neuraylib::tct_float4_a16 identity[3] = {
+    {1.0f, 0.0f, 0.0f, 0.0f},
+    {0.0f, 1.0f, 0.0f, 0.0f},
+    {0.0f, 0.0f, 1.0f, 0.0f}
+};
 
 
 // Creates an instance of the given material.
@@ -226,8 +226,8 @@ mi::neuraylib::ICanvas *bake_expression_native(
         /*tangent_v=*/             texture_tangent_v,
         /*text_results=*/          nullptr,
         /*ro_data_segment=*/       nullptr,
-        /*world_to_object=*/       &identity[0],
-        /*object_to_world=*/       &identity[0],
+        /*world_to_object=*/       identity,
+        /*object_to_world=*/       identity,
         /*object_id=*/             0,
         /*meters_per_scene_unit=*/ 1.0f
     };
@@ -320,8 +320,8 @@ mi::neuraylib::ICanvas *bake_expression_native_with_derivs(
         /*tangent_v=*/             texture_tangent_v,
         /*text_results=*/          nullptr,
         /*ro_data_segment=*/       nullptr,
-        /*world_to_object=*/       &identity[0],
-        /*object_to_world=*/       &identity[0],
+        /*world_to_object=*/       identity,
+        /*object_to_world=*/       identity,
         /*object_id=*/             0,
         /*meters_per_scene_unit=*/ 1.0f
     };

@@ -30,26 +30,34 @@
 
 // These functions are not implemented and will be replaced during DF instantiation
 BSDF_PARAM bool get_material_thin_walled(State *state);
-BSDF_PARAM float3 get_material_ior(State *state);
+BSDF_PARAM color_sample get_material_ior(State *state);
 
 #include "libbsdf_utilities.h"
 #include "libbsdf_multiscatter.h"
 namespace multiscatter = mi::libdf::multiscatter;
 
+#ifdef MDL_DF_SPECTRAL_ENABLE
+#ifndef MDL_DF_SPECTRAL_SAMPLES
+#error Definition of MDL_DF_SPECTRAL_SAMPLES missing
+#endif
+#endif
+
 
 namespace
 {
     template<typename DF_sample_data>
-    BSDF_INLINE float3 get_df_over_pdf(const DF_sample_data* data);
-    template<> BSDF_INLINE float3 get_df_over_pdf(const BSDF_sample_data* data) {
+    BSDF_INLINE color_sample get_df_over_pdf(const DF_sample_data* data);
+    template<> BSDF_INLINE color_sample get_df_over_pdf(const BSDF_sample_data* data) {
         return data->bsdf_over_pdf; }
-    template<> BSDF_INLINE float3 get_df_over_pdf(const EDF_sample_data* data) {
+
+    template<> BSDF_INLINE color_sample get_df_over_pdf(const EDF_sample_data* data) {
         return data->edf_over_pdf; }
     template<typename DF_sample_data>
-    BSDF_INLINE void set_df_over_pdf(DF_sample_data* data, float3 df_over_pdf);
-    template<> BSDF_INLINE void set_df_over_pdf(BSDF_sample_data* data, float3 df_over_pdf) {
+    BSDF_INLINE void set_df_over_pdf(DF_sample_data* data, color_sample df_over_pdf);
+    template<> BSDF_INLINE void set_df_over_pdf(BSDF_sample_data* data, color_sample df_over_pdf) {
         data->bsdf_over_pdf = df_over_pdf; }
-    template<> BSDF_INLINE void set_df_over_pdf(EDF_sample_data* data, float3 df_over_pdf) {
+
+    template<> BSDF_INLINE void set_df_over_pdf(EDF_sample_data* data, color_sample df_over_pdf) {
         data->edf_over_pdf = df_over_pdf;}
 
     template<typename DF_evaluate_data>
@@ -61,13 +69,6 @@ namespace
     template<> BSDF_INLINE void set_cos(BSDF_evaluate_data* data, float cos) { }
     template<> BSDF_INLINE void set_cos(EDF_evaluate_data* data, float cos) { data->cos = cos; }
     template<> BSDF_INLINE void set_cos(EDF_pdf_data* data, float cos) { }
-
-    template<typename DF_pdf_data>
-    BSDF_INLINE void set_pdf(DF_pdf_data* data, float pdf);
-    template<> BSDF_INLINE void set_pdf(BSDF_pdf_data* data, float pdf) { data->pdf = pdf; }
-    template<> BSDF_INLINE void set_pdf(BSDF_evaluate_data* data, float pdf) { data->pdf = pdf; }
-    template<> BSDF_INLINE void set_pdf(EDF_pdf_data* data, float pdf) { data->pdf = pdf; }
-    template<> BSDF_INLINE void set_pdf(EDF_evaluate_data* data, float pdf) { data->pdf = pdf; }
 }
 
 
@@ -78,8 +79,8 @@ namespace
 BSDF_INLINE void add_elemental_bsdf_evaluate_contribution(
     BSDF_evaluate_data *data,
     const int handle,
-    const float3 &diffuse,
-    const float3 &glossy)
+    const color_sample &diffuse,
+    const color_sample &glossy)
 {
     #if MDL_DF_HANDLE_SLOT_MODE == BSDF_HSMN
         data->bsdf_diffuse += diffuse;
@@ -102,16 +103,16 @@ BSDF_INLINE void add_elemental_bsdf_evaluate_contribution(
 BSDF_INLINE void add_elemental_bsdf_auxiliary_contribution(
     BSDF_auxiliary_data *data,
     const int handle,
-    const float3 &inherited_weight,
-    const float3 &albedo_diffuse,
-    const float3 &albedo_glossy,
+    const color_sample &inherited_weight,
+    const color_sample &albedo_diffuse,
+    const color_sample &albedo_glossy,
     const float3 &normal,
     const float glossy_roughness_u,
     const float glossy_roughness_v)
 {
     // compute the roughness for the auxiliary buffer
     // the output is non-squared roughness
-    const float avg_weight = math::luminance(inherited_weight);
+    const float avg_weight = luminance(inherited_weight);
     const float3 weighted_roughness = make<float3>(
             avg_weight * glossy_roughness_u,
             avg_weight * glossy_roughness_v,
@@ -148,7 +149,7 @@ BSDF_INLINE void add_elemental_bsdf_auxiliary_contribution(
 BSDF_INLINE void add_elemental_edf_evaluate_contribution(
     EDF_evaluate_data *data,
     const int handle,
-    const float3 &edf)
+    const color_sample &edf)
 {
     #if MDL_DF_HANDLE_SLOT_MODE == BSDF_HSMN
         data->edf += edf;
@@ -168,8 +169,8 @@ BSDF_INLINE void diffuse_sample(
     BSDF_sample_data *data,
     State *state,
     const Geometry &g,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const float roughness,
     const bool transmit,
     const bool lambert_sphere,
@@ -194,7 +195,7 @@ BSDF_INLINE void diffuse_sample(
     float3 local_dir = cosine_hemisphere_sample(make_float2(data->xi.x, data->xi.y));
 
     float3 x_axis, z_axis;
-    // use coordinate system that separates area 'a' and 'b' (x_axis is the separating line)    
+    // use coordinate system that separates area 'a' and 'b' (x_axis is the separating line)
     if (cos_alpha < 0.999f) {
         x_axis = math::normalize(math::cross(g.n.geometry_normal, g.n.shading_normal));
         z_axis = math::cross(x_axis, g.n.shading_normal);
@@ -229,7 +230,8 @@ BSDF_INLINE void diffuse_sample(
 
     if (lambert_sphere) {
         data->bsdf_over_pdf = lambert_sphere_brdf(data->k1, data->k2, math::max(math::dot(data->k1, g.n.shading_normal), 0.0f), local_dir.y, tint) * area;
-    } else {
+    }
+    else {
         data->bsdf_over_pdf = tint;
         if (roughness > 0.0f) {
             const float2 factor = eval_oren_nayar(data->k2, data->k1, g.n.shading_normal, roughness);
@@ -239,7 +241,7 @@ BSDF_INLINE void diffuse_sample(
     }
 
     if (BSDF::calc_pdf_in_sample())
-        data->pdf = math::abs(local_dir.y) / area;
+        data->pdf = make_pdf_sample(math::abs(local_dir.y) / area);
     data->event_type = transmit ? BSDF_EVENT_DIFFUSE_TRANSMISSION : BSDF_EVENT_DIFFUSE_REFLECTION;
     data->handle = handle;
 }
@@ -248,9 +250,9 @@ BSDF_INLINE void diffuse_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &inherited_weight,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const float roughness,
     const bool transmit,
     const bool lambert_sphere,
@@ -271,7 +273,7 @@ BSDF_INLINE void diffuse_evaluate(
     const float nk2 = math::max(sign * math::dot(data->k2, shading_normal), 0.0f);
     const float pdf = nk2 * pdf_proj;
 
-    float3 bsdf_diffuse = make_float3(0.0f, 0.0f, 0.0f);
+    color_sample bsdf_diffuse = make<color_sample>(0.f);
     if (nk2 > 0.0f) {
         if (lambert_sphere)
             bsdf_diffuse = lambert_sphere_brdf(data->k1, data->k2, math::max(math::dot(data->k1, shading_normal),0.0f), nk2, tint) * 2.0f / (1.0f + cos_alpha) * nk2;
@@ -286,8 +288,8 @@ BSDF_INLINE void diffuse_evaluate(
     }
 
     add_elemental_bsdf_evaluate_contribution(
-        data, handle, bsdf_diffuse * inherited_weight, make<float3>(0.0f));
-    data->pdf = pdf;
+        data, handle, bsdf_diffuse * inherited_weight, make<color_sample>(0.0f));
+    data->pdf = make_pdf_sample(pdf);
 }
 
 template <typename Data>
@@ -308,19 +310,19 @@ BSDF_INLINE void diffuse_pdf(
     }
     const float cos_alpha = math::max(math::dot(shading_normal, geometry_normal), 0.0f);
     const float pdf_proj = 1.0f / ((float)(M_PI * 0.5) + (float)(M_PI * 0.5) * cos_alpha);
-    
+
     const float nk2 = math::max(sign * math::dot(data->k2, shading_normal), 0.0f);
-    data->pdf = nk2 * pdf_proj;
+    data->pdf = make_pdf_sample(nk2 * pdf_proj);
 }
 
 template <typename Data>
 BSDF_INLINE void elemental_bsdf_auxiliary(
     Data *data,
-    State *state, 
+    State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    const float3 &tint_diffuse,
-    const float3 &tint_glossy,
+    const color_sample &inherited_weight,
+    const color_sample &tint_diffuse,
+    const color_sample &tint_glossy,
     const float glossy_roughness_u,
     const float glossy_roughness_v,
     const int handle)
@@ -332,11 +334,11 @@ BSDF_INLINE void elemental_bsdf_auxiliary(
     }
 
     add_elemental_bsdf_auxiliary_contribution(
-        data, 
-        handle, 
+        data,
+        handle,
         inherited_weight,
-        math::saturate(tint_diffuse), // diffuse albedo
-        math::saturate(tint_glossy), // glossy albedo
+        saturate(tint_diffuse), // diffuse albedo
+        saturate(tint_glossy), // glossy albedo
         g.n.shading_normal,
         glossy_roughness_u,
         glossy_roughness_v);
@@ -363,7 +365,7 @@ BSDF_API void black_bsdf_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight)
+    const color_sample &inherited_weight)
 {
     absorb(data);
 }
@@ -380,11 +382,11 @@ BSDF_API void black_bsdf_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const int handle)
 {
     elemental_bsdf_auxiliary(
-        data, state, inherited_normal, inherited_weight, make<float3>(0.0f), make<float3>(0.0f), 0.0f, 0.0f, handle);
+        data, state, inherited_normal, inherited_weight, make<color_sample>(0.0f), make<color_sample>(0.0f), 0.0f, 0.0f, handle);
 }
 
 
@@ -401,9 +403,9 @@ BSDF_API void diffuse_reflection_bsdf_sample(
     BSDF_sample_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &tint,
+    const color_sample &tint,
     const float roughness,
-    const float3 &multiscatter_tint,
+    const color_sample &multiscatter_tint,
     const int handle)
 {
     Geometry g;
@@ -413,7 +415,7 @@ BSDF_API void diffuse_reflection_bsdf_sample(
         return;
     }
 
-    diffuse_sample(data, state, g, math::saturate(tint), multiscatter_tint, roughness,
+    diffuse_sample(data, state, g, saturate(tint), multiscatter_tint, roughness,
         /*transmit=*/false, /*lambert_sphere=*/false, handle);
 }
 
@@ -421,10 +423,10 @@ BSDF_API void diffuse_reflection_bsdf_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    const float3 &tint,
+    const color_sample &inherited_weight,
+    const color_sample &tint,
     const float roughness,
-    const float3 &multiscatter_tint,
+    const color_sample &multiscatter_tint,
     const int handle)
 {
     if (!is_allowed_reflect(data)) {
@@ -433,8 +435,8 @@ BSDF_API void diffuse_reflection_bsdf_evaluate(
     }
 
     diffuse_evaluate(
-        data, state, inherited_normal, inherited_weight, 
-        math::saturate(tint), multiscatter_tint, roughness,
+        data, state, inherited_normal, inherited_weight,
+        saturate(tint), multiscatter_tint, roughness,
         /*transmit=*/false, /*lambert_sphere=*/false, handle);
 }
 
@@ -442,9 +444,9 @@ BSDF_API void diffuse_reflection_bsdf_pdf(
     BSDF_pdf_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &tint,
+    const color_sample &tint,
     const float roughness,
-    const float3 &multiscatter_tint,
+    const color_sample &multiscatter_tint,
     const int handle)
 {
     if (!is_allowed_reflect(data)) {
@@ -459,10 +461,10 @@ BSDF_API void diffuse_reflection_bsdf_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    const float3 &tint,
+    const color_sample &inherited_weight,
+    const color_sample &tint,
     const float roughness,
-    const float3 &multiscatter_tint,
+    const color_sample &multiscatter_tint,
     const int handle)
 {
     if (is_allowed_reflect(data)) {
@@ -475,7 +477,7 @@ BSDF_API void diffuse_reflection_bsdf_auxiliary(
         //          (luminance(albedo_diffuse) + roughness * luminance(albedo_glossy)) /
         //          (luminance(albedo_diffuse) + luminance(albedo_glossy))
         elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight,
-            tint, make<float3>(0.0f),
+            tint, make<color_sample>(0.0f),
             0.0f, 0.0f,
             handle);
     }
@@ -493,7 +495,7 @@ BSDF_API void dusty_diffuse_reflection_bsdf_sample(
     BSDF_sample_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &tint,
+    const color_sample &tint,
     const int handle)
 {
     Geometry g;
@@ -504,8 +506,8 @@ BSDF_API void dusty_diffuse_reflection_bsdf_sample(
     }
 
     diffuse_sample(
-        data, state, g, math::saturate(tint),
-        /*multiscatter_tint=*/make_float3(0.0f, 0.0f, 0.0f), /*roughness=*/0.0f,
+        data, state, g, saturate(tint),
+        /*multiscatter_tint=*/make<color_sample>(0.0f), /*roughness=*/0.0f,
         /*transmit=*/false, /*lambert_sphere=*/true, handle);
 }
 
@@ -513,8 +515,8 @@ BSDF_API void dusty_diffuse_reflection_bsdf_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    const float3 &tint,
+    const color_sample &inherited_weight,
+    const color_sample &tint,
     const int handle)
 {
     if (!is_allowed_reflect(data)) {
@@ -523,8 +525,8 @@ BSDF_API void dusty_diffuse_reflection_bsdf_evaluate(
     }
 
     diffuse_evaluate(
-        data, state, inherited_normal, inherited_weight, 
-        math::saturate(tint), /*multiscatter_tint=*/make_float3(0.0f, 0.0f, 0.0f), /*roughness=*/0.0f,
+        data, state, inherited_normal, inherited_weight,
+        saturate(tint), /*multiscatter_tint=*/make<color_sample>(0.0f), /*roughness=*/0.0f,
         /*transmit=*/false, /*lambert_sphere=*/true, handle);
 }
 
@@ -532,7 +534,7 @@ BSDF_API void dusty_diffuse_reflection_bsdf_pdf(
     BSDF_pdf_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &tint,
+    const color_sample &tint,
     const int handle)
 {
     if (!is_allowed_reflect(data)) {
@@ -547,13 +549,13 @@ BSDF_API void dusty_diffuse_reflection_bsdf_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    const float3 &tint,
+    const color_sample &inherited_weight,
+    const color_sample &tint,
     const int handle)
 {
     if (is_allowed_reflect(data)) {
         elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, tint,
-            make<float3>(0.0f), 0.0f, 0.0f, handle);
+            make<color_sample>(0.0f), 0.0f, 0.0f, handle);
     }
 }
 
@@ -569,7 +571,7 @@ BSDF_API void diffuse_transmission_bsdf_sample(
     BSDF_sample_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &tint,
+    const color_sample &tint,
     const int handle)
 {
     Geometry g;
@@ -580,8 +582,8 @@ BSDF_API void diffuse_transmission_bsdf_sample(
     }
 
     diffuse_sample(
-        data, state, g, math::saturate(tint),
-        /*multiscatter_tint=*/make_float3(0.0f, 0.0f, 0.0f), /*roughness=*/0.0f,
+        data, state, g, saturate(tint),
+        /*multiscatter_tint=*/make<color_sample>(0.0f), /*roughness=*/0.0f,
         /*transmit=*/true, /*lambert_sphere=*/false, handle);
 }
 
@@ -589,8 +591,8 @@ BSDF_API void diffuse_transmission_bsdf_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    const float3 &tint,
+    const color_sample &inherited_weight,
+    const color_sample &tint,
     const int handle)
 {
     if (!is_allowed_transmit(data)) {
@@ -599,8 +601,8 @@ BSDF_API void diffuse_transmission_bsdf_evaluate(
     }
 
     diffuse_evaluate(
-        data, state, inherited_normal, inherited_weight, 
-        math::saturate(tint), /*multiscatter_tint=*/make_float3(0.0f, 0.0f, 0.0f),  /*roughness=*/0.0f,
+        data, state, inherited_normal, inherited_weight,
+        saturate(tint), /*multiscatter_tint=*/make<color_sample>(0.0f),  /*roughness=*/0.0f,
         /*transmit=*/true, /*lambert_sphere=*/false, handle);
 }
 
@@ -608,7 +610,7 @@ BSDF_API void diffuse_transmission_bsdf_pdf(
     BSDF_pdf_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &tint,
+    const color_sample &tint,
     const int handle)
 {
     if (!is_allowed_transmit(data)) {
@@ -623,22 +625,23 @@ BSDF_API void diffuse_transmission_bsdf_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    const float3 &tint,
+    const color_sample &inherited_weight,
+    const color_sample &tint,
     const int handle)
 {
     if (is_allowed_transmit(data)) {
         elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, tint,
-            make<float3>(0.0f), 0.0f, 0.0f, handle);
+            make<color_sample>(0.0f), 0.0f, 0.0f, handle);
     }
 }
 
 
 /////////////////////////////////////////////////////////////////////
 // bsdf specular_bsdf(
-//     color           tint = color(1.0),
-//     scatter_mode    mode = scatter_reflect,
-//     uniform string  handle = ""
+//     color                tint = color(1.0),
+//     scatter_mode         mode = scatter_reflect,
+//     backscatter_modifier backscatter = backscatter_node,
+//     uniform string       handle = ""
 // )
 /////////////////////////////////////////////////////////////////////
 
@@ -646,8 +649,11 @@ BSDF_API void diffuse_transmission_bsdf_auxiliary(
 class Fresnel_function_none {
 public:
     Fresnel_function_none() {}
-    float4 eval(const float2 &ior, const float kh) const {
-        return make<float4>(1.0f);
+
+    template<typename Data>
+    BSDF_INLINE color_sample eval(float &w, const Data *state, const float kh) const {
+        w = 1.0f;
+        return make<color_sample>(1.0f);
     }
 };
 
@@ -655,32 +661,74 @@ public:
 class Fresnel_function_default {
 public:
     Fresnel_function_default() {}
-    float4 eval(const float2 &ior, const float kh) const {
-        float f = ior_fresnel(ior.y / ior.x, kh);
-        return make<float4>(f);
+
+    template<typename Data>
+    BSDF_INLINE color_sample eval(float &w, const Data *state, const float kh) const {
+#ifdef MDL_DF_SPECTRAL_ENABLE
+        const color_sample eta = state->ior2 / state->ior1;
+        const color_sample f = ior_fresnel(eta, kh);
+        w = f.values[0];
+        return f;
+#else
+        const float eta = math::average(state->ior2) / math::average(state->ior1);
+        w = ior_fresnel(eta, kh);
+        return make<color_sample>(w);
+#endif
     }
 };
 
 // thin-film-coated dielectric Fresnel
 class Fresnel_function_coated {
 public:
-    Fresnel_function_coated(const float coat_thickness, const float3 &coat_ior) :
+    BSDF_INLINE
+    Fresnel_function_coated(
+        State *state,
+        const float coat_thickness, const color_sample &coat_ior) :
+#ifdef MDL_DF_SPECTRAL_ENABLE
+        m_lambda(state->get_wavelengths()),
+#endif
         m_coat_thickness(coat_thickness),
-        m_coat_ior(math::average(coat_ior)) { // using scalar IOR for simplicity
+        m_coat_ior(average(coat_ior)) { // using scalar IOR for simplicity //!! TODO SPECTRAL
     }
 
-    float4 eval(const float2 &ior, const float kh) const {
+    template<typename Data>
+    BSDF_INLINE color_sample eval(float &w, const Data *data, const float kh) const {
+#ifdef MDL_DF_SPECTRAL_ENABLE
         if (m_coat_thickness <= 0.0f || m_coat_ior == 1.0f) {
-            float f = ior_fresnel(ior.y / ior.x, kh);
-            return make<float4>(f);
+            const color_sample eta = data->ior2 / data->ior1;
+            const color_sample f = ior_fresnel(eta, kh);
+            w = f.values[0];
+            return f;
         } else {
-            const float3 val = thin_film_factor(
-                m_coat_thickness, m_coat_ior, ior.y, ior.x, kh);
-            float f = math::average(val);
-            return make<float4>(val.x, val.y, val.z, f);
+            const color_sample val = thin_film_factor(
+                m_lambda,
+                m_coat_thickness, m_coat_ior,
+                //!! TODO: spectral
+                data->ior2.values[0], data->ior1.values[0],
+                kh);
+            w = val.values[0];
+            return val;
         }
+#else
+        if (m_coat_thickness <= 0.0f || m_coat_ior == 1.0f) {
+            const float eta = math::average(data->ior2) / math::average(data->ior1);
+            w = ior_fresnel(eta, kh);
+            return make<color_sample>(w);
+        } else {
+            const color_sample val = thin_film_factor(
+                m_coat_thickness, m_coat_ior,
+                math::average(data->ior2), math::average(data->ior1),
+                kh);
+            w = math::average(val);
+            return val;
+        }
+#endif
     }
+
 private:
+#ifdef MDL_DF_SPECTRAL_ENABLE
+    color_sample m_lambda;
+#endif
     float m_coat_ior, m_coat_thickness;
 };
 
@@ -690,10 +738,10 @@ BSDF_INLINE void specular_sample(
     BSDF_sample_data *data,
     State *state,
     const Normals &n,
-    const float2 &ior,
     const bool thin_walled,
-    const float3 &tint,
+    const color_sample &tint,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle)
 {
     const float nk1 = math::dot(n.shading_normal, data->k1);
@@ -702,26 +750,22 @@ BSDF_INLINE void specular_sample(
         return;
     }
 
-    data->pdf = 0.0f;
+    data->pdf = make_pdf_sample(0.0f);
 
     // compute probability of selection refraction over reflection
     float f_refl;
-    float3 f_refl_c;
+    color_sample f_refl_c;
     switch (mode) {
         case scatter_reflect:
-            f_refl_c = make<float3>(1.0f);
+            f_refl_c = make<color_sample>(1.0f);
             f_refl = 1.0f;
             break;
         case scatter_transmit:
-            f_refl_c = make<float3>(0.0f);
+            f_refl_c = make<color_sample>(0.0f);
             f_refl = 0.0f;
             break;
         case scatter_reflect_transmit:
-            {
-                float4 res = fresnel_function.eval(ior, nk1);
-                f_refl_c = make<float3>(res.x, res.y, res.z);
-                f_refl   = res.w;
-            }
+            f_refl_c = fresnel_function.eval(f_refl, data, nk1);
             break;
     }
 
@@ -730,7 +774,7 @@ BSDF_INLINE void specular_sample(
         absorb(data);
         return;
     }
-    
+
     // reflection
     if ((mode == scatter_reflect) ||
         ((mode == scatter_reflect_transmit) &&
@@ -746,15 +790,35 @@ BSDF_INLINE void specular_sample(
         // total internal reflection should only be triggered for scatter_transmit
         // (since we should fall in the code-path above otherwise)
         bool tir = false;
+        bool dispersion = false;
         if (thin_walled) // single-sided -> propagate old direction
             data->k2 = -data->k1;
-        else
-            data->k2 = refract(data->k1, n.shading_normal, ior.x / ior.y, nk1, tir);
+        else {
+            const float2 refraction_ior = get_refraction_ior(dispersion, data);
+            data->k2 = refract(data->k1, n.shading_normal, refraction_ior.x / refraction_ior.y, nk1, tir);
+        }
 
         data->event_type = tir ? BSDF_EVENT_SPECULAR_REFLECTION : BSDF_EVENT_SPECULAR_TRANSMISSION;
 
-        data->bsdf_over_pdf = tint * (make<float3>(1.0f) - f_refl_c) / (1.0f - f_refl);
+        const float inv_prob = 1.0f / (1.0f - f_refl);
+#ifdef MDL_DF_SPECTRAL_ENABLE
+        data->bsdf_over_pdf.values[0] = tint.values[0] * (1.0f - f_refl_c.values[0]) * inv_prob;
+        if (dispersion) {
+            for (unsigned int i = 1; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+                data->bsdf_over_pdf.values[i] = 0.0f;
+        } else {
+            for (unsigned int i = 1; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+                data->bsdf_over_pdf.values[i] = tint.values[i] * (1.0f - f_refl_c.values[i]) * inv_prob;
+        }
+#else
+        data->bsdf_over_pdf = tint * (make<color_sample>(1.0f) - f_refl_c) * inv_prob;
+#endif
     }
+
+    // can apply backscattering reflection on k2 in the end, this is equivalent to reflecting k1 beforehand
+    data->k2 = apply_backscatter(
+        data->k2, backscatter, data->event_type == BSDF_EVENT_SPECULAR_REFLECTION, n.shading_normal,
+        (data->event_type == BSDF_EVENT_SPECULAR_REFLECTION) ? nk1 : math::abs(math::dot(data->k2, n.shading_normal)), false);
 
     // check if the resulting direction is on the correct side of the actual geometry
     const float gnk2 = math::dot(data->k2, n.geometry_normal) * (
@@ -770,28 +834,30 @@ BSDF_API void specular_bsdf_sample(
     BSDF_sample_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &tint,
+    const color_sample &tint,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle)
 {
     Normals n;
     get_oriented_normals(
         n.shading_normal, n.geometry_normal, inherited_normal, state->geometry_normal(), data->k1);
 
-    const float2 ior = process_ior(data, state);
+    process_ior(data, state);
     const bool thin_walled = get_material_thin_walled(state);
 
     const Fresnel_function_default fresnel_function;
-    specular_sample(fresnel_function, data, state, n, ior, thin_walled, math::saturate(tint), mode, handle);
+    specular_sample(fresnel_function, data, state, n, thin_walled, saturate(tint), mode, backscatter, handle);
 }
 
 BSDF_API void specular_bsdf_evaluate(
     BSDF_evaluate_data *data,
     const State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    const float3 &tint,
+    const color_sample &inherited_weight,
+    const color_sample &tint,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle)
 {
     absorb(data);
@@ -801,8 +867,9 @@ BSDF_API void specular_bsdf_pdf(
     BSDF_pdf_data *data,
     const State *state,
     const float3 &inherited_normal,
-    const float3 &tint,
+    const color_sample &tint,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle)
 {
     absorb(data);
@@ -812,14 +879,15 @@ BSDF_API void specular_bsdf_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    const float3 &tint,
+    const color_sample &inherited_weight,
+    const color_sample &tint,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle)
 {
     if (is_allowed_scatter_mode(data, mode)) {
         elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight,
-            make<float3>(0.0f), tint, 1.0f, 1.0f, handle);
+            make<color_sample>(0.0f), tint, 1.0f, 1.0f, handle);
     }
 }
 
@@ -828,9 +896,10 @@ BSDF_API void specular_bsdf_auxiliary(
 //     float coating_thickness,
 //     color coating_ior,
 //     bsdf base = specular_bsdf(
-//         color           tint = color(1.0),
-//         scatter_mode    mode = scatter_reflect,
-//         uniform string  handle = ""
+//         color                tint = color(1.0),
+//         scatter_mode         mode = scatter_reflect,
+//         backscatter_modifier backscatter = backscatter_none
+//         uniform string       handle = ""
 //     )
 // )
 /////////////////////////////////////////////////////////////////////
@@ -839,33 +908,35 @@ BSDF_API void thin_film_specular_bsdf_sample(
     BSDF_sample_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &tint,
+    const color_sample &tint,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     Normals n;
     get_oriented_normals(
         n.shading_normal, n.geometry_normal, inherited_normal, state->geometry_normal(), data->k1);
 
-    const float2 ior = process_ior(data, state);
+    process_ior(data, state);
     const bool thin_walled = get_material_thin_walled(state);
 
-    const Fresnel_function_coated fresnel_function(coating_thickness, coating_ior);
-    specular_sample(fresnel_function, data, state, n, ior, thin_walled, math::saturate(tint), mode, handle);
+    const Fresnel_function_coated fresnel_function(state, coating_thickness, coating_ior);
+    specular_sample(fresnel_function, data, state, n, thin_walled, saturate(tint), mode, backscatter, handle);
 }
 
 BSDF_API void thin_film_specular_bsdf_evaluate(
     BSDF_evaluate_data *data,
     const State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    const float3 &tint,
+    const color_sample &inherited_weight,
+    const color_sample &tint,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     absorb(data);
 }
@@ -874,11 +945,12 @@ BSDF_API void thin_film_specular_bsdf_pdf(
     BSDF_pdf_data *data,
     const State *state,
     const float3 &inherited_normal,
-    const float3 &tint,
+    const color_sample &tint,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     absorb(data);
 }
@@ -887,16 +959,17 @@ BSDF_API void thin_film_specular_bsdf_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    const float3 &tint,
+    const color_sample &inherited_weight,
+    const color_sample &tint,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     if (is_allowed_scatter_mode(data, mode)) {
         elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight,
-            make<float3>(0.0f), tint, 1.0f, 1.0f, handle);
+            make<color_sample>(0.0f), tint, 1.0f, 1.0f, handle);
     }
 }
 
@@ -923,9 +996,9 @@ BSDF_INLINE void microfacet_sample(
     BSDF_sample_data *data,
     State *state,
     const Geometry &g,
-    const float2 &ior,
     const bool thin_walled,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle,
     float& nk1)
 {
@@ -955,22 +1028,18 @@ BSDF_INLINE void microfacet_sample(
 
     // compute probability of selecting refraction over reflection
     float f_refl;
-    float3 f_refl_c;
+    color_sample f_refl_c;
     switch (mode) {
         case scatter_reflect:
-            f_refl_c = make<float3>(1.0f);
+            f_refl_c = make<color_sample>(1.0f);
             f_refl = 1.0f;
             break;
         case scatter_transmit:
-            f_refl_c = make<float3>(0.0f);
+            f_refl_c = make<color_sample>(0.0f);
             f_refl = 0.0f;
             break;
         case scatter_reflect_transmit:
-            {
-                float4 res = fresnel_function.eval(ior, kh);
-                f_refl_c   = make<float3>(res.x, res.y, res.z);
-                f_refl     = res.w;
-            }
+            f_refl_c = fresnel_function.eval(f_refl, data, kh);
             break;
     }
 
@@ -995,6 +1064,7 @@ BSDF_INLINE void microfacet_sample(
     } else {
         prob = 1.0f - f_refl;
         bool tir = false;
+        bool dispersion = false;
         if (thin_walled) {
             // pseudo-BTDF: flip a reflected reflection direction to the back side
             data->k2 = (2.0f * kh) * h - data->k1;
@@ -1002,21 +1072,27 @@ BSDF_INLINE void microfacet_sample(
                 data->k2 - 2.0f * g.n.shading_normal * math::dot(data->k2, g.n.shading_normal));
         } else {
             // BTDF: refract
-            data->k2 = refract(data->k1, h, ior.x / ior.y, kh, tir);
+            const float2 refraction_ior = get_refraction_ior(dispersion, data);
+            data->k2 = refract(data->k1, h, refraction_ior.x / refraction_ior.y, kh, tir);
         }
         data->event_type = tir ? BSDF_EVENT_GLOSSY_REFLECTION : BSDF_EVENT_GLOSSY_TRANSMISSION;
-        data->xi.z = saturate_below_one((data->xi.z - f_refl) / prob);
+        const float inv_prob = 1.0f / prob;
+        data->xi.z = saturate_below_one((data->xi.z - f_refl) * inv_prob);
 
-        data->bsdf_over_pdf = (make<float3>(1.0f) - f_refl_c) / prob;
+#ifdef MDL_DF_SPECTRAL_ENABLE
+        data->bsdf_over_pdf.values[0] = (1.0f - f_refl_c.values[0]) * inv_prob;
+        if (dispersion) {
+            for (unsigned int i = 1; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+                data->bsdf_over_pdf.values[i] = 0.0f;
+        } else {
+            for (unsigned int i = 1; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+                data->bsdf_over_pdf.values[i] = (1.0f - f_refl_c.values[i]) * inv_prob;
+        }
+#else
+        data->bsdf_over_pdf = (make<color_sample>(1.0f) - f_refl_c) * inv_prob;
+#endif
     }
 
-    // check if the resulting direction is on the correct side of the actual geometry
-    const float gnk2 = math::dot(data->k2, g.n.geometry_normal) * (
-        data->event_type == BSDF_EVENT_GLOSSY_REFLECTION ? 1.0f : -1.0f);
-    if (gnk2 <= 0.0f) {
-        absorb(data);
-        return;
-    }
 
     const bool refraction = !thin_walled && (data->event_type == BSDF_EVENT_GLOSSY_TRANSMISSION);
 
@@ -1039,28 +1115,54 @@ BSDF_INLINE void microfacet_sample(
     // compute pdf
     if (BSDF::calc_pdf_in_sample())
     {
-        data->pdf = ph.eval(h0) * G1 * prob;
+        data->pdf = make_pdf_sample(ph.eval(h0) * G1 * prob);
 
         if (refraction) {
-            const float tmp = kh * ior.x - k2h * ior.y;
+            bool dispersion;
+            const float2 refraction_ior = get_refraction_ior(dispersion, data);
+            const float tmp = kh * refraction_ior.x - k2h * refraction_ior.y;
+#ifdef  MDL_DF_SPECTRAL_ENABLE
+            const float f = kh * k2h / (nk1 * h0.y * tmp * tmp);
+            data->pdf.values[0] *= f;
+            if (dispersion) {
+                for (unsigned int i = 1; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+                    data->pdf.values[i] = 0.0f;
+            } else {
+                for (unsigned int i = 1; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+                    data->pdf.values[i] *= f;
+            }
+#else
             data->pdf *= kh * k2h / (nk1 * h0.y * tmp * tmp);
+#endif
         }
         else
             data->pdf *= 0.25f / (nk1 * h0.y);
     }
+
+    // can apply backscattering reflection on k2 in the end, this is equivalent to reflecting k1 beforehand
+    data->k2 = apply_backscatter(data->k2, backscatter, (data->event_type & BSDF_EVENT_REFLECTION) != 0, g.n.shading_normal, nk2, false);
+
+    // check if the resulting direction is on the correct side of the actual geometry
+    const float gnk2 = math::dot(data->k2, g.n.geometry_normal) * (
+        data->event_type == BSDF_EVENT_GLOSSY_REFLECTION ? 1.0f : -1.0f);
+    if (gnk2 <= 0.0f) {
+        absorb(data);
+        return;
+    }
+
     data->handle = handle;
 }
 
 template <typename Distribution, typename Data, typename Fresnel_function>
-BSDF_INLINE float3 microfacet_evaluate(
+BSDF_INLINE color_sample microfacet_evaluate(
     const Distribution &ph,
     const Fresnel_function &fresnel_function,
     Data *data,
     State *state,
     const Geometry &g,
-    const float2 &ior,
     const bool thin_walled,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     float &nk1,
     float &nk2)
 {
@@ -1072,88 +1174,108 @@ BSDF_INLINE float3 microfacet_evaluate(
 
     // nothing to evaluate for given directions?
     if (( backside_eval && (!is_allowed_transmit(data) || (mode == scatter_reflect))) ||
-        (!backside_eval && (!is_allowed_reflect(data)  || (mode == scatter_transmit) && (ior.x < ior.y))))
+        (!backside_eval && (!is_allowed_reflect(data)  /*|| (mode == scatter_transmit) && (ior.x < ior.y)*/))) //!! TODO SPECTRAL
     {
         absorb(data);
-        return make<float3>(0.0f);
+        return make<color_sample>(0.0f);
     }
 
+    const float3 k1 = apply_backscatter(data->k1, backscatter, !backside_eval, g.n.shading_normal, nk1, true);
+
+    bool dispersion;
+    const float2 refraction_ior = get_refraction_ior(dispersion, data);
+
     const float3 h = compute_half_vector(
-        data->k1, data->k2, g.n.shading_normal, ior, nk2,
+        k1, data->k2, g.n.shading_normal, refraction_ior, nk2,
         backside_eval, thin_walled);
 
     // invalid for reflection / refraction?
     const float nh = math::dot(g.n.shading_normal, h);
-    const float k1h = math::dot(data->k1, h);
+    const float k1h = math::dot(k1, h);
     const float k2h = math::dot(data->k2, h) * (backside_eval ? -1.0f : 1.0f);
     if (nh < 0.0f || k1h < 0.0f || k2h < 0.0f) {
         absorb(data);
-        return make<float3>(0.0f);
+        return make<color_sample>(0.0f);
     }
 
     float f_refl;
-    float3 f_refl_c;
+    color_sample f_refl_c;
     bool tir = false;
     switch (mode) {
         case scatter_reflect:
-            f_refl_c = make<float3>(1.0f);
+            f_refl_c = make<color_sample>(1.0f);
             f_refl = 1.0f;
             break;
         case scatter_transmit:
             if (!backside_eval) {
                 // for scatter_transmit: only allow TIR with BRDF eval
-                tir = is_tir(ior, k1h); 
+                tir = is_tir(refraction_ior, k1h); //!! TODO SPECTRAL: check
                 if (!tir) {
                     absorb(data);
-                    return make<float3>(0.0f);
+                    return make<color_sample>(0.0f);
                 } else {
-                    f_refl_c = make<float3>(1.0f);
+                    f_refl_c = make<color_sample>(1.0f);
                     f_refl = 1.0f;
                 }
             } else {
-                f_refl_c = make<float3>(0.0f);
+                f_refl_c = make<color_sample>(0.0f);
                 f_refl = 0.0f;
             }
             break;
         case scatter_reflect_transmit:
-            {
-                float4 res = fresnel_function.eval(ior, k1h);
-                f_refl_c   = make<float3>(res.x, res.y, res.z);
-                f_refl     = res.w;
-            }
+            f_refl_c = fresnel_function.eval(f_refl, data, k1h);
             break;
     }
 
     // handle allowed mode
     if (!adapt_reflect_prob_for_allowed_mode(data, mode, &f_refl, tir)) {
         absorb(data);
-        return make<float3>(0.0f);
+        return make<color_sample>(0.0f);
     }
 
     // compute BSDF and pdf
-    data->pdf = ph.eval(make_float3(math::dot(g.x_axis, h), nh, math::dot(g.z_axis, h)));
+    float pdf = ph.eval(make_float3(math::dot(g.x_axis, h), nh, math::dot(g.z_axis, h)));
 
     float G1, G2;
     //const float k2h = math::abs(math::dot(data->k2, h));
     const bool refraction = !thin_walled && backside_eval;
     const float G12 = ph.shadow_mask(
         G1, G2, nh,
-        make_float3(math::dot(g.x_axis, data->k1), nk1, math::dot(g.z_axis, data->k1)), k1h,
+        make_float3(math::dot(g.x_axis, k1), nk1, math::dot(g.z_axis, data->k1)), k1h,
         make_float3(math::dot(g.x_axis, data->k2), nk2, math::dot(g.z_axis, data->k2)), k2h,
         refraction);
 
     if (refraction) {
         // refraction pdf and BTDF
-        const float tmp = k1h * ior.x - k2h * ior.y;
-        data->pdf *= k1h * k2h / (nk1 * nh * tmp * tmp);
+        const float tmp = k1h * refraction_ior.x - k2h * refraction_ior.y;
+        pdf *= k1h * k2h / (nk1 * nh * tmp * tmp);
     } else {
         // reflection pdf and BRDF (and pseudo-BTDF for thin-walled)
-        data->pdf *= 0.25f / (nk1 * nh);
+        pdf *= 0.25f / (nk1 * nh);
     }
 
-    const float3 bsdf =
-        (backside_eval ? (make<float3>(1.0f) - f_refl_c) : f_refl_c) * (G12 * data->pdf);
-    data->pdf *= (backside_eval ? (1.0f - f_refl) : f_refl) * G1;
+    const float bsdf_val = pdf * G12;
+    pdf *= (backside_eval ? (1.0f - f_refl) : f_refl) * G1;
+    data->pdf = make_pdf_sample(pdf);
+
+    color_sample bsdf;
+    if (backside_eval) {
+#ifdef MDL_DF_SPECTRAL_ENABLE
+        bsdf.values[0] = (1.0f - f_refl_c.values[0]) * bsdf_val;
+        if (dispersion) {
+            for (unsigned int i = 1; i < MDL_DF_SPECTRAL_SAMPLES; ++i) {
+                bsdf.values[i] = 0.0f;
+                data->pdf.values[i] = 0.0f;
+            }
+        } else {
+            for (unsigned int i = 1; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+                bsdf.values[i] = (1.0f - f_refl_c.values[i]) * bsdf_val;
+        }
+#else
+        bsdf = (make<color_sample>(1.f) - f_refl_c) * bsdf_val;
+#endif
+    } else
+        bsdf = f_refl_c * bsdf_val;
 
     return bsdf;
 }
@@ -1165,9 +1287,10 @@ BSDF_INLINE void microfacet_sample(
     BSDF_sample_data *data,
     State *state,
     const Geometry& g,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle,
     const BSDF_type type,
     const float roughness_u,
@@ -1176,7 +1299,7 @@ BSDF_INLINE void microfacet_sample(
     const BSDF *multiscatter = nullptr,
     const float3 &multiscatter_normal = make_float3(0.0f, 0.0f, 0.0f))
 {
-    const float2 ior = process_ior(data, state);
+    process_ior(data, state);
     const bool thin_walled = get_material_thin_walled(state);
     const Df_flags allowed_mode = get_allowed_scatter_mode(data);
     const bool microfacet_allowed = is_allowed_scatter_mode(data, mode);
@@ -1194,7 +1317,7 @@ BSDF_INLINE void microfacet_sample(
         }
 
         float nk1 = math::abs(math::dot(data->k1, g.n.shading_normal));
-        
+
         const float2 clamp = make<float2>(0.0f, 1.0f);
         float3 coord = make<float3>(
             multiscatter::compute_lookup_coordinate_x(type, nk1),
@@ -1218,12 +1341,12 @@ BSDF_INLINE void microfacet_sample(
             }
 
             microfacet_sample(
-                ph, fresnel_function, data, state, g, ior, thin_walled, mode, handle, nk1);
+                ph, fresnel_function, data, state, g, thin_walled, mode, backscatter, handle, nk1);
             if (data->event_type == BSDF_EVENT_ABSORB)
                 return;
 
             data->bsdf_over_pdf *= tint / microfacet_prob;
-            
+
             if (BSDF::calc_pdf_in_sample() && microfacet_prob < 1.0f)
             {
                 BSDF_pdf_data pdf_data = to_pdf_data(data);
@@ -1253,18 +1376,18 @@ BSDF_INLINE void microfacet_sample(
 
             data->bsdf_over_pdf *=
                 multiscatter_tint * (1.0f - math::max(rho1, rho2)) / (1.0f - microfacet_prob);
-            
+
             if (BSDF::calc_pdf_in_sample() && microfacet_prob > 0.0f) {
                 BSDF_pdf_data pdf_data = to_pdf_data(data);
                 microfacet_evaluate(
-                    ph, fresnel_function, &pdf_data, state, g, ior, thin_walled, mode, nk1, nk2);
+                    ph, fresnel_function, &pdf_data, state, g, thin_walled, mode, backscatter, nk1, nk2);
                 data->pdf = pdf_data.pdf * microfacet_prob + data->pdf * (1.0f - microfacet_prob);
             }
         }
 
         return;
     }
-    
+
     // diffuse multiscatter case (roughness = 0)
 
     const bool diffuse_multiscatter_allowed = is_allowed_reflect(allowed_mode);
@@ -1279,7 +1402,7 @@ BSDF_INLINE void microfacet_sample(
     float nk1;
     if (microfacet_allowed) {
         microfacet_sample(
-            ph, fresnel_function, data, state, g, ior, thin_walled, mode, handle, nk1);
+            ph, fresnel_function, data, state, g, thin_walled, mode, backscatter, handle, nk1);
 
         if (multiscatter_texture_id == 0 || mode == scatter_transmit ||
             !diffuse_multiscatter_allowed)
@@ -1295,7 +1418,7 @@ BSDF_INLINE void microfacet_sample(
     // sample, in case the multi-scattering part is sampled, k2 will change and rho1 will be > 0
     const float rho1 = multiscatter::sample(
         state, type, roughness_u, roughness_v, nk1,
-        (!thin_walled && (mode != scatter_reflect)) ? (ior.x / ior.y) : -1.0f,
+        multiscatter::get_eta((!thin_walled && (mode != scatter_reflect)), data),
         multiscatter_texture_id, data, g, tint, multiscatter_tint, mode);
 
     // recompute glossy pdf for new direction
@@ -1304,7 +1427,7 @@ BSDF_INLINE void microfacet_sample(
         BSDF_pdf_data pdf_data = to_pdf_data(data);
         float nk2;
         microfacet_evaluate(
-            ph, fresnel_function, &pdf_data, state, g, ior, thin_walled, mode, nk1, nk2);
+            ph, fresnel_function, &pdf_data, state, g, thin_walled, mode, backscatter, nk1, nk2);
 
         // incorporate multi-scatter part to pdf for the new k2
         multiscatter::sample_update_single_scatter_probability(data, pdf_data.pdf, rho1, nk2);
@@ -1319,12 +1442,13 @@ BSDF_INLINE void microfacet_sample(
     State *state,
     const float3 &normal,
     const float3 &tangent_u,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle,
     const BSDF_type type,
-    const float roughness_u, 
+    const float roughness_u,
     const float roughness_v,
     const unsigned multiscatter_texture_id,
     const BSDF *multiscatter = nullptr,
@@ -1338,12 +1462,12 @@ BSDF_INLINE void microfacet_sample(
     }
 
     microfacet_sample(
-        ph, fresnel_function, data, state, g, tint, multiscatter_tint, mode, handle, type,
+        ph, fresnel_function, data, state, g, tint, multiscatter_tint, mode, backscatter, handle, type,
         roughness_u, roughness_v, multiscatter_texture_id, multiscatter, multiscatter_normal);
 }
 
 struct float3_float {
-    float3 x;
+    color_sample x;
     float y;
 };
 
@@ -1355,6 +1479,7 @@ BSDF_INLINE float3_float microfacet_evaluate(
     State *state,
     const Geometry& g,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const BSDF_type type,
     const float roughness_u,
     const float roughness_v,
@@ -1362,25 +1487,25 @@ BSDF_INLINE float3_float microfacet_evaluate(
     float &nk1,
     float &nk2)
 {
-    const float2 ior = process_ior(data, state);
+    process_ior(data, state);
     const bool thin_walled = get_material_thin_walled(state);
     const bool microfacet_allowed = is_allowed_scatter_mode(data, mode);
 
-    const float3 contrib_single = microfacet_allowed ?
-        microfacet_evaluate(ph, fresnel_function, data, state, g, ior, thin_walled, mode, nk1, nk2) :
-        make_float3(0.0f, 0.0f, 0.0f);
+    const color_sample contrib_single = microfacet_allowed ?
+        microfacet_evaluate(ph, fresnel_function, data, state, g, thin_walled, mode, backscatter, nk1, nk2) :
+        make<color_sample>(0.0f);
 
     if (multiscatter_texture_id == 0 || mode == scatter_transmit || !is_allowed_reflect(data))
         return float3_float{contrib_single, 0.0f};
 
     float2 contrib_multi = multiscatter::evaluate(
         state, type, roughness_u, roughness_v, nk1, nk2,
-        (!thin_walled && (mode != scatter_reflect)) ? (ior.x / ior.y) : -1.0f, multiscatter_texture_id);
+        multiscatter::get_eta((!thin_walled && (mode != scatter_reflect)), data), multiscatter_texture_id);
 
     data->pdf *= contrib_multi.x; // * rho1
-    if (math::dot(g.n.geometry_normal, data->k2) >= 0.0f) 
+    if (math::dot(g.n.geometry_normal, data->k2) >= 0.0f)
     {
-        data->pdf += (1.0f - contrib_multi.x) * (float)(1.0 / M_PI);
+        data->pdf += make_pdf_sample((1.0f - contrib_multi.x) * (float)(1.0 / M_PI));
     }
     else
         contrib_multi.y = 0.0f; // backside eval
@@ -1397,19 +1522,20 @@ BSDF_INLINE float3_float microfacet_evaluate(
     const float3 &normal,
     const float3 &tangent_u,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const BSDF_type type,
-    const float roughness_u, 
+    const float roughness_u,
     const float roughness_v,
     const unsigned multiscatter_texture_id)
 {
     Geometry g;
     if (!get_geometry(g, normal, tangent_u, data->k1, state)) {
         absorb(data);
-        return float3_float{make<float3>(0.0f), 0.0f};
+        return float3_float{make<color_sample>(0.0f), 0.0f};
     }
     float nk1, nk2;
     return microfacet_evaluate(
-        ph, fresnel_function, data, state, g, mode, type, roughness_u, roughness_v, multiscatter_texture_id, nk1, nk2);
+        ph, fresnel_function, data, state, g, mode, backscatter, type, roughness_u, roughness_v, multiscatter_texture_id, nk1, nk2);
 }
 
 template <typename Distribution, typename Fresnel_function>
@@ -1421,8 +1547,9 @@ BSDF_INLINE float3_float microfacet_evaluate(
     const float3 &normal,
     const float3 &tangent_u,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const BSDF_type type,
-    const float roughness_u, 
+    const float roughness_u,
     const float roughness_v,
     const unsigned multiscatter_texture_id,
     float &nk1, float &nk2)
@@ -1430,10 +1557,10 @@ BSDF_INLINE float3_float microfacet_evaluate(
     Geometry g;
     if (!get_geometry(g, normal, tangent_u, data->k1, state)) {
         absorb(data);
-        return float3_float{make<float3>(0.0f), 0.0f};
+        return float3_float{make<color_sample>(0.0f), 0.0f};
     }
     return microfacet_evaluate(
-        ph, fresnel_function, data, state, g, mode, type, roughness_u, roughness_v, multiscatter_texture_id, nk1, nk2);
+        ph, fresnel_function, data, state, g, mode, backscatter, type, roughness_u, roughness_v, multiscatter_texture_id, nk1, nk2);
 }
 
 
@@ -1445,18 +1572,19 @@ BSDF_INLINE void microfacet_pdf(
     State *state,
     const Geometry& g,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const BSDF_type type,
     const float roughness_u,
     const float roughness_v,
     const unsigned multiscatter_texture_id,
     float &nk1)
 {
-    const float2 ior = process_ior(data, state);
+    process_ior(data, state);
     const bool thin_walled = get_material_thin_walled(state);
 
     float nk2;
     // note: internally checks and accounts for allowed mode
-    microfacet_evaluate(ph, fresnel_function, data, state, g, ior, thin_walled, mode, nk1, nk2);
+    microfacet_evaluate(ph, fresnel_function, data, state, g, thin_walled, mode, backscatter, nk1, nk2);
 
     if (multiscatter_texture_id == 0 || mode == scatter_transmit || !is_allowed_reflect(data))
         return;
@@ -1464,7 +1592,8 @@ BSDF_INLINE void microfacet_pdf(
     data->pdf = multiscatter::pdf(
         data->pdf,
         state, type, roughness_u, roughness_v, nk1, nk2,
-        (!thin_walled && (mode != scatter_reflect)) ? (ior.x / ior.y) : -1.0f, multiscatter_texture_id);
+        multiscatter::get_eta((!thin_walled && (mode != scatter_reflect)), data),
+        multiscatter_texture_id);
 }
 
 template <typename Distribution, typename Fresnel_function>
@@ -1476,6 +1605,7 @@ BSDF_INLINE void microfacet_pdf(
     const float3 &normal,
     const float3 &tangent_u,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const BSDF_type type,
     const float roughness_u,
     const float roughness_v,
@@ -1489,7 +1619,7 @@ BSDF_INLINE void microfacet_pdf(
     }
     float nk1;
     microfacet_pdf(
-        ph, fresnel_function, data, state, g, mode, type, roughness_u, roughness_v, multiscatter_texture_id, nk1);
+        ph, fresnel_function, data, state, g, mode, backscatter, type, roughness_u, roughness_v, multiscatter_texture_id, nk1);
 }
 
 template <typename Distribution, typename Fresnel_function>
@@ -1500,8 +1630,9 @@ BSDF_INLINE void microfacet_pdf(
     State *state,
     const float3 &normal,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const BSDF_type type,
-    const float roughness_u, 
+    const float roughness_u,
     const float roughness_v,
     const unsigned multiscatter_texture_id,
     float &nk1)
@@ -1510,18 +1641,19 @@ BSDF_INLINE void microfacet_pdf(
     get_oriented_normals(
         g.n.shading_normal, g.n.geometry_normal, normal, state->geometry_normal(), data->k1);
     microfacet_pdf(
-        ph, fresnel_function, data, state, g, mode, type, roughness_u, roughness_v, multiscatter_texture_id, nk1);
+        ph, fresnel_function, data, state, g, mode, backscatter, type, roughness_u, roughness_v, multiscatter_texture_id, nk1);
 }
 
 /////////////////////////////////////////////////////////////////////
 // bsdf simple_glossy_bsdf(
-//     float           roughness_u,
-//     float           roughness_v       = roughness_u,
-//     color           tint              = color(1.0),
-//     color           multiscatter_tint = color(0.0),
-//     float3          tangent_u         = state->texture_tangent_u(0),
-//     scatter_mode    mode              = scatter_reflect,
-//     uniform string  handle            = ""
+//     float                roughness_u,
+//     float                roughness_v       = roughness_u,
+//     color                tint              = color(1.0),
+//     color                multiscatter_tint = color(0.0),
+//     float3               tangent_u         = state::texture_tangent_u(0),
+//     scatter_mode         mode              = scatter_reflect,
+//     backscatter_modifier backscatter       = backscatter_none
+//     uniform string       handle            = ""
 // )
 /////////////////////////////////////////////////////////////////////
 
@@ -1587,10 +1719,11 @@ BSDF_API void simple_glossy_bsdf_sample(
     const float3 &inherited_normal,
     const float roughness_u,
     const float roughness_v,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle)
 {
     const float2 adapted_roughness = state->adapt_microfacet_roughness(
@@ -1599,13 +1732,12 @@ BSDF_API void simple_glossy_bsdf_sample(
     const Distribution_phong_vcavities ph(adapted_roughness.x, adapted_roughness.y);
     const Fresnel_function_default fresnel_function;
 
-    const unsigned int multiscatter_texture_id = 
-        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+    const unsigned int multiscatter_texture_id = (multiscatter_tint <= 0.f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_SIMPLE_GLOSSY_MULTISCATTER);
 
     microfacet_sample(
-        ph, fresnel_function, data, state, inherited_normal, tangent_u, 
-        math::saturate(tint), math::saturate(multiscatter_tint), mode, handle,
+        ph, fresnel_function, data, state, inherited_normal, tangent_u,
+        saturate(tint), saturate(multiscatter_tint), mode, backscatter, handle,
         SIMPLE_GLOSSY_BSDF,
         adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
@@ -1615,13 +1747,14 @@ BSDF_API void simple_glossy_bsdf_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const float roughness_u,
     const float roughness_v,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle)
 {
     const float2 adapted_roughness = state->adapt_microfacet_roughness(
@@ -1630,22 +1763,20 @@ BSDF_API void simple_glossy_bsdf_evaluate(
     const Distribution_phong_vcavities ph(adapted_roughness.x, adapted_roughness.y);
     const Fresnel_function_default fresnel_function;
 
-    const unsigned int multiscatter_texture_id = 
-        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+    const unsigned int multiscatter_texture_id = (multiscatter_tint <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_SIMPLE_GLOSSY_MULTISCATTER);
 
     const float3_float contrib = microfacet_evaluate(
-        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode,
+        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode, backscatter,
         SIMPLE_GLOSSY_BSDF,
         adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
 
     add_elemental_bsdf_evaluate_contribution(
-        data, handle, 
-        contrib.y * math::saturate(multiscatter_tint) * inherited_weight,
-        contrib.x * math::saturate(tint) * inherited_weight);
+        data, handle,
+        contrib.y * saturate(multiscatter_tint) * inherited_weight,
+        contrib.x * saturate(tint) * inherited_weight);
 }
-
 
 BSDF_API void simple_glossy_bsdf_pdf(
     BSDF_pdf_data *data,
@@ -1653,10 +1784,11 @@ BSDF_API void simple_glossy_bsdf_pdf(
     const float3 &inherited_normal,
     const float roughness_u,
     const float roughness_v,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle)
 {
     const float2 adapted_roughness = state->adapt_microfacet_roughness(
@@ -1665,11 +1797,10 @@ BSDF_API void simple_glossy_bsdf_pdf(
     const Distribution_phong_vcavities ph(adapted_roughness.x, adapted_roughness.y);
     const Fresnel_function_default fresnel_function;
 
-    const unsigned int multiscatter_texture_id = 
-        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+    const unsigned int multiscatter_texture_id = (multiscatter_tint <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_SIMPLE_GLOSSY_MULTISCATTER);
 
-    microfacet_pdf(ph, fresnel_function, data, state, inherited_normal, tangent_u, mode,
+    microfacet_pdf(ph, fresnel_function, data, state, inherited_normal, tangent_u, mode, backscatter,
         SIMPLE_GLOSSY_BSDF,
         adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
@@ -1679,18 +1810,19 @@ BSDF_API void simple_glossy_bsdf_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const float roughness_u,
     const float roughness_v,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle)
 {
     if (is_allowed_scatter_mode(data, mode)) {
         elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight,
-            make<float3>(0.0f), tint, roughness_u, roughness_v, handle);
+            make<color_sample>(0.0f), tint, roughness_u, roughness_v, handle);
     }
 }
 
@@ -1699,13 +1831,14 @@ BSDF_API void simple_glossy_bsdf_auxiliary(
 //     float coating_thickness,
 //     color coating_ior,
 //     bsdf base = simple_glossy_bsdf(
-//         float           roughness_u,
-//         float           roughness_v       = roughness_u,
-//         color           tint              = color(1.0),
-//         color           multiscatter_tint = color(0.0),
-//         float3          tangent_u         = state->texture_tangent_u(0),
-//         scatter_mode    mode              = scatter_reflect,
-//         uniform string  handle            = ""
+//         float                roughness_u,
+//         float                roughness_v       = roughness_u,
+//         color                tint              = color(1.0),
+//         color                multiscatter_tint = color(0.0),
+//         float3               tangent_u         = state->texture_tangent_u(0),
+//         scatter_mode         mode              = scatter_reflect,
+//         backscatter_modifier backscatter       = backscatter_none,
+//         uniform string       handle            = ""
 //    )
 // )
 /////////////////////////////////////////////////////////////////////
@@ -1716,27 +1849,27 @@ BSDF_API void thin_film_simple_glossy_bsdf_sample(
     const float3 &inherited_normal,
     const float roughness_u,
     const float roughness_v,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     const float2 adapted_roughness = state->adapt_microfacet_roughness(
         make_float2(roughness_u, roughness_v));
 
     const Distribution_phong_vcavities ph(adapted_roughness.x, adapted_roughness.y);
-    const Fresnel_function_coated fresnel_function(coating_thickness, coating_ior);
+    const Fresnel_function_coated fresnel_function(state, coating_thickness, coating_ior);
 
-    const unsigned int multiscatter_texture_id = 
-        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+    const unsigned int multiscatter_texture_id = (multiscatter_tint <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_SIMPLE_GLOSSY_MULTISCATTER);
 
     microfacet_sample(
-        ph, fresnel_function, data, state, inherited_normal, tangent_u, 
-        math::saturate(tint), math::saturate(multiscatter_tint), mode, handle,
+        ph, fresnel_function, data, state, inherited_normal, tangent_u,
+        saturate(tint), saturate(multiscatter_tint), mode, backscatter, handle,
         SIMPLE_GLOSSY_BSDF,
         adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
@@ -1746,37 +1879,37 @@ BSDF_API void thin_film_simple_glossy_bsdf_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const float roughness_u,
     const float roughness_v,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     const float2 adapted_roughness = state->adapt_microfacet_roughness(
         make_float2(roughness_u, roughness_v));
 
     const Distribution_phong_vcavities ph(adapted_roughness.x, adapted_roughness.y);
-    const Fresnel_function_coated fresnel_function(coating_thickness, coating_ior);
+    const Fresnel_function_coated fresnel_function(state, coating_thickness, coating_ior);
 
-    const unsigned int multiscatter_texture_id = 
-        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+    const unsigned int multiscatter_texture_id = (multiscatter_tint <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_SIMPLE_GLOSSY_MULTISCATTER);
 
     const float3_float contrib = microfacet_evaluate(
-        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode,
+        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode, backscatter,
         SIMPLE_GLOSSY_BSDF,
         adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
 
     add_elemental_bsdf_evaluate_contribution(
-        data, handle, 
-        contrib.y * math::saturate(multiscatter_tint) * inherited_weight,
-        contrib.x * math::saturate(tint) * inherited_weight);
+        data, handle,
+        contrib.y * saturate(multiscatter_tint) * inherited_weight,
+        contrib.x * saturate(tint) * inherited_weight);
 }
 
 
@@ -1786,25 +1919,25 @@ BSDF_API void thin_film_simple_glossy_bsdf_pdf(
     const float3 &inherited_normal,
     const float roughness_u,
     const float roughness_v,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     const float2 adapted_roughness = state->adapt_microfacet_roughness(
         make_float2(roughness_u, roughness_v));
 
     const Distribution_phong_vcavities ph(adapted_roughness.x, adapted_roughness.y);
-    const Fresnel_function_coated fresnel_function(coating_thickness, coating_ior);
+    const Fresnel_function_coated fresnel_function(state, coating_thickness, coating_ior);
 
-    const unsigned int multiscatter_texture_id = 
-        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+    const unsigned int multiscatter_texture_id = (multiscatter_tint <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_SIMPLE_GLOSSY_MULTISCATTER);
 
-    microfacet_pdf(ph, fresnel_function, data, state, inherited_normal, tangent_u, mode,
+    microfacet_pdf(ph, fresnel_function, data, state, inherited_normal, tangent_u, mode, backscatter,
         SIMPLE_GLOSSY_BSDF,
         adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
@@ -1814,20 +1947,21 @@ BSDF_API void thin_film_simple_glossy_bsdf_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const float roughness_u,
     const float roughness_v,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     if (is_allowed_scatter_mode(data, mode)) {
         elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight,
-            make<float3>(0.0f), tint, roughness_u, roughness_v, handle);
+            make<color_sample>(0.0f), tint, roughness_u, roughness_v, handle);
     }
 }
 
@@ -1871,8 +2005,8 @@ BSDF_API void sheen_bsdf_sample(
     State *state,
     const float3 &inherited_normal,
     const float roughness,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const BSDF &multiscatter,
     const int handle)
 {
@@ -1881,16 +2015,14 @@ BSDF_API void sheen_bsdf_sample(
     const Distribution_sheen_vcavities ph(adapted_roughness);
     const Fresnel_function_none fresnel_function;
 
-    const bool has_multiscatter =
-        !multiscatter.is_black() &&
-        (multiscatter_tint.x > 0.0f || multiscatter_tint.y > 0.0f || multiscatter_tint.z > 0.0f);
-    const unsigned int multiscatter_texture_id = 
+    const bool has_multiscatter = !multiscatter.is_black() && !(multiscatter_tint <= 0.f);
+    const unsigned int multiscatter_texture_id =
         has_multiscatter ? state->get_bsdf_data_texture_id(BDK_SHEEN_MULTISCATTER) : 0;
 
     microfacet_sample(
         ph, fresnel_function, data, state, inherited_normal, state->texture_tangent_u(0),
-        math::saturate(tint), math::saturate(multiscatter_tint),
-        scatter_reflect, handle, SHEEN_BSDF, adapted_roughness, adapted_roughness,
+        saturate(tint), saturate(multiscatter_tint),
+        scatter_reflect, backscatter_none, handle, SHEEN_BSDF, adapted_roughness, adapted_roughness,
         multiscatter_texture_id,
         multiscatter.is_default_diffuse_reflection() ? nullptr : &multiscatter, inherited_normal);
 }
@@ -1899,10 +2031,10 @@ BSDF_API void sheen_bsdf_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const float roughness,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const BSDF &multiscatter,
     const int handle)
 {
@@ -1911,10 +2043,8 @@ BSDF_API void sheen_bsdf_evaluate(
     const Distribution_sheen_vcavities ph(adapted_roughness);
     const Fresnel_function_none fresnel_function;
 
-    const bool has_multiscatter =
-        !multiscatter.is_black() &&
-        (multiscatter_tint.x > 0.0f || multiscatter_tint.y > 0.0f || multiscatter_tint.z > 0.0f);
-    const unsigned int multiscatter_texture_id = 
+    const bool has_multiscatter = !multiscatter.is_black() && !(multiscatter_tint <= 0.0f);
+    const unsigned int multiscatter_texture_id =
         has_multiscatter ? state->get_bsdf_data_texture_id(BDK_SHEEN_MULTISCATTER) : 0;
 
     const bool diffuse_multiscatter = multiscatter.is_default_diffuse_reflection();
@@ -1922,13 +2052,13 @@ BSDF_API void sheen_bsdf_evaluate(
     float nk1, nk2;
     const float3_float contrib = microfacet_evaluate(
         ph, fresnel_function, data, state, inherited_normal, state->texture_tangent_u(0),
-        scatter_reflect, SHEEN_BSDF, adapted_roughness, adapted_roughness,
+        scatter_reflect, backscatter_none, SHEEN_BSDF, adapted_roughness, adapted_roughness,
         diffuse_multiscatter ? multiscatter_texture_id : 0, nk1, nk2);
 
     add_elemental_bsdf_evaluate_contribution(
         data, handle,
-        contrib.y * math::saturate(multiscatter_tint) * inherited_weight,
-        contrib.x * math::saturate(tint) * inherited_weight);
+        contrib.y * saturate(multiscatter_tint) * inherited_weight,
+        contrib.x * saturate(tint) * inherited_weight);
 
     if (has_multiscatter && !diffuse_multiscatter && has_allowed_components(data, multiscatter))
     {
@@ -1943,9 +2073,9 @@ BSDF_API void sheen_bsdf_evaluate(
         const float rho2 = state->tex_lookup_float3_3d(multiscatter_texture_id,
             coord, 0, 0, 0, clamp, clamp, clamp, 0.0f).x;
 
-        float pdf = data->pdf * rho1;
-        const float3 weight =
-            inherited_weight * math::saturate(multiscatter_tint) * (1.0f - math::max(rho1, rho2));
+        pdf_sample pdf = data->pdf * rho1;
+        const color_sample weight =
+            inherited_weight * saturate(multiscatter_tint) * (1.0f - math::max(rho1, rho2));
         multiscatter.evaluate(data, state, inherited_normal, weight);
         data->pdf = pdf + data->pdf * (1.0f - rho1);
     }
@@ -1957,8 +2087,8 @@ BSDF_API void sheen_bsdf_pdf(
     State *state,
     const float3 &inherited_normal,
     const float roughness,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const BSDF &multiscatter,
     const int handle)
 {
@@ -1967,17 +2097,15 @@ BSDF_API void sheen_bsdf_pdf(
     const Distribution_sheen_vcavities ph(adapted_roughness);
     const Fresnel_function_none fresnel_function;
 
-    const bool has_multiscatter =
-        !multiscatter.is_black() &&
-        (multiscatter_tint.x > 0.0f || multiscatter_tint.y > 0.0f || multiscatter_tint.z > 0.0f);
-    const unsigned int multiscatter_texture_id = 
+    const bool has_multiscatter = !multiscatter.is_black() && !(multiscatter_tint <= 0.0f);
+    const unsigned int multiscatter_texture_id =
         has_multiscatter ? state->get_bsdf_data_texture_id(BDK_SHEEN_MULTISCATTER) : 0;
 
     const bool diffuse_multiscatter = multiscatter.is_default_diffuse_reflection();
 
     float nk1;
     microfacet_pdf(
-        ph, fresnel_function, data, state, inherited_normal, scatter_reflect,
+        ph, fresnel_function, data, state, inherited_normal, scatter_reflect, backscatter_none,
         SHEEN_BSDF, adapted_roughness, adapted_roughness,
         diffuse_multiscatter ? multiscatter_texture_id : 0, nk1);
 
@@ -1991,7 +2119,7 @@ BSDF_API void sheen_bsdf_pdf(
         const float rho1 = state->tex_lookup_float3_3d(multiscatter_texture_id,
             coord, 0, 0, 0, clamp, clamp, clamp, 0.0f).x;
 
-        float pdf = data->pdf * rho1;
+        pdf_sample pdf = data->pdf * rho1;
         multiscatter.pdf(data, state, inherited_normal);
         data->pdf = pdf + data->pdf * (1.0f - rho1);
     }
@@ -2001,18 +2129,16 @@ BSDF_API void sheen_bsdf_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const float roughness,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const BSDF &multiscatter,
     const int handle)
 {
     const float nk1 = math::saturate(math::dot(data->k1, inherited_normal));
     float rho1 = 1.0f;
-    const bool has_multiscatter =
-        !multiscatter.is_black() &&
-        (multiscatter_tint.x > 0.0f || multiscatter_tint.y > 0.0f || multiscatter_tint.z > 0.0f);
+    const bool has_multiscatter = !multiscatter.is_black() && !(multiscatter_tint <= 0.0f);
 
     if (has_multiscatter && has_allowed_components(data, multiscatter))
     {
@@ -2021,13 +2147,13 @@ BSDF_API void sheen_bsdf_auxiliary(
             multiscatter::compute_lookup_coordinate_x(SHEEN_BSDF, nk1),
             multiscatter::compute_lookup_coordinate_y(SHEEN_BSDF, roughness, roughness),
             multiscatter::compute_lookup_coordinate_z(SHEEN_BSDF, /*eta=*/-1.0f));
-         rho1 = 
+         rho1 =
             state->tex_lookup_float3_3d(
                 state->get_bsdf_data_texture_id(BDK_SHEEN_MULTISCATTER),
                 coord, 0, 0, 0, clamp, clamp, clamp, 0.0f).x;
     }
 
-    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, multiscatter_tint * (1.0f - rho1), tint * rho1, 
+    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, multiscatter_tint * (1.0f - rho1), tint * rho1,
         0.0f, 0.0f, // let sheen behave like diffuse
         handle);
 }
@@ -2103,10 +2229,10 @@ BSDF_INLINE void backscattering_glossy_sample(
     const float ph2 = eval_disk_distribution(
         x2 - xk2, y2 - zk2, exponent) * nk2_nh * nk2_nh * inv_nh;
 
-    data->bsdf_over_pdf = make<float3>(
+    data->bsdf_over_pdf = make<color_sample>(
         nk2 * math::min(ph1, ph2) / (ph1 * math::max(nk1, nk2)));
     if (BSDF::calc_pdf_in_sample())
-        data->pdf = ph1 * 0.25f / kh;
+        data->pdf = make_pdf_sample(ph1 * 0.25f / kh);
 
     data->event_type = BSDF_EVENT_GLOSSY_REFLECTION;
     data->handle = handle;
@@ -2157,7 +2283,7 @@ BSDF_INLINE float backscattering_glossy_evaluate(
 
     const float kh = math::dot(data->k1, h);
     const float f = (0.25f / kh);
-    data->pdf = f * ph1;
+    data->pdf = make_pdf_sample(f * ph1);
 
     return (f * math::min(ph1, ph2) * nk2 / math::max(nk2, nk1));
 }
@@ -2166,11 +2292,11 @@ BSDF_API void backscattering_glossy_reflection_bsdf_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const float roughness_u,
     const float roughness_v,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const int handle)
 {
@@ -2193,8 +2319,7 @@ BSDF_API void backscattering_glossy_reflection_bsdf_evaluate(
         return;
     }
 
-    const unsigned int multiscatter_texture_id = 
-        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+    const unsigned int multiscatter_texture_id = (multiscatter_tint <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_BACKSCATTERING_GLOSSY_MULTISCATTER);
 
     float2 multiscatter_contrib;
@@ -2209,13 +2334,14 @@ BSDF_API void backscattering_glossy_reflection_bsdf_evaluate(
             adapted_roughness.x, adapted_roughness.y,
             nk1, nk2, -1.0f, multiscatter_texture_id);
 
-        data->pdf = data->pdf * multiscatter_contrib.x + (1.0f - multiscatter_contrib.x) * (float)(1.0 / M_PI) * nk2;
+        data->pdf = data->pdf * multiscatter_contrib.x +
+            make_pdf_sample((1.0f - multiscatter_contrib.x) * (float)(1.0 / M_PI) * nk2);
     }
 
     add_elemental_bsdf_evaluate_contribution(
         data, handle,
-        multiscatter_contrib.y * math::saturate(multiscatter_tint) * inherited_weight,
-        glossy_contrib * math::saturate(tint) * inherited_weight);
+        multiscatter_contrib.y * saturate(multiscatter_tint) * inherited_weight,
+        glossy_contrib * saturate(tint) * inherited_weight);
 }
 
 template <typename Data>
@@ -2254,7 +2380,7 @@ BSDF_INLINE void backscattering_glossy_pdf(
         x1 - xk1, y1 - zk1, exponent) * nk1_nh * nk1_nh * inv_nh;
 
     const float kh = math::dot(data->k1, h);
-    data->pdf = (0.25f / kh) * ph1;
+    data->pdf = make_pdf_sample((0.25f / kh) * ph1);
 }
 
 
@@ -2264,8 +2390,8 @@ BSDF_API void backscattering_glossy_reflection_bsdf_sample(
     const float3 &inherited_normal,
     const float roughness_u,
     const float roughness_v,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const int handle)
 {
@@ -2284,8 +2410,7 @@ BSDF_API void backscattering_glossy_reflection_bsdf_sample(
     backscattering_glossy_sample(
         data, state, g, adapted_roughness.x, adapted_roughness.y, handle, nk1);
 
-    const unsigned int multiscatter_texture_id = 
-        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+    const unsigned int multiscatter_texture_id = (multiscatter_tint <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_BACKSCATTERING_GLOSSY_MULTISCATTER);
 
     if (multiscatter_texture_id == 0) {
@@ -2318,8 +2443,8 @@ BSDF_API void backscattering_glossy_reflection_bsdf_pdf(
     const float3 &inherited_normal,
     const float roughness_u,
     const float roughness_v,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const int handle)
 {
@@ -2336,8 +2461,7 @@ BSDF_API void backscattering_glossy_reflection_bsdf_pdf(
     float nk1, nk2;
     backscattering_glossy_pdf(data, state, g, adapted_roughness.x, adapted_roughness.y, nk1, nk2);
 
-    const unsigned int multiscatter_texture_id = 
-        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+    const unsigned int multiscatter_texture_id = (multiscatter_tint <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_BACKSCATTERING_GLOSSY_MULTISCATTER);
 
     if (multiscatter_texture_id == 0)
@@ -2354,30 +2478,31 @@ BSDF_API void backscattering_glossy_reflection_bsdf_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const float roughness_u,
     const float roughness_v,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const int handle)
 {
     if (is_allowed_reflect(data)) {
         elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight,
-            make<float3>(0.0f), tint, roughness_u, roughness_v, handle);
+            make<color_sample>(0.0f), tint, roughness_u, roughness_v, handle);
     }
 }
 
 
 /////////////////////////////////////////////////////////////////////
 // bsdf microfacet_beckmann_vcavities_bsdf(
-//     float           roughness_u,
-//     float           roughness_v       = roughness_u,
-//     color           tint              = color(1.0),
-//     color           multiscatter_tint = color(0.0),
-//     float3          tangent_u         = state->texture_tangent_u(0),
-//     scatter_mode    mode              = scatter_reflect,
-//     uniform string  handle            = ""
+//     float                roughness_u,
+//     float                roughness_v       = roughness_u,
+//     color                tint              = color(1.0),
+//     color                multiscatter_tint = color(0.0),
+//     float3               tangent_u         = state::texture_tangent_u(0),
+//     scatter_mode         mode              = scatter_reflect,
+//     backscatter_modifier backscatter       = backscatter_none,
+//     uniform string       handle            = ""
 // )
 /////////////////////////////////////////////////////////////////////
 
@@ -2407,10 +2532,11 @@ BSDF_API void microfacet_beckmann_vcavities_bsdf_sample(
     const float3 &inherited_normal,
     const float roughness_u,
     const float roughness_v,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle)
 {
     const float2 adapted_roughness = state->adapt_microfacet_roughness(
@@ -2419,13 +2545,12 @@ BSDF_API void microfacet_beckmann_vcavities_bsdf_sample(
     const Distribution_beckmann_vcavities ph(adapted_roughness.x, adapted_roughness.y);
     const Fresnel_function_default fresnel_function;
 
-    const unsigned int multiscatter_texture_id = 
-        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+    const unsigned int multiscatter_texture_id = (multiscatter_tint <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_BECKMANN_VC_MULTISCATTER);
 
     microfacet_sample(
-        ph, fresnel_function, data, state, inherited_normal, tangent_u, 
-        math::saturate(tint), math::saturate(multiscatter_tint), mode, handle,
+        ph, fresnel_function, data, state, inherited_normal, tangent_u,
+        saturate(tint), saturate(multiscatter_tint), mode, backscatter, handle,
         MICROFACET_BECKMANN_VCAVITIES_BSDF,
         adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
@@ -2435,13 +2560,14 @@ BSDF_API void microfacet_beckmann_vcavities_bsdf_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const float roughness_u,
     const float roughness_v,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle)
 {
     const float2 adapted_roughness = state->adapt_microfacet_roughness(
@@ -2450,20 +2576,19 @@ BSDF_API void microfacet_beckmann_vcavities_bsdf_evaluate(
     const Distribution_beckmann_vcavities ph(adapted_roughness.x, adapted_roughness.y);
     const Fresnel_function_default fresnel_function;
 
-    const unsigned int multiscatter_texture_id = 
-        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+    const unsigned int multiscatter_texture_id = (multiscatter_tint <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_BECKMANN_VC_MULTISCATTER);
 
     const float3_float contrib = microfacet_evaluate(
-        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode,
+        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode, backscatter,
         MICROFACET_BECKMANN_VCAVITIES_BSDF,
         adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
 
     add_elemental_bsdf_evaluate_contribution(
         data, handle,
-        contrib.y * math::saturate(multiscatter_tint) * inherited_weight,
-        contrib.x * math::saturate(tint) * inherited_weight);
+        (saturate(multiscatter_tint) * inherited_weight) * contrib.y,
+        (saturate(tint) * inherited_weight) * contrib.x);
 }
 
 
@@ -2473,10 +2598,11 @@ BSDF_API void microfacet_beckmann_vcavities_bsdf_pdf(
     const float3 &inherited_normal,
     const float roughness_u,
     const float roughness_v,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle)
 {
     const float2 adapted_roughness = state->adapt_microfacet_roughness(
@@ -2485,12 +2611,11 @@ BSDF_API void microfacet_beckmann_vcavities_bsdf_pdf(
     const Distribution_beckmann_vcavities ph(adapted_roughness.x, adapted_roughness.y);
     const Fresnel_function_default fresnel_function;
 
-    const unsigned int multiscatter_texture_id = 
-        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+    const unsigned int multiscatter_texture_id = (multiscatter_tint <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_BECKMANN_VC_MULTISCATTER);
 
     microfacet_pdf(
-        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode,
+        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode, backscatter,
         MICROFACET_BECKMANN_VCAVITIES_BSDF,
         adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
@@ -2500,18 +2625,19 @@ BSDF_API void microfacet_beckmann_vcavities_bsdf_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const float roughness_u,
     const float roughness_v,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle)
 {
     if (is_allowed_scatter_mode(data, mode)) {
         elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight,
-            make<float3>(0.0f), tint, roughness_u, roughness_v, handle);
+            make<color_sample>(0.0f), tint, roughness_u, roughness_v, handle);
     }
 }
 
@@ -2520,13 +2646,14 @@ BSDF_API void microfacet_beckmann_vcavities_bsdf_auxiliary(
 //     float coating_thickness,
 //     color coating_ior,
 //     bsdf base = microfacet_beckmann_vcavities_bsdf(
-//         float           roughness_u,
-//         float           roughness_v       = roughness_u,
-//         color           tint              = color(1.0),
-//         color           multiscatter_tint = color(0.0),
-//         float3          tangent_u         = state->texture_tangent_u(0),
-//         scatter_mode    mode              = scatter_reflect,
-//         uniform string  handle            = ""
+//         float                roughness_u,
+//         float                roughness_v       = roughness_u,
+//         color                tint              = color(1.0),
+//         color                multiscatter_tint = color(0.0),
+//         float3               tangent_u         = state->texture_tangent_u(0),
+//         scatter_mode         mode              = scatter_reflect,
+//         backscatter_modifier backscatter       = backscatter_none,
+//         uniform string       handle            = ""
 //     )
 // )
 /////////////////////////////////////////////////////////////////////
@@ -2537,27 +2664,27 @@ BSDF_API void thin_film_microfacet_beckmann_vcavities_bsdf_sample(
     const float3 &inherited_normal,
     const float roughness_u,
     const float roughness_v,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     const float2 adapted_roughness = state->adapt_microfacet_roughness(
         make_float2(roughness_u, roughness_v));
 
     const Distribution_beckmann_vcavities ph(adapted_roughness.x, adapted_roughness.y);
-    const Fresnel_function_coated fresnel_function(coating_thickness, coating_ior);
+    const Fresnel_function_coated fresnel_function(state, coating_thickness, coating_ior);
 
-    const unsigned int multiscatter_texture_id = 
-        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+    const unsigned int multiscatter_texture_id = (multiscatter_tint <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_BECKMANN_VC_MULTISCATTER);
 
     microfacet_sample(
-        ph, fresnel_function, data, state, inherited_normal, tangent_u, 
-        math::saturate(tint), math::saturate(multiscatter_tint), mode, handle,
+        ph, fresnel_function, data, state, inherited_normal, tangent_u,
+        saturate(tint), saturate(multiscatter_tint), mode, backscatter, handle,
         MICROFACET_BECKMANN_VCAVITIES_BSDF,
         adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
@@ -2567,37 +2694,37 @@ BSDF_API void thin_film_microfacet_beckmann_vcavities_bsdf_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const float roughness_u,
     const float roughness_v,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     const float2 adapted_roughness = state->adapt_microfacet_roughness(
         make_float2(roughness_u, roughness_v));
 
     const Distribution_beckmann_vcavities ph(adapted_roughness.x, adapted_roughness.y);
-    const Fresnel_function_coated fresnel_function(coating_thickness, coating_ior);
+    const Fresnel_function_coated fresnel_function(state, coating_thickness, coating_ior);
 
-    const unsigned int multiscatter_texture_id = 
-        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+    const unsigned int multiscatter_texture_id = (multiscatter_tint <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_BECKMANN_VC_MULTISCATTER);
 
     const float3_float contrib = microfacet_evaluate(
-        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode,
+        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode, backscatter,
         MICROFACET_BECKMANN_VCAVITIES_BSDF,
         adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
 
     add_elemental_bsdf_evaluate_contribution(
         data, handle,
-        contrib.y * math::saturate(multiscatter_tint) * inherited_weight,
-        contrib.x * math::saturate(tint) * inherited_weight);
+        (saturate(multiscatter_tint) * inherited_weight) * contrib.y,
+        (saturate(tint) * inherited_weight) * contrib.x);
 }
 
 
@@ -2607,26 +2734,26 @@ BSDF_API void thin_film_microfacet_beckmann_vcavities_bsdf_pdf(
     const float3 &inherited_normal,
     const float roughness_u,
     const float roughness_v,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     const float2 adapted_roughness = state->adapt_microfacet_roughness(
         make_float2(roughness_u, roughness_v));
 
     const Distribution_beckmann_vcavities ph(adapted_roughness.x, adapted_roughness.y);
-    const Fresnel_function_coated fresnel_function(coating_thickness, coating_ior);
+    const Fresnel_function_coated fresnel_function(state, coating_thickness, coating_ior);
 
-    const unsigned int multiscatter_texture_id = 
-        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+    const unsigned int multiscatter_texture_id = (multiscatter_tint <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_BECKMANN_VC_MULTISCATTER);
 
     microfacet_pdf(
-        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode,
+        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode, backscatter,
         MICROFACET_BECKMANN_VCAVITIES_BSDF,
         adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
@@ -2636,33 +2763,35 @@ BSDF_API void thin_film_microfacet_beckmann_vcavities_bsdf_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const float roughness_u,
     const float roughness_v,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     if (is_allowed_scatter_mode(data, mode)) {
         elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight,
-            make<float3>(0.0f), tint, roughness_u, roughness_v, handle);
+            make<color_sample>(0.0f), tint, roughness_u, roughness_v, handle);
     }
 }
 
 
 /////////////////////////////////////////////////////////////////////
 // bsdf microfacet_ggx_vcavities_bsdf(
-//     float           roughness_u,
-//     float           roughness_v       = roughness_u,
-//     color           tint              = color(1.0),
-//     color           multiscatter_tint = color(0.0),
-//     float3          tangent_u         = state->texture_tangent_u(0),
-//     scatter_mode    mode              = scatter_reflect,
-//     uniform string  handle            = ""
+//     float                roughness_u,
+//     float                roughness_v       = roughness_u,
+//     color                tint              = color(1.0),
+//     color                multiscatter_tint = color(0.0),
+//     float3               tangent_u         = state->texture_tangent_u(0),
+//     scatter_mode         mode              = scatter_reflect,
+//     backscatter_modifier backscatter       = backscatter_none,
+//     uniform string       handle            = ""
 // )
 /////////////////////////////////////////////////////////////////////
 
@@ -2691,10 +2820,11 @@ BSDF_API void microfacet_ggx_vcavities_bsdf_sample(
     const float3 &inherited_normal,
     const float roughness_u,
     const float roughness_v,
-    const float3 tint,
-    const float3 &multiscatter_tint,
+    const color_sample tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle)
 {
     const float2 adapted_roughness = state->adapt_microfacet_roughness(
@@ -2703,13 +2833,12 @@ BSDF_API void microfacet_ggx_vcavities_bsdf_sample(
     const Distribution_ggx_vcavities ph(adapted_roughness.x, adapted_roughness.y);
     const Fresnel_function_default fresnel_function;
 
-    const unsigned int multiscatter_texture_id = 
-        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+    const unsigned int multiscatter_texture_id = (multiscatter_tint <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_GGX_VC_MULTISCATTER);
 
     microfacet_sample(
-        ph, fresnel_function,data, state, inherited_normal, tangent_u, 
-        math::saturate(tint), math::saturate(multiscatter_tint), mode, handle,
+        ph, fresnel_function,data, state, inherited_normal, tangent_u,
+        saturate(tint), saturate(multiscatter_tint), mode, backscatter, handle,
         MICROFACET_GGX_VCAVITIES_BSDF,
         adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
@@ -2719,13 +2848,14 @@ BSDF_API void microfacet_ggx_vcavities_bsdf_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const float roughness_u,
     const float roughness_v,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle)
 {
     const float2 adapted_roughness = state->adapt_microfacet_roughness(
@@ -2734,20 +2864,19 @@ BSDF_API void microfacet_ggx_vcavities_bsdf_evaluate(
     const Distribution_ggx_vcavities ph(adapted_roughness.x, adapted_roughness.y);
     const Fresnel_function_default fresnel_function;
 
-    const unsigned int multiscatter_texture_id = 
-        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+    const unsigned int multiscatter_texture_id = (multiscatter_tint <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_GGX_VC_MULTISCATTER);
 
     const float3_float contrib = microfacet_evaluate(
-        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode,
+        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode, backscatter,
         MICROFACET_GGX_VCAVITIES_BSDF,
         adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
 
     add_elemental_bsdf_evaluate_contribution(
         data, handle,
-        contrib.y * math::saturate(multiscatter_tint) * inherited_weight,
-        contrib.x * math::saturate(tint) * inherited_weight);
+        (saturate(multiscatter_tint) * inherited_weight) * contrib.y,
+        (saturate(tint) * inherited_weight) * contrib.x);
 }
 
 
@@ -2757,10 +2886,11 @@ BSDF_API void microfacet_ggx_vcavities_bsdf_pdf(
     const float3 &inherited_normal,
     const float roughness_u,
     const float roughness_v,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle)
 {
     const float2 adapted_roughness = state->adapt_microfacet_roughness(
@@ -2769,12 +2899,11 @@ BSDF_API void microfacet_ggx_vcavities_bsdf_pdf(
     const Distribution_ggx_vcavities ph(adapted_roughness.x, adapted_roughness.y);
     const Fresnel_function_default fresnel_function;
 
-    const unsigned int multiscatter_texture_id = 
-        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+    const unsigned int multiscatter_texture_id = (multiscatter_tint <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_GGX_VC_MULTISCATTER);
-    
+
     microfacet_pdf(
-        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode,
+        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode, backscatter,
         MICROFACET_GGX_VCAVITIES_BSDF,
         adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
@@ -2784,18 +2913,19 @@ BSDF_API void microfacet_ggx_vcavities_bsdf_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const float roughness_u,
     const float roughness_v,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle)
 {
     if (is_allowed_scatter_mode(data, mode)) {
         elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight,
-            make<float3>(0.0f), tint, roughness_u, roughness_v, handle);
+            make<color_sample>(0.0f), tint, roughness_u, roughness_v, handle);
     }
 }
 
@@ -2804,13 +2934,14 @@ BSDF_API void microfacet_ggx_vcavities_bsdf_auxiliary(
 //     float coating_thickness,
 //     color coating_ior,
 //     bsdf base = microfacet_ggx_vcavities_bsdf(
-//         float           roughness_u,
-//         float           roughness_v       = roughness_u,
-//         color           tint              = color(1.0),
-//         color           multiscatter_tint = color(0.0),
-//         float3          tangent_u         = state->texture_tangent_u(0),
-//         scatter_mode    mode              = scatter_reflect,
-//         uniform string  handle            = ""
+//         float                roughness_u,
+//         float                roughness_v       = roughness_u,
+//         color                tint              = color(1.0),
+//         color                multiscatter_tint = color(0.0),
+//         float3               tangent_u         = state->texture_tangent_u(0),
+//         scatter_mode         mode              = scatter_reflect,
+//         backscatter_modifier backscatter       = backscatter_none,
+//         uniform string       handle            = ""
 //     )
 // )
 /////////////////////////////////////////////////////////////////////
@@ -2821,27 +2952,27 @@ BSDF_API void thin_film_microfacet_ggx_vcavities_bsdf_sample(
     const float3 &inherited_normal,
     const float roughness_u,
     const float roughness_v,
-    const float3 tint,
-    const float3 &multiscatter_tint,
+    const color_sample tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     const float2 adapted_roughness = state->adapt_microfacet_roughness(
         make_float2(roughness_u, roughness_v));
 
     const Distribution_ggx_vcavities ph(adapted_roughness.x, adapted_roughness.y);
-    const Fresnel_function_coated fresnel_function(coating_thickness, coating_ior);
+    const Fresnel_function_coated fresnel_function(state, coating_thickness, coating_ior);
 
-    const unsigned int multiscatter_texture_id = 
-        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+    const unsigned int multiscatter_texture_id = (multiscatter_tint <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_GGX_VC_MULTISCATTER);
 
     microfacet_sample(
-        ph, fresnel_function,data, state, inherited_normal, tangent_u, 
-        math::saturate(tint), math::saturate(multiscatter_tint), mode, handle,
+        ph, fresnel_function,data, state, inherited_normal, tangent_u,
+        saturate(tint), saturate(multiscatter_tint), mode, backscatter, handle,
         MICROFACET_GGX_VCAVITIES_BSDF,
         adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
@@ -2851,37 +2982,37 @@ BSDF_API void thin_film_microfacet_ggx_vcavities_bsdf_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const float roughness_u,
     const float roughness_v,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     const float2 adapted_roughness = state->adapt_microfacet_roughness(
         make_float2(roughness_u, roughness_v));
 
     const Distribution_ggx_vcavities ph(adapted_roughness.x, adapted_roughness.y);
-    const Fresnel_function_coated fresnel_function(coating_thickness, coating_ior);
+    const Fresnel_function_coated fresnel_function(state, coating_thickness, coating_ior);
 
-    const unsigned int multiscatter_texture_id = 
-        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+    const unsigned int multiscatter_texture_id = (multiscatter_tint <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_GGX_VC_MULTISCATTER);
 
     const float3_float contrib = microfacet_evaluate(
-        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode,
+        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode, backscatter,
         MICROFACET_GGX_VCAVITIES_BSDF,
         adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
 
     add_elemental_bsdf_evaluate_contribution(
         data, handle,
-        contrib.y * math::saturate(multiscatter_tint) * inherited_weight,
-        contrib.x * math::saturate(tint) * inherited_weight);
+        (saturate(multiscatter_tint) * inherited_weight) * contrib.y,
+        (saturate(tint) * inherited_weight) * contrib.x);
 }
 
 
@@ -2891,26 +3022,26 @@ BSDF_API void thin_film_microfacet_ggx_vcavities_bsdf_pdf(
     const float3 &inherited_normal,
     const float roughness_u,
     const float roughness_v,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     const float2 adapted_roughness = state->adapt_microfacet_roughness(
         make_float2(roughness_u, roughness_v));
 
     const Distribution_ggx_vcavities ph(adapted_roughness.x, adapted_roughness.y);
-    const Fresnel_function_coated fresnel_function(coating_thickness, coating_ior);
+    const Fresnel_function_coated fresnel_function(state, coating_thickness, coating_ior);
 
-    const unsigned int multiscatter_texture_id = 
-        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+    const unsigned int multiscatter_texture_id = (multiscatter_tint <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_GGX_VC_MULTISCATTER);
-    
+
     microfacet_pdf(
-        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode,
+        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode, backscatter,
         MICROFACET_GGX_VCAVITIES_BSDF,
         adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
@@ -2920,32 +3051,34 @@ BSDF_API void thin_film_microfacet_ggx_vcavities_bsdf_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const float roughness_u,
     const float roughness_v,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     if (is_allowed_scatter_mode(data, mode)) {
         elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight,
-            make<float3>(0.0f), tint, roughness_u, roughness_v, handle);
+            make<color_sample>(0.0f), tint, roughness_u, roughness_v, handle);
     }
 }
 
 /////////////////////////////////////////////////////////////////////
 // bsdf microfacet_beckmann_smith_bsdf(
-//     float           roughness_u,
-//     float           roughness_v       = roughness_u,
-//     color           tint              = color(1.0),
-//     color           multiscatter_tint = color(0.0),
-//     float3          tangent_u         = state->texture_tangent_u(0),
-//     scatter_mode    mode              = scatter_reflect,
-//     uniform string  handle            = ""
+//     float                roughness_u,
+//     float                roughness_v       = roughness_u,
+//     color                tint              = color(1.0),
+//     color                multiscatter_tint = color(0.0),
+//     float3               tangent_u         = state->texture_tangent_u(0),
+//     scatter_mode         mode              = scatter_reflect,
+//     backscatter_modifier backscatter       = backscatter_none,
+//     uniform string       handle            = ""
 // )
 /////////////////////////////////////////////////////////////////////
 
@@ -2987,10 +3120,11 @@ BSDF_API void microfacet_beckmann_smith_bsdf_sample(
     const float3 &inherited_normal,
     const float roughness_u,
     const float roughness_v,
-    const float3 tint,
-    const float3 &multiscatter_tint,
+    const color_sample tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle)
 {
     const float2 adapted_roughness = state->adapt_microfacet_roughness(
@@ -2999,13 +3133,12 @@ BSDF_API void microfacet_beckmann_smith_bsdf_sample(
     const Distribution_beckmann_smith ph(adapted_roughness.x, adapted_roughness.y);
     const Fresnel_function_default fresnel_function;
 
-    const unsigned int multiscatter_texture_id = 
-        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+    const unsigned int multiscatter_texture_id = (multiscatter_tint <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_BECKMANN_SMITH_MULTISCATTER);
 
     microfacet_sample(
-        ph, fresnel_function, data, state, inherited_normal, tangent_u, 
-        math::saturate(tint), math::saturate(multiscatter_tint), mode, handle,
+        ph, fresnel_function, data, state, inherited_normal, tangent_u,
+        saturate(tint), saturate(multiscatter_tint), mode, backscatter, handle,
         MICROFACET_BECKMANN_SMITH_BSDF,
         adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
@@ -3015,13 +3148,14 @@ BSDF_API void microfacet_beckmann_smith_bsdf_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const float roughness_u,
     const float roughness_v,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle)
 {
     const float2 adapted_roughness = state->adapt_microfacet_roughness(
@@ -3030,20 +3164,19 @@ BSDF_API void microfacet_beckmann_smith_bsdf_evaluate(
     const Distribution_beckmann_smith ph(adapted_roughness.x, adapted_roughness.y);
     const Fresnel_function_default fresnel_function;
 
-    const unsigned int multiscatter_texture_id = 
-        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+    const unsigned int multiscatter_texture_id = (multiscatter_tint <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_BECKMANN_SMITH_MULTISCATTER);
 
     const float3_float contrib = microfacet_evaluate(
-        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode,
+        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode, backscatter,
         MICROFACET_BECKMANN_SMITH_BSDF,
         adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
 
     add_elemental_bsdf_evaluate_contribution(
         data, handle,
-        contrib.y * math::saturate(multiscatter_tint) * inherited_weight,
-        contrib.x * math::saturate(tint) * inherited_weight);
+        (saturate(multiscatter_tint) * inherited_weight) * contrib.y,
+        (saturate(tint) * inherited_weight) * contrib.x);
 }
 
 
@@ -3053,10 +3186,11 @@ BSDF_API void microfacet_beckmann_smith_bsdf_pdf(
     const float3 &inherited_normal,
     const float roughness_u,
     const float roughness_v,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle)
 {
     const float2 adapted_roughness = state->adapt_microfacet_roughness(
@@ -3065,12 +3199,11 @@ BSDF_API void microfacet_beckmann_smith_bsdf_pdf(
     const Distribution_beckmann_smith ph(adapted_roughness.x, adapted_roughness.y);
     const Fresnel_function_default fresnel_function;
 
-    const unsigned int multiscatter_texture_id = 
-        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+    const unsigned int multiscatter_texture_id = (multiscatter_tint <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_BECKMANN_SMITH_MULTISCATTER);
 
     microfacet_pdf(
-        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode,
+        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode, backscatter,
         MICROFACET_BECKMANN_SMITH_BSDF,
         adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
@@ -3080,18 +3213,19 @@ BSDF_API void microfacet_beckmann_smith_bsdf_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const float roughness_u,
     const float roughness_v,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle)
 {
     if (is_allowed_scatter_mode(data, mode)) {
         elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight,
-            make<float3>(0.0f), tint, roughness_u, roughness_v, handle);
+            make<color_sample>(0.0f), tint, roughness_u, roughness_v, handle);
     }
 }
 
@@ -3100,13 +3234,14 @@ BSDF_API void microfacet_beckmann_smith_bsdf_auxiliary(
 //     float coating_thickness,
 //     color coating_ior,
 //     bsdf microfacet_beckmann_smith_bsdf(
-//         float           roughness_u,
-//         float           roughness_v       = roughness_u,
-//         color           tint              = color(1.0),
-//         color           multiscatter_tint = color(0.0),
-//         float3          tangent_u         = state->texture_tangent_u(0),
-//         scatter_mode    mode              = scatter_reflect,
-//         uniform string  handle            = ""
+//         float                roughness_u,
+//         float                roughness_v       = roughness_u,
+//         color                tint              = color(1.0),
+//         color                multiscatter_tint = color(0.0),
+//         float3               tangent_u         = state->texture_tangent_u(0),
+//         scatter_mode         mode              = scatter_reflect,
+//         backscatter_modifier backscatter       = backscatter_none,
+//         uniform string       handle            = ""
 //     )
 // )
 /////////////////////////////////////////////////////////////////////
@@ -3117,27 +3252,27 @@ BSDF_API void thin_film_microfacet_beckmann_smith_bsdf_sample(
     const float3 &inherited_normal,
     const float roughness_u,
     const float roughness_v,
-    const float3 tint,
-    const float3 &multiscatter_tint,
+    const color_sample tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     const float2 adapted_roughness = state->adapt_microfacet_roughness(
         make_float2(roughness_u, roughness_v));
 
     const Distribution_beckmann_smith ph(adapted_roughness.x, adapted_roughness.y);
-    const Fresnel_function_coated fresnel_function(coating_thickness, coating_ior);
+    const Fresnel_function_coated fresnel_function(state, coating_thickness, coating_ior);
 
-    const unsigned int multiscatter_texture_id = 
-        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+    const unsigned int multiscatter_texture_id = (multiscatter_tint <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_BECKMANN_SMITH_MULTISCATTER);
 
     microfacet_sample(
-        ph, fresnel_function, data, state, inherited_normal, tangent_u, 
-        math::saturate(tint), math::saturate(multiscatter_tint), mode, handle,
+        ph, fresnel_function, data, state, inherited_normal, tangent_u,
+        saturate(tint), saturate(multiscatter_tint), mode, backscatter, handle,
         MICROFACET_BECKMANN_SMITH_BSDF,
         adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
@@ -3147,37 +3282,37 @@ BSDF_API void thin_film_microfacet_beckmann_smith_bsdf_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const float roughness_u,
     const float roughness_v,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     const float2 adapted_roughness = state->adapt_microfacet_roughness(
         make_float2(roughness_u, roughness_v));
 
     const Distribution_beckmann_smith ph(adapted_roughness.x, adapted_roughness.y);
-    const Fresnel_function_coated fresnel_function(coating_thickness, coating_ior);
+    const Fresnel_function_coated fresnel_function(state, coating_thickness, coating_ior);
 
-    const unsigned int multiscatter_texture_id = 
-        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+    const unsigned int multiscatter_texture_id = (multiscatter_tint <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_BECKMANN_SMITH_MULTISCATTER);
 
     const float3_float contrib = microfacet_evaluate(
-        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode,
+        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode, backscatter,
         MICROFACET_BECKMANN_SMITH_BSDF,
         adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
 
     add_elemental_bsdf_evaluate_contribution(
         data, handle,
-        contrib.y * math::saturate(multiscatter_tint) * inherited_weight,
-        contrib.x * math::saturate(tint) * inherited_weight);
+        (saturate(multiscatter_tint) * inherited_weight) * contrib.y,
+        (saturate(tint) * inherited_weight) * contrib.x);
 }
 
 
@@ -3187,26 +3322,26 @@ BSDF_API void thin_film_microfacet_beckmann_smith_bsdf_pdf(
     const float3 &inherited_normal,
     const float roughness_u,
     const float roughness_v,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     const float2 adapted_roughness = state->adapt_microfacet_roughness(
         make_float2(roughness_u, roughness_v));
 
     const Distribution_beckmann_smith ph(adapted_roughness.x, adapted_roughness.y);
-    const Fresnel_function_coated fresnel_function(coating_thickness, coating_ior);
+    const Fresnel_function_coated fresnel_function(state, coating_thickness, coating_ior);
 
-    const unsigned int multiscatter_texture_id = 
-        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+    const unsigned int multiscatter_texture_id = (multiscatter_tint <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_BECKMANN_SMITH_MULTISCATTER);
 
     microfacet_pdf(
-        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode,
+        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode, backscatter,
         MICROFACET_BECKMANN_SMITH_BSDF,
         adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
@@ -3216,32 +3351,34 @@ BSDF_API void thin_film_microfacet_beckmann_smith_bsdf_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const float roughness_u,
     const float roughness_v,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     if (is_allowed_scatter_mode(data, mode)) {
         elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight,
-            make<float3>(0.0f), tint, roughness_u, roughness_v, handle);
+            make<color_sample>(0.0f), tint, roughness_u, roughness_v, handle);
     }
 }
 
 /////////////////////////////////////////////////////////////////////
 // bsdf microfacet_ggx_smith_bsdf(
-//     float           roughness_u,
-//     float           roughness_v       = roughness_u,
-//     color           tint              = color(1.0),
-//     color           multiscatter_tint = color(0.0),
-//     float3          tangent_u         = state->texture_tangent_u(0),
-//     scatter_mode    mode              = scatter_reflect,
-//     uniform string  handle            = ""
+//     float                roughness_u,
+//     float                roughness_v       = roughness_u,
+//     color                tint              = color(1.0),
+//     color                multiscatter_tint = color(0.0),
+//     float3               tangent_u         = state->texture_tangent_u(0),
+//     scatter_mode         mode              = scatter_reflect,
+//     backscatter_modifier backscatter       = backscatter_none,
+//     uniform string       handle            = ""
 // )
 /////////////////////////////////////////////////////////////////////
 
@@ -3283,10 +3420,11 @@ BSDF_API void microfacet_ggx_smith_bsdf_sample(
     const float3 &inherited_normal,
     const float roughness_u,
     const float roughness_v,
-    const float3 tint,
-    const float3 &multiscatter_tint,
+    const color_sample tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle)
 {
     const float2 adapted_roughness = state->adapt_microfacet_roughness(
@@ -3295,13 +3433,12 @@ BSDF_API void microfacet_ggx_smith_bsdf_sample(
     const Distribution_ggx_smith ph(adapted_roughness.x, adapted_roughness.y);
     const Fresnel_function_default fresnel_function;
 
-    const unsigned int multiscatter_texture_id = 
-        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+    const unsigned int multiscatter_texture_id = (multiscatter_tint <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_GGX_SMITH_MULTISCATTER);
-    
+
     microfacet_sample(
-        ph, fresnel_function, data, state, inherited_normal, tangent_u, 
-        math::saturate(tint), math::saturate(multiscatter_tint), mode, handle,
+        ph, fresnel_function, data, state, inherited_normal, tangent_u,
+        saturate(tint), saturate(multiscatter_tint), mode, backscatter, handle,
         MICROFACET_GGX_SMITH_BSDF,
         adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
@@ -3311,13 +3448,14 @@ BSDF_API void microfacet_ggx_smith_bsdf_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const float roughness_u,
     const float roughness_v,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle)
 {
     const float2 adapted_roughness = state->adapt_microfacet_roughness(
@@ -3326,20 +3464,19 @@ BSDF_API void microfacet_ggx_smith_bsdf_evaluate(
     const Distribution_ggx_smith ph(adapted_roughness.x, adapted_roughness.y);
     const Fresnel_function_default fresnel_function;
 
-    const unsigned int multiscatter_texture_id = 
-        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+    const unsigned int multiscatter_texture_id = (multiscatter_tint <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_GGX_SMITH_MULTISCATTER);
 
     const float3_float contrib = microfacet_evaluate(
-        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode,
+        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode, backscatter,
         MICROFACET_GGX_SMITH_BSDF,
         adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
 
     add_elemental_bsdf_evaluate_contribution(
         data, handle,
-        contrib.y * math::saturate(multiscatter_tint) * inherited_weight,
-        contrib.x * math::saturate(tint) * inherited_weight);
+        (saturate(multiscatter_tint) * inherited_weight) * contrib.y,
+        (saturate(tint) * inherited_weight) * contrib.x);
 }
 
 
@@ -3349,10 +3486,11 @@ BSDF_API void microfacet_ggx_smith_bsdf_pdf(
     const float3 &inherited_normal,
     const float roughness_u,
     const float roughness_v,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle)
 {
     const float2 adapted_roughness = state->adapt_microfacet_roughness(
@@ -3361,12 +3499,11 @@ BSDF_API void microfacet_ggx_smith_bsdf_pdf(
     const Distribution_ggx_smith ph(adapted_roughness.x, adapted_roughness.y);
     const Fresnel_function_default fresnel_function;
 
-    const unsigned int multiscatter_texture_id = 
-        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+    const unsigned int multiscatter_texture_id = (multiscatter_tint <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_GGX_SMITH_MULTISCATTER);
 
     microfacet_pdf(
-        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode,
+        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode, backscatter,
         MICROFACET_GGX_SMITH_BSDF,
         adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
@@ -3376,18 +3513,19 @@ BSDF_API void microfacet_ggx_smith_bsdf_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const float roughness_u,
     const float roughness_v,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle)
 {
     if (is_allowed_scatter_mode(data, mode)) {
         elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight,
-            make<float3>(0.0f), tint, roughness_u, roughness_v, handle);
+            make<color_sample>(0.0f), tint, roughness_u, roughness_v, handle);
     }
 }
 
@@ -3396,13 +3534,14 @@ BSDF_API void microfacet_ggx_smith_bsdf_auxiliary(
 //     float coating_thickness,
 //     color coating_ior,
 //     bsdf base = microfacet_ggx_smith_bsdf(
-//         float           roughness_u,
-//         float           roughness_v       = roughness_u,
-//         color           tint              = color(1.0),
-//         color           multiscatter_tint = color(0.0),
-//         float3          tangent_u         = state->texture_tangent_u(0),
-//         scatter_mode    mode              = scatter_reflect,
-//         uniform string  handle            = ""
+//         float                roughness_u,
+//         float                roughness_v       = roughness_u,
+//         color                tint              = color(1.0),
+//         color                multiscatter_tint = color(0.0),
+//         float3               tangent_u         = state->texture_tangent_u(0),
+//         scatter_mode         mode              = scatter_reflect,
+//         backscatter_modifier backscatter       = backscatter_none,
+//         uniform string       handle            = ""
 //     )
 // )
 /////////////////////////////////////////////////////////////////////
@@ -3413,27 +3552,27 @@ BSDF_API void thin_film_microfacet_ggx_smith_bsdf_sample(
     const float3 &inherited_normal,
     const float roughness_u,
     const float roughness_v,
-    const float3 tint,
-    const float3 &multiscatter_tint,
+    const color_sample tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     const float2 adapted_roughness = state->adapt_microfacet_roughness(
         make_float2(roughness_u, roughness_v));
 
     const Distribution_ggx_smith ph(adapted_roughness.x, adapted_roughness.y);
-    const Fresnel_function_coated fresnel_function(coating_thickness, coating_ior);
+    const Fresnel_function_coated fresnel_function(state, coating_thickness, coating_ior);
 
-    const unsigned int multiscatter_texture_id = 
-        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+    const unsigned int multiscatter_texture_id = (multiscatter_tint <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_GGX_SMITH_MULTISCATTER);
-    
+
     microfacet_sample(
-        ph, fresnel_function, data, state, inherited_normal, tangent_u, 
-        math::saturate(tint), math::saturate(multiscatter_tint), mode, handle,
+        ph, fresnel_function, data, state, inherited_normal, tangent_u,
+        saturate(tint), saturate(multiscatter_tint), mode, backscatter, handle,
         MICROFACET_GGX_SMITH_BSDF,
         adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
@@ -3443,37 +3582,37 @@ BSDF_API void thin_film_microfacet_ggx_smith_bsdf_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const float roughness_u,
     const float roughness_v,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     const float2 adapted_roughness = state->adapt_microfacet_roughness(
         make_float2(roughness_u, roughness_v));
 
     const Distribution_ggx_smith ph(adapted_roughness.x, adapted_roughness.y);
-    const Fresnel_function_coated fresnel_function(coating_thickness, coating_ior);
+    const Fresnel_function_coated fresnel_function(state, coating_thickness, coating_ior);
 
-    const unsigned int multiscatter_texture_id = 
-        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+    const unsigned int multiscatter_texture_id = (multiscatter_tint <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_GGX_SMITH_MULTISCATTER);
 
     const float3_float contrib = microfacet_evaluate(
-        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode,
+        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode, backscatter,
         MICROFACET_GGX_SMITH_BSDF,
         adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
 
     add_elemental_bsdf_evaluate_contribution(
         data, handle,
-        contrib.y * math::saturate(multiscatter_tint) * inherited_weight,
-        contrib.x * math::saturate(tint) * inherited_weight);
+        (saturate(multiscatter_tint) * inherited_weight) * contrib.y,
+        (saturate(tint) * inherited_weight) * contrib.x);
 }
 
 
@@ -3483,26 +3622,26 @@ BSDF_API void thin_film_microfacet_ggx_smith_bsdf_pdf(
     const float3 &inherited_normal,
     const float roughness_u,
     const float roughness_v,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     const float2 adapted_roughness = state->adapt_microfacet_roughness(
         make_float2(roughness_u, roughness_v));
 
     const Distribution_ggx_smith ph(adapted_roughness.x, adapted_roughness.y);
-    const Fresnel_function_coated fresnel_function(coating_thickness, coating_ior);
+    const Fresnel_function_coated fresnel_function(state, coating_thickness, coating_ior);
 
-    const unsigned int multiscatter_texture_id = 
-        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+    const unsigned int multiscatter_texture_id = (multiscatter_tint <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_GGX_SMITH_MULTISCATTER);
 
     microfacet_pdf(
-        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode,
+        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode, backscatter,
         MICROFACET_GGX_SMITH_BSDF,
         adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
@@ -3512,20 +3651,21 @@ BSDF_API void thin_film_microfacet_ggx_smith_bsdf_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const float roughness_u,
     const float roughness_v,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const scatter_mode mode,
+    const backscatter_modifier backscatter,
     const int handle,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     if (is_allowed_scatter_mode(data, mode)) {
         elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight,
-            make<float3>(0.0f), tint, roughness_u, roughness_v, handle);
+            make<color_sample>(0.0f), tint, roughness_u, roughness_v, handle);
     }
 }
 
@@ -3536,7 +3676,7 @@ BSDF_API void thin_film_microfacet_ggx_smith_bsdf_auxiliary(
 //     float           roughness_v       = roughness_u,
 //     color           tint              = color(1.0),
 //     color           multiscatter_tint = color(0.0),
-//     float3          tangent_u         = state->texture_tangent_u(0),
+//     float3          tangent_u         = state::texture_tangent_u(0),
 //     uniform string  handle            = ""
 // )
 /////////////////////////////////////////////////////////////////////
@@ -3615,9 +3755,10 @@ BSDF_INLINE void ward_geisler_moroder_sample(
     }
 
     // compute final weight and pdf
-    data->bsdf_over_pdf = make<float3>(w / prob_total);
+    data->bsdf_over_pdf = make<color_sample>(w / prob_total);
     if (BSDF::calc_pdf_in_sample())
-        data->pdf = hvd_beckmann_eval(inv_roughness, h0.y, h0.x, h0.z) * 0.25f / kh * prob_total;
+        data->pdf = make_pdf_sample(
+            hvd_beckmann_eval(inv_roughness, h0.y, h0.x, h0.z) * 0.25f / kh * prob_total);
 
     data->event_type = BSDF_EVENT_GLOSSY_REFLECTION;
     data->handle = handle;
@@ -3660,7 +3801,7 @@ BSDF_INLINE float ward_geisler_moroder_shared_eval(
 
 
     const float ph = hvd_beckmann_eval(inv_roughness, h0.y, h0.x, h0.z) * 0.25f / kh;
-    data->pdf = ph * (q + (1.0f - q_f));
+    data->pdf = make_pdf_sample(ph * (q + (1.0f - q_f)));
 
     return ph * nk2 / (kh * h0.y);
 }
@@ -3671,8 +3812,8 @@ BSDF_API void ward_geisler_moroder_bsdf_sample(
     const float3 &inherited_normal,
     const float roughness_u,
     const float roughness_v,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const int handle)
 {
@@ -3691,10 +3832,9 @@ BSDF_API void ward_geisler_moroder_bsdf_sample(
     ward_geisler_moroder_sample(
         data, state, g, adapted_roughness.x, adapted_roughness.y, handle, nk1);
 
-    const unsigned int multiscatter_texture_id = 
-        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+    const unsigned int multiscatter_texture_id = (multiscatter_tint <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_WARD_GEISLER_MORODER_MULTISCATTER);
-    
+
     if (multiscatter_texture_id == 0) {
         data->bsdf_over_pdf *= tint;
         return;
@@ -3724,11 +3864,11 @@ BSDF_API void ward_geisler_moroder_bsdf_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const float roughness_u,
     const float roughness_v,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const int handle)
 {
@@ -3746,8 +3886,7 @@ BSDF_API void ward_geisler_moroder_bsdf_evaluate(
     const float glossy_contrib = ward_geisler_moroder_shared_eval(
         data, state, g, adapted_roughness.x, adapted_roughness.y, nk1, nk2);
 
-    const unsigned int multiscatter_texture_id = 
-        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+    const unsigned int multiscatter_texture_id = (multiscatter_tint <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_WARD_GEISLER_MORODER_MULTISCATTER);
 
     float2 multiscatter_contrib;
@@ -3764,16 +3903,16 @@ BSDF_API void ward_geisler_moroder_bsdf_evaluate(
         data->pdf *= multiscatter_contrib.x; // * rho1
         if (math::dot(g.n.geometry_normal, data->k2) >= 0.0f)
         {
-            data->pdf += (1.0f - multiscatter_contrib.x) * (float)(1.0 / M_PI);
+            data->pdf += make_pdf_sample((1.0f - multiscatter_contrib.x) * (float)(1.0 / M_PI));
         }
         else
             multiscatter_contrib.y = 0.0f; // backside eval
     }
 
     add_elemental_bsdf_evaluate_contribution(
-        data, handle, 
-        multiscatter_contrib.y * math::saturate(multiscatter_tint) * inherited_weight,
-        glossy_contrib * math::saturate(tint) * inherited_weight);
+        data, handle,
+        multiscatter_contrib.y * saturate(multiscatter_tint) * inherited_weight,
+        glossy_contrib * saturate(tint) * inherited_weight);
 }
 
 BSDF_API void ward_geisler_moroder_bsdf_pdf(
@@ -3782,8 +3921,8 @@ BSDF_API void ward_geisler_moroder_bsdf_pdf(
     const float3 &inherited_normal,
     const float roughness_u,
     const float roughness_v,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const int handle)
 {
@@ -3801,8 +3940,7 @@ BSDF_API void ward_geisler_moroder_bsdf_pdf(
     ward_geisler_moroder_shared_eval(
         data, state, g, adapted_roughness.x, adapted_roughness.y, nk1, nk2);
 
-    const unsigned int multiscatter_texture_id = 
-        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+    const unsigned int multiscatter_texture_id = (multiscatter_tint <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_WARD_GEISLER_MORODER_MULTISCATTER);
 
     if (multiscatter_texture_id == 0)
@@ -3819,20 +3957,19 @@ BSDF_API void ward_geisler_moroder_bsdf_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const float roughness_u,
     const float roughness_v,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const float3 &tangent_u,
     const int handle)
 {
     if (is_allowed_reflect(data)) {
         elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight,
-            make<float3>(0.0f), tint, roughness_u, roughness_v, handle);
+            make<color_sample>(0.0f), tint, roughness_u, roughness_v, handle);
     }
 }
-
 
 /////////////////////////////////////////////////////////////////////
 // bsdf measured_bsdf(
@@ -3928,13 +4065,18 @@ BSDF_INLINE void measured_sample(
     }
 
     float pdf = incoming_polar_pdf.z * prob;
-    data->bsdf_over_pdf = state->bsdf_measurement_evaluate(
+
+    float3 bsdf_eval = state->bsdf_measurement_evaluate(
         measurement_id,
         make<float2>(incoming_polar_pdf.x, incoming_polar_pdf.y),
         outgoing_polar,
-        selected_part) * (scale * incoming_polar_cos.x / pdf);
+        selected_part);
+
+    data->bsdf_over_pdf = make_spectral_sample_reflectance(state, bsdf_eval) *
+        (scale * incoming_polar_cos.x / pdf);
+
     if (BSDF::calc_pdf_in_sample())
-        data->pdf = pdf;
+        data->pdf = make_pdf_sample(pdf);
     data->handle = handle;
 }
 
@@ -4024,7 +4166,7 @@ BSDF_INLINE void measured_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const Normals &n,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const unsigned measurement_id,
     const float multiplier,
     const scatter_mode mode,
@@ -4075,28 +4217,31 @@ BSDF_INLINE void measured_evaluate(
     if (mode == scatter_mode::scatter_transmit || mode == scatter_mode::scatter_reflect_transmit)
         scale = math::min(scale, 1.0f / max_albedos.w);
 
-    data->pdf = prob * state->bsdf_measurement_pdf(
+    data->pdf = make_pdf_sample(prob * state->bsdf_measurement_pdf(
         measurement_id,
         incoming_polar,
         outgoing_polar,
-        selected_part);
+        selected_part));
 
     // assuming measured material is glossy
-    const float3 bsdf_glossy = (scale * incoming.y) * state->bsdf_measurement_evaluate(
+    float3 bsdf_eval = state->bsdf_measurement_evaluate(
         measurement_id,
         incoming_polar,
         outgoing_polar,
         selected_part);
 
+    const color_sample bsdf_glossy = (scale * incoming.y) *
+        make_spectral_sample_reflectance(state, bsdf_eval);
+
     add_elemental_bsdf_evaluate_contribution(
-        data, handle, make<float3>(0.0f), bsdf_glossy * inherited_weight);
+        data, handle, make<color_sample>(0.0f), bsdf_glossy * inherited_weight);
 }
 
 BSDF_API void measured_bsdf_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const unsigned measurement_id,
     const float multiplier,
     const scatter_mode mode,
@@ -4130,7 +4275,7 @@ BSDF_INLINE void measured_pdf(
     // z - albedo transmittance for outgoing_polar (maximum in case of color channels)
     // w - albedo transmittance for globally over all directions (maximum in case of color channels)
     float4 max_albedos = state->bsdf_measurement_albedos(measurement_id, outgoing_polar);
-    
+
     // disable the not selected parts
     if (mode == scatter_mode::scatter_reflect || !is_allowed_transmit(data)) max_albedos.z = 0.0f;
     if (mode == scatter_mode::scatter_transmit || !is_allowed_reflect(data)) max_albedos.x = 0.0f;
@@ -4155,11 +4300,11 @@ BSDF_INLINE void measured_pdf(
         return;
     }
 
-    data->pdf = prob * state->bsdf_measurement_pdf(
+    data->pdf = make_pdf_sample(prob * state->bsdf_measurement_pdf(
         measurement_id,
         incoming_polar,
         outgoing_polar,
-        selected_part);
+        selected_part));
 }
 
 
@@ -4184,7 +4329,7 @@ BSDF_API void measured_bsdf_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const unsigned measurement_id,
     const float multiplier,
     const scatter_mode mode,
@@ -4253,8 +4398,8 @@ BSDF_API void measured_bsdf_auxiliary(
         data,
         handle,
         inherited_weight,
-        make<float3>(0.0f),  // diffuse albedo, we can't tell, so better glossy
-        make<float3>(w_refl * max_albedos.x + w_trans * max_albedos.w),  // glossy albedo
+        make<color_sample>(0.0f),  // diffuse albedo, we can't tell, so better glossy
+        make<color_sample>(w_refl * max_albedos.x + w_trans * max_albedos.w),  // glossy albedo
         n.shading_normal,
         0.0f,   // unknown
         0.0f);  // unknown
@@ -4290,7 +4435,7 @@ BSDF_INLINE float sheen_ltc_pdf(
         ab_inv_c.x * k.y,
         k.z);
     const float ll = math::dot(k_o, k_o);
-    
+
     // l^3 from jacobian, l for normalization of k_o
     return k.z * ab_inv_c.x * ab_inv_c.x / (ll * ll * (float)M_PI);
 }
@@ -4318,8 +4463,8 @@ BSDF_API void microflake_sheen_bsdf_sample(
     State *state,
     const float3 &inherited_normal,
     const float roughness,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const BSDF &multiscatter,
     const int handle)
 {
@@ -4327,7 +4472,7 @@ BSDF_API void microflake_sheen_bsdf_sample(
     const unsigned int multiscatter_texture_id =
         (multiscatter.is_black() ||
          !multiscatter.has_allowed_components(get_allowed_scatter_mode(data)) ||
-         (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f)) ? 0 :
+         (multiscatter_tint <= 0.0f)) ? 0 :
         state->get_bsdf_data_texture_id(BDK_MICROFLAKE_SHEEN_MULTISCATTER);
 
     Geometry g;
@@ -4372,7 +4517,8 @@ BSDF_API void microflake_sheen_bsdf_sample(
             k2_o.y);
         const float ll = math::dot(k2_local, k2_local);
         const float l = math::sqrt(ll);
-        data->pdf = k2_o.y * ll * l * ab_inv_c.x * ab_inv_c.x * (float)(1.0 / M_PI);
+        data->pdf = make_pdf_sample(
+            k2_o.y * ll * l * ab_inv_c.x * ab_inv_c.x * (float)(1.0 / M_PI));
 
         k2_local /= l;
 
@@ -4382,12 +4528,12 @@ BSDF_API void microflake_sheen_bsdf_sample(
             return;
         }
 
-        data->bsdf_over_pdf = make<float3>(ab_inv_c.z);
+        data->bsdf_over_pdf = make<color_sample>(ab_inv_c.z);
         data->event_type = BSDF_EVENT_GLOSSY_REFLECTION;
         data->handle = handle;
 
-        data->bsdf_over_pdf *= math::saturate(tint) / rho1;
-        
+        data->bsdf_over_pdf *= saturate(tint) / rho1;
+
         if (BSDF::calc_pdf_in_sample() && rho1 < 1.0f)
         {
             BSDF_pdf_data pdf_data = to_pdf_data(data);
@@ -4412,12 +4558,12 @@ BSDF_API void microflake_sheen_bsdf_sample(
             multiscatter_texture_id, coord, 0, 0, 0, clamp, clamp, clamp, 0.0f).x;
 
         data->bsdf_over_pdf *=
-            math::saturate(multiscatter_tint) * (1.0f - math::max(rho1, rho2)) / (1.0f - sheen_prob);
+            saturate(multiscatter_tint) * (1.0f - math::max(rho1, rho2)) / (1.0f - sheen_prob);
 
         if (BSDF::calc_pdf_in_sample() && sheen_prob > 0.0f) {
             const float3 k2_local = make_float3(math::dot(data->k2, t_x), math::dot(data->k2, t_y), nk2);
             const float pdf = sheen_ltc_pdf(ab_inv_c, k2_local);
-            data->pdf = pdf * sheen_prob + data->pdf * (1.0f - sheen_prob);
+            data->pdf = make_pdf_sample(pdf * sheen_prob) + data->pdf * (1.0f - sheen_prob);
         }
 
     }
@@ -4427,10 +4573,10 @@ BSDF_API void microflake_sheen_bsdf_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const float roughness,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const BSDF &multiscatter,
     const int handle)
 {
@@ -4438,7 +4584,7 @@ BSDF_API void microflake_sheen_bsdf_evaluate(
     const unsigned int multiscatter_texture_id =
         (multiscatter.is_black() ||
          !multiscatter.has_allowed_components(get_allowed_scatter_mode(data)) ||
-         (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f)) ? 0 :
+         (multiscatter_tint <= 0.0f)) ? 0 :
         state->get_bsdf_data_texture_id(BDK_MICROFLAKE_SHEEN_MULTISCATTER);
 
     Geometry g;
@@ -4458,7 +4604,7 @@ BSDF_API void microflake_sheen_bsdf_evaluate(
     }
 
     const float nk1 = math::dot(data->k1, g.n.shading_normal);
-    
+
     float3 t_x, t_y;
     float sheen_brdf;
     if (has_sheen) {
@@ -4466,16 +4612,17 @@ BSDF_API void microflake_sheen_bsdf_evaluate(
 
         const float3 k2_local = make_float3(math::dot(data->k2, t_x), math::dot(data->k2, t_y), nk2);
         const float3 ab_inv_c = get_sheen_ltc_data(state, nk1, roughness);
-    
-        data->pdf = sheen_ltc_pdf(ab_inv_c, k2_local);
-        sheen_brdf = data->pdf * ab_inv_c.z;
+
+        float sheen_pdf = sheen_ltc_pdf(ab_inv_c, k2_local);
+        data->pdf = make_pdf_sample(sheen_pdf);
+        sheen_brdf = sheen_pdf * ab_inv_c.z;
 
         add_elemental_bsdf_evaluate_contribution(
             data, handle,
-            make<float3>(0.0f),
-            sheen_brdf * math::saturate(tint) * inherited_weight);
+            make<color_sample>(0.0f),
+            sheen_brdf * saturate(tint) * inherited_weight);
     } else
-        data->pdf = 0.0f;
+        data->pdf = make_pdf_sample(0.0f);
 
     if (multiscatter_texture_id) {
         const float2 clamp = make<float2>(0.0f, 1.0f);
@@ -4486,13 +4633,13 @@ BSDF_API void microflake_sheen_bsdf_evaluate(
 
         const float rho1 = state->tex_lookup_float3_3d(
             multiscatter_texture_id, coord, 0, 0, 0, clamp, clamp, clamp, 0.0f).x;
-        coord.x = multiscatter::compute_lookup_coordinate_x(MICROFLAKE_SHEEN_BSDF, nk2);        
+        coord.x = multiscatter::compute_lookup_coordinate_x(MICROFLAKE_SHEEN_BSDF, nk2);
         const float rho2 = state->tex_lookup_float3_3d(
             multiscatter_texture_id, coord, 0, 0, 0, clamp, clamp, clamp, 0.0f).x;
 
-        const float pdf = data->pdf * rho1;
-        const float3 weight =
-            inherited_weight * math::saturate(multiscatter_tint) * (1.0f - math::max(rho1, rho2));
+        const pdf_sample pdf = data->pdf * rho1;
+        const color_sample weight =
+            inherited_weight * saturate(multiscatter_tint) * (1.0f - math::max(rho1, rho2));
         multiscatter.evaluate(data, state, inherited_normal, weight);
         data->pdf = pdf + data->pdf * (1.0f - rho1);
     }
@@ -4503,8 +4650,8 @@ BSDF_API void microflake_sheen_bsdf_pdf(
     State *state,
     const float3 &inherited_normal,
     const float roughness,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const BSDF &multiscatter,
     const int handle)
 {
@@ -4512,7 +4659,7 @@ BSDF_API void microflake_sheen_bsdf_pdf(
     const unsigned int multiscatter_texture_id =
         (multiscatter.is_black() ||
          !multiscatter.has_allowed_components(get_allowed_scatter_mode(data)) ||
-         (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f)) ? 0 :
+         (multiscatter_tint <= 0.0f)) ? 0 :
         state->get_bsdf_data_texture_id(BDK_MICROFLAKE_SHEEN_MULTISCATTER);
 
     Geometry g;
@@ -4532,17 +4679,17 @@ BSDF_API void microflake_sheen_bsdf_pdf(
     }
 
     const float nk1 = math::dot(data->k1, g.n.shading_normal);
-    
+
     float3 t_x, t_y;
     if (has_sheen) {
         sheen_ltc_build_basis(t_x, t_y, g, nk1, data->k1);
 
         const float3 k2_local = make_float3(math::dot(data->k2, t_x), math::dot(data->k2, t_y), nk2);
         const float3 ab_inv_c = get_sheen_ltc_data(state, nk1, roughness);
-    
-        data->pdf = sheen_ltc_pdf(ab_inv_c, k2_local);
+
+        data->pdf = make_pdf_sample(sheen_ltc_pdf(ab_inv_c, k2_local));
     } else
-        data->pdf = 0.0f;
+        data->pdf = make_pdf_sample(0.0f);
 
     if (multiscatter_texture_id) {
         const float2 clamp = make<float2>(0.0f, 1.0f);
@@ -4554,7 +4701,7 @@ BSDF_API void microflake_sheen_bsdf_pdf(
         const float rho1 = state->tex_lookup_float3_3d(
             multiscatter_texture_id, coord, 0, 0, 0, clamp, clamp, clamp, 0.0f).x;
 
-        const float pdf = data->pdf * rho1;
+        const pdf_sample pdf = data->pdf * rho1;
         multiscatter.pdf(data, state, inherited_normal);
         data->pdf = pdf + data->pdf * (1.0f - rho1);
     }
@@ -4564,18 +4711,16 @@ BSDF_API void microflake_sheen_bsdf_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const float roughness,
-    const float3 &tint,
-    const float3 &multiscatter_tint,
+    const color_sample &tint,
+    const color_sample &multiscatter_tint,
     const BSDF &multiscatter,
     const int handle)
 {
     const float nk1 = math::saturate(math::dot(data->k1, inherited_normal));
     float rho1 = 1.0f;
-    const bool has_multiscatter =
-        !multiscatter.is_black() &&
-        (multiscatter_tint.x > 0.0f || multiscatter_tint.y > 0.0f || multiscatter_tint.z > 0.0f);
+    const bool has_multiscatter = !multiscatter.is_black() && !(multiscatter_tint <= 0.0f);
 
     if (has_multiscatter && has_allowed_components(data, multiscatter))
     {
@@ -4584,13 +4729,13 @@ BSDF_API void microflake_sheen_bsdf_auxiliary(
             multiscatter::compute_lookup_coordinate_x(MICROFLAKE_SHEEN_BSDF, nk1),
             multiscatter::compute_lookup_coordinate_y(MICROFLAKE_SHEEN_BSDF, roughness, roughness),
             multiscatter::compute_lookup_coordinate_z(MICROFLAKE_SHEEN_BSDF, /*eta=*/-1.0f));
-         rho1 = 
+         rho1 =
             state->tex_lookup_float3_3d(
                 state->get_bsdf_data_texture_id(BDK_MICROFLAKE_SHEEN_MULTISCATTER),
                 coord, 0, 0, 0, clamp, clamp, clamp, 0.0f).x;
     }
 
-    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, multiscatter_tint * (1.0f - rho1), tint * rho1, 
+    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, multiscatter_tint * (1.0f - rho1), tint * rho1,
         0.0f, 0.0f, // let sheen behave like diffuse
         handle);
 }
@@ -4607,31 +4752,32 @@ BSDF_API void tint_bsdf_sample(
     BSDF_sample_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &tint,
+    const color_sample &tint,
     const BSDF &base)
 {
     base.sample(data, state, inherited_normal);
-    data->bsdf_over_pdf *= math::saturate(tint);
+    data->bsdf_over_pdf *= saturate(tint);
 }
 
-BSDF_API float3 tint_bsdf_get_factor(
+BSDF_API color_sample tint_bsdf_get_factor(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &tint)
+    const color_sample &tint,
+    const BSDF &/*base*/)
 {
-    return math::saturate(tint);
+    return saturate(tint);
 }
 
 BSDF_API void tint_bsdf_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    const float3 &tint,
+    const color_sample &inherited_weight,
+    const color_sample &tint,
     const BSDF &base)
 {
-    const float3 factor = math::saturate(tint);
+    const color_sample factor = saturate(tint);
     base.evaluate(data, state, inherited_normal, factor * inherited_weight);
 }
 
@@ -4639,7 +4785,7 @@ BSDF_API void tint_bsdf_pdf(
     BSDF_pdf_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &tint,
+    const color_sample &tint,
     const BSDF &base)
 {
     base.pdf(data, state, inherited_normal);
@@ -4649,11 +4795,11 @@ BSDF_API void tint_bsdf_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    const float3 &tint,
+    const color_sample &inherited_weight,
+    const color_sample &tint,
     const BSDF &base)
 {
-    const float3 factor = math::saturate(tint);
+    const color_sample factor = saturate(tint);
     base.auxiliary(data, state, inherited_normal, factor * inherited_weight);
 }
 
@@ -4670,27 +4816,27 @@ BSDF_API void tint_rt_bsdf_sample(
     BSDF_sample_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &reflection_tint,
-    const float3 &transmission_tint,
+    const color_sample &reflection_tint,
+    const color_sample &transmission_tint,
     const BSDF &base)
 {
     base.sample(data, state, inherited_normal);
     if (data->event_type == BSDF_EVENT_ABSORB)
         return;
 
-    const float3 tint = (data->event_type & BSDF_EVENT_TRANSMISSION) == 0 
-        ? reflection_tint 
+    const color_sample tint = (data->event_type & BSDF_EVENT_TRANSMISSION) == 0
+        ? reflection_tint
         : transmission_tint;
 
-    data->bsdf_over_pdf *= math::saturate(tint);
+    data->bsdf_over_pdf *= saturate(tint);
 }
 
-BSDF_INLINE float3 tint_rt_bsdf_get_factor_impl(
+BSDF_INLINE color_sample tint_rt_bsdf_get_factor_impl(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &reflection_tint,
-    const float3 &transmission_tint)
+    const color_sample &reflection_tint,
+    const color_sample &transmission_tint)
 {
     // get a shading normal on the side of k1
     float3 shading_normal, geometry_normal;
@@ -4699,17 +4845,18 @@ BSDF_INLINE float3 tint_rt_bsdf_get_factor_impl(
 
     const float nk2 = math::dot(data->k2, geometry_normal);
 
-    const float3& tint = (nk2 < 0.0f) ? transmission_tint : reflection_tint;
-    const float3 factor = math::saturate(tint);
+    const color_sample& tint = (nk2 < 0.0f) ? transmission_tint : reflection_tint;
+    const color_sample factor = saturate(tint);
     return factor;
 }
 
-BSDF_API float3 tint_rt_bsdf_get_factor(
+BSDF_API color_sample tint_rt_bsdf_get_factor(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &reflection_tint,
-    const float3 &transmission_tint)
+    const color_sample &reflection_tint,
+    const color_sample &transmission_tint,
+    const BSDF &/*base*/)
 {
     return tint_rt_bsdf_get_factor_impl(
         data, state, inherited_normal, reflection_tint, transmission_tint);
@@ -4719,12 +4866,12 @@ BSDF_API void tint_rt_bsdf_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    const float3 &reflection_tint,
-    const float3 &transmission_tint,
+    const color_sample &inherited_weight,
+    const color_sample &reflection_tint,
+    const color_sample &transmission_tint,
     const BSDF &base)
 {
-    const float3 factor = tint_rt_bsdf_get_factor_impl(
+    const color_sample factor = tint_rt_bsdf_get_factor_impl(
         data, state, inherited_normal, reflection_tint, transmission_tint);
     base.evaluate(data, state, inherited_normal, factor * inherited_weight);
 }
@@ -4733,8 +4880,8 @@ BSDF_API void tint_rt_bsdf_pdf(
     BSDF_pdf_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &reflection_tint,
-    const float3 &transmission_tint,
+    const color_sample &reflection_tint,
+    const color_sample &transmission_tint,
     const BSDF &base)
 {
     base.pdf(data, state, inherited_normal);
@@ -4744,12 +4891,12 @@ BSDF_API void tint_rt_bsdf_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    const float3 &reflection_tint,
-    const float3 &transmission_tint,
+    const color_sample &inherited_weight,
+    const color_sample &reflection_tint,
+    const color_sample &transmission_tint,
     const BSDF &base)
 {
-    const float3 factor = math::saturate((reflection_tint + transmission_tint) * 0.5f);
+    const color_sample factor = saturate((reflection_tint + transmission_tint) * 0.5f);
     base.auxiliary(data, state, inherited_normal, factor * inherited_weight);
 }
 
@@ -4765,31 +4912,32 @@ BSDF_API void tint_edf_sample(
     EDF_sample_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &tint,
+    const color_sample &tint,
     const EDF &base)
 {
     base.sample(data, state, inherited_normal);
-    data->edf_over_pdf *= math::saturate(tint);
+    data->edf_over_pdf *= saturate(tint);
 }
 
-BSDF_API float3 tint_edf_get_factor(
+BSDF_API color_sample tint_edf_get_factor(
     EDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &tint)
+    const color_sample &tint,
+    const EDF &/*base*/)
 {
-    return math::saturate(tint);
+    return saturate(tint);
 }
 
 BSDF_API void tint_edf_evaluate(
     EDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    const float3 &tint,
+    const color_sample &inherited_weight,
+    const color_sample &tint,
     const EDF &base)
 {
-    const float3 factor = math::saturate(tint);
+    const color_sample factor = saturate(tint);
     base.evaluate(data, state, inherited_normal, factor * inherited_weight);
 }
 
@@ -4797,7 +4945,7 @@ BSDF_API void tint_edf_pdf(
     EDF_pdf_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &tint,
+    const color_sample &tint,
     const EDF &base)
 {
     base.pdf(data, state, inherited_normal);
@@ -4807,22 +4955,23 @@ BSDF_API void tint_edf_auxiliary(
     EDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    const float3 &tint,
+    const color_sample &inherited_weight,
+    const color_sample &tint,
     const EDF &base)
 {
-    const float3 factor = math::saturate(tint);
+    const color_sample factor = saturate(tint);
     base.auxiliary(data, state, inherited_normal, factor * inherited_weight);
 }
 
 
 /////////////////////////////////////////////////////////////////////
 // bsdf directional_factor(
-//     color  normal_tint  = color(1.0),
-//     color  grazing_tint = color(1.0),
-//     color  f82_factor   = color(1.0),
-//     float  exponent     = 5.0,
-//     bsdf   base         = bsdf()
+//     color                normal_tint  = color(1.0),
+//     color                grazing_tint = color(1.0),
+//     color                f82_factor   = color(1.0),
+//     float                exponent     = 5.0,
+//     bsdf                 base         = bsdf(),
+//     backscatter_modifier backscatter  = backscatter_none
 // )
 /////////////////////////////////////////////////////////////////////
 
@@ -4830,11 +4979,12 @@ BSDF_API void directional_factor_bsdf_sample(
     BSDF_sample_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &normal_tint,
-    const float3 &grazing_tint,
-    const float3 &f82_factor,
+    const color_sample &normal_tint,
+    const color_sample &grazing_tint,
+    const color_sample &f82_factor,
     const float exponent,
-    const BSDF &base)
+    const BSDF &base,
+    const backscatter_modifier backscatter)
 {
     if (!has_allowed_components(data, base)) {
         absorb(data);
@@ -4849,11 +4999,13 @@ BSDF_API void directional_factor_bsdf_sample(
     get_oriented_normals(
         shading_normal, geometry_normal, inherited_normal, state->geometry_normal(), data->k1);
 
+    const float3 k1 = apply_backscatter(data->k1, backscatter, (data->event_type & BSDF_EVENT_REFLECTION) != 0, shading_normal, math::dot(data->k1, shading_normal), true);
+
     const float nk2 = math::abs(math::dot(data->k2, shading_normal));
     const float3 h = compute_half_vector(
-        data->k1, data->k2, shading_normal, nk2,
+        k1, data->k2, shading_normal, nk2,
         (data->event_type & BSDF_EVENT_TRANSMISSION) != 0);
-    const float kh = math::dot(data->k1, h);
+    const float kh = math::dot(k1, h);
     if (kh < 0.0f) {
         absorb(data);
         return;
@@ -4862,75 +5014,82 @@ BSDF_API void directional_factor_bsdf_sample(
     data->bsdf_over_pdf *= generalized_custom_curve_factor(
         kh,
         math::max(exponent, 0.0f),
-        math::saturate(normal_tint),
-        math::saturate(grazing_tint),
-        math::saturate(f82_factor));
+        saturate(normal_tint),
+        saturate(grazing_tint),
+        saturate(f82_factor));
 }
 
-BSDF_INLINE float3 directional_factor_bsdf_get_factor_impl(
+BSDF_INLINE color_sample directional_factor_bsdf_get_factor_impl(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &normal_tint,
-    const float3 &grazing_tint,
-    const float3 &f82_factor,
-    const float exponent)
+    const color_sample &normal_tint,
+    const color_sample &grazing_tint,
+    const color_sample &f82_factor,
+    const float exponent,
+    const backscatter_modifier backscatter)
 {
     float3 shading_normal, geometry_normal;
     get_oriented_normals(
         shading_normal, geometry_normal, inherited_normal, state->geometry_normal(), data->k1);
 
+    const bool is_reflection = math::dot(data->k2, geometry_normal) >= 0.0f;
+    const float3 k1 = apply_backscatter(data->k1, backscatter, is_reflection, shading_normal, math::dot(data->k1, shading_normal), true);
+
     const float nk2 = math::abs(math::dot(data->k2, shading_normal));
     const float3 h = compute_half_vector(
-        data->k1, data->k2, shading_normal, nk2,
-        math::dot(data->k2, geometry_normal) < 0.0f);
-    const float kh = math::dot(data->k1, h);
+        k1, data->k2, shading_normal, nk2,
+        !is_reflection);
+    const float kh = math::dot(k1, h);
     if (kh < 0.0f) {
-        return make_float3(0.0f, 0.0f, 0.0f);
+        return make<color_sample>(0.0f);
     }
 
-    const float3 factor = generalized_custom_curve_factor(
+    const color_sample factor = generalized_custom_curve_factor(
         kh,
         math::max(exponent, 0.0f),
-        math::saturate(normal_tint),
-        math::saturate(grazing_tint),
-        math::saturate(f82_factor));
+        saturate(normal_tint),
+        saturate(grazing_tint),
+        saturate(f82_factor));
     return factor;
 }
 
-BSDF_API float3 directional_factor_bsdf_get_factor(
+BSDF_API color_sample directional_factor_bsdf_get_factor(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &normal_tint,
-    const float3 &grazing_tint,
-    const float3 &f82_factor,
-    const float exponent)
+    const color_sample &normal_tint,
+    const color_sample &grazing_tint,
+    const color_sample &f82_factor,
+    const float exponent,
+    const BSDF &/*base*/,
+    const backscatter_modifier backscatter)
 {
     return directional_factor_bsdf_get_factor_impl(
-        data, state, inherited_normal, normal_tint, grazing_tint, f82_factor, exponent);
+        data, state, inherited_normal, normal_tint, grazing_tint, f82_factor, exponent, backscatter);
 }
 
 BSDF_API void directional_factor_bsdf_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    const float3 &normal_tint,
-    const float3 &grazing_tint,
-    const float3 &f82_factor,
+    const color_sample &inherited_weight,
+    const color_sample &normal_tint,
+    const color_sample &grazing_tint,
+    const color_sample &f82_factor,
     const float exponent,
-    const BSDF &base)
+    const BSDF &base,
+    const backscatter_modifier backscatter)
 {
     if (!has_allowed_components(data, base)) {
         absorb(data);
         return;
     }
 
-    const float3 factor = directional_factor_bsdf_get_factor_impl(
-        data, state, inherited_normal, normal_tint, grazing_tint, f82_factor, exponent);
+    const color_sample factor = directional_factor_bsdf_get_factor_impl(
+        data, state, inherited_normal, normal_tint, grazing_tint, f82_factor, exponent, backscatter);
 
-    if (factor.x == 0.0f && factor.y == 0.0f && factor.z == 0.0f) {
+    if (factor == 0.0f) {
         absorb(data);
         return;
     }
@@ -4946,7 +5105,8 @@ BSDF_API void directional_factor_bsdf_pdf(
     const float3 &grazing_tint,
     const float3 &f82_factor,
     const float exponent,
-    const BSDF &base)
+    const BSDF &base,
+    const backscatter_modifier backscatter)
 {
     // no need to early out if base does not have allowed components, as
     // we don't add any additional code here anyways.
@@ -4958,12 +5118,13 @@ BSDF_API void directional_factor_bsdf_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    const float3 &normal_tint,
-    const float3 &grazing_tint,
-    const float3 &f82_factor,
+    const color_sample &inherited_weight,
+    const color_sample &normal_tint,
+    const color_sample &grazing_tint,
+    const color_sample &f82_factor,
     const float exponent,
-    const BSDF &base)
+    const BSDF &base,
+    const backscatter_modifier backscatter)
 {
     if (!has_allowed_components(data, base)) {
         absorb(data);
@@ -4980,8 +5141,12 @@ BSDF_API void directional_factor_bsdf_auxiliary(
         return;
     }
 
-    const float3 factor = generalized_custom_curve_factor(
-        nk1, math::max(exponent, 0.0f), math::saturate(normal_tint), math::saturate(grazing_tint), math::saturate(f82_factor));
+    const color_sample factor = generalized_custom_curve_factor(
+        nk1,
+        math::max(exponent, 0.0f),
+        saturate(normal_tint),
+        saturate(grazing_tint),
+        saturate(f82_factor));
 
     base.auxiliary(data, state, inherited_normal, factor * inherited_weight);
 }
@@ -4991,11 +5156,12 @@ BSDF_API void directional_factor_bsdf_auxiliary(
 //     float coating_thickness,
 //     color coating_ior,
 //     bsdf base = directional_factor(
-//         color  normal_tint  = color(1.0),
-//         color  grazing_tint = color(1.0),
-//         color  f82_factor   = color(1.0),
-//         float  exponent     = 5.0,
-//         bsdf   base         = bsdf()
+//         color                normal_tint  = color(1.0),
+//         color                grazing_tint = color(1.0),
+//         color                f82_factor   = color(1.0),
+//         float                exponent     = 5.0,
+//         bsdf                 base         = bsdf(),
+//         backscatter_modifier backscatter  = backscatter_none
 //     )
 // )
 /////////////////////////////////////////////////////////////////////
@@ -5004,13 +5170,14 @@ BSDF_API void thin_film_directional_factor_bsdf_sample(
     BSDF_sample_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &normal_tint,
-    const float3 &grazing_tint,
-    const float3 &f82_factor,
+    const color_sample &normal_tint,
+    const color_sample &grazing_tint,
+    const color_sample &f82_factor,
     const float exponent,
     const BSDF &base,
+    const backscatter_modifier backscatter,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     if (!has_allowed_components(data, base)) {
         absorb(data);
@@ -5025,11 +5192,13 @@ BSDF_API void thin_film_directional_factor_bsdf_sample(
     get_oriented_normals(
         shading_normal, geometry_normal, inherited_normal, state->geometry_normal(), data->k1);
 
+    const float3 k1 = apply_backscatter(data->k1, backscatter, (data->event_type & BSDF_EVENT_REFLECTION) != 0, shading_normal, math::dot(data->k1, shading_normal), true);
+
     const float nk2 = math::abs(math::dot(data->k2, shading_normal));
     const float3 h = compute_half_vector(
-        data->k1, data->k2, shading_normal, nk2,
+        k1, data->k2, shading_normal, nk2,
         (data->event_type & BSDF_EVENT_TRANSMISSION) != 0);
-    const float kh = math::dot(data->k1, h);
+    const float kh = math::dot(k1, h);
     if (kh < 0.0f) {
         absorb(data);
         return;
@@ -5039,60 +5208,66 @@ BSDF_API void thin_film_directional_factor_bsdf_sample(
         data, state,
         kh,
         math::max(exponent, 0.0f),
-        math::saturate(normal_tint),
-        math::saturate(grazing_tint),
-        math::saturate(f82_factor),
+        saturate(normal_tint),
+        saturate(grazing_tint),
+        saturate(f82_factor),
         coating_thickness,
         coating_ior);
 }
 
-BSDF_INLINE float3 thin_film_directional_factor_bsdf_get_factor_impl(
+BSDF_INLINE color_sample thin_film_directional_factor_bsdf_get_factor_impl(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &normal_tint,
-    const float3 &grazing_tint,
-    const float3 &f82_factor,
+    const color_sample &normal_tint,
+    const color_sample &grazing_tint,
+    const color_sample &f82_factor,
     const float exponent,
+    const backscatter_modifier backscatter,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     float3 shading_normal, geometry_normal;
     get_oriented_normals(
         shading_normal, geometry_normal, inherited_normal, state->geometry_normal(), data->k1);
 
+    const bool is_reflection = math::dot(data->k2, geometry_normal) >= 0.0f;
+    const float3 k1 = apply_backscatter(data->k1, backscatter, is_reflection, shading_normal, math::dot(data->k1, shading_normal), true);
+
     const float nk2 = math::abs(math::dot(data->k2, shading_normal));
     const float3 h = compute_half_vector(
-        data->k1, data->k2, shading_normal, nk2,
-        math::dot(data->k2, geometry_normal) < 0.0f);
-    const float kh = math::dot(data->k1, h);
+        k1, data->k2, shading_normal, nk2,
+        !is_reflection);
+    const float kh = math::dot(k1, h);
     if (kh < 0.0f) {
-        return make_float3(0.0f, 0.0f, 0.0f);
+        return make<color_sample>(0.0f);
     }
 
-    const float3 factor = thin_film_custom_curve_factor_conductor(
+    const color_sample factor = thin_film_custom_curve_factor_conductor(
         data,
         state,
         kh,
         math::max(exponent, 0.0f),
-        math::saturate(normal_tint),
-        math::saturate(grazing_tint),
-        math::saturate(f82_factor),
+        saturate(normal_tint),
+        saturate(grazing_tint),
+        saturate(f82_factor),
         coating_thickness,
         coating_ior);
     return factor;
 }
 
-BSDF_API float3 thin_film_directional_factor_bsdf_get_factor(
+BSDF_API color_sample thin_film_directional_factor_bsdf_get_factor(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &normal_tint,
-    const float3 &grazing_tint,
-    const float3 &f82_factor,
+    const color_sample &normal_tint,
+    const color_sample &grazing_tint,
+    const color_sample &f82_factor,
     const float exponent,
+    const BSDF &/*base*/,
+    const backscatter_modifier backscatter,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     return thin_film_directional_factor_bsdf_get_factor_impl(
         data,
@@ -5102,6 +5277,7 @@ BSDF_API float3 thin_film_directional_factor_bsdf_get_factor(
         grazing_tint,
         f82_factor,
         exponent,
+        backscatter,
         coating_thickness,
         coating_ior);
 }
@@ -5110,24 +5286,27 @@ BSDF_API void thin_film_directional_factor_bsdf_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    const float3 &normal_tint,
-    const float3 &grazing_tint,
-    const float3 &f82_factor,
+    const color_sample &inherited_weight,
+    const color_sample &normal_tint,
+    const color_sample &grazing_tint,
+    const color_sample &f82_factor,
     const float exponent,
     const BSDF &base,
+    const backscatter_modifier backscatter,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     if (!has_allowed_components(data, base)) {
         absorb(data);
         return;
     }
 
-    const float3 factor = thin_film_directional_factor_bsdf_get_factor_impl(
-        data, state, inherited_normal, normal_tint, grazing_tint, f82_factor, exponent, coating_thickness, coating_ior);
+    const color_sample factor = thin_film_directional_factor_bsdf_get_factor_impl(
+        data, state, inherited_normal,
+        normal_tint, grazing_tint, f82_factor, exponent, backscatter,
+        coating_thickness, coating_ior);
 
-    if (factor.x == 0.0f && factor.y == 0.0f && factor.z == 0.0f) {
+    if (factor == 0.0f){
         absorb(data);
         return;
     }
@@ -5139,13 +5318,14 @@ BSDF_API void thin_film_directional_factor_bsdf_pdf(
     BSDF_pdf_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &normal_tint,
-    const float3 &grazing_tint,
-    const float3 &f82_factor,
+    const color_sample &normal_tint,
+    const color_sample &grazing_tint,
+    const color_sample &f82_factor,
     const float exponent,
     const BSDF &base,
+    const backscatter_modifier backscatter,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     // no need to early out if base does not have allowed components, as
     // we don't add any additional code here anyways.
@@ -5157,14 +5337,15 @@ BSDF_API void thin_film_directional_factor_bsdf_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    const float3 &normal_tint,
-    const float3 &grazing_tint,
-    const float3 &f82_factor,
+    const color_sample &inherited_weight,
+    const color_sample &normal_tint,
+    const color_sample &grazing_tint,
+    const color_sample &f82_factor,
     const float exponent,
     const BSDF &base,
+    const backscatter_modifier backscatter,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     if (!has_allowed_components(data, base)) {
         absorb(data);
@@ -5181,9 +5362,9 @@ BSDF_API void thin_film_directional_factor_bsdf_auxiliary(
         return;
     }
 
-    const float3 factor = thin_film_custom_curve_factor_conductor(
+    const color_sample factor = thin_film_custom_curve_factor_conductor(
         data, state,
-        nk1, math::max(exponent, 0.0f), math::saturate(normal_tint), math::saturate(grazing_tint), math::saturate(f82_factor),
+        nk1, math::max(exponent, 0.0f), saturate(normal_tint), saturate(grazing_tint), saturate(f82_factor),
         coating_thickness, coating_ior);
 
     base.auxiliary(data, state, inherited_normal, factor * inherited_weight);
@@ -5203,8 +5384,8 @@ BSDF_API void directional_factor_edf_sample(
     EDF_sample_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &normal_tint,
-    const float3 &grazing_tint,
+    const color_sample &normal_tint,
+    const color_sample &grazing_tint,
     const float exponent,
     const EDF &base)
 {
@@ -5212,37 +5393,38 @@ BSDF_API void directional_factor_edf_sample(
     const float cosine = math::dot(data->k1, inherited_normal);
     if (cosine >= 0.0f)
         data->edf_over_pdf *= custom_curve_factor(
-            cosine, math::max(exponent, 0.0f), math::saturate(normal_tint), math::saturate(grazing_tint));
+            cosine, math::max(exponent, 0.0f), saturate(normal_tint), saturate(grazing_tint));
     else
-        no_emission(data);    
+        no_emission(data);
 }
 
 
-BSDF_INLINE float3 directional_factor_edf_get_factor_impl(
+BSDF_INLINE color_sample directional_factor_edf_get_factor_impl(
     EDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &normal_tint,
-    const float3 &grazing_tint,
+    const color_sample &normal_tint,
+    const color_sample &grazing_tint,
     const float exponent)
 {
     const float cosine = math::dot(data->k1, inherited_normal);
     if (cosine < 0.0f) {
-        return make_float3(0.0f, 0.0f, 0.0f);
+        return make<color_sample>(0.0f);
     }
 
-    const float3 factor = custom_curve_factor(
-        cosine, math::max(exponent, 0.0f), math::saturate(normal_tint), math::saturate(grazing_tint));
+    const color_sample factor = custom_curve_factor(
+        cosine, math::max(exponent, 0.0f), saturate(normal_tint), saturate(grazing_tint));
     return factor;
 }
 
-BSDF_API float3 directional_factor_edf_get_factor(
+BSDF_API color_sample directional_factor_edf_get_factor(
     EDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &normal_tint,
-    const float3 &grazing_tint,
-    const float exponent)
+    const color_sample &normal_tint,
+    const color_sample &grazing_tint,
+    const float exponent,
+    const EDF &/*base*/)
 {
     return directional_factor_edf_get_factor_impl(
         data, state, inherited_normal, normal_tint, grazing_tint, exponent);
@@ -5252,16 +5434,16 @@ BSDF_API void directional_factor_edf_evaluate(
     EDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    const float3 &normal_tint,
-    const float3 &grazing_tint,
+    const color_sample &inherited_weight,
+    const color_sample &normal_tint,
+    const color_sample &grazing_tint,
     const float exponent,
     const EDF &base)
 {
-    const float3 factor = directional_factor_edf_get_factor_impl(
+    const color_sample factor = directional_factor_edf_get_factor_impl(
         data, state, inherited_normal, normal_tint, grazing_tint, exponent);
 
-    if (factor.x == 0.0f && factor.y == 0.0f && factor.z == 0.0f) {
+    if (factor == 0.0f) {
         no_emission(data);
         return;
     }
@@ -5273,8 +5455,8 @@ BSDF_API void directional_factor_edf_pdf(
     EDF_pdf_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &normal_tint,
-    const float3 &grazing_tint,
+    const color_sample &normal_tint,
+    const color_sample &grazing_tint,
     const float exponent,
     const EDF &base)
 {
@@ -5285,28 +5467,29 @@ BSDF_API void directional_factor_edf_auxiliary(
     EDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    const float3 &normal_tint,
-    const float3 &grazing_tint,
+    const color_sample &inherited_weight,
+    const color_sample &normal_tint,
+    const color_sample &grazing_tint,
     const float exponent,
     const EDF &base)
 {
     const float cosine = math::dot(data->k1, inherited_normal);
     if (cosine >= 0.0f) {
-        const float3 factor = custom_curve_factor(
-            cosine, math::max(exponent, 0.0f), math::saturate(normal_tint), math::saturate(grazing_tint));
+        const color_sample factor = custom_curve_factor(
+            cosine, math::max(exponent, 0.0f), saturate(normal_tint), saturate(grazing_tint));
         base.auxiliary(data, state, inherited_normal, factor * inherited_weight);
     }
     else
-        no_emission(data);    
+        no_emission(data);
 }
 
 
 /////////////////////////////////////////////////////////////////////
 // bsdf fresnel_factor(
-//     color  ior,
-//     color  extinction_coefficent,
-//     bsdf   base = bsdf()
+//     color                ior,
+//     color                extinction_coefficent,
+//     bsdf                 base = bsdf(),
+//     backscatter_modifier backscatter = backscatter_none,
 // )
 /////////////////////////////////////////////////////////////////////
 
@@ -5314,9 +5497,10 @@ BSDF_API void fresnel_factor_sample(
     BSDF_sample_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &ior,
-    const float3 &extinction_coefficient,
-    const BSDF &base)
+    const color_sample &ior,
+    const color_sample &extinction_coefficient,
+    const BSDF &base,
+    const backscatter_modifier backscatter)
 {
     if (!has_allowed_components(data, base)) {
         absorb(data);
@@ -5331,82 +5515,91 @@ BSDF_API void fresnel_factor_sample(
     get_oriented_normals(
         shading_normal, geometry_normal, inherited_normal, state->geometry_normal(), data->k1);
 
+    const float3 k1 = apply_backscatter(data->k1, backscatter, (data->event_type & BSDF_EVENT_REFLECTION) != 0, shading_normal, math::dot(data->k1, shading_normal), true);
+
     const float nk2 = math::abs(math::dot(data->k2, shading_normal));
     const float3 h = compute_half_vector(
-        data->k1, data->k2, shading_normal, nk2,
+        k1, data->k2, shading_normal, nk2,
         (data->event_type & BSDF_EVENT_TRANSMISSION) != 0);
-    const float kh = math::dot(data->k1, h);
+    const float kh = math::dot(k1, h);
     if (kh < 0.0f) {
         absorb(data);
         return;
     }
 
-    const float3 incoming_ior = process_incoming_ior(data, state);
-    const float3 inv_eta_i = make<float3>(1.0f) / incoming_ior;
-    const float3 eta = ior * inv_eta_i;
-    const float3 eta_k = extinction_coefficient * inv_eta_i;
+    const color_sample incoming_ior = process_incoming_ior(data, state);
+    const color_sample inv_eta_i = make<color_sample>(1.0f) / incoming_ior;
+    const color_sample eta = ior * inv_eta_i;
+    const color_sample eta_k = extinction_coefficient * inv_eta_i;
     data->bsdf_over_pdf *= complex_ior_fresnel(eta, eta_k, kh);
 }
 
 // we need an extra function, as clang doesn't allow to inline and export the same function
-BSDF_INLINE float3 fresnel_factor_get_factor_impl(
+BSDF_INLINE color_sample fresnel_factor_get_factor_impl(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &ior,
-    const float3 &extinction_coefficient)
+    const color_sample &ior,
+    const color_sample &extinction_coefficient,
+    const backscatter_modifier backscatter)
 {
     float3 shading_normal, geometry_normal;
     get_oriented_normals(
         shading_normal, geometry_normal, inherited_normal, state->geometry_normal(), data->k1);
 
+    const bool is_reflection = math::dot(data->k2, geometry_normal) >= 0.0f;
+    const float3 k1 = apply_backscatter(data->k1, backscatter, is_reflection, shading_normal, math::dot(data->k1, shading_normal), true);
+
     const float nk2 = math::abs(math::dot(data->k2, shading_normal));
     const float3 h = compute_half_vector(
-        data->k1, data->k2, shading_normal, nk2,
-        math::dot(data->k2, geometry_normal) < 0.0f);
-    const float kh = math::dot(data->k1, h);
+        k1, data->k2, shading_normal, nk2,
+        !is_reflection);
+    const float kh = math::dot(k1, h);
     if (kh < 0.0f) {
-        return make_float3(0.0f, 0.0f, 0.0f);
+        return make<color_sample>(0.0f);
     }
 
-    const float3 incoming_ior = process_incoming_ior(data, state);
-    const float3 inv_eta_i = make<float3>(1.0f) / incoming_ior;
-    const float3 eta = ior * inv_eta_i;
-    const float3 eta_k = extinction_coefficient * inv_eta_i;
+    const color_sample incoming_ior = process_incoming_ior(data, state);
+    const color_sample inv_eta_i = make<color_sample>(1.0f) / incoming_ior;
+    const color_sample eta = ior * inv_eta_i;
+    const color_sample eta_k = extinction_coefficient * inv_eta_i;
 
-    const float3 factor = complex_ior_fresnel(eta, eta_k, kh);
+    const color_sample factor = complex_ior_fresnel(eta, eta_k, kh);
     return factor;
 }
 
-BSDF_API float3 fresnel_factor_get_factor(
+BSDF_API color_sample fresnel_factor_get_factor(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &ior,
-    const float3 &extinction_coefficient)
+    const color_sample &ior,
+    const color_sample &extinction_coefficient,
+    const BSDF &/*base*/,
+    const backscatter_modifier backscatter)
 {
     return fresnel_factor_get_factor_impl(
-        data, state, inherited_normal, ior, extinction_coefficient);
+        data, state, inherited_normal, ior, extinction_coefficient, backscatter);
 }
 
 BSDF_API void fresnel_factor_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    const float3 &ior,
-    const float3 &extinction_coefficient,
-    const BSDF &base)
+    const color_sample &inherited_weight,
+    const color_sample &ior,
+    const color_sample &extinction_coefficient,
+    const BSDF &base,
+    const backscatter_modifier backscatter)
 {
     if (!has_allowed_components(data, base)) {
         absorb(data);
         return;
     }
 
-    const float3 factor = fresnel_factor_get_factor_impl(
-        data, state, inherited_normal, ior, extinction_coefficient);
+    const color_sample factor = fresnel_factor_get_factor_impl(
+        data, state, inherited_normal, ior, extinction_coefficient, backscatter);
 
-    if (factor.x == 0.0f && factor.y == 0.0f && factor.z == 0.0f) {
+    if (factor == 0.0f) {
         absorb(data);
         return;
     }
@@ -5418,9 +5611,10 @@ BSDF_API void fresnel_factor_pdf(
     BSDF_pdf_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &ior,
-    const float3 &extinction_coefficient,
-    const BSDF &base)
+    const color_sample &ior,
+    const color_sample &extinction_coefficient,
+    const BSDF &base,
+    const backscatter_modifier backscatter)
 {
     // no need to early out if base does not have allowed components, as
     // we don't add any additional code here anyways.
@@ -5432,10 +5626,11 @@ BSDF_API void fresnel_factor_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    const float3 &ior,
-    const float3 &extinction_coefficient,
-    const BSDF &base)
+    const color_sample &inherited_weight,
+    const color_sample &ior,
+    const color_sample &extinction_coefficient,
+    const BSDF &base,
+    const backscatter_modifier backscatter)
 {
     if (!has_allowed_components(data, base)) {
         absorb(data);
@@ -5452,12 +5647,12 @@ BSDF_API void fresnel_factor_auxiliary(
         return;
     }
 
-    const float3 incoming_ior = process_incoming_ior(data, state);
-    const float3 inv_eta_i = make<float3>(1.0f) / incoming_ior;
-    const float3 eta = ior * inv_eta_i;
-    const float3 eta_k = extinction_coefficient * inv_eta_i;
+    const color_sample incoming_ior = process_incoming_ior(data, state);
+    const color_sample inv_eta_i = make<color_sample>(1.0f) / incoming_ior;
+    const color_sample eta = ior * inv_eta_i;
+    const color_sample eta_k = extinction_coefficient * inv_eta_i;
 
-    const float3 factor = complex_ior_fresnel(eta, eta_k, nk1);
+    const color_sample factor = complex_ior_fresnel(eta, eta_k, nk1);
     base.auxiliary(data, state, inherited_normal, factor * inherited_weight);
 }
 
@@ -5466,9 +5661,10 @@ BSDF_API void fresnel_factor_auxiliary(
 //     float coating_thickness,
 //     color coating_ior,
 //     bsdf base = fresnel_factor(
-//         color  ior,
-//         color  extinction_coefficent,
-//         bsdf   base = bsdf()
+//         color                ior,
+//         color                extinction_coefficent,
+//         bsdf                 base = bsdf(),
+//         backscatter_modifier backscatter = backscatter_none
 //     )
 // )
 /////////////////////////////////////////////////////////////////////
@@ -5477,11 +5673,12 @@ BSDF_API void thin_film_fresnel_factor_sample(
     BSDF_sample_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &ior,
-    const float3 &extinction_coefficient,
+    const color_sample &ior,
+    const color_sample &extinction_coefficient,
     const BSDF &base,
+    const backscatter_modifier backscatter,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     if (!has_allowed_components(data, base)) {
         absorb(data);
@@ -5496,83 +5693,101 @@ BSDF_API void thin_film_fresnel_factor_sample(
     get_oriented_normals(
         shading_normal, geometry_normal, inherited_normal, state->geometry_normal(), data->k1);
 
+    const float3 k1 = apply_backscatter(data->k1, backscatter, (data->event_type & BSDF_EVENT_REFLECTION) != 0, shading_normal, math::dot(data->k1, shading_normal), true);
+
     const float nk2 = math::abs(math::dot(data->k2, shading_normal));
     const float3 h = compute_half_vector(
-        data->k1, data->k2, shading_normal, nk2,
+        k1, data->k2, shading_normal, nk2,
         (data->event_type & BSDF_EVENT_TRANSMISSION) != 0);
-    const float kh = math::dot(data->k1, h);
+    const float kh = math::dot(k1, h);
     if (kh < 0.0f) {
         absorb(data);
         return;
     }
 
-    const float3 incoming_ior = process_incoming_ior(data, state);
-    data->bsdf_over_pdf *= thin_film_factor(
+    const color_sample incoming_ior = process_incoming_ior(data, state);
+#ifdef MDL_DF_SPECTRAL_ENABLE
+#define LAMBDA_ARG state->get_wavelengths(),
+#else
+#define LAMBDA_ARG
+#endif
+    data->bsdf_over_pdf *= thin_film_factor(LAMBDA_ARG
         coating_thickness, coating_ior, ior, extinction_coefficient, incoming_ior, kh);
 }
 
 // we need an extra function, as clang doesn't allow to inline and export the same function
-BSDF_INLINE float3 thin_film_fresnel_factor_get_factor_impl(
+BSDF_INLINE color_sample thin_film_fresnel_factor_get_factor_impl(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &ior,
-    const float3 &extinction_coefficient,
+    const color_sample &ior,
+    const color_sample &extinction_coefficient,
+    const backscatter_modifier backscatter,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     float3 shading_normal, geometry_normal;
     get_oriented_normals(
         shading_normal, geometry_normal, inherited_normal, state->geometry_normal(), data->k1);
 
+    const bool is_reflection = math::dot(data->k2, geometry_normal) >= 0.0f;
+    const float3 k1 = apply_backscatter(data->k1, backscatter, is_reflection, shading_normal, math::dot(data->k1, shading_normal), true);
+
     const float nk2 = math::abs(math::dot(data->k2, shading_normal));
     const float3 h = compute_half_vector(
-        data->k1, data->k2, shading_normal, nk2,
-        math::dot(data->k2, geometry_normal) < 0.0f);
-    const float kh = math::dot(data->k1, h);
+        k1, data->k2, shading_normal, nk2,
+        !is_reflection);
+    const float kh = math::dot(k1, h);
     if (kh < 0.0f) {
-        return make_float3(0.0f, 0.0f, 0.0f);
+        return make<color_sample>(0.0f);
     }
 
-    const float3 incoming_ior = process_incoming_ior(data, state);
-    const float3 factor = thin_film_factor(
+    const color_sample incoming_ior = process_incoming_ior(data, state);
+    const color_sample factor = thin_film_factor(LAMBDA_ARG
         coating_thickness, coating_ior, ior, extinction_coefficient, incoming_ior, kh);
     return factor;
 }
 
-BSDF_API float3 thin_film_fresnel_factor_get_factor(
+BSDF_API color_sample thin_film_fresnel_factor_get_factor(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &ior,
-    const float3 &extinction_coefficient,
+    const color_sample &ior,
+    const color_sample &extinction_coefficient,
+    const BSDF &/*base*/,
+    const backscatter_modifier backscatter,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     return thin_film_fresnel_factor_get_factor_impl(
-        data, state, inherited_normal, ior, extinction_coefficient, coating_thickness, coating_ior);
+        data, state, inherited_normal,
+        ior, extinction_coefficient, backscatter,
+        coating_thickness, coating_ior);
 }
 
 BSDF_API void thin_film_fresnel_factor_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    const float3 &ior,
-    const float3 &extinction_coefficient,
+    const color_sample &inherited_weight,
+    const color_sample &ior,
+    const color_sample &extinction_coefficient,
     const BSDF &base,
+    const backscatter_modifier backscatter,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     if (!has_allowed_components(data, base)) {
         absorb(data);
         return;
     }
 
-    const float3 factor = thin_film_fresnel_factor_get_factor_impl(
-        data, state, inherited_normal, ior, extinction_coefficient, coating_thickness, coating_ior);
+    const color_sample factor = thin_film_fresnel_factor_get_factor_impl(
+        data, state, inherited_normal,
+        ior, extinction_coefficient, backscatter,
+        coating_thickness, coating_ior);
 
-    if (factor.x == 0.0f && factor.y == 0.0f && factor.z == 0.0f) {
+    if (factor == 0.0f) {
         absorb(data);
         return;
     }
@@ -5584,11 +5799,12 @@ BSDF_API void thin_film_fresnel_factor_pdf(
     BSDF_pdf_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &ior,
-    const float3 &extinction_coefficient,
+    const color_sample &ior,
+    const color_sample &extinction_coefficient,
     const BSDF &base,
+    const backscatter_modifier backscatter,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     // no need to early out if base does not have allowed components, as
     // we don't add any additional code here anyways.
@@ -5600,12 +5816,13 @@ BSDF_API void thin_film_fresnel_factor_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    const float3 &ior,
-    const float3 &extinction_coefficient,
+    const color_sample &inherited_weight,
+    const color_sample &ior,
+    const color_sample &extinction_coefficient,
     const BSDF &base,
+    const backscatter_modifier backscatter,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     if (!has_allowed_components(data, base)) {
         absorb(data);
@@ -5622,8 +5839,8 @@ BSDF_API void thin_film_fresnel_factor_auxiliary(
         return;
     }
 
-    const float3 incoming_ior = process_incoming_ior(data, state);
-    const float3 factor = thin_film_factor(
+    const color_sample incoming_ior = process_incoming_ior(data, state);
+    const color_sample factor = thin_film_factor(LAMBDA_ARG
         coating_thickness, coating_ior, ior, extinction_coefficient, incoming_ior, nk1);
 
     base.auxiliary(data, state, inherited_normal, factor * inherited_weight);
@@ -5631,8 +5848,9 @@ BSDF_API void thin_film_fresnel_factor_auxiliary(
 
 /////////////////////////////////////////////////////////////////////
 // bsdf measured_curve_factor(
-//     color[<N>] curve_values,
-//     bsdf   base = bsdf()
+//     color[<N>]           curve_values,
+//     bsdf                 base = bsdf(),
+//     backscatter_modifier backscatter = backscatter_none
 // )
 /////////////////////////////////////////////////////////////////////
 
@@ -5640,9 +5858,10 @@ BSDF_API void measured_curve_factor_sample(
     BSDF_sample_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 *curve_values,
+    const color_sample *curve_values,
     const unsigned int num_curve_values,
-    const BSDF &base)
+    const BSDF &base,
+    const backscatter_modifier backscatter)
 {
     if (!has_allowed_components(data, base)) {
         absorb(data);
@@ -5657,73 +5876,81 @@ BSDF_API void measured_curve_factor_sample(
     get_oriented_normals(
         shading_normal, geometry_normal, inherited_normal, state->geometry_normal(), data->k1);
 
+    const float3 k1 = apply_backscatter(data->k1, backscatter, (data->event_type & BSDF_EVENT_REFLECTION) != 0, shading_normal, math::dot(data->k1, shading_normal), true);
+
     const float nk2 = math::abs(math::dot(data->k2, shading_normal));
     const float3 h = compute_half_vector(
-        data->k1, data->k2, shading_normal, nk2,
+        k1, data->k2, shading_normal, nk2,
         (data->event_type & BSDF_EVENT_TRANSMISSION) != 0);
-    const float kh = math::dot(data->k1, h);
+    const float kh = math::dot(k1, h);
     if (kh < 0.0f) {
         absorb(data);
         return;
     }
 
     data->bsdf_over_pdf *=
-        math::saturate(measured_curve_factor(kh, curve_values, num_curve_values));
+        saturate(measured_curve_factor(kh, curve_values, num_curve_values));
 }
 
-BSDF_INLINE float3 measured_curve_factor_get_factor_impl(
+BSDF_INLINE color_sample measured_curve_factor_get_factor_impl(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 *curve_values,
-    const unsigned int num_curve_values)
+    const color_sample *curve_values,
+    const unsigned int num_curve_values,
+    const backscatter_modifier backscatter)
 {
     float3 shading_normal, geometry_normal;
     get_oriented_normals(
         shading_normal, geometry_normal, inherited_normal, state->geometry_normal(), data->k1);
 
+    const float3 k1 = apply_backscatter(data->k1, backscatter, math::dot(data->k2, geometry_normal) >= 0.0f, shading_normal, math::dot(data->k1, shading_normal), true);
+
     const float nk2 = math::abs(math::dot(data->k2, shading_normal));
     const float3 h = compute_half_vector(
-        data->k1, data->k2, shading_normal, nk2,
+        k1, data->k2, shading_normal, nk2,
         math::dot(data->k2, geometry_normal) < 0.0f);
-    const float kh = math::dot(data->k1, h);
+    const float kh = math::dot(k1, h);
     if (kh < 0.0f) {
-        return make_float3(0.0f, 0.0f, 0.0f);
+        return make<color_sample>(0.0f);
     }
 
-    const float3 factor = math::saturate(measured_curve_factor(kh, curve_values, num_curve_values));
+    const color_sample factor = saturate(measured_curve_factor(kh, curve_values, num_curve_values));
     return factor;
 }
 
-BSDF_API float3 measured_curve_factor_get_factor(
+BSDF_API color_sample measured_curve_factor_get_factor(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 *curve_values,
-    const unsigned int num_curve_values)
+    const color_sample *curve_values,
+    const unsigned int num_curve_values,
+    const BSDF &/*base*/,
+    const backscatter_modifier backscatter)
 {
     return measured_curve_factor_get_factor_impl(
-        data, state, inherited_normal, curve_values, num_curve_values);
+        data, state, inherited_normal, curve_values, num_curve_values, backscatter);
 }
 
 BSDF_API void measured_curve_factor_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    const float3 *curve_values,
+    const color_sample &inherited_weight,
+    const color_sample *curve_values,
     const unsigned int num_curve_values,
-    const BSDF &base)
+    const BSDF &base,
+    const backscatter_modifier backscatter)
 {
     if (!has_allowed_components(data, base)) {
         absorb(data);
         return;
     }
 
-    const float3 factor = measured_curve_factor_get_factor_impl(
-        data, state, inherited_normal, curve_values, num_curve_values);
+    const color_sample factor = measured_curve_factor_get_factor_impl(
+        data, state, inherited_normal, curve_values, num_curve_values, backscatter);
 
-    if (factor.x == 0.0f && factor.y == 0.0f && factor.z == 0.0f) {
+    if (factor == 0.0f) {
         absorb(data);
         return;
     }
@@ -5735,9 +5962,10 @@ BSDF_API void measured_curve_factor_pdf(
     BSDF_pdf_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 *curve_values,
+    const color_sample *curve_values,
     const unsigned int num_curve_values,
-    const BSDF &base)
+    const BSDF &base,
+    const backscatter_modifier backscatter)
 {
     // no need to early out if base does not have allowed components, as
     // we don't add any additional code here anyways.
@@ -5749,10 +5977,11 @@ BSDF_API void measured_curve_factor_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    const float3 *curve_values,
+    const color_sample &inherited_weight,
+    const color_sample *curve_values,
     const unsigned int num_curve_values,
-    const BSDF &base)
+    const BSDF &base,
+    const backscatter_modifier backscatter)
 {
     if (!has_allowed_components(data, base)) {
         absorb(data);
@@ -5769,7 +5998,7 @@ BSDF_API void measured_curve_factor_auxiliary(
         return;
     }
 
-    const float3 factor = math::saturate(measured_curve_factor(nk1, curve_values, num_curve_values));
+    const color_sample factor = saturate(measured_curve_factor(nk1, curve_values, num_curve_values));
     base.auxiliary(data, state, inherited_normal, factor * inherited_weight);
 }
 
@@ -5777,11 +6006,12 @@ BSDF_API void measured_curve_factor_auxiliary(
 /////////////////////////////////////////////////////////////////////
 // bsdf measured_factor(
 //     texture_2d values,
-//     bsdf       base = bsdf()
+//     bsdf       base = bsdf(),
+//     backscatter_modifier backscatter = backscatter_none
 // )
 /////////////////////////////////////////////////////////////////////
 
-BSDF_INLINE float3 measured_factor(
+BSDF_INLINE color_sample measured_factor(
     State *state,
     const float3 &shading_normal,
     const float3 &k2,
@@ -5795,16 +6025,20 @@ BSDF_INLINE float3 measured_factor(
         math::acos(math::min(beta, 1.0f)) * (float)(2.0 / M_PI));
     const float2 clamp = make<float2>(0.0f, 1.0f);
 
-    return math::max(state->tex_lookup_float3_2d(value_texture_index, coord, 0, 0, clamp, clamp, 0.0f), make_float3(0.0f, 0.0f, 0.0f));;
-}
+    float3 measured_value = math::max(
+        state->tex_lookup_float3_2d(value_texture_index, coord, 0, 0, clamp, clamp, 0.0f),
+        make_float3(0.0f, 0.0f, 0.0f));
 
+    return make_spectral_sample_reflectance(state, measured_value);
+}
 
 BSDF_API void measured_factor_sample(
     BSDF_sample_data *data,
     State *state,
     const float3 &inherited_normal,
     const unsigned value_texture_index,
-    const BSDF &base)
+    const BSDF &base,
+    const backscatter_modifier backscatter)
 {
     if (!has_allowed_components(data, base)) {
         absorb(data);
@@ -5819,59 +6053,68 @@ BSDF_API void measured_factor_sample(
     get_oriented_normals(
         shading_normal, geometry_normal, inherited_normal, state->geometry_normal(), data->k1);
 
+    const float3 k1 = apply_backscatter(data->k1, backscatter, (data->event_type & BSDF_EVENT_REFLECTION) != 0, shading_normal, math::dot(data->k1, shading_normal), true);
+
     const float nk2 = math::abs(math::dot(data->k2, shading_normal));
     const float3 h = compute_half_vector(
-        data->k1, data->k2, shading_normal, nk2,
+        k1, data->k2, shading_normal, nk2,
         (data->event_type & BSDF_EVENT_TRANSMISSION) != 0);
 
-    float3 factor = measured_factor(state, shading_normal, data->k2, h, value_texture_index);
+    color_sample factor = measured_factor(state, shading_normal, data->k2, h, value_texture_index);
     data->bsdf_over_pdf *= factor;
 }
 
-BSDF_INLINE float3 measured_factor_get_factor_impl(
+BSDF_INLINE color_sample measured_factor_get_factor_impl(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const unsigned value_texture_index)
+    const unsigned value_texture_index,
+    const backscatter_modifier backscatter)
 {
     float3 shading_normal, geometry_normal;
     get_oriented_normals(
         shading_normal, geometry_normal, inherited_normal, state->geometry_normal(), data->k1);
 
+    const bool is_reflection = math::dot(data->k2, geometry_normal) >= 0.0f;
+    const float3 k1 = apply_backscatter(data->k1, backscatter, is_reflection, shading_normal, math::dot(data->k1, shading_normal), true);
+
     const float nk2 = math::abs(math::dot(data->k2, shading_normal));
     const float3 h = compute_half_vector(
-        data->k1, data->k2, shading_normal, nk2,
-        math::dot(data->k2, geometry_normal) < 0.0f);
+        k1, data->k2, shading_normal, nk2,
+        !is_reflection);
 
-    float3 factor = measured_factor(state, shading_normal, data->k2, h, value_texture_index);
+    color_sample factor = measured_factor(state, shading_normal, data->k2, h, value_texture_index);
     return factor;
 }
 
-BSDF_API float3 measured_factor_get_factor(
+BSDF_API color_sample measured_factor_get_factor(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const unsigned value_texture_index)
+    const unsigned value_texture_index,
+    const BSDF &/*base*/,
+    const backscatter_modifier backscatter)
 {
     return measured_factor_get_factor_impl(
-        data, state, inherited_normal, value_texture_index);
+        data, state, inherited_normal, value_texture_index, backscatter);
 }
 
 BSDF_API void measured_factor_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const unsigned value_texture_index,
-    const BSDF &base)
+    const BSDF &base,
+    const backscatter_modifier backscatter)
 {
     if (!has_allowed_components(data, base)) {
         absorb(data);
         return;
     }
 
-    float3 factor = measured_factor_get_factor_impl(
-        data, state, inherited_normal, value_texture_index);
+    color_sample factor = measured_factor_get_factor_impl(
+        data, state, inherited_normal, value_texture_index, backscatter);
     base.evaluate(data, state, inherited_normal, factor * inherited_weight);
 }
 
@@ -5880,7 +6123,8 @@ BSDF_API void measured_factor_pdf(
     State *state,
     const float3 &inherited_normal,
     const unsigned value_texture_index,
-    const BSDF &base)
+    const BSDF &base,
+    const backscatter_modifier backscatter)
 {
     // no need to early out if base does not have allowed components, as
     // we don't add any additional code here anyways.
@@ -5892,9 +6136,10 @@ BSDF_API void measured_factor_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal0,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const unsigned value_texture_index,
-    const BSDF &base)
+    const BSDF &base,
+    const backscatter_modifier backscatter)
 {
     if (!has_allowed_components(data, base)) {
         absorb(data);
@@ -5902,7 +6147,7 @@ BSDF_API void measured_factor_auxiliary(
     }
 
     float3 inherited_normal = state->geometry_normal();
-    
+
     float3 shading_normal, geometry_normal;
     get_oriented_normals(
         shading_normal, geometry_normal, inherited_normal, state->geometry_normal(), data->k1);
@@ -5915,7 +6160,7 @@ BSDF_API void measured_factor_auxiliary(
     }
 
     // assuming nk1 == nk2, -> h = n
-    float3 factor = measured_factor(
+    color_sample factor = measured_factor(
         state, shading_normal, data->k1, shading_normal, value_texture_index);
     base.auxiliary(data, state, inherited_normal, factor * inherited_weight);
 }
@@ -5933,8 +6178,8 @@ BSDF_API void coat_absorption_factor_sample(
     BSDF_sample_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &ior,
-    const float3 &absorption_coefficient,
+    const color_sample &ior,
+    const color_sample &absorption_coefficient,
     const float thickness,
     const BSDF &base)
 {
@@ -5954,9 +6199,9 @@ BSDF_API void coat_absorption_factor_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    const float3 &ior,
-    const float3 &absorption_coefficient,
+    const color_sample &inherited_weight,
+    const color_sample &ior,
+    const color_sample &absorption_coefficient,
     const float thickness,
     const BSDF &base)
 {
@@ -5965,7 +6210,7 @@ BSDF_API void coat_absorption_factor_evaluate(
         return;
     }
 
-    const float3 w = coat_absorption(data, state, ior, absorption_coefficient, thickness, inherited_normal, data->k2);
+    const color_sample w = coat_absorption(data, state, ior, absorption_coefficient, thickness, inherited_normal, data->k2);
     base.evaluate(data, state, inherited_normal, inherited_weight * w);
 }
 
@@ -5973,8 +6218,8 @@ BSDF_API void coat_absorption_factor_pdf(
     BSDF_pdf_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &ior,
-    const float3 &absorption_coefficient,
+    const color_sample &ior,
+    const color_sample &absorption_coefficient,
     const float thickness,
     const BSDF &base)
 {
@@ -5988,9 +6233,9 @@ BSDF_API void coat_absorption_factor_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    const float3 &ior,
-    const float3 &absorption_coefficient,
+    const color_sample &inherited_weight,
+    const color_sample &ior,
+    const color_sample &absorption_coefficient,
     const float thickness,
     const BSDF &base)
 {
@@ -5999,7 +6244,7 @@ BSDF_API void coat_absorption_factor_auxiliary(
         return;
     }
 
-    const float3 w = coat_absorption(data, state, ior, absorption_coefficient, thickness, inherited_normal, data->k1);
+    const color_sample w = coat_absorption(data, state, ior, absorption_coefficient, thickness, inherited_normal, data->k1);
     base.auxiliary(data, state, inherited_normal, inherited_weight * w);
 }
 
@@ -6008,7 +6253,7 @@ BSDF_API void coat_absorption_factor_auxiliary(
 //     float   weight,
 //     bsdf    layer,
 //     bsdf    base   = bsdf(),
-//     float3  normal = state->normal()
+//     float3  normal = state::normal()
 // )
 /////////////////////////////////////////////////////////////////////
 
@@ -6066,7 +6311,7 @@ BSDF_API void weighted_layer_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     float weight,
     const BSDF &layer,
     const BSDF &base,
@@ -6074,19 +6319,19 @@ BSDF_API void weighted_layer_evaluate(
 {
     weight = math::saturate(weight);
 
-    float prob_layer = adapt_layer_prob_for_allowed_mode(data, layer, base, weight);
-    if (prob_layer < 0.0f) {
+    pdf_sample prob_layer = adapt_layer_prob_for_allowed_mode(data, layer, base, make<pdf_sample>(weight));
+    if (use_probability(prob_layer) < 0.0f) {
         absorb(data);
         return;
     }
 
-    float pdf = 0.0f;
-    if (prob_layer > 0.0f) {
+    pdf_sample pdf = make_pdf_sample(0.0f);
+    if (use_probability(prob_layer) > 0.0f) {
         const float3 adapted_normal = state->adapt_normal(normal);
         layer.evaluate(data, state, adapted_normal, weight * inherited_weight);
         pdf = prob_layer * data->pdf;
     }
-    if (prob_layer < 1.0f) {
+    if (use_probability(prob_layer) < 1.0f) {
         base.evaluate(data, state, inherited_normal, (1.0f - weight) * inherited_weight);
         pdf += (1.0f - prob_layer) * data->pdf;
     }
@@ -6104,19 +6349,19 @@ BSDF_API void weighted_layer_pdf(
 {
     weight = math::saturate(weight);
 
-    float prob_layer = adapt_layer_prob_for_allowed_mode(data, layer, base, weight);
-    if (prob_layer < 0.0f) {
+    pdf_sample prob_layer = adapt_layer_prob_for_allowed_mode(data, layer, base, make<pdf_sample>(weight));
+    if (use_probability(prob_layer) < 0.0f) {
         absorb(data);
         return;
     }
 
-    float pdf = 0.0f;
-    if (prob_layer > 0.0f) {
+    pdf_sample pdf = make_pdf_sample(0.0f);
+    if (use_probability(prob_layer) > 0.0f) {
         const float3 adapted_normal = state->adapt_normal(normal);
         layer.pdf(data, state, adapted_normal);
         pdf += prob_layer * data->pdf;
     }
-    if (prob_layer < 1.0f) {
+    if (use_probability(prob_layer) < 1.0f) {
         base.pdf(data, state, inherited_normal);
         pdf += (1.0f - prob_layer) * data->pdf;
     }
@@ -6127,7 +6372,7 @@ BSDF_API void weighted_layer_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     float weight,
     const BSDF &layer,
     const BSDF &base,
@@ -6151,7 +6396,7 @@ BSDF_API void weighted_layer_auxiliary(
 //     color   weight,
 //     bsdf    layer,
 //     bsdf    base   = bsdf(),
-//     float3  normal = state->normal()
+//     float3  normal = state::normal()
 // )
 /////////////////////////////////////////////////////////////////////
 
@@ -6159,20 +6404,20 @@ BSDF_API void color_weighted_layer_sample(
     BSDF_sample_data *data,
     State *state,
     const float3 &inherited_normal,
-    float3 weight,
+    color_sample weight,
     const BSDF &layer,
     const BSDF &base,
     const float3 &normal)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
-    weight = math::saturate(weight);
+    weight = saturate(weight);
 
-    float prob_layer = math::average(weight);
+    pdf_sample prob_layer = create_probability(weight);
     float prob_selected_inv;
     bool sample_layer;
     if (!decide_sampling_and_update_random_number(
-            data, data->xi.z < prob_layer, layer, base,
+            data, data->xi.z < use_probability(prob_layer), layer, base,
             &prob_layer, &prob_selected_inv, &sample_layer)) {
         absorb(data);
         return;
@@ -6186,12 +6431,12 @@ BSDF_API void color_weighted_layer_sample(
     if (sample_layer)
         data->bsdf_over_pdf *= weight * prob_selected_inv;
     else
-        data->bsdf_over_pdf *= (make_float3(1.0f, 1.0f, 1.0f) - weight) * prob_selected_inv;
+        data->bsdf_over_pdf *= (make<color_sample>(1.0f) - weight) * prob_selected_inv;
 
     if (!BSDF::calc_pdf_in_sample())
         return;
 
-    if ((sample_layer && prob_layer < 1.0f) | (!sample_layer && prob_layer > 0.0f)) {
+    if ((sample_layer && use_probability(prob_layer) < 1.0f) | (!sample_layer && use_probability(prob_layer) > 0.0f)) {
         BSDF_pdf_data pdf_data = to_pdf_data(data);
 
         // calculate the PDF of the BSDF which was not selected
@@ -6199,9 +6444,9 @@ BSDF_API void color_weighted_layer_sample(
             sample_layer, &pdf_data, state, base, inherited_normal, layer, adapted_normal);
 
         if (sample_layer)
-            data->pdf = pdf_data.pdf * (1.0f - prob_layer) + data->pdf * prob_layer;
+            data->pdf = pdf_data.pdf * (make<pdf_sample>(1.0f) - prob_layer) + data->pdf * prob_layer;
         else
-            data->pdf = pdf_data.pdf * prob_layer + data->pdf * (1.0f - prob_layer);
+            data->pdf = pdf_data.pdf * prob_layer + data->pdf * (make<pdf_sample>(1.0f) - prob_layer);
     }
 }
 
@@ -6209,57 +6454,57 @@ BSDF_API void color_weighted_layer_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    float3 weight,
+    const color_sample &inherited_weight,
+    color_sample weight,
     const BSDF &layer,
     const BSDF &base,
     const float3 &normal)
 {
-    weight = math::saturate(weight);
+    weight = saturate(weight);
 
-    float prob_layer = math::average(weight);
+    pdf_sample prob_layer = create_probability(weight);
     prob_layer = adapt_layer_prob_for_allowed_mode(data, layer, base, prob_layer);
-    if (prob_layer < 0.0f) {
+    if (use_probability(prob_layer) < 0.0f) {
         absorb(data);
         return;
     }
 
-    float pdf = 0.0f;
-    if (prob_layer > 0.0f) {
+    pdf_sample pdf = make_pdf_sample(0.0f);
+    if (use_probability(prob_layer) > 0.0f) {
         const float3 adapted_normal = state->adapt_normal(normal);
         layer.evaluate(data, state, adapted_normal, weight * inherited_weight);
         pdf = prob_layer * data->pdf;
     }
-    if (prob_layer < 1.0f) {
+    if (use_probability(prob_layer) < 1.0f) {
         base.evaluate(data, state, inherited_normal, (1.0f - weight) * inherited_weight);
         pdf += (1.0f - prob_layer) * data->pdf;
     }
-    data->pdf  = pdf;
+    data->pdf = pdf;
 }
 
 BSDF_API void color_weighted_layer_pdf(
     BSDF_pdf_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &weight,
+    const color_sample &weight,
     const BSDF &layer,
     const BSDF &base,
     const float3 &normal)
 {
-    float prob_layer = math::average(math::saturate(weight));
+    pdf_sample prob_layer = create_probability(saturate(weight));
     prob_layer = adapt_layer_prob_for_allowed_mode(data, layer, base, prob_layer);
-    if (prob_layer < 0.0f) {
+    if (use_probability(prob_layer) < 0.0f) {
         absorb(data);
         return;
     }
 
-    float pdf = 0.0f;
-    if (prob_layer > 0.0f) {
+    pdf_sample pdf = make_pdf_sample(0.0f);
+    if (use_probability(prob_layer) > 0.0f) {
         const float3 adapted_normal = state->adapt_normal(normal);
         layer.pdf(data, state, adapted_normal);
         pdf = prob_layer * data->pdf;
     }
-    if (prob_layer < 1.0f) {
+    if (use_probability(prob_layer) < 1.0f) {
         base.pdf(data, state, inherited_normal);
         pdf += (1.0f - prob_layer) * data->pdf;
     }
@@ -6270,15 +6515,15 @@ BSDF_API void color_weighted_layer_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    float3 weight,
+    const color_sample &inherited_weight,
+    color_sample weight,
     const BSDF &layer,
     const BSDF &base,
     const float3 &normal)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
-    weight = math::saturate(weight);
+    weight = saturate(weight);
 
     if (has_allowed_components(data, layer)) {
         layer.auxiliary(data, state, adapted_normal, weight * inherited_weight);
@@ -6287,7 +6532,6 @@ BSDF_API void color_weighted_layer_auxiliary(
         base.auxiliary(data, state, inherited_normal, (1.0f - weight) * inherited_weight);
     }
 }
-
 
 //
 // Common helper code for directionally dependent layering where the weight of the upper layer is
@@ -6309,7 +6553,8 @@ BSDF_INLINE void curve_layer_sample(
     const BSDF &layer,
     const BSDF &base,
     const float3 &layer_normal_unoriented,
-    const float3 &base_normal)
+    const float3 &base_normal,
+    const backscatter_modifier backscatter)
 {
     weight = math::saturate(weight);
 
@@ -6318,15 +6563,15 @@ BSDF_INLINE void curve_layer_sample(
         layer_normal, geometry_normal, layer_normal_unoriented, state->geometry_normal(), data->k1);
 
     const float nk1 = math::saturate(math::dot(data->k1, layer_normal));
-    const float estimated_curve_factor = c.estimate(nk1);
+    const pdf_sample estimated_curve_factor = c.estimate(nk1);
 
     const bool no_base = base.is_black();
 
-    float prob_layer = no_base ? 1.0f : estimated_curve_factor * weight;
+    pdf_sample prob_layer = no_base ? make<pdf_sample>(1.0f) : estimated_curve_factor * weight;
     float prob_selected_inv;
     bool sample_layer;
     if (!decide_sampling_and_update_random_number(
-            data, no_base || (data->xi.z < prob_layer), layer, base,
+            data, no_base || (data->xi.z < use_probability(prob_layer)), layer, base,
             &prob_layer, &prob_selected_inv, &sample_layer)) {
         absorb(data);
         return;
@@ -6342,28 +6587,30 @@ BSDF_INLINE void curve_layer_sample(
     const float2 ior = c.ior();
     const bool no_refraction = (ior.x < 0.0f) || !transmission || get_material_thin_walled(state);
 
+    const float3 k1 = apply_backscatter(data->k1, backscatter, !transmission, layer_normal, math::dot(data->k1, layer_normal), true);
+
     const float nk2 = math::abs(math::dot(data->k2, layer_normal));
     const float3 h =
         compute_half_vector(
-            data->k1, data->k2, layer_normal, ior, nk2,
+            k1, data->k2, layer_normal, ior, nk2,
             transmission, no_refraction);
 
-    const float kh = math::abs(math::dot(data->k1, h));
+    const float kh = math::abs(math::dot(k1, h));
 
     if (sample_layer) {
-        const float3 curve_factor = c.eval(kh);
-        data->bsdf_over_pdf *= curve_factor * weight * prob_selected_inv;
+        const color_sample curve_factor = c.eval(kh);
+        data->bsdf_over_pdf *= curve_factor * (weight * prob_selected_inv);
     } else {
         const float nk2_refl = no_refraction ? nk2 : (2.0f * kh * math::dot(layer_normal, h) - nk1);
-        const float3 w_base =
-            make_float3(1.0f, 1.0f, 1.0f) - weight * math::max(c.eval(nk1), c.eval(nk2_refl));
+        const color_sample w_base =
+            make<color_sample>(1.0f) - weight * max(c.eval(nk1), c.eval(nk2_refl));
         data->bsdf_over_pdf *= w_base * prob_selected_inv;
     }
 
     if (!BSDF::calc_pdf_in_sample())
         return;
 
-    if ((sample_layer & (prob_layer < 1.0f)) | (!sample_layer & (prob_layer > 0.0f))) {
+    if ((sample_layer & (use_probability(prob_layer) < 1.0f)) | (!sample_layer & (use_probability(prob_layer) > 0.0f))) {
         BSDF_pdf_data pdf_data = to_pdf_data(data);
 
         // calculate the PDF of the BSDF which was not selected
@@ -6387,7 +6634,8 @@ BSDF_INLINE void curve_layer_evaluate(
     const BSDF &base,
     const float3 &layer_normal_unoriented,
     const float3 &base_normal,
-    const float3 &inherited_weight)
+    const color_sample &inherited_weight,
+    const backscatter_modifier backscatter)
 {
     weight = math::saturate(weight);
 
@@ -6397,9 +6645,9 @@ BSDF_INLINE void curve_layer_evaluate(
 
     const float nk1 = math::saturate(math::dot(data->k1, layer_normal));
 
-    float prob_layer = weight * c.estimate(nk1);
+    pdf_sample prob_layer = weight * c.estimate(nk1);
     prob_layer = adapt_layer_prob_for_allowed_mode(data, layer, base, prob_layer);
-    if (prob_layer < 0.0f) {
+    if (use_probability(prob_layer) < 0.0f) {
         absorb(data);
         return;
     }
@@ -6408,29 +6656,31 @@ BSDF_INLINE void curve_layer_evaluate(
     const float2 ior = c.ior();
     const bool no_refraction = (ior.x < 0.0f) || !transmission || get_material_thin_walled(state);
 
+    const float3 k1 = apply_backscatter(data->k1, backscatter, !transmission, layer_normal, math::dot(data->k1, layer_normal), true);
+
     const float nk2 = math::abs(math::dot(data->k2, layer_normal));
     const float3 h =
         compute_half_vector(
-            data->k1, data->k2, layer_normal, ior, nk2,
+            k1, data->k2, layer_normal, ior, nk2,
             transmission, no_refraction);
 
-    const float kh = math::abs(math::dot(data->k1, h));
+    const float kh = math::abs(math::dot(k1, h));
 
-    float pdf = 0.0f;
+    pdf_sample pdf = make_pdf_sample(0.0f);
     Df_flags allowed_mode = get_allowed_scatter_mode(data);
     if (layer.has_allowed_components(allowed_mode)) {
-        const float3 curve_factor = c.eval(kh);
+        const color_sample curve_factor = c.eval(kh);
         layer.evaluate(
             data, state, layer_normal_unoriented, weight * curve_factor * inherited_weight);
         pdf = prob_layer * data->pdf;
     }
     if (base.has_allowed_components(allowed_mode)) {
-        const float3 cf1 = c.eval(nk1);
+        const color_sample cf1 = c.eval(nk1);
         const float nk2_refl = no_refraction ? nk2 : (2.0f * kh * math::dot(layer_normal, h) - nk1);
-        const float3 cf2 = c.eval(nk2_refl);
+        const color_sample cf2 = c.eval(nk2_refl);
 
         base.evaluate(
-            data, state, base_normal, (1.0f - weight * math::max(cf1, cf2)) * inherited_weight);
+            data, state, base_normal, (1.0f - weight * max(cf1, cf2)) * inherited_weight);
         pdf += (1.0f - prob_layer) * data->pdf;
     }
     data->pdf = pdf;
@@ -6446,17 +6696,17 @@ BSDF_INLINE void curve_layer_auxiliary(
     const BSDF &base,
     const float3 &layer_normal_unoriented,
     const float3 &base_normal,
-    const float3 &inherited_weight)
+    const color_sample &inherited_weight)
 {
     weight = math::saturate(weight);
 
     float3 layer_normal, geometry_normal;
     get_oriented_normals(
         layer_normal, geometry_normal, layer_normal_unoriented, state->geometry_normal(), data->k1);
-    
+
     // assuming perfect reflection
     const float nk1 = math::saturate(math::dot(data->k1, layer_normal));
-    const float3 curve_factor = weight * c.eval(nk1);
+    const color_sample curve_factor = weight * c.eval(nk1);
 
     Df_flags allowed_mode = get_allowed_scatter_mode(data);
     if (layer.has_allowed_components(allowed_mode)) {
@@ -6485,19 +6735,19 @@ BSDF_INLINE void curve_layer_pdf(
         layer_normal, geometry_normal, layer_normal_unoriented, state->geometry_normal(), data->k1);
 
     const float nk1 = math::saturate(math::dot(data->k1, layer_normal));
-    float prob_layer = weight * c.estimate(nk1);
+    pdf_sample prob_layer = weight * c.estimate(nk1);
     prob_layer = adapt_layer_prob_for_allowed_mode(data, layer, base, prob_layer);
-    if (prob_layer < 0.0f) {
+    if (use_probability(prob_layer) < 0.0f) {
         absorb(data);
         return;
     }
 
-    float pdf = 0.0f;
-    if (prob_layer > 0.0f) {
+    pdf_sample pdf = make_pdf_sample(0.0f);
+    if (use_probability(prob_layer) > 0.0f) {
         layer.pdf(data, state, layer_normal_unoriented);
         pdf = prob_layer * data->pdf;
     }
-    if (prob_layer < 1.0f) {
+    if (use_probability(prob_layer) < 1.0f) {
         base.pdf(data, state, base_normal);
         pdf += (1.0f - prob_layer) * data->pdf;
     }
@@ -6510,28 +6760,31 @@ BSDF_INLINE void curve_layer_pdf(
 //     float   weight = 1.0,
 //     bsdf    layer  = bsdf(),
 //     bsdf    base   = bsdf(),
-//     float3  normal = state->normal()
+//     float3  normal = state::normal(),
+//     backscatter_modifier backscatter = backscatter_none
 // )
 /////////////////////////////////////////////////////////////////////
 
 class Fresnel_curve_eval {
 public:
+    BSDF_INLINE
     Fresnel_curve_eval(const float2 &ior) :
         m_eta(ior.y / ior.x), m_ior(ior) {
     }
 
-    float estimate(const float cosine) const {
-        return ior_fresnel(m_eta, cosine);
+    BSDF_INLINE pdf_sample estimate(const float cosine) const {
+        return make<pdf_sample>(ior_fresnel(m_eta, cosine));
     }
 
-    float3 eval(const float cosine) const {
+    BSDF_INLINE color_sample eval(const float cosine) const {
         const float f = ior_fresnel(m_eta, cosine);
-        return make_float3(f, f, f);
+        return make<color_sample>(f);
     }
 
-    float2 ior() const {
+    BSDF_INLINE float2 ior() const {
         return m_ior;
     }
+
 private:
     float m_eta;
     float2 m_ior;
@@ -6545,26 +6798,28 @@ BSDF_API void fresnel_layer_sample(
     const float weight,
     const BSDF &layer,
     const BSDF &base,
-    const float3 &normal)
+    const float3 &normal,
+    const backscatter_modifier backscatter)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
     const float2 mat_ior = process_ior_fresnel_layer(data, state, ior);
     const Fresnel_curve_eval c(mat_ior);
     curve_layer_sample(
-        c, data, state, weight, layer, base, adapted_normal, inherited_normal);
+        c, data, state, weight, layer, base, adapted_normal, inherited_normal, backscatter);
 }
 
 BSDF_API void fresnel_layer_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const float ior,
     const float weight,
     const BSDF &layer,
     const BSDF &base,
-    const float3 &normal)
+    const float3 &normal,
+    const backscatter_modifier backscatter)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
@@ -6572,7 +6827,7 @@ BSDF_API void fresnel_layer_evaluate(
     const Fresnel_curve_eval c(mat_ior);
     curve_layer_evaluate(
         c, data, state, weight, layer, base,
-        adapted_normal, inherited_normal, inherited_weight);
+        adapted_normal, inherited_normal, inherited_weight, backscatter);
 }
 
 BSDF_API void fresnel_layer_pdf(
@@ -6583,7 +6838,8 @@ BSDF_API void fresnel_layer_pdf(
     const float weight,
     const BSDF &layer,
     const BSDF &base,
-    const float3 &normal)
+    const float3 &normal,
+    const backscatter_modifier backscatter)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
@@ -6597,19 +6853,20 @@ BSDF_API void fresnel_layer_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const float ior,
     const float weight,
     const BSDF &layer,
     const BSDF &base,
-    const float3 &normal)
+    const float3 &normal,
+    const backscatter_modifier backscatter)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
     const float2 mat_ior = process_ior_fresnel_layer(data, state, ior);
     const Fresnel_curve_eval c(mat_ior);
     curve_layer_auxiliary(
-        c, data, state, weight, layer, base, 
+        c, data, state, weight, layer, base,
         adapted_normal, inherited_normal, inherited_weight);
 }
 
@@ -6619,44 +6876,62 @@ BSDF_API void fresnel_layer_auxiliary(
 //     float coating_thickness,
 //     color coating_ior,
 //     bsdf base = fresnel_layer(
-//         float   ior,
-//         float   weight = 1.0,
-//         bsdf    layer  = bsdf(),
-//         bsdf    base   = bsdf(),
-//         float3  normal = state->normal()
+//         float                ior,
+//         float                weight      = 1.0,
+//         bsdf                 layer       = bsdf(),
+//         bsdf                 base        = bsdf(),
+//         float3               normal      = state::normal(),
+//         backscatter_modifier backscatter = backscatter_none
 //     )
 // )
 /////////////////////////////////////////////////////////////////////
 
 class Thin_film_fresnel_curve_eval {
 public:
-    Thin_film_fresnel_curve_eval(const float coating_thickness, const float3 coating_ior, const float2 &ior) :
+    BSDF_INLINE
+    Thin_film_fresnel_curve_eval(State *state, const float coating_thickness, const color_sample coating_ior, const float2 &ior) :
+#ifdef MDL_DF_SPECTRAL_ENABLE
+        m_lambda(state->get_wavelengths()),
+#endif
         m_coating_thickness(coating_thickness), m_coating_ior(coating_ior), m_ior(ior) {
     }
 
-    float estimate(const float cosine) const {
-        if (m_coating_thickness <= 0.0f || math::average(m_coating_ior) == 1.0f) {
+    BSDF_INLINE pdf_sample estimate(const float cosine) const {
+        if (m_coating_thickness <= 0.0f || average(m_coating_ior) == 1.0f) {
             // ignore thin_film
-            return ior_fresnel(m_ior.y / m_ior.x, cosine);
+            return make<pdf_sample>(ior_fresnel(m_ior.y / m_ior.x, cosine));
         }
-        return math::luminance(eval(cosine));
+        return create_probability(eval(cosine));
     }
 
-    float3 eval(const float cosine) const {
-        if (m_coating_thickness <= 0.0f || math::average(m_coating_ior) == 1.0f) {
+    BSDF_INLINE color_sample eval(const float cosine) const {
+        if (m_coating_thickness <= 0.0f || average(m_coating_ior) == 1.0f) {
             // ignore thin_film
             const float f = ior_fresnel(m_ior.y / m_ior.x, cosine);
-            return make_float3(f, f, f);
+            return make<color_sample>(f);
         }
-        return thin_film_factor(m_coating_thickness, m_coating_ior, make<float3>(m_ior.y), make<float3>(0.0f), make<float3>(m_ior.x), cosine);
+        return thin_film_factor(
+#ifdef MDL_DF_SPECTRAL_ENABLE
+                m_lambda,
+#endif
+            m_coating_thickness,
+            m_coating_ior,
+            make<color_sample>(m_ior.y),
+            make<color_sample>(0.0f),
+            make<color_sample>(m_ior.x),
+            cosine);
      }
 
-    float2 ior() const {
+    BSDF_INLINE float2 ior() const {
         return m_ior;
     }
+
 private:
+#ifdef MDL_DF_SPECTRAL_ENABLE
+    color_sample m_lambda;
+#endif
     float m_coating_thickness;
-    float3 m_coating_ior;
+    color_sample m_coating_ior;
     float2 m_ior;
 };
 
@@ -6669,37 +6944,39 @@ BSDF_API void thin_film_fresnel_layer_sample(
     const BSDF &layer,
     const BSDF &base,
     const float3 &normal,
+    const backscatter_modifier backscatter,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
     const float2 mat_ior = process_ior_fresnel_layer(data, state, ior);
-    const Thin_film_fresnel_curve_eval c(coating_thickness, coating_ior, mat_ior);
+    const Thin_film_fresnel_curve_eval c(state, coating_thickness, coating_ior, mat_ior);
     curve_layer_sample(
-        c, data, state, weight, layer, base, adapted_normal, inherited_normal);
+        c, data, state, weight, layer, base, adapted_normal, inherited_normal, backscatter);
 }
 
 BSDF_API void thin_film_fresnel_layer_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const float ior,
     const float weight,
     const BSDF &layer,
     const BSDF &base,
     const float3 &normal,
+    const backscatter_modifier backscatter,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
     const float2 mat_ior = process_ior_fresnel_layer(data, state, ior);
-    const Thin_film_fresnel_curve_eval c(coating_thickness, coating_ior, mat_ior);
+    const Thin_film_fresnel_curve_eval c(state, coating_thickness, coating_ior, mat_ior);
     curve_layer_evaluate(
         c, data, state, weight, layer, base,
-        adapted_normal, inherited_normal, inherited_weight);
+        adapted_normal, inherited_normal, inherited_weight, backscatter);
 }
 
 BSDF_API void thin_film_fresnel_layer_pdf(
@@ -6711,13 +6988,14 @@ BSDF_API void thin_film_fresnel_layer_pdf(
     const BSDF &layer,
     const BSDF &base,
     const float3 &normal,
+    const backscatter_modifier backscatter,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
     const float2 mat_ior = process_ior_fresnel_layer(data, state, ior);
-    const Thin_film_fresnel_curve_eval c(coating_thickness, coating_ior, mat_ior);
+    const Thin_film_fresnel_curve_eval c(state, coating_thickness, coating_ior, mat_ior);
     curve_layer_pdf(
         c, data, state, weight, layer, base, adapted_normal, inherited_normal);
 }
@@ -6726,57 +7004,58 @@ BSDF_API void thin_film_fresnel_layer_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const float ior,
     const float weight,
     const BSDF &layer,
     const BSDF &base,
     const float3 &normal,
+    const backscatter_modifier backscatter,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
     const float2 mat_ior = process_ior_fresnel_layer(data, state, ior);
-    const Thin_film_fresnel_curve_eval c(coating_thickness, coating_ior, mat_ior);
+    const Thin_film_fresnel_curve_eval c(state, coating_thickness, coating_ior, mat_ior);
     curve_layer_auxiliary(
-        c, data, state, weight, layer, base, 
+        c, data, state, weight, layer, base,
         adapted_normal, inherited_normal, inherited_weight);
 }
 
 /////////////////////////////////////////////////////////////////////
 // bsdf color_fresnel_layer(
-//     color   ior,
-//     color   weight = 1.0,
-//     bsdf    layer  = bsdf(),
-//     bsdf    base   = bsdf(),
-//     float3  normal = state->normal()
+//     color                ior,
+//     color                weight      = 1.0,
+//     bsdf                 layer       = bsdf(),
+//     bsdf                 base        = bsdf(),
+//     float3               normal      = state::normal(),
+//     backscatter_modifier backscatter = backscatter_none
 // )
 /////////////////////////////////////////////////////////////////////
 
 class Color_fresnel_curve_eval {
 public:
-    Color_fresnel_curve_eval(const float3 &eta, const float3 &weight, const float2 &ior) :
-        m_eta(eta), m_weight(math::saturate(weight)), m_ior(ior) {
+    BSDF_INLINE
+    Color_fresnel_curve_eval(const color_sample &eta, const color_sample &weight, const float2 &ior) :
+        m_eta(eta), m_weight(saturate(weight)), m_ior(ior) {
     }
 
-    float estimate(const float cosine) const {
-        return math::luminance(eval(cosine));
+    BSDF_INLINE pdf_sample estimate(const float cosine) const {
+        return create_probability(eval(cosine));
     }
 
-    float3 eval(const float cosine) const {
-        return m_weight * make_float3(
-            ior_fresnel(m_eta.x, cosine),
-            ior_fresnel(m_eta.y, cosine),
-            ior_fresnel(m_eta.z, cosine));
+    BSDF_INLINE color_sample eval(const float cosine) const {
+        return m_weight * ior_fresnel(m_eta, cosine);
     }
-    float2 ior() const {
+
+    BSDF_INLINE float2 ior() const {
         return m_ior;
     }
 
 private:
-    float3 m_eta;
-    float3 m_weight;
+    color_sample m_eta;
+    color_sample m_weight;
     float2 m_ior;
 };
 
@@ -6784,30 +7063,32 @@ BSDF_API void color_fresnel_layer_sample(
     BSDF_sample_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &ior,
-    const float3 &weight,
+    const color_sample &ior,
+    const color_sample &weight,
     const BSDF &layer,
     const BSDF &base,
-    const float3 &normal)
+    const float3 &normal,
+    const backscatter_modifier backscatter)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
     const Color_fresnel_ior mat_ior = process_ior_color_fresnel_layer(data, state, ior);
     const Color_fresnel_curve_eval c(mat_ior.eta, weight, mat_ior.ior);
     curve_layer_sample(
-        c, data, state, 1.0f, layer, base, adapted_normal, inherited_normal);
+        c, data, state, 1.0f, layer, base, adapted_normal, inherited_normal, backscatter);
 }
 
 BSDF_API void color_fresnel_layer_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    const float3 &ior,
-    const float3 &weight,
+    const color_sample &inherited_weight,
+    const color_sample &ior,
+    const color_sample &weight,
     const BSDF &layer,
     const BSDF &base,
-    const float3 &normal)
+    const float3 &normal,
+    const backscatter_modifier backscatter)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
@@ -6815,15 +7096,15 @@ BSDF_API void color_fresnel_layer_evaluate(
     const Color_fresnel_curve_eval c(mat_ior.eta, weight, mat_ior.ior);
     curve_layer_evaluate(
         c, data, state, 1.0f, layer, base,
-        adapted_normal, inherited_normal, inherited_weight);
+        adapted_normal, inherited_normal, inherited_weight, backscatter);
 }
 
 BSDF_API void color_fresnel_layer_pdf(
     BSDF_pdf_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &ior,
-    const float3 &weight,
+    const color_sample &ior,
+    const color_sample &weight,
     const BSDF &layer,
     const BSDF &base,
     const float3 &normal)
@@ -6840,19 +7121,20 @@ BSDF_API void color_fresnel_layer_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    const float3 &ior,
-    const float3 &weight,
+    const color_sample &inherited_weight,
+    const color_sample &ior,
+    const color_sample &weight,
     const BSDF &layer,
     const BSDF &base,
-    const float3 &normal)
+    const float3 &normal,
+    const backscatter_modifier backscatter)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
     const Color_fresnel_ior mat_ior = process_ior_color_fresnel_layer(data, state, ior);
     const Color_fresnel_curve_eval c(mat_ior.eta, weight, mat_ior.ior);
     curve_layer_auxiliary(
-        c, data, state, 1.0f, layer, base, 
+        c, data, state, 1.0f, layer, base,
         adapted_normal, inherited_normal, inherited_weight);
 }
 
@@ -6861,45 +7143,59 @@ BSDF_API void color_fresnel_layer_auxiliary(
 //     float coating_thickness,
 //     color coating_ior,
 //     base = color_fresnel_layer(
-//         color   ior,
-//         color   weight = 1.0,
-//         bsdf    layer  = bsdf(),
-//         bsdf    base   = bsdf(),
-//         float3  normal = state->normal()
+//         color                ior,
+//         color                weight      = 1.0,
+//         bsdf                 layer       = bsdf(),
+//         bsdf                 base        = bsdf(),
+//         float3               normal      = state::normal(),
+//         backscatter_modifier backscatter = backscatter_none
 //     )
 // )
 /////////////////////////////////////////////////////////////////////
 
 class Thin_film_color_fresnel_curve_eval {
 public:
+    BSDF_INLINE
     Thin_film_color_fresnel_curve_eval(
-        const float3 &weight,
+        State *state,
+        const color_sample &weight,
         const float coating_thickness,
-        const float3 &coating_ior,
-        const float3 &ior1,
-        const float3 &ior2,
+        const color_sample &coating_ior,
+        const color_sample &ior1,
+        const color_sample &ior2,
         const float2 &ior) :
-        m_weight(math::saturate(weight)), m_coating_thickness(coating_thickness), m_coating_ior(coating_ior),
+#ifdef MDL_DF_SPECTRAL_ENABLE
+        m_lambda(state->get_wavelengths()),
+#endif
+        m_weight(saturate(weight)), m_coating_thickness(coating_thickness), m_coating_ior(coating_ior),
         m_base_ior(ior2), m_incoming_ior(ior1), m_ior(ior) {
     }
 
-    float estimate(const float cosine) const {
-        return math::luminance(eval(cosine));
+    BSDF_INLINE pdf_sample estimate(const float cosine) const {
+        return create_probability(eval(cosine));
     }
 
-    float3 eval(const float cosine) const {
-        return m_weight * thin_film_factor(m_coating_thickness, m_coating_ior, m_base_ior, make<float3>(0.0f), m_incoming_ior, cosine);
+    BSDF_INLINE color_sample eval(const float cosine) const {
+        return m_weight * thin_film_factor(
+#ifdef MDL_DF_SPECTRAL_ENABLE
+                m_lambda,
+#endif
+                m_coating_thickness, m_coating_ior, m_base_ior, make<color_sample>(0.0f), m_incoming_ior, cosine);
     }
-    float2 ior() const {
+
+    BSDF_INLINE float2 ior() const {
         return m_ior;
     }
 
 private:
+#ifdef MDL_DF_SPECTRAL_ENABLE
+    color_sample m_lambda;
+#endif
     float m_coating_thickness;
-    float3 m_coating_ior;
-    float3 m_base_ior;
-    float3 m_incoming_ior;
-    float3 m_weight;
+    color_sample m_coating_ior;
+    color_sample m_base_ior;
+    color_sample m_incoming_ior;
+    color_sample m_weight;
     float2 m_ior;
 };
 
@@ -6907,60 +7203,63 @@ BSDF_API void thin_film_color_fresnel_layer_sample(
     BSDF_sample_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &ior,
-    const float3 &weight,
+    const color_sample &ior,
+    const color_sample &weight,
     const BSDF &layer,
     const BSDF &base,
     const float3 &normal,
+    const backscatter_modifier backscatter,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
     const Thin_film_color_fresnel_ior mat_ior = process_ior_thin_film_color_fresnel_layer(data, state, ior);
-    const Thin_film_color_fresnel_curve_eval c(weight, coating_thickness, coating_ior, mat_ior.ior1, mat_ior.ior2, mat_ior.ior);
+    const Thin_film_color_fresnel_curve_eval c(state, weight, coating_thickness, coating_ior, mat_ior.ior1, mat_ior.ior2, mat_ior.ior);
     curve_layer_sample(
-        c, data, state, 1.0f, layer, base, adapted_normal, inherited_normal);
+        c, data, state, 1.0f, layer, base, adapted_normal, inherited_normal, backscatter);
 }
 
 BSDF_API void thin_film_color_fresnel_layer_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    const float3 &ior,
-    const float3 &weight,
+    const color_sample &inherited_weight,
+    const color_sample &ior,
+    const color_sample &weight,
     const BSDF &layer,
     const BSDF &base,
     const float3 &normal,
+    const backscatter_modifier backscatter,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
     const Thin_film_color_fresnel_ior mat_ior = process_ior_thin_film_color_fresnel_layer(data, state, ior);
-    const Thin_film_color_fresnel_curve_eval c(weight, coating_thickness, coating_ior, mat_ior.ior1, mat_ior.ior2, mat_ior.ior);
+    const Thin_film_color_fresnel_curve_eval c(state, weight, coating_thickness, coating_ior, mat_ior.ior1, mat_ior.ior2, mat_ior.ior);
     curve_layer_evaluate(
         c, data, state, 1.0f, layer, base,
-        adapted_normal, inherited_normal, inherited_weight);
+        adapted_normal, inherited_normal, inherited_weight, backscatter);
 }
 
 BSDF_API void thin_film_color_fresnel_layer_pdf(
     BSDF_pdf_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &ior,
-    const float3 &weight,
+    const color_sample &ior,
+    const color_sample &weight,
     const BSDF &layer,
     const BSDF &base,
     const float3 &normal,
+    const backscatter_modifier backscatter,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
     const Thin_film_color_fresnel_ior mat_ior = process_ior_thin_film_color_fresnel_layer(data, state, ior);
-    const Thin_film_color_fresnel_curve_eval c(weight, coating_thickness, coating_ior, mat_ior.ior1, mat_ior.ior2, mat_ior.ior);
+    const Thin_film_color_fresnel_curve_eval c(state, weight, coating_thickness, coating_ior, mat_ior.ior1, mat_ior.ior2, mat_ior.ior);
     curve_layer_pdf(
         c, data, state, 1.0f, layer, base, adapted_normal, inherited_normal);
 }
@@ -6969,53 +7268,56 @@ BSDF_API void thin_film_color_fresnel_layer_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    const float3 &ior,
-    const float3 &weight,
+    const color_sample &inherited_weight,
+    const color_sample &ior,
+    const color_sample &weight,
     const BSDF &layer,
     const BSDF &base,
     const float3 &normal,
+    const backscatter_modifier backscatter,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
     const Thin_film_color_fresnel_ior mat_ior = process_ior_thin_film_color_fresnel_layer(data, state, ior);
-    const Thin_film_color_fresnel_curve_eval c(weight, coating_thickness, coating_ior, mat_ior.ior1, mat_ior.ior2, mat_ior.ior);
+    const Thin_film_color_fresnel_curve_eval c(state, weight, coating_thickness, coating_ior, mat_ior.ior1, mat_ior.ior2, mat_ior.ior);
     curve_layer_auxiliary(
-        c, data, state, 1.0f, layer, base, 
+        c, data, state, 1.0f, layer, base,
         adapted_normal, inherited_normal, inherited_weight);
 }
 
 /////////////////////////////////////////////////////////////////////
 // bsdf custom_curve_layer(
-//     float   normal_reflectivity,
-//     float   grazing_reflectivity = 1.0,
-//     float   exponent             = 5.0,
-//     float   weight               = 1.0,
-//     bsdf    layer                = bsdf(),
-//     bsdf    base                 = bsdf(),
-//     float3  normal               = state->normal()
+//     float                normal_reflectivity,
+//     float                grazing_reflectivity = 1.0,
+//     float                exponent             = 5.0,
+//     float                weight               = 1.0,
+//     bsdf                 layer                = bsdf(),
+//     bsdf                 base                 = bsdf(),
+//     float3               normal               = state::normal(),
+//     backscatter_modifier backscatter          = backscatter_none
 // )
 /////////////////////////////////////////////////////////////////////
 
 class Custom_curve_eval {
 public:
+    BSDF_INLINE
     Custom_curve_eval(
         const float r0, const float r90, const float exponent) :
         m_r0(math::saturate(r0)), m_r90(math::saturate(r90)), m_exponent(math::max(exponent, 0.0f)) {
     }
 
-    float estimate(const float cosine) const {
-        return custom_curve_factor(cosine, m_exponent, m_r0, m_r90);
+    BSDF_INLINE pdf_sample estimate(const float cosine) const {
+        return make<pdf_sample>(custom_curve_factor(cosine, m_exponent, m_r0, m_r90));
     }
 
-    float3 eval(const float cosine) const {
+    BSDF_INLINE color_sample eval(const float cosine) const {
         const float f = custom_curve_factor(cosine, m_exponent, m_r0, m_r90);
-        return make_float3(f, f, f);
+        return make<color_sample>(f);
     }
 
-    float2 ior() const {
+    BSDF_INLINE float2 ior() const {
         return make<float2>(-1.0f);
     }
 
@@ -7033,33 +7335,35 @@ BSDF_API void custom_curve_layer_sample(
     const float weight,
     const BSDF &layer,
     const BSDF &base,
-    const float3 &normal)
+    const float3 &normal,
+    const backscatter_modifier backscatter)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
     const Custom_curve_eval c(normal_reflectivity, grazing_reflectivity, exponent);
-    curve_layer_sample(c, data, state, weight, layer, base, adapted_normal, inherited_normal);
+    curve_layer_sample(c, data, state, weight, layer, base, adapted_normal, inherited_normal, backscatter);
 }
 
 BSDF_API void custom_curve_layer_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const float normal_reflectivity,
     const float grazing_reflectivity,
     const float exponent,
     const float weight,
     const BSDF &layer,
     const BSDF &base,
-    const float3 &normal)
+    const float3 &normal,
+    const backscatter_modifier backscatter)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
     const Custom_curve_eval c(normal_reflectivity, grazing_reflectivity, exponent);
     curve_layer_evaluate(
         c, data, state, weight, layer, base,
-        adapted_normal, inherited_normal, inherited_weight);
+        adapted_normal, inherited_normal, inherited_weight, backscatter);
 }
 
 BSDF_API void custom_curve_layer_pdf(
@@ -7072,7 +7376,8 @@ BSDF_API void custom_curve_layer_pdf(
     const float weight,
     const BSDF &layer,
     const BSDF &base,
-    const float3 &normal)
+    const float3 &normal,
+    const backscatter_modifier backscatter)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
@@ -7086,14 +7391,15 @@ BSDF_API void custom_curve_layer_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const float normal_reflectivity,
     const float grazing_reflectivity,
     const float exponent,
     const float weight,
     const BSDF &layer,
     const BSDF &base,
-    const float3 &normal)
+    const float3 &normal,
+    const backscatter_modifier backscatter)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
@@ -7109,13 +7415,14 @@ BSDF_API void custom_curve_layer_auxiliary(
 //     float coating_thickness,
 //     color coating_ior,
 //     base = custom_curve_layer(
-//         float   normal_reflectivity,
-//         float   grazing_reflectivity = 1.0,
-//         float   exponent             = 5.0,
-//         float   weight               = 1.0,
-//         bsdf    layer                = bsdf(),
-//         bsdf    base                 = bsdf(),
-//         float3  normal               = state->normal()
+//         float                normal_reflectivity,
+//         float                grazing_reflectivity = 1.0,
+//         float                exponent             = 5.0,
+//         float                weight               = 1.0,
+//         bsdf                 layer                = bsdf(),
+//         bsdf                 base                 = bsdf(),
+//         float3               normal               = state::normal(),
+//         backscatter_modifier backscatter          = backscatter_none
 //     )
 // )
 /////////////////////////////////////////////////////////////////////
@@ -7123,53 +7430,62 @@ BSDF_API void custom_curve_layer_auxiliary(
 template<typename Data>
 class Thin_film_custom_curve_eval {
 public:
+    BSDF_INLINE
     Thin_film_custom_curve_eval(
         Data *data,
         State *state,
-        const float3 &r0, const float3 &r90, const float exponent,
+        const color_sample &r0, const color_sample &r90, const float exponent,
         const float coating_thickness,
-        const float3 &coating_ior,
-        const float3 &weight = make_float3(1.0f, 1.0f, 1.0f),
-        const float3 &f82_factor = make_float3(1.0f, 1.0f, 1.0f)) :
-        m_r0(math::saturate(r0)),
-        m_r90(math::saturate(r90)),
-        m_coating_ior(math::max(coating_ior, make_float3(0.0f, 0.0f, 0.0f))),
+        const color_sample &coating_ior,
+        const color_sample &weight = make<color_sample>(1.0f),
+        const color_sample &f82_factor = make<color_sample>(1.0f)) :
+#ifdef MDL_DF_SPECTRAL_ENABLE
+        m_lambda(state->get_wavelengths()),
+#endif
+        m_r0(saturate(r0)),
+        m_r90(saturate(r90)),
+        m_coating_ior(max(coating_ior, make<color_sample>(0.0f))),
         m_exponent(math::max(exponent, 0.0f)),
         m_coating_thickness(coating_thickness),
         m_weight(weight),
-        m_f82(math::saturate(f82_factor)) {
+        m_f82(saturate(f82_factor)) {
         if (m_coating_thickness > 0.0f) {
-            const float3 ior = schlick_to_dielectric_fresnel(m_r0);
+            const color_sample ior = schlick_to_dielectric_fresnel(m_r0);
             const Color_fresnel_ior mat_ior = process_ior_color_fresnel_layer(data, state, ior);
             m_eta = mat_ior.eta;
             m_incoming_ior = mat_ior.ior.x;
         }
     }
 
-    float estimate(const float cosine) const {
-        return math::luminance(eval(cosine));
+    BSDF_INLINE pdf_sample estimate(const float cosine) const {
+        return create_probability(eval(cosine));
     }
 
-    float3 eval(const float cosine) const {
-
-        float3 result = generalized_custom_curve_factor(cosine, m_exponent, m_r0, m_r90, m_f82);
+    BSDF_INLINE color_sample eval(const float cosine) const {
+        color_sample result = generalized_custom_curve_factor(cosine, m_exponent, m_r0, m_r90, m_f82);
 
         if (m_coating_thickness > 0.0f) {
-            const float3 uncoated_fresnel = ior_fresnel(m_eta, cosine);
-            const float3 coated_fresnel = thin_film_factor(
-                m_coating_thickness, m_coating_ior, m_eta * m_incoming_ior, make<float3>(0.0f), make<float3>(m_incoming_ior), cosine);
+            const color_sample uncoated_fresnel = ior_fresnel(m_eta, cosine);
+            const color_sample coated_fresnel = thin_film_factor(
+#ifdef MDL_DF_SPECTRAL_ENABLE
+                m_lambda,
+#endif
+                m_coating_thickness, m_coating_ior, m_eta * m_incoming_ior, make<color_sample>(0.0f), make<color_sample>(m_incoming_ior), cosine);
 
             result = apply_coating_color_shift(result, coated_fresnel, uncoated_fresnel);
         }
         return result * m_weight;
     }
 
-    float2 ior() const {
+    BSDF_INLINE float2 ior() const {
         return make<float2>(-1.0f);
     }
 
 private:
-    float3 m_r0, m_r90, m_eta, m_coating_ior, m_weight, m_f82;
+#ifdef MDL_DF_SPECTRAL_ENABLE
+    color_sample m_lambda;
+#endif
+    color_sample m_r0, m_r90, m_eta, m_coating_ior, m_weight, m_f82;
     float m_exponent, m_coating_thickness, m_incoming_ior;
 };
 
@@ -7184,20 +7500,21 @@ BSDF_API void thin_film_custom_curve_layer_sample(
     const BSDF &layer,
     const BSDF &base,
     const float3 &normal,
+    const backscatter_modifier backscatter,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
-    const Thin_film_custom_curve_eval<BSDF_sample_data> c(data, state, make<float3>(normal_reflectivity), make<float3>(grazing_reflectivity), exponent, coating_thickness, coating_ior);
-    curve_layer_sample(c, data, state, weight, layer, base, adapted_normal, inherited_normal);
+    const Thin_film_custom_curve_eval<BSDF_sample_data> c(data, state, make<color_sample>(normal_reflectivity), make<color_sample>(grazing_reflectivity), exponent, coating_thickness, coating_ior);
+    curve_layer_sample(c, data, state, weight, layer, base, adapted_normal, inherited_normal, backscatter);
 }
 
 BSDF_API void thin_film_custom_curve_layer_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const float normal_reflectivity,
     const float grazing_reflectivity,
     const float exponent,
@@ -7205,15 +7522,16 @@ BSDF_API void thin_film_custom_curve_layer_evaluate(
     const BSDF &layer,
     const BSDF &base,
     const float3 &normal,
+    const backscatter_modifier backscatter,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
-    const Thin_film_custom_curve_eval<BSDF_evaluate_data> c(data, state, make<float3>(normal_reflectivity), make<float3>(grazing_reflectivity), exponent, coating_thickness, coating_ior);
+    const Thin_film_custom_curve_eval<BSDF_evaluate_data> c(data, state, make<color_sample>(normal_reflectivity), make<color_sample>(grazing_reflectivity), exponent, coating_thickness, coating_ior);
     curve_layer_evaluate(
         c, data, state, weight, layer, base,
-        adapted_normal, inherited_normal, inherited_weight);
+        adapted_normal, inherited_normal, inherited_weight, backscatter);
 }
 
 BSDF_API void thin_film_custom_curve_layer_pdf(
@@ -7227,12 +7545,13 @@ BSDF_API void thin_film_custom_curve_layer_pdf(
     const BSDF &layer,
     const BSDF &base,
     const float3 &normal,
+    const backscatter_modifier backscatter,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
-    const Thin_film_custom_curve_eval<BSDF_pdf_data> c(data, state, make<float3>(normal_reflectivity), make<float3>(grazing_reflectivity), exponent, coating_thickness, coating_ior);
+    const Thin_film_custom_curve_eval<BSDF_pdf_data> c(data, state, make<color_sample>(normal_reflectivity), make<color_sample>(grazing_reflectivity), exponent, coating_thickness, coating_ior);
     curve_layer_pdf(
         c, data, state, weight, layer, base, adapted_normal, inherited_normal);
 }
@@ -7242,7 +7561,7 @@ BSDF_API void thin_film_custom_curve_layer_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const float normal_reflectivity,
     const float grazing_reflectivity,
     const float exponent,
@@ -7250,12 +7569,13 @@ BSDF_API void thin_film_custom_curve_layer_auxiliary(
     const BSDF &layer,
     const BSDF &base,
     const float3 &normal,
+    const backscatter_modifier backscatter,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
-    const Thin_film_custom_curve_eval<BSDF_auxiliary_data> c(data, state, make<float3>(normal_reflectivity), make<float3>(grazing_reflectivity), exponent, coating_thickness, coating_ior);
+    const Thin_film_custom_curve_eval<BSDF_auxiliary_data> c(data, state, make<color_sample>(normal_reflectivity), make<color_sample>(grazing_reflectivity), exponent, coating_thickness, coating_ior);
     curve_layer_auxiliary(
         c, data, state, weight, layer, base,
         adapted_normal, inherited_normal, inherited_weight);
@@ -7264,42 +7584,45 @@ BSDF_API void thin_film_custom_curve_layer_auxiliary(
 
 /////////////////////////////////////////////////////////////////////
 // bsdf color_custom_curve_layer(
-//     color   normal_reflectivity,
-//     color   grazing_reflectivity = color(1.0),
-//     color   f82_factor           = color(1.0),
-//     float   exponent             = 5.0,
-//     color   weight               = color(1.0),
-//     bsdf    layer                = bsdf(),
-//     bsdf    base                 = bsdf(),
-//     float3  normal               = state->normal()
+//     color                normal_reflectivity,
+//     color                grazing_reflectivity = color(1.0),
+//     color                f82_factor           = color(1.0),
+//     float                exponent             = 5.0,
+//     color                weight               = color(1.0),
+//     bsdf                 layer                = bsdf(),
+//     bsdf                 base                 = bsdf(),
+//     float3               normal               = state::normal(),
+//     backscatter_modifier backscatter          = backscatter_none
 // )
 /////////////////////////////////////////////////////////////////////
 
 class Color_custom_curve_eval {
 public:
+    BSDF_INLINE
     Color_custom_curve_eval(
-        const float3 &r0, const float3 &r90, const float3 &weight, const float exponent,
-        const float3 f82) :
-        m_r0(math::saturate(r0)),
-        m_r90(math::saturate(r90)),
-        m_f82(math::saturate(f82)),
-        m_weight(math::saturate(weight)),
+        const color_sample &r0, const color_sample &r90, const color_sample &weight, const float exponent,
+        const color_sample f82) :
+        m_r0(saturate(r0)),
+        m_r90(saturate(r90)),
+        m_f82(saturate(f82)),
+        m_weight(saturate(weight)),
         m_exponent(math::max(exponent, 0.0f)) {
     }
 
-    float estimate(const float cosine) const {
-        return math::luminance(eval(cosine));
+    BSDF_INLINE pdf_sample estimate(const float cosine) const {
+        return create_probability(eval(cosine));
     }
 
-    float3 eval(const float cosine) const {
+    BSDF_INLINE color_sample  eval(const float cosine) const {
         return m_weight * generalized_custom_curve_factor(cosine, m_exponent, m_r0, m_r90, m_f82);
     }
 
-    float2 ior() const {
+    BSDF_INLINE float2 ior() const {
         return make<float2>(-1.0f);
     }
+
 private:
-    float3 m_r0, m_r90, m_f82, m_weight;
+    color_sample m_r0, m_r90, m_f82, m_weight;
     float m_exponent;
 };
 
@@ -7307,35 +7630,37 @@ BSDF_API void color_custom_curve_layer_sample(
     BSDF_sample_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &normal_reflectivity,
-    const float3 &grazing_reflectivity,
-    const float3 &f82_factor,
+    const color_sample &normal_reflectivity,
+    const color_sample &grazing_reflectivity,
+    const color_sample &f82_factor,
     const float exponent,
-    const float3 &weight,
+    const color_sample &weight,
     const BSDF &layer,
     const BSDF &base,
-    const float3 &normal)
+    const float3 &normal,
+    const backscatter_modifier backscatter)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
     const Color_custom_curve_eval c(
         normal_reflectivity, grazing_reflectivity, weight, exponent, f82_factor);
-    curve_layer_sample(c, data, state, 1.0f, layer, base, adapted_normal, inherited_normal);
+    curve_layer_sample(c, data, state, 1.0f, layer, base, adapted_normal, inherited_normal, backscatter);
 }
 
 BSDF_API void color_custom_curve_layer_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    const float3 &normal_reflectivity,
-    const float3 &grazing_reflectivity,
-    const float3 &f82_factor,
+    const color_sample &inherited_weight,
+    const color_sample &normal_reflectivity,
+    const color_sample &grazing_reflectivity,
+    const color_sample &f82_factor,
     const float exponent,
-    const float3 &weight,
+    const color_sample &weight,
     const BSDF &layer,
     const BSDF &base,
-    const float3 &normal)
+    const float3 &normal,
+    const backscatter_modifier backscatter)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
@@ -7343,21 +7668,22 @@ BSDF_API void color_custom_curve_layer_evaluate(
         normal_reflectivity, grazing_reflectivity, weight, exponent, f82_factor);
     curve_layer_evaluate(
         c, data, state, 1.0f, layer, base,
-        adapted_normal, inherited_normal, inherited_weight);
+        adapted_normal, inherited_normal, inherited_weight, backscatter);
 }
 
 BSDF_API void color_custom_curve_layer_pdf(
     BSDF_pdf_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &normal_reflectivity,
-    const float3 &grazing_reflectivity,
-    const float3 &f82_factor,
+    const color_sample &normal_reflectivity,
+    const color_sample &grazing_reflectivity,
+    const color_sample &f82_factor,
     const float exponent,
-    const float3 &weight,
+    const color_sample &weight,
     const BSDF &layer,
     const BSDF &base,
-    const float3 &normal)
+    const float3 &normal,
+    const backscatter_modifier backscatter)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
@@ -7371,22 +7697,23 @@ BSDF_API void color_custom_curve_layer_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    const float3 &normal_reflectivity,
-    const float3 &grazing_reflectivity,
-    const float3 &f82_factor,
+    const color_sample &inherited_weight,
+    const color_sample &normal_reflectivity,
+    const color_sample &grazing_reflectivity,
+    const color_sample &f82_factor,
     const float exponent,
-    const float3 &weight,
+    const color_sample &weight,
     const BSDF &layer,
     const BSDF &base,
-    const float3 &normal)
+    const float3 &normal,
+    const backscatter_modifier backscatter)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
     const Color_custom_curve_eval c(
         normal_reflectivity, grazing_reflectivity, weight, exponent, f82_factor);
     curve_layer_auxiliary(
-        c, data, state, 1.0f, layer, base, 
+        c, data, state, 1.0f, layer, base,
         adapted_normal, inherited_normal, inherited_weight);
 }
 
@@ -7396,13 +7723,14 @@ BSDF_API void color_custom_curve_layer_auxiliary(
 //     float coating_thickness,
 //     color coating_ior,
 //     base = color_custom_curve_layer(
-//         color   normal_reflectivity,
-//         color   grazing_reflectivity = color(1.0),
-//         float   exponent             = 5.0,
-//         color   weight               = color(1.0),
-//         bsdf    layer                = bsdf(),
-//         bsdf    base                 = bsdf(),
-//         float3  normal               = state->normal()
+//         color                normal_reflectivity,
+//         color                grazing_reflectivity = color(1.0),
+//         float                exponent             = 5.0,
+//         color                weight               = color(1.0),
+//         bsdf                 layer                = bsdf(),
+//         bsdf                 base                 = bsdf(),
+//         float3               normal               = state::normal(),
+//         backscatter_modifier backscatter          = backscatter_none
 //     )
 // )
 /////////////////////////////////////////////////////////////////////
@@ -7411,71 +7739,74 @@ BSDF_API void thin_film_color_custom_curve_layer_sample(
     BSDF_sample_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &normal_reflectivity,
-    const float3 &grazing_reflectivity,
-    const float3 &f82_factor,
+    const color_sample &normal_reflectivity,
+    const color_sample &grazing_reflectivity,
+    const color_sample &f82_factor,
     const float exponent,
-    const float3 &weight,
+    const color_sample &weight,
     const BSDF &layer,
     const BSDF &base,
     const float3 &normal,
+    const backscatter_modifier backscatter,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
     const Thin_film_custom_curve_eval<BSDF_sample_data> c(
         data, state, normal_reflectivity, grazing_reflectivity, exponent, coating_thickness,
-        coating_ior, math::saturate(weight), f82_factor);
-    curve_layer_sample(c, data, state, 1.0f, layer, base, adapted_normal, inherited_normal);
+        coating_ior, saturate(weight), f82_factor);
+    curve_layer_sample(c, data, state, 1.0f, layer, base, adapted_normal, inherited_normal, backscatter);
 }
 
 BSDF_API void thin_film_color_custom_curve_layer_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    const float3 &normal_reflectivity,
-    const float3 &grazing_reflectivity,
-    const float3 &f82_factor,
+    const color_sample &inherited_weight,
+    const color_sample &normal_reflectivity,
+    const color_sample &grazing_reflectivity,
+    const color_sample &f82_factor,
     const float exponent,
-    const float3 &weight,
+    const color_sample &weight,
     const BSDF &layer,
     const BSDF &base,
     const float3 &normal,
+    const backscatter_modifier backscatter,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
     const Thin_film_custom_curve_eval<BSDF_evaluate_data> c(
         data, state, normal_reflectivity, grazing_reflectivity, exponent, coating_thickness,
-        coating_ior, math::saturate(weight), f82_factor);
+        coating_ior, saturate(weight), f82_factor);
     curve_layer_evaluate(
         c, data, state, 1.0f, layer, base,
-        adapted_normal, inherited_normal, inherited_weight);
+        adapted_normal, inherited_normal, inherited_weight, backscatter);
 }
 
 BSDF_API void thin_film_color_custom_curve_layer_pdf(
     BSDF_pdf_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &normal_reflectivity,
-    const float3 &grazing_reflectivity,
-    const float3 &f82_factor,
+    const color_sample &normal_reflectivity,
+    const color_sample &grazing_reflectivity,
+    const color_sample &f82_factor,
     const float exponent,
-    const float3 &weight,
+    const color_sample &weight,
     const BSDF &layer,
     const BSDF &base,
     const float3 &normal,
+    const backscatter_modifier backscatter,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
     const Thin_film_custom_curve_eval<BSDF_pdf_data> c(
         data, state, normal_reflectivity, grazing_reflectivity, exponent, coating_thickness,
-        coating_ior, math::saturate(weight), f82_factor);
+        coating_ior, saturate(weight), f82_factor);
     curve_layer_pdf(
         c, data, state, 1.0f, layer, base, adapted_normal, inherited_normal);
 }
@@ -7484,36 +7815,39 @@ BSDF_API void thin_film_color_custom_curve_layer_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    const float3 &normal_reflectivity,
-    const float3 &grazing_reflectivity,
-    const float3 &f82_factor,
+    const color_sample &inherited_weight,
+    const color_sample &normal_reflectivity,
+    const color_sample &grazing_reflectivity,
+    const color_sample &f82_factor,
     const float exponent,
-    const float3 &weight,
+    const color_sample &weight,
     const BSDF &layer,
     const BSDF &base,
     const float3 &normal,
+    const backscatter_modifier backscatter,
     const float coating_thickness,
-    const float3 &coating_ior)
+    const color_sample &coating_ior)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
     const Thin_film_custom_curve_eval<BSDF_auxiliary_data> c(
         data, state, normal_reflectivity, grazing_reflectivity, exponent, coating_thickness,
-        coating_ior, math::saturate(weight), f82_factor);
+        coating_ior, saturate(weight), f82_factor);
     curve_layer_auxiliary(
-        c, data, state, 1.0f, layer, base, 
+        c, data, state, 1.0f, layer, base,
         adapted_normal, inherited_normal, inherited_weight);
 }
 
+// TODO SPECTRAL: For measured curved curve_values can be spectral or only RGB (float3)???
 
 /////////////////////////////////////////////////////////////////////
 // bsdf measured_curve_layer(
-//     color[<N>] curve_values,
-//     float   weight               = 1.0,
-//     bsdf    layer                = bsdf(),
-//     bsdf    base                 = bsdf(),
-//     float3  normal               = state->normal()
+//     color[<N>]           curve_values,
+//     float                weight               = 1.0,
+//     bsdf                 layer                = bsdf(),
+//     bsdf                 base                 = bsdf(),
+//     float3               normal               = state::normal(),
+//     backscatter_modifier backscatter          = backscatter_none,
 // )
 /////////////////////////////////////////////////////////////////////
 
@@ -7524,26 +7858,26 @@ BSDF_API void thin_film_color_custom_curve_layer_auxiliary(
 class Measured_curve_eval {
 public:
     Measured_curve_eval(
-        const float3 *const values, const unsigned int num_values) :
+        const color_sample *const values, const unsigned int num_values) :
         m_values(values), m_num_values(num_values) {
     }
 
-    float estimate(const float cosine) const {
-        return math::luminance(eval(cosine));
+    pdf_sample estimate(const float cosine) const {
+        return create_probability(eval(cosine));
     }
 
-    float3 eval(const float cosine) const {
+    color_sample eval(const float cosine) const {
         if (m_num_values == 0)
-            return make_float3(0.0f, 0.0f, 0.0f);
+            return make<color_sample>(0.0f);
         else
-            return math::saturate(measured_curve_factor(cosine, m_values, m_num_values));
+            return saturate(measured_curve_factor(cosine, m_values, m_num_values));
     }
 
     float2 ior() const {
         return make<float2>(-1.0f);
     }
 private:
-    const float3 *m_values;
+    const color_sample *m_values;
     unsigned int m_num_values;
 };
 
@@ -7551,49 +7885,52 @@ BSDF_API void measured_curve_layer_sample(
     BSDF_sample_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 *curve_values,
+    const color_sample *curve_values,
     const unsigned int num_curve_values,
     const float weight,
     const BSDF &layer,
     const BSDF &base,
-    const float3 &normal)
+    const float3 &normal,
+    const backscatter_modifier backscatter)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
     const Measured_curve_eval c(curve_values, num_curve_values);
-    curve_layer_sample(c, data, state, weight, layer, base, adapted_normal, inherited_normal);
+    curve_layer_sample(c, data, state, weight, layer, base, adapted_normal, inherited_normal, backscatter);
 }
 
 BSDF_API void measured_curve_layer_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    const float3 *curve_values,
+    const color_sample &inherited_weight,
+    const color_sample *curve_values,
     const unsigned int num_curve_values,
     const float weight,
     const BSDF &layer,
     const BSDF &base,
-    const float3 &normal)
+    const float3 &normal,
+    const backscatter_modifier backscatter)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
     const Measured_curve_eval c(curve_values, num_curve_values);
     curve_layer_evaluate(
-        c, data, state, weight, layer, base, 
-        adapted_normal, inherited_normal, inherited_weight);
+        c, data, state, weight, layer, base,
+        adapted_normal, inherited_normal, inherited_weight, backscatter);
 }
 
 BSDF_API void measured_curve_layer_pdf(
     BSDF_pdf_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 *curve_values,
+    const color_sample *curve_values,
     const unsigned int num_curve_values,
     const float weight,
     const BSDF &layer,
     const BSDF &base,
-    const float3 &normal)
+    const float3 &normal,
+    const backscatter_modifier backscatter)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
@@ -7606,19 +7943,20 @@ BSDF_API void measured_curve_layer_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    const float3 *curve_values,
+    const color_sample &inherited_weight,
+    const color_sample *curve_values,
     const unsigned int num_curve_values,
     const float weight,
     const BSDF &layer,
     const BSDF &base,
-    const float3 &normal)
+    const float3 &normal,
+    const backscatter_modifier backscatter)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
     const Measured_curve_eval c(curve_values, num_curve_values);
     curve_layer_auxiliary(
-        c, data, state, weight, layer, base, 
+        c, data, state, weight, layer, base,
         shading_normal, adapted_normal, geometry_normal, inherited_weight);
 }
 
@@ -7628,12 +7966,13 @@ BSDF_API void measured_curve_layer_sample(
     BSDF_sample_data *data,
     State *state,
     const float3 &base_normal,
-    const float3 *curve_values,
+    const color_sample *curve_values,
     const unsigned int num_curve_values,
     float weight,
     const BSDF &layer,
     const BSDF &base,
-    const float3 &normal)
+    const float3 &normal,
+    const backscatter_modifier backscatter)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
@@ -7644,15 +7983,15 @@ BSDF_API void measured_curve_layer_sample(
     weight = math::saturate(weight);
 
     const float nk1 = math::saturate(math::dot(data->k1, layer_normal));
-    const float estimated_curve_factor = measured_curve_factor_estimate(nk1, curve_values, num_curve_values);
+    const pdf_sample estimated_curve_factor = measured_curve_factor_estimate(nk1, curve_values, num_curve_values);
 
     const bool no_base = base.is_black();
 
-    float prob_layer = no_base ? 1.0f : estimated_curve_factor * weight;
+    pdf_sample prob_layer = no_base ? make<pdf_sample>(1.0f) : estimated_curve_factor * weight;
     float prob_selected_inv;
     bool sample_layer;
     if (!decide_sampling_and_update_random_number(
-            data, no_base || (data->xi.z < prob_layer), layer, base,
+            data, no_base || (data->xi.z < use_probability(prob_layer)), layer, base,
             &prob_layer, &prob_selected_inv, &sample_layer)) {
         absorb(data);
         return;
@@ -7663,18 +8002,21 @@ BSDF_API void measured_curve_layer_sample(
     if (data->event_type == BSDF_EVENT_ABSORB)
         return;
 
+    const bool is_reflection = (data->event_type & BSDF_EVENT_REFLECTION) != 0;
+    const float3 k1 = apply_backscatter(data->k1, backscatter, is_reflection, layer_normal, math::dot(data->k1, layer_normal), true);
+
     const float nk2 = math::abs(math::dot(data->k2, layer_normal));
     const float3 h = compute_half_vector(
-        data->k1, data->k2, layer_normal, nk2,
-        (data->event_type & BSDF_EVENT_TRANSMISSION) != 0);
+        k1, data->k2, layer_normal, nk2,
+        !is_reflection);
 
     if (sample_layer) {
-        const float kh = math::abs(math::dot(data->k1, h));
-        const float3 curve_factor = measured_curve_factor_eval(kh, curve_values, num_curve_values);
-        data->bsdf_over_pdf *= curve_factor * weight * prob_selected_inv;
+        const float kh = math::abs(math::dot(k1, h));
+        const color_sample curve_factor = measured_curve_factor_eval(kh, curve_values, num_curve_values);
+        data->bsdf_over_pdf *= curve_factor * (weight * prob_selected_inv);
     } else {
-        const float3 w_base =
-            make_float3(1.0f, 1.0f, 1.0f) - weight * math::max(
+        const color_sample w_base =
+            make<color_sample>(1.0f) - weight * max(
                 measured_curve_factor_eval(nk1, curve_values, num_curve_values),
                 measured_curve_factor_eval(nk2, curve_values, num_curve_values));
         data->bsdf_over_pdf *= w_base * prob_selected_inv;
@@ -7683,7 +8025,7 @@ BSDF_API void measured_curve_layer_sample(
     if (!BSDF::calc_pdf_in_sample())
         return;
 
-    if ((sample_layer & (prob_layer < 1.0f)) | (!sample_layer & (prob_layer > 0.0f))) {
+    if ((sample_layer & (use_probability(prob_layer) < 1.0f)) | (!sample_layer & (use_probability(prob_layer) > 0.0f))) {
         BSDF_pdf_data pdf_data = to_pdf_data(data);
 
         // calculate the PDF of the BSDF which was not selected
@@ -7700,13 +8042,14 @@ BSDF_API void measured_curve_layer_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &base_normal,
-    const float3 &inherited_weight,
-    const float3 *curve_values,
+    const color_sample &inherited_weight,
+    const color_sample *curve_values,
     const unsigned int num_curve_values,
     float weight,
     const BSDF &layer,
     const BSDF &base,
-    const float3 &normal)
+    const float3 &normal,
+    const backscatter_modifier backscatter)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
@@ -7718,33 +8061,34 @@ BSDF_API void measured_curve_layer_evaluate(
 
     const float nk1 = math::saturate(math::dot(data->k1, layer_normal));
 
-    float prob_layer = weight * measured_curve_factor_estimate(
+    pdf_sample prob_layer = weight * measured_curve_factor_estimate(
         nk1, curve_values, num_curve_values);
     prob_layer = adapt_layer_prob_for_allowed_mode(data, layer, base, prob_layer);
-    if (prob_layer < 0.0f) {
+    if (use_probability(prob_layer) < 0.0f) {
         absorb(data);
         return;
     }
 
     const float nk2 = math::abs(math::dot(data->k2, layer_normal));
 
-    float pdf = 0.0f;
+    pdf_sample pdf = make_pdf_sample(0.0f);
     Df_flags allowed_mode = get_allowed_scatter_mode(data);
     if (layer.has_allowed_components(allowed_mode)) {
         const bool backside_eval = math::dot(data->k2, geometry_normal) < 0.0f;
+        const float3 k1 = apply_backscatter(data->k1, backscatter, !backside_eval, layer_normal, math::dot(data->k1, layer_normal), true);
         const float3 h = compute_half_vector(
-            data->k1, data->k2, layer_normal, nk2, backside_eval);
-        const float kh = math::abs(math::dot(data->k1, h));
-        const float3 curve_factor = measured_curve_factor_eval(kh, curve_values, num_curve_values);
+            k1, data->k2, layer_normal, nk2, backside_eval);
+        const float kh = math::abs(math::dot(k1, h));
+        const color_sample curve_factor = measured_curve_factor_eval(kh, curve_values, num_curve_values);
 
         layer.evaluate(data, state, adapted_normal, (weight * curve_factor) * inherited_weight);
         pdf = prob_layer * data->pdf;
     }
     if (base.has_allowed_components(allowed_mode)) {
-        const float3 cf1 = measured_curve_factor_eval(nk1, curve_values, num_curve_values);
-        const float3 cf2 = measured_curve_factor_eval(nk2, curve_values, num_curve_values);
+        const color_sample cf1 = measured_curve_factor_eval(nk1, curve_values, num_curve_values);
+        const color_sample cf2 = measured_curve_factor_eval(nk2, curve_values, num_curve_values);
         base.evaluate(
-            data, state, base_normal, (1.0f - weight * math::max(cf1, cf2)) * inherited_weight);
+            data, state, base_normal, (1.0f - weight * max(cf1, cf2)) * inherited_weight);
         pdf += (1.0f - prob_layer) * data->pdf;
     }
     data->pdf = pdf;
@@ -7754,12 +8098,13 @@ BSDF_API void measured_curve_layer_pdf(
     BSDF_pdf_data *data,
     State *state,
     const float3 &base_normal,
-    const float3 *curve_values,
+    const color_sample *curve_values,
     const unsigned int num_curve_values,
     float weight,
     const BSDF &layer,
     const BSDF &base,
-    const float3 &normal)
+    const float3 &normal,
+    const backscatter_modifier backscatter)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
@@ -7770,19 +8115,19 @@ BSDF_API void measured_curve_layer_pdf(
     weight = math::saturate(weight);
 
     const float nk1 = math::saturate(math::dot(data->k1, layer_normal));
-    float prob_layer = weight * measured_curve_factor_estimate(nk1, curve_values, num_curve_values);
+    pdf_sample prob_layer = weight * measured_curve_factor_estimate(nk1, curve_values, num_curve_values);
     prob_layer = adapt_layer_prob_for_allowed_mode(data, layer, base, prob_layer);
-    if (prob_layer < 0.0f) {
+    if (use_probability(prob_layer) < 0.0f) {
         absorb(data);
         return;
     }
 
-    float pdf = 0.0f;
-    if (prob_layer > 0.0f) {
+    pdf_sample pdf = make_pdf_sample(0.0f);
+    if (use_probability(prob_layer) > 0.0f) {
         layer.pdf(data, state, adapted_normal);
         pdf = prob_layer * data->pdf;
     }
-    if (prob_layer < 1.0f) {
+    if (use_probability(prob_layer) < 1.0f) {
         base.pdf(data, state, base_normal);
         pdf += (1.0f - prob_layer) * data->pdf;
     }
@@ -7793,13 +8138,14 @@ BSDF_API void measured_curve_layer_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &base_normal,
-    const float3 &inherited_weight,
-    const float3 *curve_values,
+    const color_sample &inherited_weight,
+    const color_sample *curve_values,
     const unsigned int num_curve_values,
     float weight,
     const BSDF &layer,
     const BSDF &base,
-    const float3 &normal)
+    const float3 &normal,
+    const backscatter_modifier backscatter)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
@@ -7811,7 +8157,7 @@ BSDF_API void measured_curve_layer_auxiliary(
 
     // assuming perfect reflection
     const float nk1 = math::saturate(math::dot(data->k1, layer_normal));
-    const float3 curve_factor = weight * measured_curve_factor_eval(nk1, curve_values, num_curve_values);
+    const color_sample curve_factor = weight * measured_curve_factor_eval(nk1, curve_values, num_curve_values);
 
     Df_flags allowed_mode = get_allowed_scatter_mode(data);
     if (layer.has_allowed_components(allowed_mode)) {
@@ -7827,11 +8173,12 @@ BSDF_API void measured_curve_layer_auxiliary(
 
 /////////////////////////////////////////////////////////////////////
 // bsdf color_measured_curve_layer(
-//     color[<N>] curve_values,
-//     color   weight               = color(1.0),
-//     bsdf    layer                = bsdf(),
-//     bsdf    base                 = bsdf(),
-//     float3  normal               = state->normal()
+//     color[<N>]           curve_values,
+//     color                weight               = color(1.0),
+//     bsdf                 layer                = bsdf(),
+//     bsdf                 base                 = bsdf(),
+//     float3               normal               = state::normal(),
+//     backscatter_modifier backscatter          = backscatter_none
 // )
 /////////////////////////////////////////////////////////////////////
 
@@ -7842,28 +8189,28 @@ BSDF_API void measured_curve_layer_auxiliary(
 class Color_measured_curve_eval {
 public:
     Color_measured_curve_eval(
-        const float3 *const values, const unsigned int num_values, const float3 &weight) :
-        m_values(values), m_num_values(num_values), m_weight(math::saturate(weight)) {
+        const color_sample *const values, const unsigned int num_values, const color_sample&weight) :
+        m_values(values), m_num_values(num_values), m_weight(saturate(weight)) {
     }
 
-    float estimate(const float cosine) const {
-        return math::luminance(eval(cosine));
+    pdf_sample estimate(const float cosine) const {
+        return create_probability(eval(cosine));
     }
 
-    float3 eval(const float cosine) const {
+    color_sample eval(const float cosine) const {
         if (m_num_values == 0)
-            return make_float3(0.0f, 0.0f, 0.0f);
+            return make<color_sample>(0.0f);
         else
-            return m_weight * math::saturate(measured_curve_factor(cosine, m_values, m_num_values));
+            return m_weight * saturate(measured_curve_factor(cosine, m_values, m_num_values));
     }
-    
+
     float2 ior() const {
         return make<float2>(-1.0f);
     }
 private:
-    const float3 *m_values;
+    const color_sample *m_values;
     unsigned int m_num_values;
-    float3 m_weight;
+    color_sample m_weight;
 
 };
 
@@ -7871,49 +8218,52 @@ BSDF_API void color_measured_curve_layer_sample(
     BSDF_sample_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 *curve_values,
+    const color_sample *curve_values,
     const unsigned int num_curve_values,
-    const float3 &weight,
+    const color_sample &weight,
     const BSDF &layer,
     const BSDF &base,
-    const float3 &normal)
+    const float3 &normal,
+    const backscatter_modifier backscatter)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
     const Color_measured_curve_eval c(curve_values, num_curve_values, weight);
-    curve_layer_sample(c, data, state, 1.0f, layer, base, adapted_normal, inherited_normal);
+    curve_layer_sample(c, data, state, 1.0f, layer, base, adapted_normal, inherited_normal, backscatter);
 }
 
 BSDF_API void color_measured_curve_layer_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const float3 *curve_values,
     const unsigned int num_curve_values,
-    const float3 &weight,
+    const color_sample &weight,
     const BSDF &layer,
     const BSDF &base,
-    const float3 &normal)
+    const float3 &normal,
+    const backscatter_modifier backscatter)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
     const Color_measured_curve_eval c(curve_values, num_curve_values, weight);
     curve_layer_evaluate(
-        c, data, state, 1.0f, layer, base, 
-        adapted_normal, inherited_normal, inherited_weight);
+        c, data, state, 1.0f, layer, base,
+        adapted_normal, inherited_normal, inherited_weight, backscatter);
 }
 
 BSDF_API void color_measured_curve_layer_pdf(
     BSDF_pdf_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 *curve_values,
+    const color_sample *curve_values,
     const unsigned int num_curve_values,
-    const float3 &weight,
+    const color_sample &weight,
     const BSDF &layer,
     const BSDF &base,
-    const float3 &normal)
+    const float3 &normal,
+    const backscatter_modifier backscatter)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
@@ -7926,19 +8276,20 @@ BSDF_API void color_measured_curve_layer_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    const float3 *curve_values,
+    const color_sample &inherited_weight,
+    const color_sample *curve_values,
     const unsigned int num_curve_values,
-    const float3 &weight,
+    const color_sample &weight,
     const BSDF &layer,
     const BSDF &base,
-    const float3 &normal)
+    const float3 &normal,
+    const backscatter_modifier backscatter)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
     const Color_measured_curve_eval c(curve_values, num_curve_values, weight);
     curve_layer_auxiliary(
-        c, data, state, 1.0f, layer, base, 
+        c, data, state, 1.0f, layer, base,
         adapted_normal, inherited_normal, inherited_weight);
 }
 
@@ -7949,12 +8300,13 @@ BSDF_API void color_measured_curve_layer_sample(
     BSDF_sample_data *data,
     State *state,
     const float3 &base_normal,
-    const float3 *curve_values,
+    const color_sample *curve_values,
     const unsigned int num_curve_values,
-    const float3 &color_weight,
+    const color_sample &color_weight,
     const BSDF &layer,
     const BSDF &base,
-    const float3 &normal)
+    const float3 &normal,
+    const backscatter_modifier backscatter)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
@@ -7966,16 +8318,16 @@ BSDF_API void color_measured_curve_layer_sample(
     const float weight = 1.0f;
 
     const float nk1 = math::saturate(math::dot(data->k1, layer_normal));
-    const float estimated_curve_factor = color_measured_curve_factor_estimate(
+    const pdf_sample estimated_curve_factor = color_measured_curve_factor_estimate(
         nk1, curve_values, num_curve_values, color_weight);
 
     const bool no_base = base.is_black();
 
-    float prob_layer = no_base ? 1.0f : estimated_curve_factor * weight;
+    pdf_sample prob_layer = no_base ? make<pdf_sample>(1.0f) : estimated_curve_factor * weight;
     float prob_selected_inv;
     bool sample_layer;
     if (!decide_sampling_and_update_random_number(
-            data, no_base || (data->xi.z < prob_layer), layer, base,
+            data, no_base || (data->xi.z < use_probability(prob_layer)), layer, base,
             &prob_layer, &prob_selected_inv, &sample_layer)) {
         absorb(data);
         return;
@@ -7986,19 +8338,22 @@ BSDF_API void color_measured_curve_layer_sample(
     if (data->event_type == BSDF_EVENT_ABSORB)
         return;
 
+    const bool is_reflection = (data->event_type & BSDF_EVENT_REFLECTION) != 0;
+    const float3 k1 = apply_backscatter(data->k1, backscatter, is_reflection, layer_normal, math::dot(data->k1, layer_normal), true);
+
     const float nk2 = math::abs(math::dot(data->k2, layer_normal));
     const float3 h = compute_half_vector(
-        data->k1, data->k2, layer_normal, nk2,
-        (data->event_type & BSDF_EVENT_TRANSMISSION) != 0);
+        k1, data->k2, layer_normal, nk2,
+        !is_reflection);
 
     if (sample_layer) {
-        const float kh = math::abs(math::dot(data->k1, h));
-        const float3 curve_factor = color_measured_curve_factor_eval(
+        const float kh = math::abs(math::dot(k1, h));
+        const color_sample curve_factor = color_measured_curve_factor_eval(
             kh, curve_values, num_curve_values, color_weight);
         data->bsdf_over_pdf *= curve_factor * weight * prob_selected_inv;
     } else {
-        const float3 w_base =
-            make_float3(1.0f, 1.0f, 1.0f) - weight * math::max(
+        const color_sample w_base =
+            make<color_sample>(1.0f) - weight * max(
                 color_measured_curve_factor_eval(
                     nk1, curve_values, num_curve_values, color_weight),
                 color_measured_curve_factor_eval(
@@ -8009,7 +8364,7 @@ BSDF_API void color_measured_curve_layer_sample(
     if (!BSDF::calc_pdf_in_sample())
         return;
 
-    if ((sample_layer & (prob_layer < 1.0f)) | (!sample_layer & (prob_layer > 0.0f))) {
+    if ((sample_layer & (use_probability(prob_layer) < 1.0f)) | (!sample_layer & (use_probability(prob_layer) > 0.0f))) {
         BSDF_pdf_data pdf_data = to_pdf_data(data);
 
         // calculate the PDF of the BSDF which was not selected
@@ -8026,13 +8381,14 @@ BSDF_API void color_measured_curve_layer_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &base_normal,
-    const float3 &inherited_weight,
-    const float3 *curve_values,
+    const color_sample &inherited_weight,
+    const color_sample *curve_values,
     const unsigned int num_curve_values,
-    const float3 &color_weight,
+    const color_sample &color_weight,
     const BSDF &layer,
     const BSDF &base,
-    const float3 &normal)
+    const float3 &normal,
+    const backscatter_modifier backscatter)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
@@ -8045,37 +8401,37 @@ BSDF_API void color_measured_curve_layer_evaluate(
 
     const float nk1 = math::saturate(math::dot(data->k1, layer_normal));
 
-    float prob_layer = weight * color_measured_curve_factor_estimate(
+    pdf_sample prob_layer = weight * color_measured_curve_factor_estimate(
         nk1, curve_values, num_curve_values, color_weight);
     prob_layer = adapt_layer_prob_for_allowed_mode(data, layer, base, prob_layer);
-    if (prob_layer < 0.0f) {
+    if (use_probability(prob_layer) < 0.0f) {
         absorb(data);
         return;
     }
 
     const float nk2 = math::abs(math::dot(data->k2, layer_normal));
 
-    float pdf = 0.0f;
+    pdf_sample pdf = make_pdf_sample(0.0f);
     Df_flags allowed_mode = get_allowed_scatter_mode(data);
     if (layer.has_allowed_components(allowed_mode)) {
         const bool backside_eval = math::dot(data->k2, geometry_normal) < 0.0f;
+        const float3 k1 = apply_backscatter(data->k1, backscatter, !backside_eval, layer_normal, math::dot(data->k1, layer_normal), true);
         const float3 h = compute_half_vector(
-            data->k1, data->k2, layer_normal, nk2, backside_eval);
-        const float kh = math::abs(math::dot(data->k1, h));
-        const float3 curve_factor = color_measured_curve_factor_eval(
+            k1, data->k2, layer_normal, nk2, backside_eval);
+        const float kh = math::abs(math::dot(k1, h));
+        const color_sample curve_factor = color_measured_curve_factor_eval(
                 kh, curve_values, num_curve_values, color_weight);
 
         layer.evaluate(data, state, adapted_normal, (weight * curve_factor) * inherited_weight);
         pdf = prob_layer * data->pdf;
     }
     if (base.has_allowed_components(allowed_mode)) {
-
-        const float3 cf1 = color_measured_curve_factor_eval(
+        const color_sample cf1 = color_measured_curve_factor_eval(
             nk1, curve_values, num_curve_values, color_weight);
-        const float3 cf2 = color_measured_curve_factor_eval(
+        const color_sample cf2 = color_measured_curve_factor_eval(
             nk2, curve_values, num_curve_values, color_weight);
         base.evaluate(
-            data, state, base_normal, (1.0f - weight * math::max(cf1, cf2)) * inherited_weight);
+            data, state, base_normal, (1.0f - weight * max(cf1, cf2)) * inherited_weight);
         pdf += (1.0f - prob_layer) * data->pdf;
     }
     data->pdf = pdf;
@@ -8085,12 +8441,13 @@ BSDF_API void color_measured_curve_layer_pdf(
     BSDF_pdf_data *data,
     State *state,
     const float3 &base_normal,
-    const float3 *curve_values,
+    const color_sample *curve_values,
     const unsigned int num_curve_values,
-    const float3 &color_weight,
+    const color_sample &color_weight,
     const BSDF &layer,
     const BSDF &base,
-    const float3 &normal)
+    const float3 &normal,
+    const backscatter_modifier backscatter)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
@@ -8102,20 +8459,20 @@ BSDF_API void color_measured_curve_layer_pdf(
     const float weight = 1.0f;
 
     const float nk1 = math::saturate(math::dot(data->k1, layer_normal));
-    float prob_layer = weight * color_measured_curve_factor_estimate(
+    pdf_sample prob_layer = weight * color_measured_curve_factor_estimate(
         nk1, curve_values, num_curve_values, color_weight);
     prob_layer = adapt_layer_prob_for_allowed_mode(data, layer, base, prob_layer);
-    if (prob_layer < 0.0f) {
+    if (use_probability(prob_layer) < 0.0f) {
         absorb(data);
         return;
     }
 
-    float pdf = 0.0f;
-    if (prob_layer > 0.0f) {
+    pdf_sample pdf = make_pdf_sample(0.0f);
+    if (use_probability(prob_layer) > 0.0f) {
         layer.pdf(data, state, adapted_normal);
         pdf = prob_layer * data->pdf;
     }
-    if (prob_layer < 1.0f) {
+    if (use_probability(prob_layer) < 1.0f) {
         base.pdf(data, state, base_normal);
         pdf += (1.0f - prob_layer) * data->pdf;
     }
@@ -8126,13 +8483,14 @@ BSDF_API void color_measured_curve_layer_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &base_normal,
-    const float3 &inherited_weight,
-    const float3 *curve_values,
+    const color_sample &inherited_weight,
+    const color_sample *curve_values,
     const unsigned int num_curve_values,
-    const float3 &color_weight,
+    const color_sample &color_weight,
     const BSDF &layer,
     const BSDF &base,
-    const float3 &normal)
+    const float3 &normal,
+    const backscatter_modifier backscatter)
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
@@ -8144,7 +8502,7 @@ BSDF_API void color_measured_curve_layer_auxiliary(
     const float weight = 1.0f;
 
     const float nk1 = math::saturate(math::dot(data->k1, layer_normal));
-    const float3 curve_factor = weight * color_measured_curve_factor_eval(
+    const color_sample curve_factor = weight * color_measured_curve_factor_eval(
         nk1, curve_values, num_curve_values, color_weight);
 
     Df_flags allowed_mode = get_allowed_scatter_mode(data);
@@ -8250,7 +8608,7 @@ BSDF_INLINE void mix_df_evaluate(
     TDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const TDF_component *components,
     const unsigned int num_components)
 {
@@ -8286,7 +8644,7 @@ BSDF_INLINE void mix_df_evaluate(
 
     const float inv_w_sum = 1.0f / w_sum;
 
-    float pdf = 0.0f;
+    pdf_sample pdf = make<pdf_sample>(0.0f);
     for (unsigned int i = 0; i < num_components; ++i) {
         if (!has_allowed_components(data, components[i].component)) {
             continue;
@@ -8334,7 +8692,7 @@ BSDF_INLINE void mix_df_pdf(
     }
 
     const float inv_w_sum = 1.0f / w_sum;
-    float pdf = 0.0f;
+    pdf_sample pdf = make<pdf_sample>(0.0f);
     for (unsigned int i = 0; i < num_components; ++i) {
         if (!has_allowed_components(data, components[i].component)) {
             continue;
@@ -8351,7 +8709,7 @@ BSDF_INLINE void mix_df_auxiliary(
     TDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const TDF_component *components,
     const unsigned int num_components)
 {
@@ -8517,7 +8875,7 @@ BSDF_INLINE void clamped_mix_df_evaluate(
     TDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const TDF_component *components,
     const unsigned int num_components)
 {
@@ -8569,7 +8927,7 @@ BSDF_INLINE void clamped_mix_df_evaluate(
 
     const float inv_w_sum = 1.0f / w_sum;
 
-    float pdf = 0.0f;
+    pdf_sample pdf = make<pdf_sample>(0.0f);
     for (unsigned int i = 0; i < num_active; ++i) {
         if (!has_allowed_components(data, components[i].component)) {
             continue;
@@ -8639,7 +8997,7 @@ BSDF_INLINE void clamped_mix_df_pdf(
     }
 
     const float inv_w_sum = 1.0f / w_sum;
-    float pdf = 0.0f;
+    pdf_sample pdf = make<pdf_sample>(0.0f);
     for (unsigned int i = 0; i < num_active; ++i) {
         if (!has_allowed_components(data, components[i].component)) {
             continue;
@@ -8658,7 +9016,7 @@ BSDF_INLINE void clamped_mix_df_auxiliary(
     TDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const TDF_component *components,
     const unsigned int num_components)
 {
@@ -8744,33 +9102,35 @@ BSDF_INLINE void color_mix_df_sample(
         return;
     }
 
-    float3 w_sum = make_float3(0.0f, 0.0f, 0.0f), w_sum_all = make_float3(0.0f, 0.0f, 0.0f);
+    pdf_sample w_sum = make<pdf_sample>(0.0f);
+    color_sample w_sum_all = make<color_sample>(0.0f);
     for (unsigned int i = 0; i < num_components; ++i) {
-        const float3 cur_weight = math::max(components[i].weight, make_float3(0.0f, 0.0f, 0.0f));
+        const color_sample cur_weight = max(components[i].weight, make<color_sample>(0.0f));
         w_sum_all += cur_weight;
         if (has_allowed_components(data, components[i].component)) {
-            w_sum += cur_weight;
+            w_sum += create_probability(cur_weight);
         }
     }
 
-    if (w_sum.x <= 0.0f && w_sum.y <= 0.0f && w_sum.z <= 0.0f) {
+    if (use_probability(w_sum) <= 0.0f) {
         no_contribution(data, g.n.shading_normal);
         return;
     }
 
-    const float inv_w_sum = 1.0f / math::luminance(w_sum);
+    const pdf_sample inv_w_sum = divide_if_greater_than_zero(make<pdf_sample>(1.0f), w_sum);
 
     unsigned int sampled_idx;
     float prev_cdf = 0.0f;
-    float p;
+    pdf_sample p;
+    color_sample cw;
     for (sampled_idx = 0; ; ++sampled_idx) {
         if (!has_allowed_components(data, components[sampled_idx].component)) {
             continue;
         }
 
-        p = math::luminance(math::max(
-            components[sampled_idx].weight, make_float3(0.0f, 0.0f, 0.0f))) * inv_w_sum;
-        const float cdf = prev_cdf + p;
+        cw = max(components[sampled_idx].weight, make<color_sample>(0.0f));
+        p = create_probability(cw) * inv_w_sum;
+        const float cdf = prev_cdf + use_probability(p);
         if (data->xi.z < cdf || sampled_idx == num_components - 1) {
             data->xi.z = saturate_below_one((data->xi.z - prev_cdf) / (cdf - prev_cdf));
             break;
@@ -8782,10 +9142,11 @@ BSDF_INLINE void color_mix_df_sample(
     if (data->event_type == 0) // BSDF_EVENT_ABSORB or EDF_NO_EMISSION or ...
         return;
 
-    const float3 nrm = normalized_mix ?
-        (math::max(w_sum_all, make_float3(1.0f, 1.0f, 1.0f)) * p) : make_float3(p, p, p);
+     const color_sample nrm = normalized_mix ?
+         (max(w_sum_all, make<color_sample>(1.0f)) * use_probability(p)) :
+         make<color_sample>(use_probability(p));
     set_df_over_pdf(data, get_df_over_pdf<TDF_sample_data>(data) *
-                    math::max(components[sampled_idx].weight, make_float3(0.0f, 0.0f, 0.0f)) / nrm);
+                    max(cw, make<color_sample>(0.0f)) / nrm);
 
     if (!BSDF::calc_pdf_in_sample())
         return;
@@ -8800,9 +9161,8 @@ BSDF_INLINE void color_mix_df_sample(
             continue;
         }
 
-        const float q = math::luminance(math::max(
-            components[i].weight, make_float3(0.0f, 0.0f, 0.0f))) * inv_w_sum;
-        if (q > 0.0f) {
+        const pdf_sample q = create_probability(max(components[i].weight, make<color_sample>(0.0f))) * inv_w_sum;
+        if (use_probability(q) > 0.0f) {
             components[i].component.pdf(&pdf_data, state, inherited_normal);
             data->pdf += q * pdf_data.pdf;
         }
@@ -8814,7 +9174,7 @@ BSDF_INLINE void color_mix_df_evaluate(
     TDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const TDF_component *components,
     const unsigned int num_components)
 {
@@ -8829,16 +9189,18 @@ BSDF_INLINE void color_mix_df_evaluate(
         return;
     }
 
-    float3 w_sum = make_float3(0.0f, 0.0f, 0.0f), w_sum_all = make_float3(0.0f, 0.0f, 0.0f);
+    pdf_sample w_sum = make<pdf_sample>(0.0f);
+    color_sample w_sum_all = make<color_sample>(0.0f);
     for (unsigned int i = 0; i < num_components; ++i) {
-        float3 cur_weight = math::max(components[i].weight, make_float3(0.0f, 0.0f, 0.0f));
+
+        color_sample cur_weight = max(components[i].weight, make<color_sample>(0.0f));
         w_sum_all += cur_weight;
         if (has_allowed_components(data, components[i].component)) {
-            w_sum += cur_weight;
+            w_sum += create_probability(cur_weight);
         }
     }
 
-    if (w_sum.x <= 0.0f && w_sum.y <= 0.0f && w_sum.z <= 0.0f) {
+    if (!has_greater_than_zero(w_sum)) {
         no_contribution(data, g.n.shading_normal);
         return;
     }
@@ -8846,27 +9208,44 @@ BSDF_INLINE void color_mix_df_evaluate(
     // the inherited_weight parameter of BSDF.evaluate() must not be modified depending
     // on the allowed components, so we use w_sum_all, which is calculated over all components,
     // for the normalization factor
-    const float3 normalize = normalized_mix ? make_float3(
+
+#ifdef MDL_DF_SPECTRAL_ENABLE
+
+    color_sample normalize;
+
+    if (normalized_mix)
+    {
+        for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+            normalize.values[i] = w_sum_all.values[i] > 1.0f ? 1.0f / w_sum_all.values[i] : 1.0f;
+    }
+    else
+    {
+        normalize = make<color_sample>(1.0f);
+    }
+
+#else
+
+    const color_sample normalize = normalized_mix ? make_float3(
         w_sum_all.x > 1.0f ? 1.0f / w_sum_all.x : 1.0f,
         w_sum_all.y > 1.0f ? 1.0f / w_sum_all.y : 1.0f,
         w_sum_all.z > 1.0f ? 1.0f / w_sum_all.z : 1.0f) : make_float3(1.0f, 1.0f, 1.0f);
 
-    const float inv_w_sum = 1.0f / math::luminance(w_sum);
+#endif
 
-    float pdf = 0.0f;
+    pdf_sample pdf = make<pdf_sample>(0.0f);
     for (unsigned int i = 0; i < num_components; ++i) {
         if (!has_allowed_components(data, components[i].component)) {
             continue;
         }
 
-        const float3 w = math::max(components[i].weight, make_float3(0.0f, 0.0f, 0.0f));
+        const color_sample w = max(components[i].weight, make<color_sample>(0.0f));
         components[i].component.evaluate(
-            data, state, inherited_normal, w * normalize * inherited_weight); 
-        pdf += data->pdf * math::luminance(w) * inv_w_sum;
+            data, state, inherited_normal, w * normalize * inherited_weight);
+        pdf += data->pdf * create_probability(w);
     }
+    data->pdf = divide_if_greater_than_zero(pdf, w_sum);
 
     set_cos(data, num_components == 0 ? 0.0f : get_cos(data));
-    data->pdf = pdf;
 }
 
 template<typename TDF_pdf_data, typename TDF_component, bool normalized_mix>
@@ -8888,31 +9267,30 @@ BSDF_INLINE void color_mix_df_pdf(
         return;
     }
 
-    float w_sum = 0.0f;
+    pdf_sample w_sum = make<pdf_sample>(0.0f);
     for (unsigned int i = 0; i < num_components; ++i) {
         if (has_allowed_components(data, components[i].component)) {
-            w_sum += math::luminance(math::max(
-                components[i].weight, make_float3(0.0f, 0.0f, 0.0f)));
+            w_sum += create_probability(max(components[i].weight, make<color_sample>(0.0f)));
         }
     }
 
-    if (w_sum <= 0.0f) {
+    if (!has_greater_than_zero(w_sum)) {
         no_contribution(data, g.n.shading_normal);
         return;
     }
 
-    const float inv_w_sum = 1.0f / w_sum;
-    float pdf = 0.0f;
+    pdf_sample pdf = make<pdf_sample>(0.0f);
     for (unsigned int i = 0; i < num_components; ++i) {
         if (!has_allowed_components(data, components[i].component)) {
             continue;
         }
 
         components[i].component.pdf(data, state, inherited_normal);
-        pdf += data->pdf * math::luminance(
-            math::max(components[i].weight, make_float3(0.0f, 0.0f, 0.0f))) * inv_w_sum;
+        pdf += data->pdf *
+            create_probability(max(components[i].weight, make<color_sample>(0.0f)));
     }
-    data->pdf = pdf;
+
+    data->pdf = divide_if_greater_than_zero(pdf, w_sum);
 }
 
 template<typename TDF_auxiliary_data, typename TDF_component, bool normalized_mix>
@@ -8920,7 +9298,7 @@ BSDF_INLINE void color_mix_df_auxiliary(
     TDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const TDF_component *components,
     const unsigned int num_components)
 {
@@ -8935,16 +9313,18 @@ BSDF_INLINE void color_mix_df_auxiliary(
         return;
     }
 
-    float3 w_sum = make_float3(0.0f, 0.0f, 0.0f), w_sum_all = make_float3(0.0f, 0.0f, 0.0f);
+    pdf_sample w_sum = make<pdf_sample>(0.0f);
+    color_sample w_sum_all = make<color_sample>(0.0f);
     for (unsigned int i = 0; i < num_components; ++i) {
-        float3 cur_weight = math::max(components[i].weight, make_float3(0.0f, 0.0f, 0.0f));
+        const color_sample cw = components[i].weight;
+        color_sample cur_weight = max(cw, make<color_sample>(0.0f));
         w_sum_all += cur_weight;
         if (has_allowed_components(data, components[i].component)) {
-            w_sum += cur_weight;
+            w_sum += create_probability(cur_weight);
         }
     }
 
-    if (w_sum.x <= 0.0f && w_sum.y <= 0.0f && w_sum.z <= 0.0f) {
+    if (!has_greater_than_zero(w_sum)) {
         no_contribution(data, g.n.shading_normal);
         return;
     }
@@ -8952,17 +9332,36 @@ BSDF_INLINE void color_mix_df_auxiliary(
     // the inherited_weight parameter of BSDF.auxiliary() must not be modified depending
     // on the allowed components, so we use w_sum_all, which is calculated over all components,
     // for the normalization factor
+
+#ifdef MDL_DF_SPECTRAL_ENABLE
+
+    color_sample normalize;
+
+    if (normalized_mix)
+    {
+        for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+            normalize.values[i] = w_sum_all.values[i] > 1.0f ? 1.0f / w_sum_all.values[i] : 1.0f;
+    }
+    else
+    {
+        normalize = make<color_sample>(1.0f);
+    }
+
+#else
+
     const float3 normalize = normalized_mix ? make_float3(
         w_sum_all.x > 1.0f ? 1.0f / w_sum_all.x : 1.0f,
         w_sum_all.y > 1.0f ? 1.0f / w_sum_all.y : 1.0f,
         w_sum_all.z > 1.0f ? 1.0f / w_sum_all.z : 1.0f) : make_float3(1.0f, 1.0f, 1.0f);
 
+#endif
+
     for (unsigned int i = 0; i < num_components; ++i) {
         if (!has_allowed_components(data, components[i].component)) {
             continue;
         }
-
-        const float3 w = math::max(components[i].weight, make_float3(0.0f, 0.0f, 0.0f));
+        const color_sample cw = components[i].weight;
+        const color_sample w = max(cw, make<color_sample>(0.0f));
         components[i].component.auxiliary(
             data, state, inherited_normal, w * normalize * inherited_weight);
     }
@@ -9002,14 +9401,34 @@ BSDF_INLINE void color_clamped_mix_df_sample(
     //   reflect and transmit -> last weight = color(0.3), mix_sum = color(1)
     //   only transmit        -> last weight = color(0.3), mix_sum = color(0.5)
 
-    float3 mix_sum_all = make_float3(0.0f, 0.0f, 0.0f);
-    float lw_sum = 0.0f;
+    color_sample mix_sum_all = make<color_sample>(0.0f);
+    pdf_sample lw_sum = make<pdf_sample>(0.0f);
     unsigned int num_active = 0;
     int last_allowed = -1;
     unsigned int clamp_mask = 0;
     for (unsigned int i = 0; i < num_components && clamp_mask != 7; ++i) {
         ++num_active;
-        float3 w = math::saturate(components[i].weight);
+
+        color_sample w = saturate(components[i].weight);
+
+#ifdef MDL_DF_SPECTRAL_ENABLE
+
+        for (int j = 0; j < MDL_DF_SPECTRAL_SAMPLES; ++j)
+        {
+            if (clamp_mask & (1 << j))
+                w.values[j] = 0.0f;
+
+            mix_sum_all.values[j] += w.values[j];
+
+            if ((clamp_mask & (1 << j)) == 0 && mix_sum_all.values[j] > 1.0f)
+            {
+                w.values[j] += 1.0f - mix_sum_all.values[j];
+                mix_sum_all.values[j] = 1.0f;
+                clamp_mask |= (1 << j);
+            }
+
+        }
+#else
         if (clamp_mask & 1)
             w.x = 0.0f;
         if (clamp_mask & 2)
@@ -9035,29 +9454,50 @@ BSDF_INLINE void color_clamped_mix_df_sample(
             clamp_mask |= 4;
         }
 
+#endif
+
         if (has_allowed_components(data, components[i].component)) {
             last_allowed = i;
-            lw_sum += math::luminance(w);
+            lw_sum += create_probability(w);
         }
     }
 
-    if (lw_sum <= 0.0f) {
+    if (!has_greater_than_zero(lw_sum)) {
         no_contribution(data, g.n.shading_normal);
         return;
     }
 
-
-    const float inv_lw_sum = 1.0f / lw_sum;
+    const pdf_sample inv_lw_sum = divide_if_greater_than_zero(make<pdf_sample>(1.0f), lw_sum);
 
     unsigned int sampled_idx;
     float prev_cdf = 0.0f;
-    float p;
-    float3 w;
-    mix_sum_all = make_float3(0.0f, 0.0f, 0.0f);
+    pdf_sample p;
+    color_sample w;
+    mix_sum_all = make<color_sample>(0.0f);
     clamp_mask = 0;
     for (sampled_idx = 0; ; ++sampled_idx) {
 
-        w = math::saturate(components[sampled_idx].weight);
+        w = saturate(components[sampled_idx].weight);
+
+#ifdef MDL_DF_SPECTRAL_ENABLE
+
+        for (int j = 0; j < MDL_DF_SPECTRAL_SAMPLES; ++j)
+        {
+            if (clamp_mask & (1 << j))
+                w.values[j] = 0.0f;
+
+            mix_sum_all.values[j] += w.values[j];
+
+            if ((clamp_mask & (1 << j)) == 0 && mix_sum_all.values[j] > 1.0f)
+            {
+                w.values[j] += 1.0f - mix_sum_all.values[j];
+                mix_sum_all.values[j] = 1.0f;
+                clamp_mask |= (1 << j);
+            }
+
+        }
+
+#else
         if (clamp_mask & 1)
             w.x = 0.0f;
         if (clamp_mask & 2)
@@ -9082,16 +9522,18 @@ BSDF_INLINE void color_clamped_mix_df_sample(
             mix_sum_all.z = 1.0f;
             clamp_mask |= 4;
         }
+
+#endif
 
         if (!has_allowed_components(data, components[sampled_idx].component)) {
             continue;
         }
 
-        p = math::luminance(w) * inv_lw_sum;
+        p = create_probability(w) * inv_lw_sum;
 
-        const float cdf = prev_cdf + p;
+        const float cdf = prev_cdf + use_probability(p);
         if (data->xi.z < cdf || (int)sampled_idx == last_allowed) {
-            data->xi.z = saturate_below_one((data->xi.z - prev_cdf) / p);
+            data->xi.z = saturate_below_one((data->xi.z - prev_cdf) / use_probability(p));
             break;
         }
         prev_cdf = cdf;
@@ -9101,18 +9543,38 @@ BSDF_INLINE void color_clamped_mix_df_sample(
     if (data->event_type == 0) // BSDF_EVENT_ABSORB or DF_NO_EMISSION or ...
         return;
 
-    set_df_over_pdf(data, get_df_over_pdf(data) * w / p);
+    set_df_over_pdf(data, get_df_over_pdf(data) * w / use_probability(p));
 
     if (!BSDF::calc_pdf_in_sample())
         return;
 
     data->pdf *= p;
-    mix_sum_all = make_float3(0.0f, 0.0f, 0.0f);
+    mix_sum_all = make<color_sample>(0.0f);
     clamp_mask = 0;
     auto pdf_data = to_pdf_data(data);
     for (unsigned int i = 0; i < num_active && clamp_mask != 7; ++i) {
+        w = saturate(components[i].weight);
 
-        w = math::saturate(components[i].weight);
+#ifdef MDL_DF_SPECTRAL_ENABLE
+
+        for (int j = 0; j < MDL_DF_SPECTRAL_SAMPLES; ++j)
+        {
+            if (clamp_mask & (1 << j))
+                w.values[j] = 0.0f;
+
+            mix_sum_all.values[j] += w.values[j];
+
+            if ((clamp_mask & (1 << j)) == 0 && mix_sum_all.values[j] > 1.0f)
+            {
+                w.values[j] += 1.0f - mix_sum_all.values[j];
+                mix_sum_all.values[j] = 1.0f;
+                clamp_mask |= (1 << j);
+            }
+
+        }
+
+#else
+
         if (clamp_mask & 1)
             w.x = 0.0f;
         if (clamp_mask & 2)
@@ -9138,12 +9600,14 @@ BSDF_INLINE void color_clamped_mix_df_sample(
             clamp_mask |= 4;
         }
 
+#endif
+
         if (!has_allowed_components(data, components[i].component)) {
             continue;
         }
 
-        const float q = math::luminance(w) * inv_lw_sum;
-        if (q > 0.0f) {
+        const pdf_sample q = create_probability(w) * inv_lw_sum;
+        if (use_probability(q) > 0.0f) {
             components[i].component.pdf(&pdf_data, state, inherited_normal);
             data->pdf += q * pdf_data.pdf;
         }
@@ -9155,7 +9619,7 @@ BSDF_INLINE void color_clamped_mix_df_evaluate(
     TDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const TDF_component *components,
     const unsigned int num_components)
 {
@@ -9174,12 +9638,32 @@ BSDF_INLINE void color_clamped_mix_df_evaluate(
     // The relative weights between the components may also not change based on allowed components.
     // See clamped_mix_df_sample() for examples.
 
-    float pdf = 0.0f;
-    float3 mix_sum_all = make_float3(0.0f, 0.0f, 0.0f);
-    float lw_sum = 0.0f;
+    pdf_sample pdf = make<pdf_sample>(0.0f);
+    color_sample mix_sum_all = make<color_sample>(0.0f);
+    pdf_sample lw_sum = make<pdf_sample>(0.0f);
     unsigned int clamp_mask = 0;
     for (unsigned int i = 0; i < num_components && clamp_mask != 7; ++i) {
-        float3 w = math::saturate(components[i].weight);
+        color_sample w = saturate(components[i].weight);
+
+#ifdef MDL_DF_SPECTRAL_ENABLE
+
+        for (int j = 0; j < MDL_DF_SPECTRAL_SAMPLES; ++j)
+        {
+            if (clamp_mask & (1 << j))
+                w.values[j] = 0.0f;
+
+            mix_sum_all.values[j] += w.values[j];
+
+            if ((clamp_mask & (1 << j)) == 0 && mix_sum_all.values[j] > 1.0f)
+            {
+                w.values[j] += 1.0f - mix_sum_all.values[j];
+                mix_sum_all.values[j] = 1.0f;
+                clamp_mask |= (1 << j);
+            }
+        }
+
+#else
+
         if (clamp_mask & 1)
             w.x = 0.0f;
         if (clamp_mask & 2)
@@ -9205,20 +9689,22 @@ BSDF_INLINE void color_clamped_mix_df_evaluate(
             clamp_mask |= 4;
         }
 
+#endif
+
         if (!has_allowed_components(data, components[i].component)) {
             continue;
         }
 
         components[i].component.evaluate(data, state, inherited_normal, w * inherited_weight);
 
-        const float lw = math::luminance(w);
+        const pdf_sample lw = create_probability(w);
         lw_sum += lw;
         pdf += data->pdf * lw;
     }
 
     set_cos(data, num_components == 0 ? 0.0f : get_cos(data));
-    if (lw_sum > 0.0f)
-        data->pdf = pdf / lw_sum;
+
+    data->pdf = divide_if_greater_than_zero(pdf, lw_sum);
 }
 
 template<typename TDF_pdf_data, typename TDF_component>
@@ -9244,13 +9730,33 @@ BSDF_INLINE void color_clamped_mix_df_pdf(
     // The relative weights between the components may also not change based on allowed components.
     // See clamped_mix_df_sample() for examples.
 
-    float pdf = 0.0f;
+    pdf_sample pdf = make<pdf_sample>(0.0f);
 
-    float3 mix_sum_all = make_float3(0.0f, 0.0f, 0.0f);
-    float lw_sum = 0.0f;
+    color_sample mix_sum_all = make<color_sample>(0.0f);
+    pdf_sample lw_sum = make<pdf_sample>(0.0f);
     unsigned int clamp_mask = 0;
     for (unsigned int i = 0; i < num_components && clamp_mask != 7; ++i) {
-        float3 w = math::saturate(components[i].weight);
+        color_sample w = saturate(components[i].weight);
+
+#ifdef MDL_DF_SPECTRAL_ENABLE
+
+        for (int j = 0; j < MDL_DF_SPECTRAL_SAMPLES; ++j)
+        {
+            if (clamp_mask & (1 << j))
+                w.values[j] = 0.0f;
+
+            mix_sum_all.values[j] += w.values[j];
+
+            if ((clamp_mask & (1 << j)) == 0 && mix_sum_all.values[j] > 1.0f)
+            {
+                w.values[j] += 1.0f - mix_sum_all.values[j];
+                mix_sum_all.values[j] = 1.0f;
+                clamp_mask |= (1 << j);
+            }
+        }
+
+#else
+
         if (clamp_mask & 1)
             w.x = 0.0f;
         if (clamp_mask & 2)
@@ -9276,20 +9782,19 @@ BSDF_INLINE void color_clamped_mix_df_pdf(
             clamp_mask |= 4;
         }
 
+#endif
+
         if (!has_allowed_components(data, components[i].component)) {
             continue;
         }
 
         components[i].component.pdf(data, state, inherited_normal);
-        const float lw = math::luminance(w);
+        const pdf_sample lw = create_probability(w);
         lw_sum += lw;
         pdf += data->pdf * lw;
     }
 
-    if (lw_sum > 0.0f)
-        pdf /= lw_sum;
-
-    data->pdf = pdf;
+    data->pdf = divide_if_greater_than_zero(pdf, lw_sum);
 }
 
 
@@ -9298,7 +9803,7 @@ BSDF_INLINE void color_clamped_mix_df_auxiliary(
     TDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const TDF_component *components,
     const unsigned int num_components)
 {
@@ -9318,11 +9823,31 @@ BSDF_INLINE void color_clamped_mix_df_auxiliary(
     // The relative weights between the components may also not change based on allowed components.
     // See clamped_mix_df_sample() for examples.
 
-    float3 mix_sum_all = make_float3(0.0f, 0.0f, 0.0f);
+    color_sample mix_sum_all = make<color_sample>(0.0f);
     unsigned int clamp_mask = 0;
     for (unsigned int i = 0; i < num_components && clamp_mask != 7; ++i)
     {
-        float3 w = math::saturate(components[i].weight);
+        color_sample w = saturate(components[i].weight);
+
+#ifdef MDL_DF_SPECTRAL_ENABLE
+
+        for (int j = 0; j < MDL_DF_SPECTRAL_SAMPLES; ++j)
+        {
+            if (clamp_mask & (1 << j))
+                w.values[j] = 0.0f;
+
+            mix_sum_all.values[j] += w.values[j];
+
+            if ((clamp_mask & (1 << j)) == 0 && mix_sum_all.values[j] > 1.0f)
+            {
+                w.values[j] += 1.0f - mix_sum_all.values[j];
+                mix_sum_all.values[j] = 1.0f;
+                clamp_mask |= (1 << j);
+            }
+        }
+
+#else
+
         if (clamp_mask & 1)
             w.x = 0.0f;
         if (clamp_mask & 2)
@@ -9350,6 +9875,8 @@ BSDF_INLINE void color_clamped_mix_df_auxiliary(
             mix_sum_all.z = 1.0f;
             clamp_mask |= 4;
         }
+
+#endif
 
         if (!has_allowed_components(data, components[i].component)) {
             continue;
@@ -9379,7 +9906,7 @@ BSDF_API void normalized_mix_bsdf_evaluate (
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const BSDF_component *components,
     const unsigned int num_components)
 {
@@ -9402,7 +9929,7 @@ BSDF_API void normalized_mix_bsdf_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const BSDF_component *components,
     const unsigned int num_components)
 {
@@ -9425,7 +9952,7 @@ BSDF_API void color_normalized_mix_bsdf_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const color_BSDF_component *components,
     const unsigned int num_components)
 {
@@ -9448,7 +9975,7 @@ BSDF_API void color_normalized_mix_bsdf_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const color_BSDF_component *components,
     const unsigned int num_components)
 {
@@ -9470,7 +9997,7 @@ BSDF_API void clamped_mix_bsdf_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const BSDF_component *components,
     const unsigned int num_components)
 {
@@ -9492,7 +10019,7 @@ BSDF_API void clamped_mix_bsdf_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const BSDF_component *components,
     const unsigned int num_components)
 {
@@ -9514,7 +10041,7 @@ BSDF_API void color_clamped_mix_bsdf_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const color_BSDF_component *components,
     const unsigned int num_components)
 {
@@ -9536,7 +10063,7 @@ BSDF_API void color_clamped_mix_bsdf_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const color_BSDF_component *components,
     const unsigned int num_components)
 {
@@ -9559,7 +10086,7 @@ BSDF_API void unbounded_mix_bsdf_evaluate (
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const BSDF_component *components,
     const unsigned int num_components)
 {
@@ -9582,7 +10109,7 @@ BSDF_API void unbounded_mix_bsdf_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const BSDF_component *components,
     const unsigned int num_components)
 {
@@ -9605,7 +10132,7 @@ BSDF_API void color_unbounded_mix_bsdf_evaluate (
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const color_BSDF_component *components,
     const unsigned int num_components)
 {
@@ -9628,7 +10155,7 @@ BSDF_API void color_unbounded_mix_bsdf_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const color_BSDF_component *components,
     const unsigned int num_components)
 {
@@ -9653,7 +10180,7 @@ BSDF_API void black_edf_evaluate(
     EDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight)
+    const color_sample &inherited_weight)
 {
     no_emission(data);
 }
@@ -9670,7 +10197,7 @@ BSDF_API void black_edf_auxiliary(
     EDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight)
+    const color_sample &inherited_weight)
 {
     no_emission(data);
 }
@@ -9787,8 +10314,8 @@ BSDF_API void diffuse_edf_sample(
     }
 
     if (BSDF::calc_pdf_in_sample())
-        data->pdf = cosh.y * float(M_ONE_OVER_PI);
-    data->edf_over_pdf = make<float3>(1.0f);
+        data->pdf = make<pdf_sample>(cosh.y * float(M_ONE_OVER_PI));
+    data->edf_over_pdf = make<color_sample>(1.0f);
     data->event_type = EDF_EVENT_EMISSION;
     data->handle = handle;
 }
@@ -9797,15 +10324,15 @@ BSDF_API void diffuse_edf_evaluate(
     EDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const int handle)
 {
     float cos;
     edf_compute_cos(data->k1, state, inherited_normal, cos);
 
     data->cos = cos;
-    data->pdf = cos * float(M_ONE_OVER_PI);
-    add_elemental_edf_evaluate_contribution(data, handle, make<float3>(float(M_ONE_OVER_PI)) * inherited_weight);
+    data->pdf = make<pdf_sample>(cos * float(M_ONE_OVER_PI));
+    add_elemental_edf_evaluate_contribution(data, handle, make<color_sample>(float(M_ONE_OVER_PI)) * inherited_weight);
 }
 
 BSDF_API void diffuse_edf_pdf(
@@ -9816,14 +10343,14 @@ BSDF_API void diffuse_edf_pdf(
 {
     float cos;
     edf_compute_cos(data->k1, state, inherited_normal, cos);
-    data->pdf = cos * float(M_ONE_OVER_PI);
+    data->pdf = make<pdf_sample>(cos * float(M_ONE_OVER_PI));
 }
 
 BSDF_API void diffuse_edf_auxiliary(
     EDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const int handle)
 {
     no_emission(data);
@@ -9858,10 +10385,11 @@ namespace
         return math::cos(spread * 0.5f); // to compare against the cosine at the normal
     }
 
-    BSDF_INLINE float spot_edf_pdf(float s, float k, float cos_theta)
+    BSDF_INLINE pdf_sample spot_edf_pdf(float s, float k, float cos_theta)
     {
-        return (k + 1.0f) * math::pow(cos_theta - s, k)
-            / (math::pow(1.0f - s, k + 1.0f) * (float) (2.0 * M_PI));
+        return make<pdf_sample>(
+            (k + 1.0f) * math::pow(cos_theta - s, k)
+            / (math::pow(1.0f - s, k + 1.0f) * (float) (2.0 * M_PI)));
     }
 }
 
@@ -9908,7 +10436,7 @@ BSDF_API void spot_edf_sample(
         }
 
         // edf * cos_theta / pdf
-        data->edf_over_pdf = make<float3>((k * k + 3.0f * k + 2.0f) * cos_theta
+        data->edf_over_pdf = make<color_sample>((k * k + 3.0f * k + 2.0f) * cos_theta
                                           / (k * k + k * (2.0f + s) + s + 1.0f));
     }
 
@@ -9922,7 +10450,7 @@ BSDF_API void spot_edf_evaluate(
     EDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const float exponent,
     const float spread,
     const bool global_distribution,
@@ -9962,10 +10490,10 @@ BSDF_API void spot_edf_evaluate(
 
     data->cos = cos_theta;
     data->pdf = spot_edf_pdf(s, k, cos_theta);
-    
+
     // normalized edf (not cosine corrected)
     add_elemental_edf_evaluate_contribution(
-        data, handle, make<float3>(edf * normalization) * inherited_weight);
+        data, handle, make<color_sample>(edf * normalization) * inherited_weight);
 }
 
 BSDF_API void spot_edf_pdf(
@@ -9998,7 +10526,7 @@ BSDF_API void spot_edf_auxiliary(
     EDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const float exponent,
     const float spread,
     const bool global_distribution,
@@ -10065,8 +10593,8 @@ BSDF_INLINE void lightprofile_sample(
                                               make<float2>(polar_pdf.x, polar_pdf.y));
 
     if (BSDF::calc_pdf_in_sample())
-        data->pdf = polar_pdf.z;
-    data->edf_over_pdf = make<float3>(edf * scale / polar_pdf.z);
+        data->pdf = make<pdf_sample>(polar_pdf.z);
+    data->edf_over_pdf = make<color_sample>(edf * scale / polar_pdf.z);
     data->event_type = EDF_EVENT_EMISSION;
 }
 
@@ -10096,9 +10624,9 @@ BSDF_API void measured_edf_sample(
                         global_distribution, global_frame);
 }
 
-
+// TODO SPECTRAL: RGB or spectral??? it should be scalar, double ckeck
 template<typename TEDF_data>
-BSDF_INLINE float3 lightprofile_eval_and_pdf(
+BSDF_INLINE color_sample lightprofile_eval_and_pdf(
     TEDF_data *data,
     State *state,
     const Geometry &g,
@@ -10111,7 +10639,7 @@ BSDF_INLINE float3 lightprofile_eval_and_pdf(
     float cos;
     if (global_distribution) {
         no_emission(data);
-        return make<float3>(0.0f);
+        return make<color_sample>(0.0f);
     } else {
         // internal to local (assuming an orthonormal base)
         const float3 outgoing = math::normalize(make_float3(
@@ -10130,15 +10658,15 @@ BSDF_INLINE float3 lightprofile_eval_and_pdf(
                     * state->light_profile_evaluate(light_profile_id, outgoing_polar);
 
     set_cos(data, cos);
-    set_pdf(data, state->light_profile_pdf(light_profile_id, outgoing_polar));
-    return make<float3>(intensity);
+    data->pdf = make<pdf_sample>(state->light_profile_pdf(light_profile_id, outgoing_polar));
+    return make<color_sample>(intensity);
 }
 
 BSDF_API void measured_edf_evaluate(
     EDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     //
     const unsigned light_profile_id,
     const float multiplier,
@@ -10159,7 +10687,7 @@ BSDF_API void measured_edf_evaluate(
 
     get_bumped_basis(g.x_axis, g.z_axis, tangent_u, g.n.shading_normal);
 
-    const float3 edf = lightprofile_eval_and_pdf<EDF_evaluate_data>(
+    const color_sample edf = lightprofile_eval_and_pdf<EDF_evaluate_data>(
         data, state, g, light_profile_id, multiplier, global_distribution, global_frame);
 
     add_elemental_edf_evaluate_contribution(data, handle, edf * inherited_weight);
@@ -10197,7 +10725,7 @@ BSDF_API void measured_edf_auxiliary(
     EDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     //
     const unsigned light_profile_id,
     const float multiplier,
@@ -10229,7 +10757,7 @@ BSDF_API void normalized_mix_edf_evaluate(
     EDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const EDF_component *components,
     const unsigned int num_components)
 {
@@ -10252,7 +10780,7 @@ BSDF_API void normalized_mix_edf_auxiliary(
     EDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const EDF_component *components,
     const unsigned int num_components)
 {
@@ -10276,7 +10804,7 @@ BSDF_API void color_normalized_mix_edf_evaluate(
     EDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const color_EDF_component *components,
     const unsigned int num_components)
 {
@@ -10299,7 +10827,7 @@ BSDF_API void color_normalized_mix_edf_auxiliary(
     EDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const color_EDF_component *components,
     const unsigned int num_components)
 {
@@ -10322,7 +10850,7 @@ BSDF_API void clamped_mix_edf_evaluate(
     EDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const EDF_component *components,
     const unsigned int num_components)
 {
@@ -10344,7 +10872,7 @@ BSDF_API void clamped_mix_edf_auxiliary(
     EDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const EDF_component *components,
     const unsigned int num_components)
 {
@@ -10367,7 +10895,7 @@ BSDF_API void color_clamped_mix_edf_evaluate(
     EDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const color_EDF_component *components,
     const unsigned int num_components)
 {
@@ -10389,7 +10917,7 @@ BSDF_API void color_clamped_mix_edf_auxiliary(
     EDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const color_EDF_component *components,
     const unsigned int num_components)
 {
@@ -10413,7 +10941,7 @@ BSDF_API void unbounded_mix_edf_evaluate(
     EDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const EDF_component *components,
     const unsigned int num_components)
 {
@@ -10436,7 +10964,7 @@ BSDF_API void unbounded_mix_edf_auxiliary(
     EDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const EDF_component *components,
     const unsigned int num_components)
 {
@@ -10460,7 +10988,7 @@ BSDF_API void color_unbounded_mix_edf_evaluate(
     EDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const color_EDF_component *components,
     const unsigned int num_components)
 {
@@ -10483,7 +11011,7 @@ BSDF_API void color_unbounded_mix_edf_auxiliary(
     EDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const color_EDF_component *components,
     const unsigned int num_components)
 {

@@ -862,8 +862,11 @@ void Vulkan_base_app::init_swapchain_for_window()
     }
 
     // Requested image count might not be supported, so clamp it
+    // NOTE: surface_caps.maxImageCount == 0 means unlimited images are supported
+    const uint32_t maxImageCount =
+        surface_caps.maxImageCount == 0 ? ~0u : surface_caps.maxImageCount;
     m_image_count = std::clamp(
-        m_config.image_count, surface_caps.minImageCount, surface_caps.maxImageCount);
+        m_config.image_count, surface_caps.minImageCount, maxImageCount);
 
     // Create swapchain
     VkSwapchainCreateInfoKHR swapchain_create_info = {};

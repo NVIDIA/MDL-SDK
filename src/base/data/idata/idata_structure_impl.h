@@ -54,6 +54,7 @@
 #include <base/lib/unordered_dense/unordered_dense.h>
 
 #include "idata_interfaces.h"
+#include "i_idata_string_cache.h"
 
 namespace MI {
 
@@ -211,8 +212,8 @@ private:
     /// Maps indices to keys.
     std::vector<std::string> m_index_to_key;
 
-    /// Caches the last return value of get_key().
-    mutable std::string m_cached_key;
+    /// Caches the return values of get_key().
+    mutable String_cache m_string_cache;
 
     /// Indicates whether the constructor successfully constructed the instance.
     /// \see #successfully_constructed()
@@ -327,8 +328,8 @@ private:
     /// Maps indices to keys.
     std::vector<std::string> m_index_to_key;
 
-    /// Caches the last return value of get_key().
-    mutable std::string m_cached_key;
+    /// Caches the return values of get_key().
+    mutable String_cache m_string_cache;
 
     /// Owner of the storage
     ///

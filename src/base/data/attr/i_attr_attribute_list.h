@@ -28,7 +28,7 @@
 
 /// \file
 /// \brief Attribute_list class definition.
- 
+
 #ifndef BASE_DATA_ATTR_I_ATTR_ATTRIBUTE_LIST_H
 #define BASE_DATA_ATTR_I_ATTR_ATTRIBUTE_LIST_H
 
@@ -65,31 +65,29 @@ class Attribute_list : public Attribute
       : Attribute(id, type, list_size, override),
         m_listsize(list_size),
         m_listalloc(list_size)
-    { init(id, override, list_size, false, false); }
+    { init(id, override, list_size, false); }
     explicit Attribute_list(
         Type_code       type,
         const char      *name,
         Uint            type_asize,
         Uint            list_size,
         Attribute_propagation override,
-        bool            global,
-        bool            is_const)
-      : Attribute(type, name, type_asize, list_size, override, global, is_const),
+        bool            global)
+      : Attribute(type, name, type_asize, list_size, override, global),
         m_listsize(list_size),
         m_listalloc(list_size)
-    { init(Attribute::id_create(name), override, list_size, is_const, global); }
+    { init(Attribute::id_create(name), override, list_size, global); }
     explicit Attribute_list(
         Attribute_id    id,
         Type_code       type,
         Uint            type_asize,
         Uint            list_size,
         Attribute_propagation override,
-        bool            global,
-        bool            is_const)
-      : Attribute(id, type, type_asize, list_size, override, global, is_const),
+        bool            global)
+      : Attribute(id, type, type_asize, list_size, override, global),
         m_listsize(list_size),
         m_listalloc(list_size)
-    { init(id, override, list_size, is_const, global); }
+    { init(id, override, list_size, global); }
     //@}
 
     /// Attribute virtual functions. Return the approximate size in bytes of the element

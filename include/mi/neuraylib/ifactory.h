@@ -114,7 +114,7 @@ public:
     ///
     /// This templated member function is a wrapper of the non-template variant for the user's
     /// convenience. It eliminates the need to call
-    /// #mi::base::IInterface::get_interface(const Uuid&)
+    /// #mi::base::IInterface::get_interface(const mi::base::Uuid&)
     /// on the returned pointer, since the return type already is a pointer to the type \p T
     /// specified as template parameter.
     ///
@@ -165,7 +165,7 @@ public:
     ///
     /// This templated member function is a wrapper of the non-template variant for the user's
     /// convenience. It eliminates the need to call
-    /// #mi::base::IInterface::get_interface(const Uuid&)
+    /// #mi::base::IInterface::get_interface(const mi::base::Uuid&)
     /// on the returned pointer, since the return type already is a pointer to the type \p T
     /// specified as template parameter.
     ///
@@ -300,7 +300,7 @@ public:
     ///
     /// This templated member function is a wrapper of the non-template variant for the user's
     /// convenience. It eliminates the need to call
-    /// #mi::base::IInterface::get_interface(const Uuid&)
+    /// #mi::base::IInterface::get_interface(const mi::base::Uuid&)
     /// on the returned pointer, since the return type already is a pointer to the type \p T
     /// specified as template parameter.
     ///
@@ -362,13 +362,13 @@ public:
     /// \p depth.
     ///
     /// \ifnot DICE_API
-    /// \see #mi::neuraylib::IFactory::dump(ITransaction*,const IData*,const char*,Size)
+    /// \see #dump(mi::neuraylib::ITransaction*,const mi::IData*,const char*,mi::Size)
     /// \endif
     virtual const IString* dump( const IData* data, const char* name = nullptr, Size depth = 0) = 0;
 
     /// Returns a textual representation of a type.
     ///
-    /// This overload of #mi::neuraylib::IFactory::dump(const IData*,const char*,Size) requires an
+    /// This overload of #dump(const mi::IData*,const char*,mi::Size) requires an
     /// additional transaction pointer. This is necessary to support the dumping of possibly nested
     /// non-#mi::IData types.
     virtual const IString* dump(

@@ -112,6 +112,12 @@ public:
     /// Indicates whether an attempt is made to expose names of let expressions.
     virtual bool get_expose_names_of_let_expressions() const = 0;
 
+    /// Defines whether imports of ::nvidia::df emit a deprecation warning.
+    virtual void set_warn_about_nvidia_df( bool value) = 0;
+
+    /// Indicates whether imports of ::nvidia::df emit a deprecation warning.
+    virtual bool get_warn_about_nvidia_df() const = 0;
+
     /// Returns the module wait queue.
     virtual MDL::Mdl_module_wait_queue* get_module_wait_queue() const = 0;
 };

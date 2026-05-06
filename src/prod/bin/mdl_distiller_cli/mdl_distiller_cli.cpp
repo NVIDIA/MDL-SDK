@@ -744,6 +744,10 @@ int main( int argc, char* argv[]) {
                     options.export_spec = mdl_spec_1_8;
                 else if ( 0 == strcmp( "1.9", argv[i]))
                     options.export_spec = mdl_spec_1_9;
+                else if (0 == strcmp("1.10", argv[i]))
+                    options.export_spec = mdl_spec_1_10;
+                else if (0 == strcmp("1.11", argv[i]))
+                    options.export_spec = mdl_spec_1_11;
                 else {
                     std::cerr << "Error: unknown argument for -export-spec parameter <v>.\n";
                     usage();

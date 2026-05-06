@@ -78,62 +78,110 @@ public:
     /// Distills a material.
     ///
     /// Material distilling refers to the translation of an arbitrary input material to a
-    /// predefined target model.
-    /// Supported target models are
-    /// - diffuse
-    /// - specular_glossy
-    /// - ue4
-    /// - transmissive_pbr
+    /// material with a predefined structure, called a target model. The SDK ships with a number of
+    /// distilling targets as well as the sources to the distiller plugin implementing those
+    /// targets. The general mechanism by which a distiller plugin simplifies a material is by
+    /// traversing the call graph of the material's BSDF, analysing the current expression and,
+    /// potentially, replacing that expression with a different, simpler one. The result is a
+    /// material with a transformed BSDF graph, typically matching some target material model in
+    /// structure. The user can now inspect the BSDF parameters and either create compiled code
+    /// for those expressions or bake the expressions to textures.
     ///
-    /// Depending on the structure of the input material and the
-    /// complexity of the target model the resulting material can be as simple as a single bsdf
-    /// or a set of bsdfs combined using layerers and mixes as illustrated in the table below
-    /// using a pseudo-mdl notation.
+    /// Users can implement custom targets by modifying existing replacement rules or writing their
+    /// own rules. \if MDL_SDK_API \see \ref mi_neuray_mdltl \endif
+    ///
+    /// The distiller plugin shipped by default supports the following target models:
+    ///
+    /// - <tt>diffuse</tt>: A target model with a singular diffuse BSDF. Useful for extremely
+    ///   simple viewport previews or as a starting point for writing custom targets.
+    ///
+    /// - <tt>specular_glossy</tt>: Target model consisting of a diffuse reflection lobe combined
+    ///   with a glossy lobe layered on top using a <tt>custom_curve_layer</tt>.
+    ///
+    /// - <tt>ue4</tt>: A generig metallic-roughness material model. Originally developed for
+    ///   supporting UE4 materials, it is a good starting point for all metallic roughness based
+    ///   rasterizer materials. If the source material is transmissive, the distiller maps the
+    ///   transparency to <tt>material.geometry.cutout_opacity</tt>. This target also supports a
+    ///   secondary dielectric glossy lobe (coat). The MDL BSDF graph has more parameters than the
+    ///   simple metallic roughness material model. The distiller in general tries to retain 
+    ///   attachments for those parameters. This can be used to extract values and expressions for
+    ///   more capable models. For example the secondary dielectric glossy lobe is not restricted
+    ///   to white and also anisotropy of glossy lobes is retained. Since metallic roughness
+    ///   workflows support only a single base color, the color of the diffuse lobe and the
+    ///   metallic glossy lobe is averaged into a single color. <tt>material.geometry.normal</tt>
+    ///   is combined with potential additional layering normals and represented as a dedicated
+    ///   weighted layer with weight 1.
+    ///
+    /// - <tt>transmissive_pbr</tt>: Largely the same as <tt>ue4</tt>, this target supports a
+    ///   dedicated transmissive lobe. If the source has a diffuse transmission, it will map to a
+    ///   glossy transmission of roughness 1, potentially allowing the reconstruction of diffuse
+    ///   transmissive or SSS contributions.
+    ///
+    /// The following table contains the lists the target BSDF graphs using a pseudo-MDL notation.
+    /// Note that the distiller is not guaranteed to create lobes not already contained in the
+    /// source material.
+    ///
     /// <table>
     ///   <tr>
+    ///      <th>Target model name</th>
+    ///      <th>Paths available in the target material and their structure</th>
+    ///   </tr>
+    ///   <tr>
     ///      <td>diffuse</td>
-    ///      <td>surface.scattering = diffuse_reflection_bsdf<br>
-    ///          geometry.normal = ()
+    ///      <td>
+    ///\code
+    ///  surface.scattering = diffuse_reflection_bsdf
+    ///  geometry.normal = ()
+    ///\endcode
     ///      </td>
     ///    </tr>
     ///   <tr>
     ///      <td rowspan=3>specular_glossy</td>
-    ///      <td>surface.scattering = custom_curve_layer(layer: bsdf_glossy_ggx_vcavities,
-    ///          base: diffuse_reflection_bsdf)<br>
-    ///          geometry.normal = ()
+    ///      <td>
+    ///\code
+    ///  surface.scattering = custom_curve_layer(
+    ///    layer: bsdf_glossy_ggx_vcavities,
+    ///    base: diffuse_reflection_bsdf)
+    ///  geometry.normal = ()
+    ///\endcode
     ///      </td>
     ///   </tr>
     ///   <tr>
     ///      <td>
-    ///          surface.scattering = bsdf_glossy_ggx_vcavities<br>
-    ///          geometry.normal = ()
+    ///\code
+    ///  surface.scattering = bsdf_glossy_ggx_vcavities
+    ///  geometry.normal = ()
+    ///\endcode
     ///      </td>
     ///   </tr>
     ///   <tr>
     ///      <td>
-    ///          surface.scattering = diffuse_reflection_bsdf<br>
-    ///          geometry.normal = ()
+    ///\code
+    ///  surface.scattering = diffuse_reflection_bsdf
+    ///  geometry.normal = ()
+    ///\endcode
     ///      </td>
     ///   </tr>
     ///   <tr>
     ///      <td rowspan=2>ue4</td>
-    ///      <td>surface.scattering = custom_curve_layer( // clearcoat<br>
-    ///          &nbsp;&nbsp;layer: bsdf_glossy_ggx_vcavities,<br>
-    ///          &nbsp;&nbsp;base: weighted_layer(<br>
-    ///          &nbsp;&nbsp;&nbsp;&nbsp;layer: normalized_mix(<br>
-    ///          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;bsdf_glossy_ggx_vcavities,<br>
-    ///          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;custom_curve_layer(<br>
-    ///          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layer:
-    ///          bsdf_glossy_ggx_vcavities,<br>
-    ///          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;base:
-    ///          diffuse_reflection_bsdf<br>
-    ///          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;),<br>
-    ///          &nbsp;&nbsp;&nbsp;&nbsp;),<br>
-    ///          &nbsp;&nbsp;&nbsp;&nbsp;normal: () // under-clearcoat normal<br>
-    ///          &nbsp;&nbsp;),<br>
-    ///          &nbsp;&nbsp;normal: () // clearcoat normal<br>
-    ///          )
-    ///      </td>
+    ///      <td>
+    ///\code
+    ///  surface.scattering = custom_curve_layer(  // dielectric (coat) weighting parameters
+    ///    layer: bsdf_glossy_ggx_vcavities,       // dielectric glossy lobe
+    ///    base: weighted_layer(                   // add coat normal
+    ///      layer: normalized_mix(                // metalness parameter
+    ///        bsdf_glossy_ggx_vcavities           // metallic glossy lobe
+    ///        custom_curve_layer(                 // dielectric weighting parameters
+    ///          layer: bsdf_glossy_ggx_vcavities, // dielectric glossy lobe
+    ///          base: diffuse_reflection_bsdf
+    ///        ),
+    ///      ),
+    ///      normal: ()                            // under-clearcoat normal
+    ///    ),
+    ///    normal: ()                              // clearcoat normal
+    ///  )
+    ///\endcode
+    ///   </td>
     ///   </tr>
     ///   <tr>
     ///      <td>
@@ -143,27 +191,26 @@ public:
     ///   </tr>
     ///   <tr>
     ///      <td rowspan=2>transmissive_pbr</td>
-    ///      <td>surface.scattering = custom_curve_layer( // clearcoat<br>
-    ///          &nbsp;&nbsp;layer: bsdf_glossy_ggx_vcavities,<br>
-    ///          &nbsp;&nbsp;base: weighted_layer(<br>
-    ///          &nbsp;&nbsp;&nbsp;&nbsp;layer: normalized_mix(<br>
-    ///          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;bsdf_glossy_ggx_vcavities,<br>
-    ///          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;custom_curve_layer(<br>
-    ///          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layer:
-    ///          bsdf_glossy_ggx_vcavities,<br>
-    ///          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;base:
-    ///          normalized_mix(<br>
-    ///          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-    ///          bsdf_glossy_ggx_vcavities(scatter_transmit)<br>
-    ///          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-    ///          diffuse_reflection_bsdf<br>
-    ///          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;),<br>
-    ///          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;),<br>
-    ///          &nbsp;&nbsp;&nbsp;&nbsp;),<br>
-    ///          &nbsp;&nbsp;&nbsp;&nbsp;normal: () // under-clearcoat normal<br>
-    ///          &nbsp;&nbsp;),<br>
-    ///          &nbsp;&nbsp;normal: () // clearcoat normal<br>
-    ///          )
+    ///      <td>
+    ///\code
+    ///  surface.scattering = custom_curve_layer(              // dielectric (coat) weighting parameters
+    ///    layer: bsdf_glossy_ggx_vcavities                    // dielectric glossy lobe
+    ///    base: weighted_layer(                               // add coat normal
+    ///      layer: normalized_mix(                            // metalness parameter
+    ///        bsdf_glossy_ggx_vcavities,                      // metallic glossy lobe
+    ///        custom_curve_layer(                             // dielectric weighting parameters
+    ///          layer: bsdf_glossy_ggx_vcavities,             // dielectric glossy reflection lobe
+    ///          base: normalized_mix(                         // transparency parameter
+    ///            bsdf_glossy_ggx_vcavities(scatter_transmit) // dielectric glossy transmission lobe
+    ///            diffuse_reflection_bsdf
+    ///          ),
+    ///        ),
+    ///      ),
+    ///      normal: ()                                        // under-clearcoat normal
+    ///    ),
+    ///    normal: ()                                          // clearcoat normal
+    ///  )
+    ///\endcode
     ///      </td>
     ///   </tr>
     ///   <tr>
@@ -184,7 +231,6 @@ public:
     ///       - \c "layer_normal" of type #mi::IBoolean. If \c true, it enables the aggregation
     ///         of the local normal maps of BSDF layerers to combine them with the global normal
     ///         map. Default: \c true.
-    ///
     /// \param errors             An optional pointer to an #mi::Sint32 to which an error code will
     ///                           be written. The error codes have the following meaning:
     ///                           -  0: Success.

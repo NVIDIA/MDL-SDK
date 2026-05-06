@@ -132,6 +132,11 @@ bool Image::load_header(
         header.m_depth = ((header.m_caps2 & cubemap_flags) == cubemap_flags) ? 6 : 1;
     }
 
+    if( header.m_width == 0 || header.m_height == 0 || header.m_depth == 0) {
+        log( mi::base::MESSAGE_SEVERITY_ERROR, "DDS image dimensions must be non-zero.");
+        return false;
+    }
+
     // For volume textures with more than one miplevel skip higher miplevels. The problem is that in
     // DDS the depth of volume textures is halved in each miplevel, but it is constant in neuray
     // (only width and height are halved).
@@ -318,7 +323,8 @@ bool Image::load( mi::neuraylib::IReader* reader)
 
     // Set the texture type (needed for is_cubemap()).
     m_texture_type = TEXTURE_FLAT;
-    if( header.m_caps2 & (DDSF_CUBEMAP | DDSF_CUBEMAP_ALL_FACES))
+    const mi::Uint32 cubemap_flags = DDSF_CUBEMAP | DDSF_CUBEMAP_ALL_FACES;
+    if( (header.m_caps2 & cubemap_flags) == cubemap_flags)
         m_texture_type = TEXTURE_CUBEMAP;
     if( header.m_caps2 & DDSF_VOLUME)
         m_texture_type = TEXTURE_3D;
@@ -511,7 +517,7 @@ bool Image::save( mi::neuraylib::IWriter* writer)
     }
 
     if( get_num_surfaces() > 1)
-        header.m_caps2 |= DDSF_COMPLEX | DDSF_MIPMAP;
+        header.m_caps1 |= DDSF_COMPLEX | DDSF_MIPMAP;
 
     // Write the magic string
     mi::Sint64 bytes_written = writer->write( "DDS ", 4);

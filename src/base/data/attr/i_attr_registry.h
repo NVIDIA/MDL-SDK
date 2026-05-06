@@ -62,7 +62,7 @@ class Attribute_spec
     /// Data retrieval
     //@{
     Uint get_id() const                                 { return m_id; }
-    const std::string& get_name() const         { return m_name; }
+    const std::string& get_name() const                 { return m_name; }
     Type_code get_typecode() const                      { return m_type; }
     Uint get_array_size() const                         { return m_array_size; }
     std::any get_default() const                        { return m_default; }
@@ -84,10 +84,10 @@ class Attribute_spec
         DB::Journal_type journal_flags=DB::JOURNAL_NONE);
 
     Uint m_id;                                          ///< id of attribute
-    std::string m_name;                         ///< name of attribute
+    std::string m_name;                                 ///< name of attribute
     Type_code m_type;                                   ///< required type of sttribute
     Uint m_array_size;                                  ///< the arraysize
-    std::any m_default;                         ///< its default
+    std::any m_default;                                 ///< its default
     // These two values are here only for reserved attributes, since there former storage had this
     // information attached to it.
     bool m_inheritable;                                 ///< may have GLOBAL flag set

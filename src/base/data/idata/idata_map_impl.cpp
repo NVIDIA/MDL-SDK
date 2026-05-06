@@ -85,9 +85,11 @@ Map_impl::~Map_impl()
 
 const char* Map_impl::get_key( mi::Size index) const
 {
-    if( !index_to_key( index, m_cached_key))
+    std::string key;
+    if( !index_to_key( index, key))
         return nullptr;
-    return m_cached_key.c_str();
+
+    return m_string_cache.add( key);
 }
 
 bool Map_impl::has_key( const char* key) const
@@ -170,7 +172,10 @@ mi::Sint32 Map_impl::set_value( mi::Size index, mi::base::IInterface* value)
 
 void Map_impl::clear()
 {
-    m_cache_valid = false;
+    {
+        std::lock_guard lock( m_cache_lock);
+        m_cache_valid = false;
+    }
     m_map.clear();
 }
 
@@ -186,7 +191,10 @@ mi::Sint32 Map_impl::insert( const char* key, mi::base::IInterface* value)
     if( !has_correct_value_type( value))
         return -3;
 
-    m_cache_valid = false;
+    {
+        std::lock_guard lock( m_cache_lock);
+        m_cache_valid = false;
+    }
 
     m_map[key] = make_handle_dup( value);
     return 0;
@@ -201,7 +209,10 @@ mi::Sint32 Map_impl::erase( const char* key)
     if( it == m_map.end())
         return -2;
 
-    m_cache_valid = false;
+    {
+        std::lock_guard lock( m_cache_lock);
+        m_cache_valid = false;
+    }
 
     m_map.erase( it);
     return 0;
@@ -230,6 +241,8 @@ bool Map_impl::index_to_key( mi::Size index, std::string& key) const
 {
     if( index >= m_map.size())
         return false;
+
+    std::lock_guard lock( m_cache_lock);
 
     Map_type::const_iterator it;
     mi::Size i;

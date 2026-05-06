@@ -56,146 +56,6 @@
 
 #include "test_shared.h"
 
-#define GET_REFCOUNT(X) ((X) ? (X)->retain(), (X)->release() : 999)
-
-
-void test_texture( mi::neuraylib::IScope* scope)
-{
-    mi::base::Handle<mi::neuraylib::ITransaction> transaction( scope->create_transaction());
-
-    // create dummy members
-
-    mi::base::Handle<mi::neuraylib::IImage> image( transaction->create<mi::neuraylib::IImage>( "Image"));
-    MI_CHECK( image);
-    MI_CHECK_EQUAL( 0, transaction->store( image.get(), "referenced_image_1"));
-    image = nullptr;
-
-    image = transaction->create<mi::neuraylib::IImage>( "Image");
-    MI_CHECK( image);
-    MI_CHECK_EQUAL( 0, transaction->store( image.get(), "referenced_image_2"));
-    image = nullptr;
-
-    // test create() and store()
-
-    mi::base::Handle<mi::neuraylib::ITexture> texture( transaction->create<mi::neuraylib::ITexture>( "Texture"));
-    MI_CHECK( texture);
-    texture->set_image( "referenced_image_1");
-    MI_CHECK_EQUAL( 0, transaction->store( texture.get(), "texture_foo"));
-    texture = nullptr;
-
-    // test access()
-
-    mi::base::Handle<const mi::neuraylib::ITexture> c_texture( transaction->access<mi::neuraylib::ITexture>( "texture_foo"));
-    MI_CHECK( c_texture);
-    MI_CHECK_EQUAL_CSTR( c_texture->get_image(), "referenced_image_1");
-    c_texture = nullptr;
-
-    // test edit()
-
-    mi::base::Handle<mi::neuraylib::ITexture> m_texture( transaction->edit<mi::neuraylib::ITexture>( "texture_foo"));
-    MI_CHECK( m_texture);
-    m_texture->set_image( "referenced_image_2");
-    m_texture = nullptr;
-
-    // test access() on modified element
-
-    c_texture = transaction->access<mi::neuraylib::ITexture>( "texture_foo");
-    MI_CHECK( c_texture);
-    MI_CHECK_EQUAL_CSTR( c_texture->get_image(), "referenced_image_2");
-    c_texture = nullptr;
-
-    // test edit() on modified element
-
-    m_texture = transaction->edit<mi::neuraylib::ITexture>( "texture_foo");
-    MI_CHECK( m_texture);
-    MI_CHECK_EQUAL_CSTR( m_texture->get_image(), "referenced_image_2");
-    m_texture = nullptr;
-
-    // test concurrent access()'s and edit()'s
-
-    mi::base::Handle<const mi::neuraylib::ITexture> c_texture2;
-    mi::base::Handle<mi::neuraylib::ITexture> m_texture2;
-    c_texture  = transaction->access<mi::neuraylib::ITexture>( "texture_foo");
-    c_texture2 = transaction->access<mi::neuraylib::ITexture>( "texture_foo");
-    m_texture  = transaction->edit<mi::neuraylib::ITexture>( "texture_foo");
-    m_texture2 = transaction->edit<mi::neuraylib::ITexture>( "texture_foo");
-    c_texture  = nullptr;
-    c_texture2 = nullptr;
-    m_texture  = nullptr;
-    m_texture2 = nullptr;
-    c_texture  = transaction->access<mi::neuraylib::ITexture>( "texture_foo");
-    c_texture2 = transaction->access<mi::neuraylib::ITexture>( "texture_foo");
-    m_texture  = transaction->edit<mi::neuraylib::ITexture>( "texture_foo");
-    m_texture2 = transaction->edit<mi::neuraylib::ITexture>( "texture_foo");
-    m_texture2 = nullptr;
-    m_texture  = nullptr;
-    c_texture2 = nullptr;
-    c_texture  = nullptr;
-
-    // test copy()
-
-    MI_CHECK_EQUAL(  0, transaction->copy( "texture_foo", "texture_copy"));
-    MI_CHECK_EQUAL( -5, transaction->copy( "texture_foo", "texture_foo", 0));
-
-    c_texture = transaction->access<mi::neuraylib::ITexture>( "texture_copy");
-    MI_CHECK( c_texture);
-    MI_CHECK_EQUAL_CSTR( c_texture->get_image(), "referenced_image_2");
-    c_texture = nullptr;
-
-    m_texture = transaction->edit<mi::neuraylib::ITexture>( "texture_copy");
-    MI_CHECK( m_texture);
-    MI_CHECK_EQUAL_CSTR( m_texture->get_image(), "referenced_image_2");
-    m_texture = nullptr;
-
-    // test remove()
-
-    // Disabled because reusing the name after removal might trigger an invalid tag access
-    // (see also test case in bug 8577).
-    // MI_CHECK_EQUAL( 0, transaction->remove( "texture_copy"));
-
-    // test name_of()
-
-    c_texture = transaction->access<mi::neuraylib::ITexture>( "texture_foo");
-    MI_CHECK( c_texture);
-    MI_CHECK_EQUAL_CSTR( "texture_foo", transaction->name_of( c_texture.get()));
-    c_texture = nullptr;
-
-    m_texture = transaction->edit<mi::neuraylib::ITexture>( "texture_foo");
-    MI_CHECK( m_texture);
-    MI_CHECK_EQUAL_CSTR( "texture_foo", transaction->name_of( m_texture.get()));
-    m_texture = nullptr;
-
-    // test get_timestamp() / has_changed_since_timestamp()
-
-    std::string time_stamp1 = transaction->get_time_stamp();
-
-    mi::base::Handle<mi::neuraylib::ITexture> x_texture( transaction->create<mi::neuraylib::ITexture>( "Texture"));
-    MI_CHECK( x_texture);
-    MI_CHECK_EQUAL( 0, transaction->store( x_texture.get(), "texture_bar"));
-    x_texture = nullptr;
-
-    std::string time_stamp2a = transaction->get_time_stamp();
-    std::string time_stamp2b = transaction->get_time_stamp( "texture_bar");
-    MI_CHECK_EQUAL( time_stamp2a, time_stamp2b);
-
-    MI_CHECK(  transaction->has_changed_since_time_stamp( "texture_bar", time_stamp1.c_str()));
-    MI_CHECK( !transaction->has_changed_since_time_stamp( "texture_bar", time_stamp2a.c_str()));
-
-    MI_CHECK_EQUAL( 0, transaction->commit());
-    transaction = scope->create_transaction();
-    MI_CHECK( transaction);
-
-    std::string time_stamp3a = transaction->get_time_stamp();
-    std::string time_stamp3b = transaction->get_time_stamp( "texture_bar");
-    MI_CHECK_NOT_EQUAL( time_stamp3a, time_stamp3b);
-    MI_CHECK_EQUAL( time_stamp2b, time_stamp3b);
-
-    MI_CHECK(  transaction->has_changed_since_time_stamp( "texture_bar", time_stamp1.c_str()));
-    MI_CHECK( !transaction->has_changed_since_time_stamp( "texture_bar", time_stamp2a.c_str()));
-    MI_CHECK( !transaction->has_changed_since_time_stamp( "texture_bar", time_stamp3a.c_str()));
-
-    MI_CHECK_EQUAL( 0, transaction->commit());
-}
 
 void test_string( mi::neuraylib::IScope* scope)
 {
@@ -208,7 +68,271 @@ void test_string( mi::neuraylib::IScope* scope)
     str->set_c_str( "foo");
     MI_CHECK_EQUAL_CSTR( "foo", str->get_c_str());
     MI_CHECK_EQUAL( -4, transaction->store( str.get(), "string_foo"));
-    str = nullptr;
+    str.reset();
+
+    MI_CHECK_EQUAL( 0, transaction->commit());
+}
+
+void test_field( mi::neuraylib::IScope* scope)
+{
+    mi::base::Handle<mi::neuraylib::ITransaction> transaction( scope->create_transaction());
+
+    // test create() and store()
+
+    mi::base::Handle<mi::neuraylib::ITexture> texture(
+        transaction->create<mi::neuraylib::ITexture>( "Texture"));
+    MI_CHECK( texture);
+    texture->set_gamma( 1.0f);
+    MI_CHECK_EQUAL( 0, transaction->store( texture.get(), "field_foo"));
+    texture.reset();
+
+    // test access()
+
+    mi::base::Handle<const mi::neuraylib::ITexture> c_texture(
+        transaction->access<mi::neuraylib::ITexture>( "field_foo"));
+    MI_CHECK( c_texture);
+    MI_CHECK_EQUAL( 1.0f, c_texture->get_gamma());
+    c_texture.reset();
+
+    // test edit()
+
+    mi::base::Handle<mi::neuraylib::ITexture> m_texture(
+        transaction->edit<mi::neuraylib::ITexture>( "field_foo"));
+    MI_CHECK( m_texture);
+    MI_CHECK_EQUAL( 1.0f, m_texture->get_gamma());
+    m_texture->set_gamma( 2.0f);
+    m_texture.reset();
+
+    // test access() on modified element
+
+    c_texture = transaction->access<mi::neuraylib::ITexture>( "field_foo");
+    MI_CHECK( c_texture);
+    MI_CHECK_EQUAL( 2.0f, c_texture->get_gamma());
+    c_texture.reset();
+
+    // test edit() on modified element
+
+    m_texture = transaction->edit<mi::neuraylib::ITexture>( "field_foo");
+    MI_CHECK( m_texture);
+    MI_CHECK_EQUAL( 2.0f, m_texture->get_gamma());
+    m_texture.reset();
+
+    // test concurrent access()'s and edit()'s
+
+    mi::base::Handle<const mi::neuraylib::ITexture> c_texture2;
+    mi::base::Handle<mi::neuraylib::ITexture> m_texture2;
+    c_texture  = transaction->access<mi::neuraylib::ITexture>( "field_foo");
+    c_texture2 = transaction->access<mi::neuraylib::ITexture>( "field_foo");
+    m_texture  = transaction->edit<mi::neuraylib::ITexture>( "field_foo");
+    m_texture2 = transaction->edit<mi::neuraylib::ITexture>( "field_foo");
+    c_texture .reset();
+    c_texture2.reset();
+    m_texture .reset();
+    m_texture2.reset();
+    c_texture  = transaction->access<mi::neuraylib::ITexture>( "field_foo");
+    c_texture2 = transaction->access<mi::neuraylib::ITexture>( "field_foo");
+    m_texture  = transaction->edit<mi::neuraylib::ITexture>( "field_foo");
+    m_texture2 = transaction->edit<mi::neuraylib::ITexture>( "field_foo");
+    m_texture2.reset();
+    m_texture .reset();
+    c_texture2.reset();
+    c_texture .reset();
+
+    // test copy()
+
+    MI_CHECK_EQUAL(  0, transaction->copy( "field_foo", "field_copy"));
+    MI_CHECK_EQUAL( -5, transaction->copy( "field_foo", "field_foo", 0));
+
+    c_texture = transaction->access<mi::neuraylib::ITexture>( "field_copy");
+    MI_CHECK( c_texture);
+    MI_CHECK_EQUAL( 2.0f, c_texture->get_gamma());
+    c_texture.reset();
+
+    m_texture = transaction->edit<mi::neuraylib::ITexture>( "field_copy");
+    MI_CHECK( m_texture);
+    MI_CHECK_EQUAL( 2.0f, m_texture->get_gamma());
+    m_texture.reset();
+
+    // test remove()
+
+    // Disabled because reusing the name after removal might trigger an invalid tag access
+    // (see also test case in bug 8577).
+    // MI_CHECK_EQUAL( 0, transaction->remove( "field_copy"));
+
+    // test name_of()
+
+    c_texture = transaction->access<mi::neuraylib::ITexture>( "field_foo");
+    MI_CHECK( c_texture);
+    MI_CHECK_EQUAL_CSTR( "field_foo", transaction->name_of( c_texture.get()));
+    c_texture.reset();
+
+    m_texture = transaction->edit<mi::neuraylib::ITexture>( "field_foo");
+    MI_CHECK( m_texture);
+    MI_CHECK_EQUAL_CSTR( "field_foo", transaction->name_of( m_texture.get()));
+    m_texture.reset();
+
+    // test get_timestamp() / has_changed_since_timestamp()
+
+    std::string time_stamp1 = transaction->get_time_stamp();
+
+    mi::base::Handle<mi::neuraylib::ITexture> x_texture(
+        transaction->create<mi::neuraylib::ITexture>( "Texture"));
+    MI_CHECK( x_texture);
+    MI_CHECK_EQUAL( 0, transaction->store( x_texture.get(), "field_bar"));
+    x_texture.reset();
+
+    std::string time_stamp2 = transaction->get_time_stamp();
+
+    MI_CHECK(  transaction->has_changed_since_time_stamp( "field_bar", time_stamp1.c_str()));
+    MI_CHECK( !transaction->has_changed_since_time_stamp( "field_bar", time_stamp2.c_str()));
+
+    MI_CHECK_EQUAL( 0, transaction->commit());
+    transaction = scope->create_transaction();
+    MI_CHECK( transaction);
+
+    std::string time_stamp3 = transaction->get_time_stamp();
+
+    MI_CHECK(  transaction->has_changed_since_time_stamp( "field_bar", time_stamp1.c_str()));
+    MI_CHECK( !transaction->has_changed_since_time_stamp( "field_bar", time_stamp2.c_str()));
+    MI_CHECK( !transaction->has_changed_since_time_stamp( "field_bar", time_stamp3.c_str()));
+
+    MI_CHECK_EQUAL( 0, transaction->commit());
+}
+
+void test_reference( mi::neuraylib::IScope* scope)
+{
+    mi::base::Handle<mi::neuraylib::ITransaction> transaction( scope->create_transaction());
+
+    // create dummy members
+
+    mi::base::Handle<mi::neuraylib::IImage> image( transaction->create<mi::neuraylib::IImage>( "Image"));
+    MI_CHECK( image);
+    MI_CHECK_EQUAL( 0, transaction->store( image.get(), "referenced_image_1"));
+    image.reset();
+
+    image = transaction->create<mi::neuraylib::IImage>( "Image");
+    MI_CHECK( image);
+    MI_CHECK_EQUAL( 0, transaction->store( image.get(), "referenced_image_2"));
+    image.reset();
+
+    // test create() and store()
+
+    mi::base::Handle<mi::neuraylib::ITexture> texture( transaction->create<mi::neuraylib::ITexture>( "Texture"));
+    MI_CHECK( texture);
+    texture->set_image( "referenced_image_1");
+    MI_CHECK_EQUAL( 0, transaction->store( texture.get(), "ref_foo"));
+    texture.reset();
+
+    // test access()
+
+    mi::base::Handle<const mi::neuraylib::ITexture> c_texture( transaction->access<mi::neuraylib::ITexture>( "ref_foo"));
+    MI_CHECK( c_texture);
+    MI_CHECK_EQUAL_CSTR( c_texture->get_image(), "referenced_image_1");
+    c_texture.reset();
+
+    // test edit()
+
+    mi::base::Handle<mi::neuraylib::ITexture> m_texture( transaction->edit<mi::neuraylib::ITexture>( "ref_foo"));
+    MI_CHECK( m_texture);
+    m_texture->set_image( "referenced_image_2");
+    m_texture.reset();
+
+    // test access() on modified element
+
+    c_texture = transaction->access<mi::neuraylib::ITexture>( "ref_foo");
+    MI_CHECK( c_texture);
+    MI_CHECK_EQUAL_CSTR( c_texture->get_image(), "referenced_image_2");
+    c_texture.reset();
+
+    // test edit() on modified element
+
+    m_texture = transaction->edit<mi::neuraylib::ITexture>( "ref_foo");
+    MI_CHECK( m_texture);
+    MI_CHECK_EQUAL_CSTR( m_texture->get_image(), "referenced_image_2");
+    m_texture.reset();
+
+    // test concurrent access()'s and edit()'s
+
+    mi::base::Handle<const mi::neuraylib::ITexture> c_texture2;
+    mi::base::Handle<mi::neuraylib::ITexture> m_texture2;
+    c_texture  = transaction->access<mi::neuraylib::ITexture>( "ref_foo");
+    c_texture2 = transaction->access<mi::neuraylib::ITexture>( "ref_foo");
+    m_texture  = transaction->edit<mi::neuraylib::ITexture>( "ref_foo");
+    m_texture2 = transaction->edit<mi::neuraylib::ITexture>( "ref_foo");
+    c_texture.reset();
+    c_texture2.reset();
+    m_texture.reset();
+    m_texture2.reset();
+    c_texture  = transaction->access<mi::neuraylib::ITexture>( "ref_foo");
+    c_texture2 = transaction->access<mi::neuraylib::ITexture>( "ref_foo");
+    m_texture  = transaction->edit<mi::neuraylib::ITexture>( "ref_foo");
+    m_texture2 = transaction->edit<mi::neuraylib::ITexture>( "ref_foo");
+    m_texture2.reset();
+    m_texture.reset();
+    c_texture2.reset();
+    c_texture.reset();
+
+    // test copy()
+
+    MI_CHECK_EQUAL(  0, transaction->copy( "ref_foo", "ref_copy"));
+    MI_CHECK_EQUAL( -5, transaction->copy( "ref_foo", "ref_foo", 0));
+
+    c_texture = transaction->access<mi::neuraylib::ITexture>( "ref_copy");
+    MI_CHECK( c_texture);
+    MI_CHECK_EQUAL_CSTR( c_texture->get_image(), "referenced_image_2");
+    c_texture.reset();
+
+    m_texture = transaction->edit<mi::neuraylib::ITexture>( "ref_copy");
+    MI_CHECK( m_texture);
+    MI_CHECK_EQUAL_CSTR( m_texture->get_image(), "referenced_image_2");
+    m_texture.reset();
+
+    // test remove()
+
+    // Disabled because reusing the name after removal might trigger an invalid tag access
+    // (see also test case in bug 8577).
+    // MI_CHECK_EQUAL( 0, transaction->remove( "ref_copy"));
+
+    // test name_of()
+
+    c_texture = transaction->access<mi::neuraylib::ITexture>( "ref_foo");
+    MI_CHECK( c_texture);
+    MI_CHECK_EQUAL_CSTR( "ref_foo", transaction->name_of( c_texture.get()));
+    c_texture.reset();
+
+    m_texture = transaction->edit<mi::neuraylib::ITexture>( "ref_foo");
+    MI_CHECK( m_texture);
+    MI_CHECK_EQUAL_CSTR( "ref_foo", transaction->name_of( m_texture.get()));
+    m_texture.reset();
+
+    // test get_timestamp() / has_changed_since_timestamp()
+
+    std::string time_stamp1 = transaction->get_time_stamp();
+
+    mi::base::Handle<mi::neuraylib::ITexture> x_texture( transaction->create<mi::neuraylib::ITexture>( "Texture"));
+    MI_CHECK( x_texture);
+    MI_CHECK_EQUAL( 0, transaction->store( x_texture.get(), "ref_bar"));
+    x_texture.reset();
+
+    std::string time_stamp2a = transaction->get_time_stamp();
+    std::string time_stamp2b = transaction->get_time_stamp( "ref_bar");
+    MI_CHECK_EQUAL( time_stamp2a, time_stamp2b);
+
+    MI_CHECK(  transaction->has_changed_since_time_stamp( "ref_bar", time_stamp1.c_str()));
+    MI_CHECK( !transaction->has_changed_since_time_stamp( "ref_bar", time_stamp2a.c_str()));
+
+    MI_CHECK_EQUAL( 0, transaction->commit());
+    transaction = scope->create_transaction();
+    MI_CHECK( transaction);
+
+    std::string time_stamp3a = transaction->get_time_stamp();
+    std::string time_stamp3b = transaction->get_time_stamp( "ref_bar");
+    MI_CHECK_NOT_EQUAL( time_stamp3a, time_stamp3b);
+    MI_CHECK_EQUAL( time_stamp2b, time_stamp3b);
+
+    MI_CHECK(  transaction->has_changed_since_time_stamp( "ref_bar", time_stamp1.c_str()));
+    MI_CHECK( !transaction->has_changed_since_time_stamp( "ref_bar", time_stamp2a.c_str()));
+    MI_CHECK( !transaction->has_changed_since_time_stamp( "ref_bar", time_stamp3a.c_str()));
 
     MI_CHECK_EQUAL( 0, transaction->commit());
 }
@@ -228,12 +352,14 @@ void run_tests( mi::neuraylib::INeuray* neuray)
         MI_CHECK( global_scope);
         MI_CHECK_EQUAL( 0, global_scope->get_privacy_level());
 
-
-        // test an API class which references another DB element by tag
-        test_texture( global_scope.get());
-
-        // test an API class without DB class counterpart
+        // API class without DB class counterpart
         test_string( global_scope.get());
+
+        // API class with DB class counterpart: simple fields
+        test_field( global_scope.get());
+
+        // API class with DB class counterpart: DB element references
+        test_reference( global_scope.get());
 
     }
 
@@ -256,7 +382,7 @@ MI_TEST_AUTO_FUNCTION( test_db_elements )
         run_tests( neuray.get());
     }
 
-    neuray = nullptr;
+    neuray.reset();
     MI_CHECK( unload());
 }
 

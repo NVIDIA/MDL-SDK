@@ -275,6 +275,9 @@ const mi::IEnum_decl* Enum_impl_proxy::get_enum_decl() const
 
 void Enum_impl_proxy::set_pointer_and_owner( void* pointer, const mi::base::IInterface* owner)
 {
+    MI_ASSERT( pointer);
+    MI_ASSERT( owner);
+
     m_pointer = static_cast<mi::Uint32*>( pointer);
     m_owner = make_handle_dup( owner);
 }
@@ -612,6 +615,9 @@ template <typename I, typename T>
 void Number_impl_proxy<I, T>::set_pointer_and_owner(
     void* pointer, const mi::base::IInterface* owner)
 {
+    MI_ASSERT( pointer);
+    MI_ASSERT( owner);
+
     m_pointer = static_cast<T*>( pointer);
     m_owner = make_handle_dup( owner);
 }
@@ -920,6 +926,10 @@ mi::Sint32 Ref_impl_proxy::set_reference( const IInterface* interface)
     if( result != 0)
         return result;
 
+    mi::base::Handle attribute_context( m_owner->get_interface<IAttribute_context>());
+    if( !attribute_context->can_reference_tag( tag))
+        return -4;
+
     *m_pointer = tag;
     return 0;
 }
@@ -965,6 +975,12 @@ const char* Ref_impl_proxy::get_reference_name() const
 void Ref_impl_proxy::set_pointer_and_owner(
     void* pointer, const mi::base::IInterface* owner)
 {
+    MI_ASSERT( pointer);
+    MI_ASSERT( owner);
+
+    mi::base::Handle attribute_context( owner->get_interface<IAttribute_context>());
+    MI_ASSERT( attribute_context);
+
     m_pointer = static_cast<DB::Tag*>( pointer);
     m_owner = make_handle_dup( owner);
 }
@@ -1019,6 +1035,9 @@ void String_impl_proxy::set_c_str( const char* str)
 
 void String_impl_proxy::set_pointer_and_owner( void* pointer, const mi::base::IInterface* owner)
 {
+    MI_ASSERT( pointer);
+    MI_ASSERT( owner);
+
     m_pointer = static_cast<const char**>( pointer);
     m_owner = make_handle_dup( owner);
 }

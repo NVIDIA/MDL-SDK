@@ -32,6 +32,12 @@
 #include "libbsdf.h"
 #include "libbsdf_internal.h"
 
+#ifdef MDL_DF_SPECTRAL_ENABLE
+#ifndef MDL_DF_SPECTRAL_SAMPLES
+#error Definition of MDL_DF_SPECTRAL_SAMPLES missing
+#endif
+#endif
+
 namespace mi
 {
 namespace libdf
@@ -43,7 +49,7 @@ namespace hair
     {
         float v = 1.0f;
         float n = 1.0f;
-        float d = 1.0f; //!! div by 0 if uint, as overflow, but does not matter in practice as float is suitable enough 
+        float d = 1.0f; //!! div by 0 if uint, as overflow, but does not matter in practice as float is suitable enough
                         //!! (only last iterations exceed precision but these are huuuge numbers in d then anyway)
         float f = 1.0f;
         const float x2 = x * x;
@@ -76,7 +82,7 @@ namespace hair
         const float inv_v = 1.0f / v;
         const float a = cos_theta_o * cos_theta_i * inv_v;
         const float b = sin_theta_o * sin_theta_i * inv_v;
-        return (v < 0.1f) 
+        return (v < 0.1f)
             ? math::exp(hair_log_I0(a) - b - inv_v + 0.6931f + math::log(0.5f * inv_v))
             : (math::exp(-b) * hair_I0(a) / (2.0f * v * math::sinh(inv_v)));
     }
@@ -181,18 +187,18 @@ BSDF_API void chiang_hair_bsdf_sample(
     State *state,
     const float3 &inherited_normal,
     float diffuse_reflection_weight,
-    const float3 &diffuse_reflection_tint,
+    const color_sample &diffuse_reflection_tint,
     const float2 &roughness_R,
     const float2 &roughness_TT,
     const float2 &roughness_TRT,
     const float cuticle_angle,
-    const float3 &absorption_coefficient,
+    const color_sample &absorption_coefficient,
     const float ior,
     const int handle)
 {
     diffuse_reflection_weight = math::saturate(diffuse_reflection_weight);
     data->event_type = BSDF_EVENT_ABSORB;
-    data->pdf = 0.0f;
+    data->pdf = make_pdf_sample(0.0f);
 
     const float3 tangent_u = state->texture_tangent_u(0);
     const float3 tangent_v = math::cross(inherited_normal, tangent_u);
@@ -213,9 +219,9 @@ BSDF_API void chiang_hair_bsdf_sample(
             inherited_normal * nk2 +
             tangent_v * sin_phi * sin_theta;
 
-        data->pdf = nk2 * (float) (1.0f / M_PI) * diffuse_reflection_weight;
+        data->pdf = make_pdf_sample(nk2 * (float) (1.0f / M_PI) * diffuse_reflection_weight);
 
-        data->bsdf_over_pdf = math::saturate(diffuse_reflection_tint);
+        data->bsdf_over_pdf = saturate(diffuse_reflection_tint);
 
         data->event_type = BSDF_EVENT_DIFFUSE_REFLECTION;
 
@@ -257,22 +263,36 @@ BSDF_API void chiang_hair_bsdf_sample(
 
 
     const float fresnel = ior_fresnel(eta, cos_theta_o * cos_gamma_o);
-    float3 T;
-    float T_s;
+    color_sample T;
+    float T_s = 0.0f;
     if (fresnel < 1.0f)
     {
-        const float3 sigma_a = absorption_coefficient;
+        const color_sample sigma_a = absorption_coefficient;
 
         const float dist = 2.0f * cos_gamma_t / cos_theta_t;
+
+#ifdef MDL_DF_SPECTRAL_ENABLE
+
+        for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        {
+            T.values[i] = (sigma_a.values[i] > 0.0f) ? math::exp(-sigma_a.values[i] * dist) : 1.0f;
+            T_s = (i > 0) ? math::max(T_s, T.values[i]) : T.values[0];
+        }
+
+#else
+
         T = make_float3(
             (sigma_a.x > 0.0f) ? math::exp(-sigma_a.x * dist) : 1.0f,
             (sigma_a.y > 0.0f) ? math::exp(-sigma_a.y * dist) : 1.0f,
             (sigma_a.z > 0.0f) ? math::exp(-sigma_a.z * dist) : 1.0f);
         T_s = math::max(T.x, math::max(T.y, T.z));
+
+#endif // MDL_DF_SPECTRAL_ENABLE
+
     }
     else
     {
-        T = make_float3(0.0f, 0.0f, 0.0f);
+        T = make<color_sample>(0.0f);
         T_s = 0.0f;
     }
 
@@ -284,7 +304,7 @@ BSDF_API void chiang_hair_bsdf_sample(
     if (data->event_type != BSDF_EVENT_DIFFUSE_REFLECTION) // sample hair bsdf
     {
         float weight_s = fresnel;
-        float3 weight = make_float3(fresnel, fresnel, fresnel);
+        color_sample weight = make<color_sample>(fresnel);
         float prev_cdf = 0.f;
         unsigned int p;
         for (p = 0; ; ++p)
@@ -297,13 +317,13 @@ BSDF_API void chiang_hair_bsdf_sample(
                     absorb(data);
                     return;
                 }
-                
-                data->bsdf_over_pdf = weight * sum / weight_s;
-                
+
+                data->bsdf_over_pdf = weight * (sum / weight_s);
+
                 xi_z = saturate_below_one((xi_z * sum - prev_cdf) / weight_s);
                 break;
             }
-            
+
             if (p == 0)
             {
                 const float f = (1.0f - fresnel) * (1.0f - fresnel);
@@ -318,9 +338,9 @@ BSDF_API void chiang_hair_bsdf_sample(
             else if (p == 2)
             {
                 weight_s *= T_s_f / (1.0f - T_s_f);
-                weight *= T * fresnel / (make_float3(1.0f, 1.0f, 1.0f) - T * fresnel);
+                weight *= (T * fresnel) / (make<color_sample>(1.0f) - T * fresnel);
             }
-            
+
             prev_cdf = cdf;
         }
 
@@ -354,7 +374,7 @@ BSDF_API void chiang_hair_bsdf_sample(
         const float cos_phi = math::cos(float(2.0 * M_PI) * xi_z);
         sin_theta_i = -cos_theta * sin_theta_o + sin_theta * cos_phi * cos_theta_o;
         cos_theta_i = math::sqrt(1.0f - sin_theta_i * sin_theta_i);
-        
+
         {
             float sti, cti;
             mi::libdf::hair::hair_tilt_angles(sti, cti, p, -cuticle_angle, sin_theta_i, cos_theta_i);
@@ -397,8 +417,8 @@ BSDF_API void chiang_hair_bsdf_sample(
 
         float sti, cti;
         mi::libdf::hair::hair_tilt_angles(sti, cti, p, cuticle_angle, sin_theta_i, cos_theta_i);
-        const float pdf_p = 
-            mi::libdf::hair::hair_M_p(cos_theta_o, math::abs(cti), sti, sin_theta_o, vs.x) * 
+        const float pdf_p =
+            mi::libdf::hair::hair_M_p(cos_theta_o, math::abs(cti), sti, sin_theta_o, vs.x) *
             mi::libdf::hair::hair_N_p(dphi, p, vs.y, gamma_o, gamma_t);
 
         pdf += weight_s * pdf_p;
@@ -422,7 +442,7 @@ BSDF_API void chiang_hair_bsdf_sample(
         }
     }
     pdf /= sum;
-    data->pdf += pdf * (1.0f - diffuse_reflection_weight);
+    data->pdf += make_pdf_sample(pdf * (1.0f - diffuse_reflection_weight));
 }
 
 template<typename TBSDF_data>
@@ -434,10 +454,10 @@ BSDF_INLINE void chiang_hair_bsdf_evaluate_and_pdf(
     const float2 &roughness_TT,
     const float2 &roughness_TRT,
     const float cuticle_angle,
-    const float3 &absorption_coefficient,
+    const color_sample &absorption_coefficient,
     const float ior,
-    float& pdf,
-    float3& bsdf)
+    pdf_sample &pdf,
+    color_sample &bsdf)
 {
     const float3 tangent_u = state->texture_tangent_u(0);
     const float3 tangent_v = math::cross(inherited_normal, tangent_u);
@@ -473,25 +493,38 @@ BSDF_INLINE void chiang_hair_bsdf_evaluate_and_pdf(
     const float gamma_t = math::asin(sin_gamma_t);
 
     const float fresnel = ior_fresnel(eta, cos_theta_o * cos_gamma_o);
-    float3 T = make_float3(0.0f, 0.0f, 0.0f);
+    color_sample T = make<color_sample>(0.0f);
     float T_s = 0.0f;
     if (fresnel < 1.0f)
     {
-        const float3 sigma_a = absorption_coefficient;
+        const color_sample sigma_a = absorption_coefficient;
         const float dist = 2.0f * cos_gamma_t / cos_theta_t;
+
+#ifdef MDL_DF_SPECTRAL_ENABLE
+
+        for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        {
+            T.values[i] = (sigma_a.values[i] > 0.0f) ? math::exp(-sigma_a.values[i] * dist) : 1.0f;
+            T_s = (i > 0) ? math::max(T_s, T.values[i]) : T.values[0];
+        }
+
+#else
+
         T = make_float3(
             (sigma_a.x > 0.0f) ? math::exp(-sigma_a.x * dist) : 1.0f,
             (sigma_a.y > 0.0f) ? math::exp(-sigma_a.y * dist) : 1.0f,
             (sigma_a.z > 0.0f) ? math::exp(-sigma_a.z * dist) : 1.0f);
         T_s = math::max(T.x, math::max(T.y, T.z));
+
+#endif
     }
 
-    bsdf = make_float3(0.0f, 0.0f, 0.0f);
-    pdf = 0.0f;
+    bsdf = make<color_sample>(0.0f);
+    float pdf_val = 0.0f;
 
-    float3 weight = make_float3(fresnel, fresnel, fresnel);
+    color_sample weight = make<color_sample>(fresnel);
     float weight_s = fresnel;
-    
+
     float2 vs = mi::libdf::hair::hair_prepare_roughness(roughness_R);
     float sum = 0.0f;
     for (unsigned int p = 0; p <= 3; ++p)
@@ -499,13 +532,13 @@ BSDF_INLINE void chiang_hair_bsdf_evaluate_and_pdf(
         float sti = 0.0f;
         float cti = 0.0f;
         mi::libdf::hair::hair_tilt_angles(sti, cti, p, cuticle_angle, sin_theta_i, cos_theta_i);
-        
+
         const float pdf_p =
             mi::libdf::hair::hair_M_p(cos_theta_o, math::abs(cti), sti, sin_theta_o, vs.x) *
             mi::libdf::hair::hair_N_p(phi, p, vs.y, gamma_o, gamma_t);
 
         bsdf += weight * pdf_p;
-        pdf += weight_s * pdf_p;
+        pdf_val += weight_s * pdf_p;
         sum += weight_s;
 
         if (p == 0)
@@ -525,31 +558,32 @@ BSDF_INLINE void chiang_hair_bsdf_evaluate_and_pdf(
         }
         else if (p == 2)
         {
-            weight *= T * fresnel / (make_float3(1.0f, 1.0f, 1.0f) - T * fresnel);
+            weight *= (T * fresnel) / (make<color_sample>(1.0f) - T * fresnel);
             weight_s *= T_s * fresnel / (1.0f - T_s * fresnel);
         }
     }
-    pdf /= sum;
+    pdf_val /= sum;
+    pdf = make_pdf_sample(pdf_val);
 }
 
 BSDF_API void chiang_hair_bsdf_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     float diffuse_reflection_weight,
-    const float3 &diffuse_reflection_tint,
+    const color_sample &diffuse_reflection_tint,
     const float2 &roughness_R,
     const float2 &roughness_TT,
     const float2 &roughness_TRT,
     const float cuticle_angle,
-    const float3 &absorption_coefficient,
+    const color_sample &absorption_coefficient,
     const float ior,
     const int handle)
 {
     diffuse_reflection_weight = math::saturate(diffuse_reflection_weight);
 
-    float3 bsdf_glossy;
+    color_sample bsdf_glossy;
     chiang_hair_bsdf_evaluate_and_pdf(
         data, state, inherited_normal,
         roughness_R, roughness_TT, roughness_TRT,
@@ -563,9 +597,9 @@ BSDF_API void chiang_hair_bsdf_evaluate(
         pdf_diffuse * diffuse_reflection_weight +
         data->pdf * (1.0f - diffuse_reflection_weight);
 
-    const float3 bsdf_diffuse = math::saturate(diffuse_reflection_tint) * pdf_diffuse;
+    const color_sample bsdf_diffuse = saturate(diffuse_reflection_tint) * pdf_diffuse;
     add_elemental_bsdf_evaluate_contribution(
-        data, handle, 
+        data, handle,
         bsdf_diffuse * inherited_weight * diffuse_reflection_weight,
         bsdf_glossy * inherited_weight * (1.0f - diffuse_reflection_weight));
 }
@@ -575,18 +609,18 @@ BSDF_API void chiang_hair_bsdf_pdf(
     State *state,
     const float3 &inherited_normal,
     float diffuse_reflection_weight,
-    const float3 &diffuse_reflection_tint,
+    const color_sample &diffuse_reflection_tint,
     const float2 &roughness_R,
     const float2 &roughness_TT,
     const float2 &roughness_TRT,
     const float cuticle_angle,
-    const float3 &absorption_coefficient,
+    const color_sample &absorption_coefficient,
     const float ior,
     const int handle)
 {
     diffuse_reflection_weight = math::saturate(diffuse_reflection_weight);
 
-    float3 bsdf;
+    color_sample bsdf;
     chiang_hair_bsdf_evaluate_and_pdf(
         data, state, inherited_normal,
         roughness_R, roughness_TT, roughness_TRT,
@@ -597,7 +631,7 @@ BSDF_API void chiang_hair_bsdf_pdf(
     const float pdf_diffuse = nk2 * (float) (1.0f / M_PI);
 
     data->pdf =
-        pdf_diffuse * diffuse_reflection_weight +
+        make_pdf_sample(pdf_diffuse * diffuse_reflection_weight) +
         data->pdf * (1.0f - diffuse_reflection_weight);
 }
 
@@ -605,14 +639,14 @@ BSDF_API void chiang_hair_bsdf_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
+    const color_sample &inherited_weight,
     const float diffuse_reflection_weight,
-    const float3 &diffuse_reflection_tint,
+    const color_sample &diffuse_reflection_tint,
     const float2 &roughness_R,
     const float2 &roughness_TT,
     const float2 &roughness_TRT,
     const float cuticle_angle,
-    const float3 &absorption_coefficient,
+    const color_sample &absorption_coefficient,
     const float ior,
     const int handle)
 {
@@ -620,9 +654,9 @@ BSDF_API void chiang_hair_bsdf_auxiliary(
         data,
         handle,
         inherited_weight,
-        make<float3>(0.0f), // diffuse albedo, zero because from the appearance, hair is glossy
+        make<color_sample>(0.0f), // diffuse albedo, zero because from the appearance, hair is glossy
         diffuse_reflection_weight * diffuse_reflection_tint, // glossy albedo
-        inherited_normal, 
+        inherited_normal,
         roughness_R.x,
         roughness_R.y);
 }
@@ -639,22 +673,22 @@ BSDF_API void tint_hair_bsdf_sample(
     BSDF_sample_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &tint,
+    const color_sample &tint,
     const BSDF &base)
 {
     base.sample(data, state, inherited_normal);
-    data->bsdf_over_pdf *= math::saturate(tint);
+    data->bsdf_over_pdf *= saturate(tint);
 }
 
 BSDF_API void tint_hair_bsdf_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    const float3 &tint,
+    const color_sample &inherited_weight,
+    const color_sample &tint,
     const BSDF &base)
 {
-    const float3 factor = math::saturate(tint);
+    const color_sample factor = saturate(tint);
     base.evaluate(data, state, inherited_normal, factor * inherited_weight);
 }
 
@@ -662,7 +696,7 @@ BSDF_API void tint_hair_bsdf_pdf(
     BSDF_pdf_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &tint,
+    const color_sample &tint,
     const BSDF &base)
 {
     base.pdf(data, state, inherited_normal);
@@ -672,11 +706,11 @@ BSDF_API void tint_hair_bsdf_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
     const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    const float3 &tint,
+    const color_sample &inherited_weight,
+    const color_sample &tint,
     const BSDF &base)
 {
-    const float3 factor = math::saturate(tint);
+    const color_sample factor = saturate(tint);
     base.auxiliary(data, state, inherited_normal, factor * inherited_weight);
 }
 

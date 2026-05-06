@@ -1135,7 +1135,7 @@ int MAIN_UTF8(int argc, char* argv[])
             exit_failure("Failed to access the loaded module.");
 
         // We will generate GLSL code for these materials
-        std::vector<std::string> material_simple_names ;
+        std::vector<std::string> material_simple_names;
         material_simple_names.push_back("example_execution1");
         material_simple_names.push_back("example_execution2");
         material_simple_names.push_back("example_execution3");

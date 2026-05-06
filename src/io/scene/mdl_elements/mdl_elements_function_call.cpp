@@ -195,192 +195,6 @@ const IExpression_list* Mdl_function_call::get_arguments() const
     return m_arguments.get();
 }
 
-const IExpression_list* Mdl_function_call::get_enable_if_conditions() const
-{
-    m_enable_if_conditions->retain();
-    return m_enable_if_conditions.get();
-}
-
-bool Mdl_function_call::is_valid(
-    DB::Transaction* transaction, Execution_context* context) const
-{
-    DB::Tag_set tags_seen;
-    return is_valid(transaction, tags_seen, context);
-}
-
-bool Mdl_function_call::is_valid(
-    DB::Transaction* transaction, DB::Tag_set& tags_seen, Execution_context* context) const
-{
-    DB::Tag module_tag = get_module( transaction);
-    DB::Access<Mdl_module> module(module_tag, transaction);
-    if (!module->is_valid(transaction, context))
-        return false;
-
-    if (module->has_definition(m_is_material,m_definition_db_name, m_definition_ident) != 0) {
-        add_error_message(
-            context, "The function definition '" + m_definition_db_name + "' "
-            "does no longer exist or has interface changes.", -1);
-        return false;
-    }
-
-    for (mi::Size i = 0, n = m_arguments->get_size(); i < n; ++i) {
-        mi::base::Handle<const IExpression> arg(m_arguments->get_expression(i));
-        if (arg->get_kind() == IExpression::EK_CALL) {
-            mi::base::Handle<const IExpression_call> arg_call(
-                arg->get_interface<IExpression_call>());
-            DB::Tag call_tag = arg_call->get_call();
-            if (!call_tag)
-                continue;
-            if (!tags_seen.insert(call_tag).second)
-                return false; // cycle in graph, always invalid.
-            SERIAL::Class_id class_id = transaction->get_class_id(call_tag);
-            if (class_id != ID_MDL_FUNCTION_CALL) {
-                add_error_message(
-                    context, "The function call attached to parameter '"
-                    + std::string(m_arguments->get_name(i)) + "' has a wrong element type.", -1);
-                return false;
-            }
-            DB::Access<Mdl_function_call> fcall(call_tag, transaction);
-            if (!fcall->is_valid(transaction, tags_seen, context)) {
-                add_error_message(
-                    context, "The function call attached to parameter '"
-                    + std::string(m_arguments->get_name(i)) + "' is invalid.", -1);
-                return false;
-            }
-            tags_seen.erase(call_tag);
-        }
-    }
-    return true;
-}
-
-mi::Sint32 Mdl_function_call::repair(
-    DB::Transaction* transaction,
-    bool repair_invalid_calls,
-    bool remove_invalid_calls,
-    mi::Uint32 level,
-    Execution_context* context)
-{
-    if (m_immutable) // immutable calls cannot be changed.
-        return -3;
-
-    ASSERT(M_SCENE, m_module_tag);
-    DB::Access<Mdl_module> module(m_module_tag, transaction);
-    // cannot restore if we refer to an invalid module
-    if (!module->is_valid(transaction, context))
-        return -1;
-
-    mi::Sint32 ret
-        = module->has_definition(m_is_material, m_definition_db_name, m_definition_ident);
-    if (ret == -1) {
-        // a definition of that name does no longer exist
-        m_definition_tag = DB::Tag();
-        m_definition_ident = -1;
-        add_error_message(
-            context, "The definition '" + m_definition_db_name +
-            "' does no longer exist in the module.", -1);
-        return -1;
-    }
-    else if (ret == -2) {
-
-        if (level == 0 || repair_invalid_calls) {
-
-            mi::Size index = module->get_definition_index(
-                m_is_material, m_definition_db_name, Mdl_ident(-1));
-            ASSERT(M_SCENE, index != mi::Size(-1));
-            DB::Tag def_tag = module->get_definition(m_is_material, index);
-            DB::Access<Mdl_function_definition> fdef(def_tag, transaction);
-
-            if( fdef->is_material()) {
-
-            // compare argument types with new parameter types
-            if (m_arguments->get_size() != fdef->get_parameter_count()) {
-                // for now, we cannot adapt to this.
-                m_definition_tag = DB::Tag();
-                m_definition_ident = -1;
-                add_error_message(
-                    context, "The parameter count of definition '" + m_definition_db_name +
-                    "' has changed.", -1);
-                return -1;
-            }
-
-            mi::base::Handle<const IType_list> param_types(fdef->get_parameter_types());
-            for (mi::Size i = 0, n = fdef->get_parameter_count(); i < n; ++i) {
-
-                const char* param_name = fdef->get_parameter_name(i);
-                const char* arg_name = m_arguments->get_name(i);
-                if (strcmp(param_name, arg_name) == 0) {
-
-                    mi::base::Handle<const IType> ptype(param_types->get_type(i));
-                    mi::base::Handle<const IExpression> arg(m_arguments->get_expression(i));
-                    mi::base::Handle<const IType> atype(arg->get_type());
-
-                    bool needs_cast;
-                    if (!argument_type_matches_parameter_type(
-                        m_tf.get(),
-                        atype.get(),
-                        ptype.get(),
-                        /*allow_cast*/ false,
-                        needs_cast)) {
-
-                        m_definition_tag = DB::Tag();
-                        m_definition_ident = -1;
-                        return -1;
-                    }
-                }
-                else {
-                    m_definition_tag = DB::Tag();
-                    m_definition_ident = -1;
-                    return -1;
-                }
-            }
-
-            } else {
-
-            // in this case, parameter types must match (part of signature)
-            // does the return type match, too?
-            mi::base::Handle<const IType> def_ret_type(fdef->get_return_type());
-
-            bool needs_cast;
-            if (!argument_type_matches_parameter_type(
-                m_tf.get(),
-                def_ret_type.get(),
-                m_return_type.get(),
-                /*allow_cast*/ false,
-                needs_cast)) {
-
-                // different type, cannot promote
-                m_definition_tag = DB::Tag();
-                m_definition_ident = -1;
-                add_error_message(
-                    context, "The return type of definition '" + m_definition_db_name +
-                    "' has changed.", -1);
-                return -1;
-            }
-
-            }
-            m_definition_tag = def_tag;
-            m_definition_ident = fdef->get_ident();
-        }
-        else
-            return -1;
-    }
-
-    // try to fix invalid arguments
-    DB::Access<Mdl_function_definition> fct_def(m_definition_tag, transaction);
-    mi::base::Handle<const IExpression_list> defaults(fct_def->get_defaults());
-
-    if(repair_arguments(
-        transaction,
-        m_arguments.get(), defaults.get(),
-        repair_invalid_calls, remove_invalid_calls, ++level, context) != 0) {
-
-        m_definition_tag = DB::Tag();
-        m_definition_ident = -1;
-        return -1;
-    }
-    return 0;
-}
-
 mi::Sint32 Mdl_function_call::set_arguments(
     DB::Transaction* transaction, const IExpression_list* arguments)
 {
@@ -532,6 +346,152 @@ mi::Sint32 Mdl_function_call::reset_argument(
     return reset_argument( transaction, index);
 }
 
+bool Mdl_function_call::is_valid(
+    DB::Transaction* transaction, Execution_context* context) const
+{
+    DB::Tag_set modules_checked;
+    DB::Tag_set call_tags_stack;
+    return is_valid( transaction, modules_checked, call_tags_stack, context);
+}
+
+/// This transaction wrapper caches results of various methods on DB::Transaction.
+///
+/// The cache assumes that the transaction's view on the database does *not* change during the
+/// caches lifetime. Do *not* use the cache if this not guaranteed.
+///
+/// Cached methods: get_class_id(), name_to_tag(), access_element().
+class Caching_transaction : public DB::Transaction_wrapper
+{
+public:
+    Caching_transaction( DB::Transaction* transaction)
+      : DB::Transaction_wrapper( transaction) { }
+
+    ~Caching_transaction()
+    {
+        for( auto &entry : m_elements_by_tag)
+            entry.second->unpin();
+        for( auto &entry : m_elements_by_name)
+            entry.second->unpin();
+    }
+
+    DB::Info* access_element( DB::Tag tag) final
+    {
+        auto it = m_elements_by_tag.find( tag);
+        if( it != m_elements_by_tag.end()) {
+            it->second->pin();
+            return it->second;
+        }
+
+        DB::Info* element = m_transaction->access_element( tag);
+        element->pin();
+        m_elements_by_tag[tag] = element;
+        return element;
+    }
+
+    // Invalid names are not cached. Unclear if relevant.
+    DB::Info* access_element( const char* name) final
+    {
+        auto it = m_elements_by_name.find( name);
+        if( it != m_elements_by_name.end()) {
+            it->second->pin();
+            return it->second;
+        }
+
+        DB::Info* element = m_transaction->access_element( name);
+        if( !element)
+            return nullptr;
+
+        element->pin();
+        m_elements_by_name[name] = element;
+        return element;
+    }
+
+    SERIAL::Class_id get_class_id( DB::Tag tag) final
+    {
+        DB::Info* info = access_element( tag);
+        if( !info)
+            return SERIAL::class_id_unknown;
+
+        SERIAL::Class_id class_id = info->get_element()->get_class_id();
+        info->unpin();
+        return class_id;
+    }
+
+    // Invalid names are not cached. Unclear if relevant.
+    //
+    // The implementation of access_element() might be more expensive than that of name_to_tag()
+    // alone, but that cost is offset by the most likely following, and now cached, access_element()
+    // call.
+    DB::Tag name_to_tag( const char* name, Name_to_tag_context context) final
+    {
+        ASSERT( M_SCENE, context != STORE_CONTEXT);
+
+        DB::Info* info = access_element( name);
+        if( !info)
+            return {};
+
+        DB::Tag result = info->get_tag();
+        info->unpin();
+        return result;
+    }
+
+private:
+    // Allow comparisons of C-style string with std::strings to avoid temporaries when searching in
+    // a map.
+    struct String_less
+    {
+        using is_transparent = void;
+        bool operator()( const std::string& lhs, const char* rhs) const
+        { return strcmp( lhs.c_str(), rhs) < 0; }
+        bool operator()( const char* lhs, const std::string& rhs) const
+        { return strcmp( lhs, rhs.c_str()) < 0; }
+        bool operator()( const std::string& lhs, const std::string& rhs) const
+        { return lhs < rhs; }
+    };
+
+    std::map<std::string, DB::Info*, String_less> m_elements_by_name;
+    std::map<DB::Tag, DB::Info*>                  m_elements_by_tag;
+};
+
+Mdl_compiled_material* Mdl_function_call::create_compiled_material(
+    DB::Transaction* transaction_non_cached,
+    bool class_compilation,
+    const IType_struct* target_type,
+    Execution_context* context) const
+{
+    Caching_transaction transaction_cached( transaction_non_cached);
+    DB::Transaction* transaction = &transaction_cached;
+
+    if( !is_valid( transaction, context)) {
+        add_error_message( context, "The material instance is invalid.", -1);
+        return nullptr;
+    }
+
+    mi::base::Handle<const mi::mdl::IMaterial_instance> instance(
+        create_dag_material_instance(
+            transaction,
+            /*use_temporaries*/ true,
+            class_compilation,
+            target_type,
+            context));
+    if( !instance)
+        return nullptr;
+
+    ASSERT( M_SCENE, m_module_tag);
+
+    auto mdl_meters_per_scene_unit
+        = context->get_option<mi::Float32>( MDL_CTX_OPTION_METERS_PER_SCENE_UNIT);
+    auto mdl_wavelength_min
+        = context->get_option<mi::Float32>( MDL_CTX_OPTION_WAVELENGTH_MIN);
+    auto mdl_wavelength_max
+        = context->get_option<mi::Float32>( MDL_CTX_OPTION_WAVELENGTH_MAX);
+    auto resolve_resources = context->get_option<bool>( MDL_CTX_OPTION_RESOLVE_RESOURCES);
+
+    return new Mdl_compiled_material(
+        transaction, instance.get(), m_module_tag,
+        mdl_meters_per_scene_unit, mdl_wavelength_min, mdl_wavelength_max, resolve_resources);
+}
+
 void Mdl_function_call::make_mutable( DB::Transaction* transaction)
 {
     if( !is_valid_definition( transaction))
@@ -569,6 +529,12 @@ bool Mdl_function_call::is_valid_definition( DB::Transaction* transaction) const
 
     DB::Access<Mdl_module> module( module_tag, transaction);
     return module->has_definition( m_is_material, m_definition_db_name, m_definition_ident) == 0;
+}
+
+const IExpression_list* Mdl_function_call::get_enable_if_conditions() const
+{
+    m_enable_if_conditions->retain();
+    return m_enable_if_conditions.get();
 }
 
 void Mdl_function_call::swap( Mdl_function_call& other)
@@ -764,144 +730,6 @@ mi::mdl::IGenerated_code_lambda_function* Mdl_function_call::create_jitted_funct
 
     *errors = 0;
     return jitted_func;
-}
-
-/// This transaction wrapper caches results of various methods on DB::Transaction.
-///
-/// The cache assumes that the transaction's view on the database does *not* change during the
-/// caches lifetime. Do *not* use the cache if this not guaranteed.
-///
-/// Cached methods: get_class_id(), name_to_tag(), access_element().
-class Caching_transaction : public DB::Transaction_wrapper
-{
-public:
-    Caching_transaction( DB::Transaction* transaction)
-      : DB::Transaction_wrapper( transaction) { }
-
-    ~Caching_transaction()
-    {
-        for( auto &entry : m_elements_by_tag)
-            entry.second->unpin();
-        for( auto &entry : m_elements_by_name)
-            entry.second->unpin();
-    }
-
-    DB::Info* access_element( DB::Tag tag) final
-    {
-        auto it = m_elements_by_tag.find( tag);
-        if( it != m_elements_by_tag.end()) {
-            it->second->pin();
-            return it->second;
-        }
-
-        DB::Info* element = m_transaction->access_element( tag);
-        element->pin();
-        m_elements_by_tag[tag] = element;
-        return element;
-    }
-
-    // Invalid names are not cached. Unclear if relevant.
-    DB::Info* access_element( const char* name) final
-    {
-        auto it = m_elements_by_name.find( name);
-        if( it != m_elements_by_name.end()) {
-            it->second->pin();
-            return it->second;
-        }
-
-        DB::Info* element = m_transaction->access_element( name);
-        if( !element)
-            return nullptr;
-
-        element->pin();
-        m_elements_by_name[name] = element;
-        return element;
-    }
-
-    SERIAL::Class_id get_class_id( DB::Tag tag) final
-    {
-        DB::Info* info = access_element( tag);
-        if( !info)
-            return SERIAL::class_id_unknown;
-
-        SERIAL::Class_id class_id = info->get_element()->get_class_id();
-        info->unpin();
-        return class_id;
-    }
-
-    // Invalid names are not cached. Unclear if relevant.
-    //
-    // The implementation of access_element() might be more expensive than that of name_to_tag()
-    // alone, but that cost is offset by the most likely following, and now cached, access_element()
-    // call.
-    DB::Tag name_to_tag( const char* name, Name_to_tag_context context) final
-    {
-        ASSERT( M_SCENE, context != STORE_CONTEXT);
-
-        DB::Info* info = access_element( name);
-        if( !info)
-            return {};
-
-        DB::Tag result = info->get_tag();
-        info->unpin();
-        return result;
-    }
-
-private:
-    // Allow comparisons of C-style string with std::strings to avoid temporaries when searching in
-    // a map.
-    struct String_less
-    {
-        using is_transparent = void;
-        bool operator()( const std::string& lhs, const char* rhs) const
-        { return strcmp( lhs.c_str(), rhs) < 0; }
-        bool operator()( const char* lhs, const std::string& rhs) const
-        { return strcmp( lhs, rhs.c_str()) < 0; }
-        bool operator()( const std::string& lhs, const std::string& rhs) const
-        { return lhs < rhs; }
-    };
-
-    std::map<std::string, DB::Info*, String_less> m_elements_by_name;
-    std::map<DB::Tag, DB::Info*>                  m_elements_by_tag;
-};
-
-Mdl_compiled_material* Mdl_function_call::create_compiled_material(
-    DB::Transaction* transaction_non_cached,
-    bool class_compilation,
-    const IType_struct* target_type,
-    Execution_context* context) const
-{
-    Caching_transaction transaction_cached( transaction_non_cached);
-    DB::Transaction* transaction = &transaction_cached;
-
-    if( !is_valid( transaction, context)) {
-        add_error_message( context, "The material instance is invalid.", -1);
-        return nullptr;
-    }
-
-    mi::base::Handle<const mi::mdl::IMaterial_instance> instance(
-        create_dag_material_instance(
-            transaction,
-            /*use_temporaries*/ true,
-            class_compilation,
-            target_type,
-            context));
-    if( !instance)
-        return nullptr;
-
-    ASSERT( M_SCENE, m_module_tag);
-
-    auto mdl_meters_per_scene_unit
-        = context->get_option<mi::Float32>( MDL_CTX_OPTION_METERS_PER_SCENE_UNIT);
-    auto mdl_wavelength_min
-        = context->get_option<mi::Float32>( MDL_CTX_OPTION_WAVELENGTH_MIN);
-    auto mdl_wavelength_max
-        = context->get_option<mi::Float32>( MDL_CTX_OPTION_WAVELENGTH_MAX);
-    auto resolve_resources = context->get_option<bool>( MDL_CTX_OPTION_RESOLVE_RESOURCES);
-
-    return new Mdl_compiled_material(
-        transaction, instance.get(), m_module_tag,
-        mdl_meters_per_scene_unit, mdl_wavelength_min, mdl_wavelength_max, resolve_resources);
 }
 
 const mi::mdl::IMaterial_instance*
@@ -1112,6 +940,216 @@ Mdl_function_call::create_dag_material_instance(
     return instance.extract();
 }
 
+void Mdl_function_call::dump( DB::Transaction* transaction) const
+{
+    std::ostringstream s;
+    s << std::boolalpha;
+    mi::base::Handle<const mi::IString> tmp;
+
+    s << "Module tag: " << m_module_tag.get_uint() << std::endl;
+    s << "Module DB name: \"" << m_module_db_name << '\"' << std::endl;
+    s << "Function definition tag: " << m_definition_tag.get_uint() << std::endl;
+    s << "Function definition identifier: " << m_definition_ident << std::endl;
+    s << "Function definition MDL name: \"" << m_definition_name << '\"' << std::endl;
+    s << "Function definition DB name: \"" << m_definition_db_name << '\"' << std::endl;
+    tmp = m_ef->dump( transaction, m_arguments.get(), /*name*/ nullptr);
+    s << "Arguments: " << tmp->get_c_str() << std::endl;
+    s << "Is declarative: " << m_is_declarative << std::endl;
+    s << "Is material: " << m_is_material << std::endl;
+    s << "Immutable: " << m_immutable << std::endl;
+    tmp = m_ef->dump( transaction, m_enable_if_conditions.get(), /*name*/ nullptr);
+    s << "Enable_if conditions: " << tmp->get_c_str() << std::endl;
+
+    s << std::endl;
+    LOG::mod_log->info( M_SCENE, LOG::Mod_log::C_DATABASE, "%s", s.str().c_str());
+}
+
+bool Mdl_function_call::is_valid(
+    DB::Transaction* transaction,
+    DB::Tag_set& modules_checked,
+    DB::Tag_set& call_tags_stack,
+    Execution_context* context) const
+{
+    DB::Tag module_tag = get_module( transaction);
+    DB::Access<Mdl_module> module( module_tag, transaction);
+    if( !module->is_valid( transaction, modules_checked, context))
+        return false;
+
+    modules_checked.insert( module_tag);
+
+    if( module->has_definition( m_is_material,m_definition_db_name, m_definition_ident) != 0) {
+        add_error_message(
+            context, "The function definition '" + m_definition_db_name + "' "
+            "does no longer exist or has interface changes.", -1);
+        return false;
+    }
+
+    for( mi::Size i = 0, n = m_arguments->get_size(); i < n; ++i) {
+
+        mi::base::Handle<const IExpression> arg( m_arguments->get_expression( i));
+        if( arg->get_kind() != IExpression::EK_CALL)
+            continue;
+        mi::base::Handle<const IExpression_call> arg_call(
+            arg->get_interface<IExpression_call>());
+
+        DB::Tag call_tag = arg_call->get_call();
+        if( !call_tag)
+            continue;
+
+        if( !call_tags_stack.insert( call_tag).second) {
+            add_error_message(
+                context, "The call arguments create a cyclic graph.", -1);
+                return false;
+        }
+
+        DB::Access<Mdl_function_call> call( call_tag, transaction);
+        if( !call) {
+             add_error_message(
+                 context, "The function call attached to parameter '"
+                 + std::string(m_arguments->get_name(i)) + "' has a wrong element type.", -1);
+             return false;
+        }
+        if( !call->is_valid( transaction, modules_checked, call_tags_stack, context)) {
+            add_error_message(
+                context, "The function call attached to parameter '"
+                + std::string( m_arguments->get_name( i)) + "' is invalid.", -1);
+            return false;
+        }
+
+        call_tags_stack.erase( call_tag);
+    }
+
+    return true;
+}
+
+mi::Sint32 Mdl_function_call::repair(
+    DB::Transaction* transaction,
+    bool repair_invalid_calls,
+    bool remove_invalid_calls,
+    mi::Uint32 level,
+    Execution_context* context)
+{
+    if (m_immutable) // immutable calls cannot be changed.
+        return -3;
+
+    ASSERT(M_SCENE, m_module_tag);
+    DB::Access<Mdl_module> module(m_module_tag, transaction);
+    // cannot restore if we refer to an invalid module
+    if (!module->is_valid(transaction, context))
+        return -1;
+
+    mi::Sint32 ret
+        = module->has_definition(m_is_material, m_definition_db_name, m_definition_ident);
+    if (ret == -1) {
+        // a definition of that name does no longer exist
+        m_definition_tag = DB::Tag();
+        m_definition_ident = -1;
+        add_error_message(
+            context, "The definition '" + m_definition_db_name +
+            "' does no longer exist in the module.", -1);
+        return -1;
+    }
+    else if (ret == -2) {
+
+        if (level == 0 || repair_invalid_calls) {
+
+            mi::Size index = module->get_definition_index(
+                m_is_material, m_definition_db_name, Mdl_ident(-1));
+            ASSERT(M_SCENE, index != mi::Size(-1));
+            DB::Tag def_tag = module->get_definition(m_is_material, index);
+            DB::Access<Mdl_function_definition> fdef(def_tag, transaction);
+
+            if( fdef->is_material()) {
+
+            // compare argument types with new parameter types
+            if (m_arguments->get_size() != fdef->get_parameter_count()) {
+                // for now, we cannot adapt to this.
+                m_definition_tag = DB::Tag();
+                m_definition_ident = -1;
+                add_error_message(
+                    context, "The parameter count of definition '" + m_definition_db_name +
+                    "' has changed.", -1);
+                return -1;
+            }
+
+            mi::base::Handle<const IType_list> param_types(fdef->get_parameter_types());
+            for (mi::Size i = 0, n = fdef->get_parameter_count(); i < n; ++i) {
+
+                const char* param_name = fdef->get_parameter_name(i);
+                const char* arg_name = m_arguments->get_name(i);
+                if (strcmp(param_name, arg_name) == 0) {
+
+                    mi::base::Handle<const IType> ptype(param_types->get_type(i));
+                    mi::base::Handle<const IExpression> arg(m_arguments->get_expression(i));
+                    mi::base::Handle<const IType> atype(arg->get_type());
+
+                    bool needs_cast;
+                    if (!argument_type_matches_parameter_type(
+                        m_tf.get(),
+                        atype.get(),
+                        ptype.get(),
+                        /*allow_cast*/ false,
+                        needs_cast)) {
+
+                        m_definition_tag = DB::Tag();
+                        m_definition_ident = -1;
+                        return -1;
+                    }
+                }
+                else {
+                    m_definition_tag = DB::Tag();
+                    m_definition_ident = -1;
+                    return -1;
+                }
+            }
+
+            } else {
+
+            // in this case, parameter types must match (part of signature)
+            // does the return type match, too?
+            mi::base::Handle<const IType> def_ret_type(fdef->get_return_type());
+
+            bool needs_cast;
+            if (!argument_type_matches_parameter_type(
+                m_tf.get(),
+                def_ret_type.get(),
+                m_return_type.get(),
+                /*allow_cast*/ false,
+                needs_cast)) {
+
+                // different type, cannot promote
+                m_definition_tag = DB::Tag();
+                m_definition_ident = -1;
+                add_error_message(
+                    context, "The return type of definition '" + m_definition_db_name +
+                    "' has changed.", -1);
+                return -1;
+            }
+
+            }
+            m_definition_tag = def_tag;
+            m_definition_ident = fdef->get_ident();
+        }
+        else
+            return -1;
+    }
+
+    // try to fix invalid arguments
+    DB::Access<Mdl_function_definition> fct_def(m_definition_tag, transaction);
+    mi::base::Handle<const IExpression_list> defaults(fct_def->get_defaults());
+
+    if(repair_arguments(
+        transaction,
+        m_arguments.get(), defaults.get(),
+        repair_invalid_calls, remove_invalid_calls, ++level, context) != 0) {
+
+        m_definition_tag = DB::Tag();
+        m_definition_ident = -1;
+        return -1;
+    }
+    return 0;
+}
+
 const SERIAL::Serializable* Mdl_function_call::serialize( SERIAL::Serializer* serializer) const
 {
     Scene_element_base::serialize( serializer);
@@ -1156,30 +1194,6 @@ SERIAL::Serializable* Mdl_function_call::deserialize( SERIAL::Deserializer* dese
     m_enable_if_conditions = m_ef->deserialize_list( deserializer);
 
     return this + 1;
-}
-
-void Mdl_function_call::dump( DB::Transaction* transaction) const
-{
-    std::ostringstream s;
-    s << std::boolalpha;
-    mi::base::Handle<const mi::IString> tmp;
-
-    s << "Module tag: " << m_module_tag.get_uint() << std::endl;
-    s << "Module DB name: \"" << m_module_db_name << '\"' << std::endl;
-    s << "Function definition tag: " << m_definition_tag.get_uint() << std::endl;
-    s << "Function definition identifier: " << m_definition_ident << std::endl;
-    s << "Function definition MDL name: \"" << m_definition_name << '\"' << std::endl;
-    s << "Function definition DB name: \"" << m_definition_db_name << '\"' << std::endl;
-    tmp = m_ef->dump( transaction, m_arguments.get(), /*name*/ nullptr);
-    s << "Arguments: " << tmp->get_c_str() << std::endl;
-    s << "Is declarative: " << m_is_declarative << std::endl;
-    s << "Is material: " << m_is_material << std::endl;
-    s << "Immutable: " << m_immutable << std::endl;
-    tmp = m_ef->dump( transaction, m_enable_if_conditions.get(), /*name*/ nullptr);
-    s << "Enable_if conditions: " << tmp->get_c_str() << std::endl;
-
-    s << std::endl;
-    LOG::mod_log->info( M_SCENE, LOG::Mod_log::C_DATABASE, "%s", s.str().c_str());
 }
 
 size_t Mdl_function_call::get_size() const
@@ -1274,11 +1288,11 @@ mi::Sint32 Mdl_function_call::repair_arguments(
             arguments->get_expression<IExpression_call>(i));
         if (arg_call) {
             DB::Tag call_tag = arg_call->get_call();
-            if (!call_tag.is_valid())
+            if (!call_tag)
                 continue;
 
-            SERIAL::Class_id class_id = transaction->get_class_id(call_tag);
-            if (class_id != ID_MDL_FUNCTION_CALL)
+            DB::Access<Mdl_function_call> fcall(call_tag, transaction);
+            if (!fcall)
                 continue;
 
             const char* arg_name = arguments->get_name(i);
@@ -1286,7 +1300,6 @@ mi::Sint32 Mdl_function_call::repair_arguments(
                 defaults->get_expression(defaults->get_index(arg_name)));
 
             mi::base::Handle<IExpression> new_expr;
-            DB::Access<Mdl_function_call> fcall(call_tag, transaction);
             if (!fcall->is_valid(transaction, context)) {
                 if (repair_call(
                     transaction,

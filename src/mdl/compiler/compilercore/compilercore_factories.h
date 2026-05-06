@@ -30,6 +30,7 @@
 #define MDL_COMPILERCORE_FACTORIES_H 1
 
 #include <mi/base/handle.h>
+#include <mi/base/lock.h>
 
 #include <mi/mdl/mdl_iowned.h>
 #include <mi/mdl/mdl_declarations.h>
@@ -51,6 +52,7 @@ namespace mdl {
 class MDL;
 class Type_material;
 class Struct_category;
+class Type_spectrum;
 class Type_struct;
 class Type_array_size;
 class Type_enum;
@@ -1077,6 +1079,12 @@ public:
     /// Create a new type color instance.
     MDL_CHECK_RESULT IType_color const *create_color() MDL_FINAL;
 
+    /// Create a new type spectral sample instance.
+    MDL_CHECK_RESULT IType_spectral_sample const *create_spectral_sample() MDL_FINAL;
+
+    /// Create a new type spectrum instance.
+    MDL_CHECK_RESULT IType_spectrum const *create_spectrum() MDL_FINAL;
+
     /// Create a new type pointer instance.
     ///
     /// \param element_type  The element type of the pointer.
@@ -1276,10 +1284,16 @@ public:
     /// \param arena               the memory arena used to allocate new types
     /// \param mat_ior_is_varying  true if the material IOR field is varying
     /// \param sym_tab             the symbol table for symbols inside types
+    /// \param compiler            the MDL compiler (which may not be fully initialized
+    ///                            in this constructor, yet)
     explicit Type_factory(
         Memory_arena  &arena,
         bool          mat_ior_is_varying,
-        Symbol_table  &sym_tab);
+        Symbol_table  &sym_tab,
+        MDL const     &compiler);
+
+    /// Destructor.
+    virtual ~Type_factory();
 
 private:
     // non copyable
@@ -1332,6 +1346,9 @@ private:
     /// The id of this factory, for debugging.
     size_t const m_id;
 
+    /// The MDL compiler of the root factory or NULL.
+    MDL const *m_compiler;
+
     /// The type factory of the compiler itself or NULL.
     IType_factory * const m_root_factory;
 
@@ -1346,6 +1363,12 @@ private:
 
     /// Predefined categories (used in predefined structs).
     Struct_category const *m_predefined_categories[IStruct_category::CID_LAST + 1];
+
+    /// Lock to used, when creating the singleton types in the root factory.
+    mi::base::Lock m_root_lock;
+
+    /// The singleton spectrum type, only available in the root factory.
+    Type_spectrum const *m_spectrum_type;
 
     /// Hashtable of cached types.
     typedef Arena_hash_map<
@@ -1552,6 +1575,27 @@ public:
         IValue_array const *wavelengths,
         IValue_array const *amplitudes) MDL_FINAL;
 
+    /// Create a new zero spectral sample value of type spectral sample.
+    IValue_spectral_sample const *create_spectral_sample_zero() MDL_FINAL;
+
+    /// Create a new one spectral sample value of type spectral sample.
+    IValue_spectral_sample const *create_spectral_sample_one() MDL_FINAL;
+
+
+    /// Create a new color value of a given type.
+    ///
+    /// \param color_type   The color type (must be IType_color or IType_spectrum)
+    /// \param amplitudes   The values for the amplitudes in the wavelengths
+    ///                     specified by the color type.
+    /// \param size         The length of the amplitudes array.
+    ///
+    /// \return IValue_bad if the passed type is not a color type or the array is not of type
+    ///                    array of floats.
+    IValue const *create_color(
+        IType const                *color_type,
+        IValue_float const * const amplitudes[],
+        size_t                     size) MDL_FINAL;
+
     /// Create a new value of type struct.
     /// 
     /// \param type    The type of the struct.
@@ -1644,6 +1688,9 @@ public:
     /// \param value  the value to import
     IValue const *import(IValue const *value) MDL_FINAL;
 
+    /// Get the allocator of the value factory.
+    IAllocator *get_allocator() MDL_FINAL;
+
     // Non interface methods
 public:
     /// Create a new value of type array.
@@ -1716,6 +1763,12 @@ private:
 
     /// The false value.
     IValue_bool const *const m_false_value;
+
+    /// The zero spectral sample value.
+    IValue_spectral_sample const *const m_zero_spectral_sample_value;
+
+    /// The one spectral sample value.
+    IValue_spectral_sample const *const m_one_spectral_sample_value;
 };
 
 }  // mdl

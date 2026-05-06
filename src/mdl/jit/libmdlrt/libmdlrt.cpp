@@ -312,7 +312,7 @@ static float dot_lerp(
     if (g0 < f0 && f[0] > 0.0f) {
         // need to extend range for f to g's data range if first value of f isn't zero
         f_i = -1;
-        f0 = f_wl[0];
+        f0 = g0;
     } else {
         // start with g where f's data starts
         //!! TODO: could skip ahead while g_i + 1 < 0
@@ -455,7 +455,10 @@ static void spectrum_to_cs_refl(
         XYZ_illum[1] += SPECTRAL_XYZ1931_Y[i] * illum;
         XYZ_illum[2] += SPECTRAL_XYZ1931_Z[i] * illum;
     }
-    // note: can ignore actual scaling for both integrals (since it's identical)
+    XYZ_illum[0] *= SPECTRAL_XYZ_LAMBDA_STEP;
+    XYZ_illum[1] *= SPECTRAL_XYZ_LAMBDA_STEP;
+    XYZ_illum[2] *= SPECTRAL_XYZ_LAMBDA_STEP;
+    // note: can ignore scaling by 683 for both integrals (since it's identical)
 
     // convert both to the color space
     float cs_spectral[3];
@@ -489,9 +492,9 @@ extern "C" void mdl_emission_color(
         num_values);
     convert_XYZ_to_cs(target, XYZ, CS_sRGB);
 
-    math::max(target[0], 0.0f);
-    math::max(target[1], 0.0f);
-    math::max(target[2], 0.0f);
+    target[0] = math::max(target[0], 0.0f);
+    target[1] = math::max(target[1], 0.0f);
+    target[2] = math::max(target[2], 0.0f);
 }
 
 extern "C" void mdl_reflection_color(

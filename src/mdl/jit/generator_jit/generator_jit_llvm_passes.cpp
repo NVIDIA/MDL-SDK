@@ -28,12 +28,6 @@
 
 #include "pch.h"
 
-#include <string>
-#include <set>
-
-#include <cstdlib>
-#include <cstdio>
-
 #include <llvm/IR/Attributes.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/PassManager.h>

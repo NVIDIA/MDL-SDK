@@ -26,9 +26,9 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
- // examples/mdl_sdk/df_native/example_df_native.cpp
- //
- // Simple CPU renderer using compiled BSDFs with a material parameter editor GUI.
+// examples/mdl_sdk/df_native/example_df_native.cpp
+//
+// Simple CPU renderer using compiled BSDFs with a material parameter editor GUI.
 
 #define _USE_MATH_DEFINES
 #include <cmath>
@@ -71,11 +71,11 @@ struct
     const mi::mdl::tct_float3 ones_float3 = { 1.f, 1.f, 1.f };
     const mi::mdl::tct_float3 tangent_u[1] = { {1.0f, 0.0f, 0.0f} };
     const mi::mdl::tct_float3 tangent_v[1] = { { 0.0f, 1.0f, 0.0f} };
-    const mi::mdl::tct_float4 identity[4] = {
+    const mi::mdl::tct_float4_a16 identity[3] = {
         {1.0f, 0.0f, 0.0f, 0.0f},
         {0.0f, 1.0f, 0.0f, 0.0f},
-        {0.0f, 0.0f, 1.0f, 0.0f},
-        {0.0f, 0.0f, 0.0f, 1.0f}
+        {0.0f, 0.0f, 1.0f, 0.0f}
+        // The last row is always implied to be (0, 0, 0, 1).
     };
 } Constants;
 
@@ -576,6 +576,7 @@ struct Options
             << "  -o <outputfile>            image file to write result to\n"
             << "                             (default: example_native.png)\n"
             << "  -p|--mdl_path <path>       mdl search path, can occur multiple times\n"
+            << "  --max_path_length <num>    maximum path length (default: 6, clamped to 2..100)\n"
             << "  --single_threaded          render on one thread only"
             << "\n"
             << "Viewport controls:\n"
@@ -615,7 +616,7 @@ struct Options
                 }
                 else if (strcmp(opt, "--max_path_length") == 0 && i < argc - 1)
                 {
-                    max_ray_length = std::max(atoi(argv[++i]), 0);
+                    max_ray_length = std::min(std::max(atoi(argv[++i]), 2), 100);
                 }
                 else if (strcmp(opt, "--hdr") == 0 && i < argc - 1)
                 {
@@ -1240,7 +1241,7 @@ bool trace_ray(mi::mdl::tct_float3 vp_sample[3], Render_context& rc, Render_cont
     {
         mi::mdl::Shading_state_material* shading_state = nullptr;
         mi::mdl::Texture_handler_base* tex_handler = nullptr;
-        mi::mdl::tct_float4 text_results[128];
+        mi::mdl::tct_float4_a16 text_results[128];
 
         // Update material shader state
         if (rc.use_derivatives) {
@@ -1354,6 +1355,7 @@ bool trace_ray(mi::mdl::tct_float3 vp_sample[3], Render_context& rc, Render_cont
 
             if (!light_culled)
             {
+                // TODO SPECTRAL: Default to RGB??
                 mi::mdl::Bsdf_evaluate_data<mi::mdl::DF_HSM_NONE> eval_data;
                 if (ray.is_inside)
                 {
@@ -2094,11 +2096,18 @@ int MAIN_UTF8(int argc, char* argv[])
     // Generate code for the material
     std::cout << "Adding material \"" << options.material_name << "\"..." << std::endl;
 
+    // Create material instance
+    Material_instance mat_instance(
+        mc.create_and_init_material_instance(
+            options.material_name, options.use_class_compilation));
+    if (!mat_instance) {
+        std::cout << "Failed creating material instance for \""
+            << options.material_name << "\"." << std::endl;
+        exit(EXIT_FAILURE);
+    }
+
     // Add functions of the material to the link unit
-    if (!mc.add_material(
-        options.material_name,
-        descs.data(), descs.size(),
-        options.use_class_compilation))
+    if (!mc.add_material(mat_instance, descs.data(), descs.size()))
     {
         std::cout << "Failed!" << std::endl;
         // Print any compiler messages, if available
@@ -2142,15 +2151,15 @@ int MAIN_UTF8(int argc, char* argv[])
         // Get BSDF texture data if exists
         if (tex->get_shape() == mi::mdl::IType_texture::TS_BSDF_DATA)
         {
-            textures.push_back(Texture(
+            textures.emplace_back(
                 tex->get_bsdf_data(),
                 tex->get_width(), tex->get_height(), tex->get_depth(),
-                tex->get_pixel_type()));
+                tex->get_pixel_type());
         }
         // Get texture image data
         else
         {
-            textures.push_back(tex->get_image());
+            textures.emplace_back(tex->get_image(), tex->get_gamma_mode());
         }
     }
 

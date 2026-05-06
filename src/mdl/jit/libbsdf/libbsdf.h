@@ -75,10 +75,6 @@ enum BSDF_event_type
     BSDF_EVENT_SPECULAR_TRANSMISSION = BSDF_EVENT_SPECULAR | BSDF_EVENT_TRANSMISSION
 };
 
-// the calling code can mark an IOR field in *_data with BSDF_USE_MATERIAL_IOR, which will then
-// be replaced by BSDF functions with the MDL material's IOR
-#define BSDF_USE_MATERIAL_IOR   -1.0f
-
 /// Flags controlling the calculation of DF results.
 enum Df_flags {
     DF_FLAGS_NONE = 0,               ///< allows nothing -> black
@@ -103,28 +99,32 @@ enum Df_flags {
 #error "Compile constant 'MDL_DF_HANDLE_SLOT_MODE' not defined."
 #endif
 
+// note: if this struct is changed, the padding_fields logic in generator_jit_llvm_df.cpp
+// may need to be updated accordingly
 struct __align__(16) BSDF_sample_data
 {
-    float3 ior1;                // mutual input: IOR current medium
-    float3 ior2;                // mutual input: IOR other side
-    float3 k1;                  // mutual input: outgoing direction
+    color_sample ior1;              // mutual input: IOR current medium
+    color_sample ior2;              // mutual input: IOR other side
+    float3 k1;                      // mutual input: outgoing direction
 
-    float3 k2;                  // output:  incoming direction
-    float4 xi;                  // input:   pseudo-random sample numbers
+    float3 k2;                      // output:  incoming direction
 
-    float  pdf;                 // output:  pdf (non-projected hemisphere)
-    float3 bsdf_over_pdf;       // output:  bsdf * dot(normal, k2) / pdf
-    int event_type;             // output:  BSDF_event_type
-    int handle;                 // output:  handle of the sampled elemental BSDF (lobe)
+    // depending on the size of color_sample, padding may be added here by the compiler
+    float4 xi;                      // input:   pseudo-random sample numbers
 
-    Df_flags flags;             // input:   flags controlling calculation of result
-                                //          (optional depending on backend options)
+    pdf_sample pdf;                 // output:  pdf (non-projected hemisphere)
+    color_sample bsdf_over_pdf;     // output:  bsdf * dot(normal, k2) / pdf
+    int event_type;                 // output:  BSDF_event_type
+    int handle;                     // output:  handle of the sampled elemental BSDF (lobe)
+
+    Df_flags flags;                 // input:   flags controlling calculation of result
+                                    //          (optional depending on backend options)
 };
 
 struct __align__(16) BSDF_evaluate_data
 {
-    float3 ior1;                // mutual input: IOR current medium
-    float3 ior2;                // mutual input: IOR other side
+    color_sample ior1;          // mutual input: IOR current medium
+    color_sample ior2;          // mutual input: IOR other side
     float3 k1;                  // mutual input: outgoing direction
 
     float3 k2;
@@ -136,16 +136,17 @@ struct __align__(16) BSDF_evaluate_data
     #endif
 
     #if MDL_DF_HANDLE_SLOT_MODE == BSDF_HSMN
-        float3 bsdf_diffuse;    // output: (diffuse part of the) bsdf * dot(normal, k2)
-        float3 bsdf_glossy;     // output: (glossy part of the) bsdf * dot(normal, k2)
+        color_sample bsdf_diffuse;    // output: (diffuse part of the) bsdf * dot(normal, k2)
+        color_sample bsdf_glossy;     // output: (glossy part of the) bsdf * dot(normal, k2)
     #elif MDL_DF_HANDLE_SLOT_MODE == BSDF_HSMP
-        float3* bsdf_diffuse;   // output: (diffuse part of the) bsdf * dot(normal, k2)
-        float3* bsdf_glossy;    // output: (glossy part of the) bsdf * dot(normal, k2)
+        color_sample* bsdf_diffuse;   // output: (diffuse part of the) bsdf * dot(normal, k2)
+        color_sample* bsdf_glossy;    // output: (glossy part of the) bsdf * dot(normal, k2)
     #else
-        float3 bsdf_diffuse[MDL_DF_HANDLE_SLOT_MODE]; // output: (diffuse) bsdf * dot(normal, k2)
-        float3 bsdf_glossy [MDL_DF_HANDLE_SLOT_MODE]; // output: (glossy) bsdf * dot(normal, k2)
+        color_sample bsdf_diffuse[MDL_DF_HANDLE_SLOT_MODE]; // output: (diffuse) bsdf * dot(normal, k2)
+        color_sample bsdf_glossy[MDL_DF_HANDLE_SLOT_MODE];  // output: (glossy) bsdf * dot(normal, k2)
     #endif
-    float  pdf;                 // output: pdf (non-projected hemisphere)
+
+    pdf_sample pdf;             // output: pdf (non-projected hemisphere)
 
     Df_flags flags;             // input:   flags controlling calculation of result
                                 //          (optional depending on backend options)
@@ -153,12 +154,13 @@ struct __align__(16) BSDF_evaluate_data
 
 struct __align__(16) BSDF_pdf_data
 {
-    float3 ior1;                // mutual input: IOR current medium
-    float3 ior2;                // mutual input: IOR other side
+    color_sample ior1;          // mutual input: IOR current medium
+    color_sample ior2;          // mutual input: IOR other side
     float3 k1;                  // mutual input: outgoing direction
 
     float3 k2;                  // input:   incoming direction
-    float pdf;                  // output:  pdf (non-projected hemisphere)
+
+    pdf_sample pdf;             // output:  pdf (non-projected hemisphere)
 
     Df_flags flags;             // input:   flags controlling calculation of result
                                 //          (optional depending on backend options)
@@ -166,8 +168,8 @@ struct __align__(16) BSDF_pdf_data
 
 struct __align__(16) BSDF_auxiliary_data
 {
-    float3 ior1;                // mutual input: IOR current medium
-    float3 ior2;                // mutual input: IOR other side
+    color_sample ior1;          // mutual input: IOR current medium
+    color_sample ior2;          // mutual input: IOR other side
     float3 k1;                  // mutual input: outgoing direction
 
     #if MDL_DF_HANDLE_SLOT_MODE != BSDF_HSMN
@@ -180,14 +182,14 @@ struct __align__(16) BSDF_auxiliary_data
     // output: albedo 2x float3
     // The albedo output is split into diffuse and glossy albedo corresponding the BSDF_evaluate_data.
     #if MDL_DF_HANDLE_SLOT_MODE == BSDF_HSMN
-        float3 albedo_diffuse;
-        float3 albedo_glossy;
+        color_sample albedo_diffuse;
+        color_sample albedo_glossy;
     #elif MDL_DF_HANDLE_SLOT_MODE == BSDF_HSMP
-        float3* albedo_diffuse;
-        float3* albedo_glossy;
+        color_sample* albedo_diffuse;
+        color_sample* albedo_glossy;
     #else
-        float3 albedo_diffuse[MDL_DF_HANDLE_SLOT_MODE];
-        float3 albedo_glossy[MDL_DF_HANDLE_SLOT_MODE];
+        color_sample albedo_diffuse[MDL_DF_HANDLE_SLOT_MODE];
+        color_sample albedo_glossy[MDL_DF_HANDLE_SLOT_MODE];
     #endif
 
     // output: normal
@@ -232,7 +234,6 @@ struct __align__(16) BSDF_auxiliary_data
                                 //          (optional depending on backend options)
 };
 
-
 // functions provided by libbsdf
 typedef void (*mdl_bsdf_sample_function)   (BSDF_sample_data *,
                                             MDL_SDK_State *, MDL_SDK_Res_data_pair *, void *);
@@ -252,13 +253,15 @@ enum EDF_event_type
 
 struct __align__(16) EDF_sample_data
 {
-    float4 xi;                  // input: pseudo-random sample numbers
+    float4 xi;                      // input: pseudo-random sample numbers
 
-    float3 k1;                  // output: outgoing direction
-    float pdf;                  // output: pdf (non-projected hemisphere)
-    float3 edf_over_pdf;        // output: edf * dot(normal,k1) / pdf
+    float3 k1;                      // output: outgoing direction
+
+    pdf_sample pdf;                 // output: pdf (non-projected hemisphere)
+
+    color_sample edf_over_pdf;      // output: edf * dot(normal,k1) / pdf
     int event_type;
-    int handle;                 // output: handle of the sampled elemental EDF (lobe)
+    int handle;                     // output: handle of the sampled elemental EDF (lobe)
 };
 
 struct __align__(16) EDF_evaluate_data
@@ -273,20 +276,21 @@ struct __align__(16) EDF_evaluate_data
 
     float cos;                  // output: dot(normal, k1)
     #if MDL_DF_HANDLE_SLOT_MODE == BSDF_HSMN
-        float3 edf;             // output: edf
+        color_sample edf;       // output: edf
     #elif MDL_DF_HANDLE_SLOT_MODE == BSDF_HSMP
-        float3* edf;            // output: edf
+        color_sample* edf;      // output: edf
     #else
-        float3 edf[MDL_DF_HANDLE_SLOT_MODE]; // output: edf
+        color_sample edf[MDL_DF_HANDLE_SLOT_MODE]; // output: edf
     #endif
-    float pdf;                  // output: pdf (non-projected hemisphere)
+
+    pdf_sample pdf;             // output: pdf (non-projected hemisphere)
 };
 
 struct __align__(16) EDF_pdf_data
 {
     float3 k1;                  // input: outgoing direction
 
-    float pdf;                  // output: pdf (non-projected hemisphere)
+    pdf_sample pdf;             // output: pdf (non-projected hemisphere)
 };
 
 struct __align__(16) EDF_auxiliary_data

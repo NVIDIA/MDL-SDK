@@ -65,8 +65,7 @@ inline void set_value(
         Uint size = type->get_arraysize();
         STLEXT::no_unused_variable_warning_please( size);
         ASSERT(M_ATTR, size != 0); // dynamic arrays are note supported in this variant
-        ASSERT(M_ATTR,
-            type->sizeof_one()/size == sizeof(value) || type->get_typecode() == TYPE_CALL);
+        ASSERT(M_ATTR, type->sizeof_one()/size == sizeof(value));
         const char* ptr = reinterpret_cast<const char*>(&value);
         memcpy(ret_address,ptr,sizeof(value));
     } else {

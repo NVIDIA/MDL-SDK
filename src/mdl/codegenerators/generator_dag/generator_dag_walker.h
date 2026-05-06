@@ -39,35 +39,6 @@ namespace mdl {
 
 class MD5_hasher;
 
-class IDAG_ir_visitor {
-public:
-    /// Post-visit a Constant.
-    ///
-    /// \param cnst  the constant that is visited
-    virtual void visit(DAG_constant *cnst) = 0;
-
-    /// Post-visit a Temporary.
-    ///
-    /// \param tmp  the temporary that is visited
-    virtual void visit(DAG_temporary *tmp) = 0;
-
-    /// Post-visit a call.
-    ///
-    /// \param call  the call that is visited
-    virtual void visit(DAG_call *call) = 0;
-
-    /// Post-visit a Parameter.
-    ///
-    /// \param param  the parameter that is visited
-    virtual void visit(DAG_parameter *param) = 0;
-
-    /// Post-visit a temporary initializer.
-    ///
-    /// \param index  the index of the temporary
-    /// \param init   the initializer expression of this temporary
-    virtual void visit(int index, DAG_node *init) = 0;
-};
-
 /// A walker for DAG IR nodes.
 class DAG_ir_walker {
 public:

@@ -676,6 +676,8 @@ void Dag_hasher::hash(IType const *tp) {
         }
         break;
     case IType::TK_COLOR:
+    case IType::TK_SPECTRAL_SAMPLE:
+    case IType::TK_SPECTRUM:
         break;
     case IType::TK_FUNCTION:
         {
@@ -797,6 +799,8 @@ void Dag_hasher::hash(IValue const *v) {
     case IValue::VK_MATRIX:
     case IValue::VK_ARRAY:
     case IValue::VK_RGB_COLOR:
+    case IValue::VK_SPECTRUM:
+    case IValue::VK_SPECTRAL_SAMPLE:
         {
             IValue_compound const *cv = cast<IValue_compound>(v);
 

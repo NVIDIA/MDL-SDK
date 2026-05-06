@@ -522,8 +522,8 @@ const char* Image_impl::get_original_filename() const
 
 const char* Image_impl::get_selector() const
 {
-    m_cached_selector = get_db_element()->get_selector();
-    return !m_cached_selector.empty() ? m_cached_selector.c_str() : nullptr;
+    std::string result = get_db_element()->get_selector();
+    return !result.empty() ? m_string_cache.add( result) : nullptr;
 }
 
 const char* Image_impl::get_filename( mi::Size frame_id, mi::Size uvtile_id) const

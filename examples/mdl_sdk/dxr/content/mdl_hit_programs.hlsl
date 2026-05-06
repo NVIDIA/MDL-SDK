@@ -314,7 +314,7 @@ void setup_mdl_shading_state(
     mdl_state.renderer_state.hit_vertex_indices = vertex_indices;
     mdl_state.renderer_state.barycentric = barycentric;
     mdl_state.renderer_state.hit_backface = backfacing_primitive;
-    
+
     // get texture coordinates using a manually added scene data element with the scene data id
     // defined as `SCENE_DATA_ID_TEXCOORD_0`
     // (see end of target code generation on application side)
@@ -386,6 +386,11 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
     Shading_state_material mdl_state;
     setup_mdl_shading_state(mdl_state, attrib);
 
+#if defined(MDL_SPECTRAL_RENDERING)
+    // Copy the active wavelengths from the ray payload into the shading state.
+    mdl_state.spectral_wavelengths = payload.spectral_wavelengths;
+#endif
+
     // pre-compute and cache data used by different generated MDL functions
     if (mat.has_init())
     {
@@ -410,17 +415,31 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
 
     // for thin-walled materials there is no 'inside'
     const bool inside = has_flag(payload.flags, FLAG_INSIDE);
-    const float ior1 = (inside &&!thin_walled) ? BSDF_USE_MATERIAL_IOR : 1.0f;
-    const float ior2 = (inside &&!thin_walled) ? 1.0f : BSDF_USE_MATERIAL_IOR;
+
+#if defined(MDL_SPECTRAL_RENDERING)
+    Color_sample ior1, ior2;
+    {
+        float v1 = (inside && !thin_walled) ? BSDF_USE_MATERIAL_IOR : 1.0f;
+        float v2 = (inside && !thin_walled) ? 1.0f : BSDF_USE_MATERIAL_IOR;
+        [unroll] for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        {
+            ior1.values[i] = v1;
+            ior2.values[i] = v2;
+        }
+    }
+#else
+    const float ior1 = (inside && !thin_walled) ? BSDF_USE_MATERIAL_IOR : 1.0f;
+    const float ior2 = (inside && !thin_walled) ? 1.0f : BSDF_USE_MATERIAL_IOR;
+#endif
 
 
     // apply volume attenuation
     //---------------------------------------------------------------------------------------------
-    if (inside && !thin_walled && (mat.has_volume_absorption() || mat.has_volume_scattering())) 
+    if (inside && !thin_walled && (mat.has_volume_absorption() || mat.has_volume_scattering()))
     {
-        const float3 a_coeff = mdl_volume_absorption_coefficient(mdl_state);
-        const float3 s_coeff = mdl_volume_scattering_coefficient(mdl_state);
-        const float3 t_coeff = a_coeff + s_coeff;
+        const Color_sample a_coeff = mdl_volume_absorption_coefficient(mdl_state);
+        const Color_sample s_coeff = mdl_volume_scattering_coefficient(mdl_state);
+        const Color_sample t_coeff = addcc(a_coeff, s_coeff);
         const float g = mdl_volume_scattering_directional_bias(mdl_state);
 
         // distance the ray traveled in meters
@@ -430,6 +449,81 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
         float distance = length(mdl_state.position - payload.ray_origin_next) * scene_constants.meters_per_scene_unit;
 #endif
 
+#if defined(MDL_SPECTRAL_RENDERING)
+        // Spectral volume scattering / absorption (aligned with Vulkan path_trace.comp).
+        bool do_scatter = false;
+        [unroll] for (int si = 0; si < MDL_DF_SPECTRAL_SAMPLES; ++si)
+        {
+            if (s_coeff.values[si] > 0.0f)
+            {
+                do_scatter = true;
+                break;
+            }
+        }
+
+        float survival_prob = 1.0f;
+        if (do_scatter)
+        {
+            const float sample_coeff = t_coeff.values[0];
+
+            const float sampled_distance = -log(1.0 - rnd(payload.seed)) / sample_coeff;
+
+            if (sampled_distance < distance)
+            {
+                distance = sampled_distance;
+                payload.ray_origin_next +=
+                    payload.ray_direction_next * (distance / scene_constants.meters_per_scene_unit);
+
+                float cosTheta;
+                if (g < 0.001f)
+                    cosTheta = 1.0f - 2.0f * rnd(payload.seed);
+                else
+                {
+                    const float inner_term = (1.0f - g * g) / (1.0f - g + 2.0f * g * rnd(payload.seed));
+                    cosTheta = (1.0f + g * g - inner_term * inner_term) / (2.0f * g);
+                }
+                const float phi = 2.0f * M_PI * rnd(payload.seed);
+                const float sinTheta = sqrt(1.0f - cosTheta * cosTheta);
+                float sinPhi, cosPhi;
+                sincos(phi, sinPhi, cosPhi);
+
+                float3 u, v;
+                create_basis(payload.ray_direction_next, u, v);
+                payload.ray_direction_next =
+                    u * cosPhi * sinTheta + v * sinPhi * sinTheta + payload.ray_direction_next * cosTheta;
+
+                Spectral_sample pdfs;
+                [unroll] for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+                {
+                    pdfs.values[i] = t_coeff.values[i] * exp(-t_coeff.values[i] * distance);
+                    if (i == 0)
+                        payload.weight.values[i] *= s_coeff.values[i] / t_coeff.values[i];
+                    else
+                        payload.weight.values[i] *=
+                            s_coeff.values[i] * exp(-t_coeff.values[i] * distance) / pdfs.values[0];
+                }
+                payload.weight = mulcf(
+                    payload.weight, payload.update_spectral_pdf_ratios(pdfs, false, false));
+
+                add_flag(payload.flags, FLAG_SSS);
+                return;
+            }
+            remove_flag(payload.flags, FLAG_SSS);
+
+            survival_prob = exp(-sample_coeff * distance);
+        }
+
+        Spectral_sample survival_probs;
+        [unroll] for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        {
+            survival_probs.values[i] = exp(-t_coeff.values[i] * distance);
+            if (payload.weight.values[i] > 0.0f)
+                payload.weight.values[i] *= survival_probs.values[i] / survival_prob;
+        }
+        if (do_scatter)
+            payload.weight = mulcf(
+                payload.weight, payload.update_spectral_pdf_ratios(survival_probs, false, false));
+#else
         // scatter only if we have non-zero scatter coefficients
         float survival_prob = 1.0f;
         if (s_coeff.x > 0.0f || s_coeff.y > 0.0 || s_coeff.z > 0.0f)
@@ -533,6 +627,7 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
             payload.weight.y *= exp(-t_coeff.y * distance) / survival_prob;
         if (payload.weight.z > 0.0f)
             payload.weight.z *= exp(-t_coeff.z * distance) / survival_prob;
+        #endif
     }
 
     // add emission
@@ -546,14 +641,13 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
         eval_data.k1 = -WorldRayDirection();
 
         // evaluate intensity expression
-        float3 intensity = float3(0.0f, 0.0f, 0.0f);
+        Color_sample intensity = (Color_sample)0;
         if (has_backface_emission && thin_walled && mdl_state.renderer_state.hit_backface)
             intensity = mdl_backface_emission_intensity(mdl_state);
         else if (has_surface_emission)
             intensity = mdl_surface_emission_intensity(mdl_state);
 
         #if (MDL_DF_HANDLE_SLOT_MODE == -1)
-
             // evaluate the distribution function
             if (has_backface_emission && thin_walled && mdl_state.renderer_state.hit_backface)
             {
@@ -563,12 +657,18 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
             {
                 mdl_surface_emission_evaluate(eval_data, mdl_state);
             }
-        
-            // add emission
-            payload.contribution += payload.weight * intensity * eval_data.edf;
 
+            // add emission
+            #if defined(MDL_SPECTRAL_RENDERING)
+            {
+                Spectral_sample contrib = mulcc(payload.weight, mulcc(intensity, eval_data.edf));
+                payload.contribution += spectral_to_rgb(contrib, payload.spectral_wavelengths, false);
+            }
+            #else
+                payload.contribution += payload.weight * intensity * eval_data.edf;
+            #endif
         #else
-            for(uint offset = 0; offset < MDL_DF_HANDLE_SLOT_COUNT; offset += MDL_DF_HANDLE_SLOT_MODE)
+            for (uint offset = 0; offset < MDL_DF_HANDLE_SLOT_COUNT; offset += MDL_DF_HANDLE_SLOT_MODE)
             {
                 // evaluate the distribution function
                 eval_data.handle_offset = offset;
@@ -580,12 +680,21 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
                 {
                     mdl_surface_emission_evaluate(eval_data, mdl_state);
                 }
-        
+
                 // add emission
                 for (uint lobe = 0; lobe < MDL_DF_HANDLE_SLOT_MODE; ++lobe)
-                    payload.contribution += payload.weight * intensity * eval_data.edf[lobe];
+                {
+                    #if defined(MDL_SPECTRAL_RENDERING)
+                    {
+                        Spectral_sample contrib = mulcc(payload.weight, mulcc(intensity, eval_data.edf[lobe]));
+                        payload.contribution += spectral_to_rgb(contrib, payload.spectral_wavelengths, false);
+                    }
+                    #else
+                        payload.contribution += payload.weight * intensity * eval_data.edf[lobe];
+                    #endif
+                }
             }
-#endif
+        #endif
     }
 
     // Write Auxiliary Buffers
@@ -615,7 +724,6 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
         #endif
 
         #if (MDL_DF_HANDLE_SLOT_MODE == -1)
-
             if (has_backface_scattering && thin_walled && mdl_state.renderer_state.hit_backface)
             {
                 mdl_backface_scattering_auxiliary(aux_data, mdl_state);
@@ -624,19 +732,27 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
             {
                 mdl_surface_scattering_auxiliary(aux_data, mdl_state);
             }
-        
-            AlbedoDiffuseBuffer[launch_index.xy] = float4(aux_data.albedo_diffuse, 1.0f);
-            AlbedoGlossyBuffer[launch_index.xy] = float4(aux_data.albedo_glossy, 1.0f);
+
+            #if defined(MDL_SPECTRAL_RENDERING)
+                AlbedoDiffuseBuffer[launch_index.xy] = float4(
+                    spectral_to_rgb(aux_data.albedo_diffuse, payload.spectral_wavelengths, true),
+                    1.0f);
+                AlbedoGlossyBuffer[launch_index.xy]  = float4(
+                    spectral_to_rgb(aux_data.albedo_glossy, payload.spectral_wavelengths, true),
+                    1.0f);
+            #else
+                AlbedoDiffuseBuffer[launch_index.xy] = float4(aux_data.albedo_diffuse, 1.0f);
+                AlbedoGlossyBuffer[launch_index.xy] = float4(aux_data.albedo_glossy, 1.0f);
+            #endif
             NormalBuffer[launch_index.xy] = float4(aux_data.normal, 1.0f);
             RoughnessBuffer[launch_index.xy] = float4(aux_data.roughness.xy, 0.0f, 1.0f);
-
         #else
-            float3 aux_albedo_diffuse = float3(0.0f, 0.0f, 0.0f);
-            float3 aux_albedo_glossy = float3(0.0f, 0.0f, 0.0f);
+            Color_sample aux_albedo_diffuse = (Color_sample)0;
+            Color_sample aux_albedo_glossy = (Color_sample)0;
             float3 aux_normal = float3(0.0f, 0.0f, 0.0f);
             float aux_roughness_weight_sum = 0.0f;
-            float2 aux_rouhness = float2(0.0f, 0.0f);
-            for(uint offset = 0; offset < MDL_DF_HANDLE_SLOT_COUNT; offset += MDL_DF_HANDLE_SLOT_MODE)
+            float2 aux_roughness = float2(0.0f, 0.0f);
+            for (uint offset = 0; offset < MDL_DF_HANDLE_SLOT_COUNT; offset += MDL_DF_HANDLE_SLOT_MODE)
             {
                 aux_data.handle_offset = offset;
                 if (has_backface_scattering && thin_walled && mdl_state.renderer_state.hit_backface)
@@ -650,17 +766,24 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
 
                 for (uint lobe = 0; lobe < MDL_DF_HANDLE_SLOT_MODE; ++lobe)
                 {
-                    aux_albedo_diffuse += aux_data.albedo_diffuse[lobe];
-                    aux_albedo_glossy += aux_data.albedo_glossy[lobe];
+                    aux_albedo_diffuse = addcc(aux_albedo_diffuse, aux_data.albedo_diffuse[lobe]);
+                    aux_albedo_glossy = addcc(aux_albedo_glossy, aux_data.albedo_glossy[lobe]);
                     aux_normal += aux_data.normal[lobe];
-                    aux_rouhness += aux_data.roughness[lobe].xy * aux_data.roughness[lobe].z;
+                    aux_roughness += aux_data.roughness[lobe].xy * aux_data.roughness[lobe].z;
                     aux_roughness_weight_sum += aux_data.roughness[lobe].z;
                 }
             }
-            AlbedoDiffuseBuffer[launch_index.xy] = float4(aux_albedo_diffuse, 0.0f);
-            AlbedoGlossyBuffer[launch_index.xy] = float4(aux_albedo_glossy, 0.0f);
+            #if defined(MDL_SPECTRAL_RENDERING)
+                AlbedoDiffuseBuffer[launch_index.xy] = float4(
+                    spectral_to_rgb(aux_albedo_diffuse, payload.spectral_wavelengths, true), 1.0f);
+                AlbedoGlossyBuffer[launch_index.xy] = float4(
+                    spectral_to_rgb(aux_albedo_glossy, payload.spectral_wavelengths, true), 1.0f);
+            #else
+                AlbedoDiffuseBuffer[launch_index.xy] = float4(aux_albedo_diffuse, 1.0f);
+                AlbedoGlossyBuffer[launch_index.xy] = float4(aux_albedo_glossy, 1.0f);
+            #endif
             NormalBuffer[launch_index.xy] = float4(aux_normal, 0.0f);
-            RoughnessBuffer[launch_index.xy] = float4(aux_rouhness / aux_roughness_weight_sum, 0.0f, 0.0f);
+            RoughnessBuffer[launch_index.xy] = float4(aux_roughness / aux_roughness_weight_sum, 0.0f, 0.0f);
         #endif
     }
     #endif
@@ -689,7 +812,7 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
 
         #if (MDL_DF_HANDLE_SLOT_MODE != -1)
         // begin handle loop
-        for(uint offset = 0; offset < MDL_DF_HANDLE_SLOT_COUNT; offset += MDL_DF_HANDLE_SLOT_MODE)
+        for (uint offset = 0; offset < MDL_DF_HANDLE_SLOT_COUNT; offset += MDL_DF_HANDLE_SLOT_MODE)
         {
             eval_data.handle_offset = offset;
         #endif
@@ -705,7 +828,27 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
             }
 
             // compute lighting for this light
-            if(eval_data.pdf > 0.0f)
+            #if defined(MDL_SPECTRAL_RENDERING)
+            if (eval_data.pdf.values[0] > 0.0f)
+            {
+                const float mis_weight = (light_pdf == DIRAC)
+                    ? 1.0f
+                    : light_pdf / (light_pdf + eval_data.pdf.values[0]);
+
+                // Convert RGB radiance to spectral and accumulate per-wavelength contribution.
+                Spectral_sample rad_s = rgb_to_spectral(radiance_over_pdf, payload.spectral_wavelengths, true);
+                Spectral_sample contrib;
+                #if (MDL_DF_HANDLE_SLOT_MODE == -1)
+                    contrib = mulcc(payload.weight, mulcc(rad_s, mulcf(addcc(eval_data.bsdf_diffuse, eval_data.bsdf_glossy), mis_weight)));
+                #else
+                    contrib = (Spectral_sample)0;
+                    for (uint lobe = 0; lobe < MDL_DF_HANDLE_SLOT_MODE; ++lobe)
+                        contrib = addcc(contrib, mulcc(payload.weight, mulcc(rad_s, mulcf(addcc(eval_data.bsdf_diffuse[lobe], eval_data.bsdf_glossy[lobe]), mis_weight))));
+                #endif
+                contribution += spectral_to_rgb(contrib, payload.spectral_wavelengths, false);
+            }
+            #else
+            if (eval_data.pdf > 0.0f)
             {
                 const float mis_weight = (light_pdf == DIRAC)
                     ? 1.0f
@@ -724,6 +867,7 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
                     }
                 #endif
             }
+            #endif
 
         #if (MDL_DF_HANDLE_SLOT_MODE != -1)
         // end handle loop
@@ -765,7 +909,7 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
         // flip inside/outside on transmission
         // setup next path segment
         payload.ray_direction_next = sample_data.k2;
-        payload.weight *= sample_data.bsdf_over_pdf;
+        payload.weight = mulcc(payload.weight, sample_data.bsdf_over_pdf);
         if ((sample_data.event_type & BSDF_EVENT_TRANSMISSION) != 0)
         {
             toggle_flag(payload.flags, FLAG_INSIDE);
@@ -786,10 +930,44 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
             #endif
         }
 
-        if ((sample_data.event_type & BSDF_EVENT_SPECULAR) != 0)
-            payload.last_bsdf_pdf = DIRAC;
-        else
-            payload.last_bsdf_pdf = sample_data.pdf;
+        #if defined(MDL_SPECTRAL_RENDERING)
+            bool specular = false;
+            bool specular_dispersion = false;
+            if ((sample_data.event_type & BSDF_EVENT_SPECULAR) != 0)
+            {
+                specular = true;
+                payload.last_bsdf_pdf = DIRAC;
+
+                if (!thin_walled && (sample_data.event_type & BSDF_EVENT_TRANSMISSION) != 0)
+                {
+                    for (int i = 1; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+                    {
+                        if (sample_data.ior1.values[i] != sample_data.ior1.values[0] ||
+                            sample_data.ior2.values[i] != sample_data.ior2.values[0])
+                        {
+                            specular_dispersion = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            else
+            {
+                // Use the first wavelength's PDF for MIS — it was used for direction sampling.
+                payload.last_bsdf_pdf = sample_data.pdf.values[0];
+            }
+            payload.weight = mulcf(payload.weight, payload.update_spectral_pdf_ratios(
+                sample_data.pdf, specular, specular_dispersion));
+        #else
+            if ((sample_data.event_type & BSDF_EVENT_SPECULAR) != 0)
+            {
+                payload.last_bsdf_pdf = DIRAC;
+            }
+            else
+            {
+                payload.last_bsdf_pdf = sample_data.pdf;
+            }
+        #endif
     }
 
     // Add contribution from next event estimation if not shadowed

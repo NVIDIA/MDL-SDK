@@ -370,7 +370,7 @@ struct Hash_ptr
 template <typename T>
 struct Equal_ptr
 {
-    unsigned int operator()(const T* a, const T* b) const
+    bool operator()(const T* a, const T* b) const
     {
         return a == b;
     }

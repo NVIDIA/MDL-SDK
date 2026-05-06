@@ -331,7 +331,7 @@ public:
     /// Write an MDL section tag.
     ///
     /// \param tag  the MDL section tag to write.
-    void write_section_tag(Serializer::Serializer_tags tag) MDL_FINAL;
+    void write_section_tag(unsigned tag) MDL_FINAL;
 
     /// Write a (general) tag, assuming small values.
     ///
@@ -526,7 +526,7 @@ public:
     /// Write an MDL section tag.
     ///
     /// \param tag  the MDL section tag to write.
-    void write_section_tag(Serializer::Serializer_tags tag) {
+    void write_section_tag(unsigned tag) {
         m_serializer->write_section_tag(tag);
     }
 
@@ -1209,9 +1209,6 @@ private:
     Entry *get_entry(void **adr);
 
 private:
-    /// The allocator.
-    IAllocator *m_alloc;
-
     /// The builder for objects.
     Allocator_builder m_builder;
 

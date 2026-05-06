@@ -76,6 +76,14 @@ public:
         mi::Uint32 z,
         mi::Uint32 level);
 
+    // internal methods
+
+    /// Indicates whether the constructor succeeded.
+    ///
+    /// This method needs to be called before any other method. If it returns \c false, no other
+    /// method must be called, and the instance should be destroyed right away.
+    bool is_valid() const;
+
 private:
 
     /// API component IImage_api.
@@ -98,6 +106,9 @@ private:
 
     /// The gamma value (decoded from the header).
     mi::Float32 m_gamma = 0.0f;
+
+    /// Indicates whether the constructor succeeded.
+    bool m_is_valid = false;
 
     /// The DDS image.
     mutable Image m_image;

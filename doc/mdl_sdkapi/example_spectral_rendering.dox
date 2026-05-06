@@ -1,0 +1,703 @@
+/******************************************************************************
+ * Copyright (c) 2026, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+/*! \page mi_neuray_example_spectral_rendering Example for spectral rendering
+
+<div align="right">
+    [\link mi_neuray_example_axf_to_mdl Previous\endlink]
+    [\link mi_neuray_examples Up\endlink]
+</div>
+
+The MDL SDK has extended its physically based rendering capabilities with spectral rendering,
+allowing materials to be described and evaluated spectrally (per wavelength) instead of only
+in RGB color space. This enables more accurate representation of effects such as
+colored dispersion, complex absorption in transmissive media, and the correct interaction of
+narrow-band light sources with highly saturated materials. With spectral rendering enabled,
+MDL materials can drive renderers that operate per wavelength while maintaining the familiar
+high-level material descriptions and BSDF/EDF concepts.
+
+A few MDL SDK examples have been extended to demonstrate spectral rendering, such as the 
+CPU-based renderer [\link mi_neuray_example_df_native df_native\endlink], and the GPU-based
+renderers like the Microsoft DXR-based renderer [\link mi_neuray_example_dxr dxr\endlink] or
+the Vulkan-based renderer [\link mi_neuray_example_df_vulkan df_vulkan\endlink]. In this guide,
+we describe step by step how to integrate spectral rendering into your rendering application,
+using the extended df_native example as a reference, while pointing the few differences to
+dxr and df_vulkan examples.
+
+\section mi_neuray_example_spectral_rendering_new New Topics
+
+- Integrating spectral rendering support into your rendering application
+
+\section mi_neuray_example_spectral_rendering_descr Detailed Description
+
+\subsection mi_neuray_example_spectral_rendering_overview Overview
+
+The original [\link mi_neuray_example_df_native df_native\endlink] example demonstrates how to 
+compile MDL materials for the native backend and use the generated BSDF/EDF functions in a 
+CPU-based path tracer. The spectral extension builds on this and extends RGB evaluation 
+with per-wavelength evaluation while reusing the same MDL materials, BSDF/EDF APIs, and rendering 
+algorithm structure.
+
+The integration can be divided into the following steps:
+
+- Configure the number of spectral samples.
+- Command line options to control spectral rendering.
+- Enable spectral code generation in the MDL backend.
+- Propagate the spectral configuration to the shader compilers (GPU backends).
+- Switch to spectral shading state types and sample wavelengths per path.
+- Use spectral BSDF/EDF data structures.
+- Track spectral weights and information to implement spectral MIS.
+- Implement RGB to spectral conversion (using the SDK defaults or custom callbacks).
+- Apply backend-specific adjustments for DXR and Vulkan.
+
+The following sections go through each step in detail so that you can apply the same changes in
+your own renderer.
+
+\subsection mi_neuray_example_spectral_rendering_samples Spectral Samples Configuration
+
+For spectral rendering, the MDL SDK introduces a dedicated spectral color representation:
+
+\code
+/// A floatN type for spectral sampling.
+struct tct_spectral_sample {
+    float values[MDL_DF_SPECTRAL_SAMPLES];
+};
+\endcode
+
+The preprocessor macro \c MDL_DF_SPECTRAL_SAMPLES specifies the number of wavelength samples
+carried along each path. By default, this is set to \c 5 in the SDK.
+
+This configuration does not affect the physical correctness or final quality of spectral
+rendering in a progressive path tracer, since the solution will always converge to the same
+result as more iterations are accumulated. The primary impact is on performance and convergence
+behavior: increasing the number of spectral samples can reduce the number of iterations required
+to reach a given noise level, but each iteration becomes more expensive to compute.
+Consequently, this setting is intended to match the number of spectral samples used by your
+rendering application, rather than to change the final rendered quality.
+
+If your renderer requires a different number of spectral samples, you can override the default
+at build time by setting the CMake option:
+
+- \c MDL_DF_SPECTRAL_SAMPLES_OVERRIDE
+
+This allows you to align the MDL runtime's spectral layout with your renderer's internal spectral
+sampling scheme.
+
+\note libbsdf treats the value at index \c 0 of \c tct_spectral_sample as the <em>main wavelength</em>:
+this is the wavelength that BSDF/EDF sampling routines use as the reference for importance sampling.
+The remaining entries are evaluated alongside the main wavelength so that all samples share the same
+sampled direction. The renderer is expected to fill \c spectral_wavelengths with one main wavelength
+followed by additional wavelengths; how these are placed or sampled across the wavelength range
+is up to the renderer. See
+\ref mi_neuray_example_spectral_rendering_state below for the per-ray sampling code used by the
+df_native example.
+
+\subsection mi_neuray_example_spectral_rendering_cmdline Command Line Options
+
+The df_native example uses the following command line options to control spectral rendering at runtime:
+
+- \c --spectral
+  Enables spectral rendering support. When this flag is set, the renderer switches to spectral
+  data types and APIs instead of the RGB variants.
+
+- \c --spectral_min_wavelength (default: \c 400 nm)
+  Sets the lower bound of the sampled wavelength interval.
+
+- \c --spectral_max_wavelength (default: \c 700 nm)
+  Sets the upper bound of the sampled wavelength interval.
+
+The \c --spectral_min_wavelength and \c --spectral_max_wavelength parameters define the
+wavelength range used by the example's wavelength sampling.
+
+The pre-existing \c --cr option, which enables the MDL Custom Texture Runtime, is also relevant
+when running with \c --spectral: it allows the application to provide its own implementations of
+the RGB to spectral conversion callbacks instead of relying on the SDK's built-in conversions
+(see \ref mi_neuray_example_spectral_rendering_conversion).
+
+\subsection mi_neuray_example_spectral_rendering_backend Enabling Spectral Code Generation in the Backend
+
+To enable spectral evaluation in the code generated by the MDL backend, the example sets
+a backend option on the #mi::neuraylib::IMdl_backend instance:
+
+\code
+// enable spectral rendering
+if (enable_spectral)
+    check_success(be_native->set_option("libbsdf_enable_spectral", "on") == 0);
+\endcode
+
+Setting \c libbsdf_enable_spectral to \c "on" activates the spectral variants of the BSDF/EDF
+code paths in libbsdf.
+This will also change the return type for all compiled MDL expressions of type \c color from \c float3 to \c tct_spectral_sample, like the material IOR, emission intensity and volume coefficients.
+
+The option is supported by the \c MB_NATIVE, \c MB_HLSL, and \c MB_GLSL backends and is set in
+exactly the same way on each of them; the behavior is identical regardless of the target
+language.
+
+\subsection mi_neuray_example_spectral_rendering_shader_defines Propagating Spectral Configuration to Shader Compilers
+
+When the MDL backend produces shader source (HLSL for DXR, GLSL for Vulkan), the generated code
+references the preprocessor macros \c MDL_SPECTRAL_RENDERING and \c MDL_DF_SPECTRAL_SAMPLES. Unlike
+the native backend, where \c MDL_DF_SPECTRAL_SAMPLES is baked in via
+<tt>\<mi/neuraylib/target_code_types.h\></tt> at C++ compile time, shaders are compiled separately
+by your renderer's shader toolchain and therefore receive these values from the host application.
+
+There are two ways to do this in the examples:
+
+- Passing the macros as defines to the shader compiler. The df_vulkan example uses this approach for
+  its renderer shaders:
+
+  \code
+  // Vulkan
+  defines.push_back("MDL_SPECTRAL_RENDERING");
+  defines.push_back("MDL_DF_SPECTRAL_SAMPLES=" MI_BASE_STRINGIZE(MDL_DF_SPECTRAL_SAMPLES));
+  \endcode
+
+  The dxr example also uses this approach when compiling its non-MDL HLSL shaders (ray
+  generation, miss programs, etc.):
+
+  \code
+  // DXR (non-MDL HLSL shaders)
+  defines["MDL_SPECTRAL_RENDERING"] = "1";
+  defines["MDL_DF_SPECTRAL_SAMPLES"] = std::to_string(MDL_DF_SPECTRAL_SAMPLES);
+  \endcode
+
+- Prepending \c \#define directives directly to the shader source string before it is handed to
+  the shader compiler. The dxr example uses this approach for the per-material HLSL source that
+  contains the MDL-generated code, where the same macros are emitted as text at the top of the
+  source:
+
+  \code
+  // DXR (per-material HLSL source)
+  if (m_app->get_options()->enable_spectral)
+  {
+      m_hlsl_source_code += "#define MDL_SPECTRAL_RENDERING\n";
+      m_hlsl_source_code += "#define MDL_DF_SPECTRAL_SAMPLES " +
+          std::to_string(MDL_DF_SPECTRAL_SAMPLES) + "\n";
+  }
+  \endcode
+
+In all cases, the value passed to the shader compiler must match the C++ value of
+\c MDL_DF_SPECTRAL_SAMPLES (configurable via the CMake option \c MDL_DF_SPECTRAL_SAMPLES_OVERRIDE).
+
+\subsection mi_neuray_example_spectral_rendering_state Spectral Shading State Types and Per-Path Wavelength Sampling
+
+In order to pass the current wavelength sample from the renderer into MDL-generated code, the SDK
+provides spectral variants of the material shading state:
+
+\code
+mi::neuraylib::Shading_state_material_spectral shading_state;
+mi::neuraylib::Shading_state_material_spectral_with_derivs shading_state_derivs;
+\endcode
+
+The spectral variants add the following field:
+
+\code
+tct_spectral_sample spectral_wavelengths;
+\endcode
+
+The \c spectral_wavelengths field allows your renderer to pass the wavelength samples associated
+with the current ray path through the MDL code to the texture runtime which also handles spectral conversions.
+It is not directly accessed by the generated code.
+
+For simplicity, the example uses the same spectral material state for both,
+RGB and spectral rendering, but for the RGB case (or if spectral rendering is not required) one can also use the original material state
+variants:
+
+\code
+mi::neuraylib::Shading_state_material shading_state;
+mi::neuraylib::Shading_state_material_with_derivs shading_state_derivs;
+\endcode
+
+\par Per-Path Wavelength Sampling
+
+Each primary ray needs a fresh set of \c MDL_DF_SPECTRAL_SAMPLES wavelengths, with the value at
+index \c 0 acting as the main wavelength used by libbsdf for importance sampling. The df_native
+example uses stratified sampling with a random shift across the configured wavelength range and stores
+them in the shading state for the lifetime of the path:
+
+\code
+if (rc.enable_spectral)
+{
+    // sample wavelengths for this path (stratified sampling with a random shift)
+    tct_spectral_sample lambdas;
+    float xi = rnd(seed);
+    for (unsigned int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+    {
+        xi += 1.0f / float(MDL_DF_SPECTRAL_SAMPLES);
+        if (xi > 1.0f)
+            xi -= 1.0f;
+        lambdas.values[i] =
+            rc.spectral.min_wavelength
+                + (rc.spectral.max_wavelength - rc.spectral.min_wavelength) * xi;
+    }
+    rc.shading_state.spectral_wavelengths = lambdas;
+
+    // initialize the per-wavelength PDF ratios used for MIS along the path
+    for (unsigned int i = 0; i < MDL_DF_SPECTRAL_SAMPLES - 1; ++i)
+        rc.spectral_pdf_ratios[i] = 1.0f;
+}
+\endcode
+
+The wavelengths are sampled once per path and remain unchanged for all subsequent bounces, which
+is required for the MIS bookkeeping described in \ref mi_neuray_example_spectral_rendering_weight.
+On the GPU backends the same sampling is performed in the ray generation shader; the dxr
+\c ray_gen_program.hlsl and the df_vulkan \c path_trace.comp use the same stratified sampling
+scheme.
+
+\subsection mi_neuray_example_spectral_rendering_bsdf Spectral BSDF/EDF Data Structures
+
+During rendering, the df_native path tracer calls the usual MDL target code entry points to
+account for the different light path contributions:
+
+- #mi::neuraylib::ITarget_code::execute()
+- #mi::neuraylib::ITarget_code::execute_edf_evaluate()
+- #mi::neuraylib::ITarget_code::execute_bsdf_auxiliary()
+- #mi::neuraylib::ITarget_code::execute_bsdf_evaluate()
+- #mi::neuraylib::ITarget_code::execute_bsdf_sample()
+
+These functions are the same in RGB and spectral mode; only the data structures used to pass
+inputs and read back outputs differ. For the BSDF/EDF functions, each of the corresponding
+data structures is a class template parameterized by a color mode enum:
+
+\code
+// Spectral rendering enabled or disabled depending on the backend and its configuration.
+enum Target_code_color_mode : tct_int
+{
+    TCCM_RGB = 0,               // no spectral sampling, use RGB
+    TCCM_SPECTRAL_SAMPLING = 1, // spectral sampling, use spectral samples
+};
+\endcode
+
+- \c TCCM_RGB selects the regular RGB layout: colors and IORs are \c tct_float3 and PDFs are
+  scalar \c tct_float.
+- \c TCCM_SPECTRAL_SAMPLING selects the spectral layout: the same fields are replaced by
+  \c tct_spectral_sample so that one value per wavelength sample is carried.
+
+All BSDF/EDF data structures are templated on \c Target_code_color_mode and have explicit 
+specializations for RGB and spectral sampling.  
+The following excerpt illustrates this for \c Bsdf_sample_data:
+
+\code
+// Explicit specialization for RGB case
+template<>
+struct Bsdf_sample_data<TCCM_RGB> : public Bsdf_sample_data_base
+{
+    tct_float3       ior1;           ///< mutual input: IOR current medium
+    tct_float3       ior2;           ///< mutual input: IOR other side
+    tct_float3       k1;             ///< mutual input: outgoing direction
+
+    tct_float3       k2;             ///< output: incoming direction
+
+    tct_float4_a16   xi;             ///< input: pseudo-random sample numbers in range [0, 1)
+
+    tct_float        pdf;            ///< output: pdf (non-projected hemisphere)
+    tct_float3       bsdf_over_pdf;  ///< output: bsdf * dot(normal, k2) / pdf
+    Bsdf_event_type  event_type;     ///< output: the type of event for the generated sample
+    tct_int          handle;         ///< output: handle of the sampled elemental BSDF (lobe)
+
+    Df_flags         flags;          ///< input: flags controlling calculation of result
+                                     ///<     (optional depending on backend options)
+};
+
+// Explicit specialization for spectral sampling case
+template<>
+struct Bsdf_sample_data<TCCM_SPECTRAL_SAMPLING> : public Bsdf_sample_data_base
+{
+    tct_spectral_sample ior1;           ///< mutual input: IOR current medium
+    tct_spectral_sample ior2;           ///< mutual input: IOR other side
+    tct_float3          k1;             ///< mutual input: outgoing direction
+
+    tct_float3          k2;             ///< output: incoming direction
+
+    tct_float4_a16      xi;             ///< input: pseudo-random sample numbers in range [0, 1)
+
+    tct_spectral_sample pdf;            ///< output: pdf (non-projected hemisphere)
+    tct_spectral_sample bsdf_over_pdf;  ///< output: bsdf * dot(normal, k2) / pdf
+    Bsdf_event_type     event_type;     ///< output: the type of event for the generated sample
+    tct_int             handle;         ///< output: handle of the sampled elemental BSDF (lobe)
+
+    Df_flags            flags;          ///< input: flags controlling calculation of result
+                                        ///<     (optional depending on backend options)
+};
+\endcode
+
+The same pattern applies to \c Edf_evaluate_data, \c Bsdf_auxiliary_data, and 
+\c Bsdf_evaluate_data: the RGB variants use \c tct_float3 for color-like fields, while the 
+spectral variants replace those fields by \c tct_spectral_sample.
+
+\subsubsection mi_neuray_example_spectral_rendering_bsdf_shader Macro-based variants for HLSL and GLSL
+
+HLSL and GLSL do not have C++ templates, so the SDK shader headers provide the same
+RGB-versus-spectral switch through preprocessor macros instead of \c Target_code_color_mode
+specializations. The color and PDF field types in the BSDF/EDF data structures are typedefs
+that resolve to either scalar/RGB types or the \c Spectral_sample struct depending on whether
+\c MDL_SPECTRAL_RENDERING is defined:
+
+\code
+#ifdef MDL_SPECTRAL_RENDERING
+struct Spectral_sample { float values[MDL_DF_SPECTRAL_SAMPLES]; };
+#define Color_sample Spectral_sample
+#define Pdf_sample   Spectral_sample
+#else
+#define Color_sample vec3   // float3 in HLSL
+#define Pdf_sample   float
+#endif
+\endcode
+
+Because shading languages also lack operator overloading on user-defined structs, the SDK
+shader headers additionally provide small helper functions for per-wavelength arithmetic
+on \c Color_sample values, namely \c addcc (component-wise add), \c mulcc (component-wise
+multiply) and \c mulcf (component times scalar). The renderer uses these helpers in the
+spectral code paths in place of the regular \c + and \c * operators that work on \c float3.
+
+The net effect is the same as in the C++ case: a single set of call sites and BSDF/EDF data
+structure declarations works for both modes, and the only thing that changes is the underlying
+field type. To stay consistent across backends, refer to color-valued fields as \c Color_sample
+and PDFs as \c Pdf_sample in your renderer's shader code, instead of hard-coding \c float3 or
+\c float.
+
+\subsection mi_neuray_example_spectral_rendering_weight Spectral Ray Weight
+
+In the original df_native example (RGB rendering), the ray weight is a \c float3:
+
+\code
+ray.weight = 1.f; // of type mi::Float32_3
+\endcode
+
+For spectral rendering, the example adds a parallel field of type \c tct_spectral_sample that
+holds one ray weight per wavelength:
+
+\code
+ray.weight_spectral = make_spectral_sample(1.0f);
+\endcode
+
+Here, \c make_spectral_sample is a convenience helper that initializes all entries of the
+spectral sample with the same scalar value. During path tracing, \c weight_spectral is
+multiplied with the spectral BSDF/EDF values at each interaction, in the same way the
+\c float3 \c weight is used in the RGB version.
+
+\par Spectral MIS (\c update_spectral_pdf_ratios)
+
+libbsdf samples a direction at the main wavelength (index \c 0) but returns a per-wavelength
+PDF, since any BSDF may have different PDFs at the secondary wavelengths. The straightforward
+spectral weight \c bsdf \c / \c pdf_main can therefore have high variance at the secondary
+wavelengths, so the example applies single-sample MIS weights based on the per-wavelength PDF
+ratios, tracked in \c spectral_pdf_ratios in the render context (see
+\ref mi_neuray_example_spectral_rendering_state for initialization). The
+\c update_spectral_pdf_ratios helper is called at every BSDF sample to update those ratios and
+returns the factor that converts the previous MIS weight to the updated one:
+
+\code
+// in the render context
+float spectral_pdf_ratios[MDL_DF_SPECTRAL_SAMPLES - 1];
+
+float update_spectral_pdf_ratios(
+    const tct_spectral_sample pdfs,        // per-wavelength PDFs returned by the BSDF sample
+    const bool specular,                   // event was a specular bounce
+    const bool specular_dispersion)        // specular bounce on a dispersive interface
+{
+    // the main wavelength (index 0) was used for sampling, so the MIS weight is
+    //   w = p[0] / sum(p) = 1 / (sum(p) / p[0])
+
+    if (specular && !specular_dispersion)  // pure specular: nothing to update
+        return 1.0f;
+    if (!specular_dispersion && pdfs.values[0] <= 0.0f)
+        return 0.0f;                        // path has zero probability at the main wavelength
+
+    float inv_w_old = 1.0f;
+    float inv_w_new = 1.0f;
+    const float inv_p0 = specular_dispersion ? 0.0f : (1.0f / pdfs.values[0]);
+    for (unsigned int i = 1; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+    {
+        inv_w_old += spectral_pdf_ratios[i - 1];
+        spectral_pdf_ratios[i - 1] *= pdfs.values[i] * inv_p0;
+        inv_w_new += spectral_pdf_ratios[i - 1];
+    }
+    return inv_w_old / inv_w_new;
+}
+\endcode
+
+The returned factor scales the spectral weight in-place after multiplying in \c bsdf_over_pdf:
+
+\code
+ray.weight_spectral *= sample_data.bsdf_over_pdf;
+ray.weight_spectral *= rc.update_spectral_pdf_ratios(
+    sample_data.pdf, specular, specular_dispersion);
+\endcode
+
+The dxr and df_vulkan examples carry the same \c spectral_pdf_ratios array in their per-ray state
+and apply the same update rule.
+
+\subsection mi_neuray_example_spectral_rendering_conversion RGB to Spectral Conversion
+
+\note Spectral support only operates at the BSDF/EDF level for now; all input data (colors,
+textures, etc.) remain RGB.
+
+The code generated for spectral rendering must therefore be able to convert RGB values to
+spectral samples for the wavelengths that are currently sampled, so that RGB-valued material
+parameters and texture lookups can be consumed by the spectral BSDF/EDF code. In addition, the
+renderer typically needs the inverse direction in order to present results:
+
+- RGB to spectral (upsampling), used by the generated code when MDL parameters or texture
+  fetches deliver RGB values that have to be evaluated spectrally.
+- Spectral to RGB (downsampling), used by the renderer when writing RGB frame buffers for
+  display, when storing image files, or when interacting with RGB-only APIs.
+
+For RGB to spectral upsampling, the MDL SDK provides a default built-in implementation based on
+Jendersie, "Fast Spectral Upsampling of Volume Attenuation Coefficients", Ray Tracing Gems II,
+which can be used directly when spectral rendering is enabled. If you require full control,
+you can override or replace these conversions via the MDL Custom Texture Runtime interface.
+
+In the df_native example, the MDL Custom Texture Runtime is enabled through the pre-existing
+\c --cr command line option. The following texture runtime callbacks can then be implemented to
+handle the different kinds of RGB inputs consistently (IOR, reflectance, luminance, and volume
+coefficients):
+
+\code
+// Implementation of rgb_to_spectral_ior().
+void rgb_to_spectral_ior(
+    tct_spectral_sample         *result,
+    Texture_handler_base const  *self_base,
+    Shading_state_material      *state,
+    float const                  rgb[3])
+{
+    *result = rgb_to_spectral_ior(get_wavelengths(state), rgb);
+}
+
+// Implementation of rgb_to_spectral_reflectance().
+void rgb_to_spectral_reflectance(
+    tct_spectral_sample         *result,
+    Texture_handler_base const  *self_base,
+    Shading_state_material      *state,
+    float const                  rgb[3])
+{
+    *result = rgb_to_spectral<false>(get_wavelengths(state), rgb);
+}
+
+// Implementation of rgb_to_spectral_luminance().
+void rgb_to_spectral_luminance(
+    tct_spectral_sample         *result,
+    Texture_handler_base const  *self_base,
+    Shading_state_material      *state,
+    float const                  rgb[3])
+{
+    *result = rgb_to_spectral<true>(get_wavelengths(state), rgb);
+}
+
+// Implementation of rgb_to_spectral_volume_coefficient().
+void rgb_to_spectral_volume_coefficient(
+    tct_spectral_sample         *result,
+    Texture_handler_base const  *self_base,
+    Shading_state_material      *state,
+    float const                  rgb[3])
+{
+    *result = rgb_to_spectral<false>(get_wavelengths(state), rgb);
+}
+
+// Implementation of get_wavelengths().
+void get_wavelengths(
+    tct_spectral_sample         *result,
+    Texture_handler_base const  *self_base,
+    Shading_state_material      *state)
+{
+    *result = get_wavelengths(state);
+}
+\endcode
+
+The shared header \c texture_support_native.h additionally provides \c _deriv variants of each
+callback that take \c Shading_state_material_with_derivs instead of \c Shading_state_material.
+Your renderer only needs to register the variant that matches the mode for which target code was
+generated; either the non-deriv set or the deriv set is required, never both.
+
+For the actual implementations of the inline upsampling routines used here (\c rgb_to_spectral
+and \c rgb_to_spectral_ior), please take a look at the source code section
+\ref example_spectral_rendering, \c examples/mdl_sdk/shared/texture_support_native.h.
+
+On the GPU backends (HLSL for DXR, GLSL for Vulkan) the same set of conversions has to be
+provided, but the binding mechanism is different. There is no \c Texture_handler to register;
+instead, the renderer's runtime shader file declares the conversion functions directly, with the
+names that MDL-generated code expects, and they are linked at shader compile time. The expected
+symbols are the same set documented above, expressed as shader functions:
+
+\code
+// HLSL (dxr/content/mdl_renderer_runtime.hlsl)
+Spectral_sample mdl_rgb_to_spectral_ior(inout Shading_state_material state, float3 rgb);
+Spectral_sample mdl_rgb_to_spectral_reflectance(inout Shading_state_material state, float3 rgb);
+Spectral_sample mdl_rgb_to_spectral_luminance(inout Shading_state_material state, float3 rgb);
+Spectral_sample mdl_rgb_to_spectral_volume_coefficient(inout Shading_state_material state, float3 rgb);
+Spectral_sample mdl_get_wavelengths(inout Shading_state_material state);
+\endcode
+
+\code
+// GLSL (df_vulkan/mdl_runtime.glsl)
+Spectral_sample mdl_rgb_to_spectral_ior(inout State state, vec3 rgb);
+Spectral_sample mdl_rgb_to_spectral_reflectance(inout State state, vec3 rgb);
+Spectral_sample mdl_rgb_to_spectral_luminance(inout State state, vec3 rgb);
+Spectral_sample mdl_rgb_to_spectral_volume_coefficient(inout State state, vec3 rgb);
+Spectral_sample mdl_get_wavelengths(inout State state);
+\endcode
+
+When writing to an RGB frame buffer, the renderer needs to transform the spectral samples back
+to the RGB color space. The exact implementation is renderer-specific and not dictated by the MDL SDK. 
+The df_native example uses the following implementation:
+
+\code
+    // spectral sample to RGB conversion
+    mi::Float32_3 spectral_to_rgb(const tct_spectral_sample &intensities, const bool is_reflectivity = false) const
+    {
+        mi::Float32_3 xyz(0.0f, 0.0f, 0.0f);
+        // weight by CIE XYZ color matching functions
+        // (using Wyman et al - "Simple Analytic Approximations to the CIE XYZ Color Matching Functions")
+        const tct_spectral_sample lambdas = get_wavelengths();
+        for (unsigned int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        {
+            const float lambda = lambdas.values[i];
+            // for reflectivity values we need to multiply by the spectral whitepoint of the RGB color space (normalized to luminance 1)
+            const float factor = is_reflectivity ? ::lookup_d65(lambda) : 1.0f;
+            {
+                const float p1 = (lambda - 442.0f) * ((lambda < 442.0f) ? 0.0624f : 0.0374f);
+                const float p2 = (lambda - 599.8f) * ((lambda < 599.8f) ? 0.0264f : 0.0323f);
+                const float p3 = (lambda - 501.1f) * ((lambda < 501.1f) ? 0.0490f : 0.0382f);
+                xyz.x +=
+                    (0.362f * expf(-0.5f * p1 * p1) + 1.056f * expf(-0.5f * p2 * p2) - 0.065f * expf(-0.5f * p3 * p3)) * intensities.values[i] * factor;
+            }
+            {
+                const float p1 = (lambda - 568.8f) * ((lambda < 568.8f) ? 0.0213f : 0.0247f);
+                const float p2 = (lambda - 530.9f) * ((lambda < 530.9f) ? 0.0613f : 0.0322f);
+                xyz.y +=
+                    (0.821f * expf(-0.5f * p1 * p1) + 0.286f * expf(-0.5f * p2 * p2)) * intensities.values[i] * factor;
+            }
+            {
+                const float p1 = (lambda - 437.0f) * ((lambda < 437.0f) ? 0.0845f : 0.0278f);
+                const float p2 = (lambda - 459.0f) * ((lambda < 459.0f) ? 0.0385f : 0.0725f);
+                xyz.z +=
+                    (1.217f * expf(-0.5f * p1 * p1) + 0.681f * expf(-0.5f * p2 * p2)) * intensities.values[i] * factor;
+            }
+        }
+
+        // apply scaling from radiometric to photometric units
+        xyz *= 683.002f;
+
+        // MDL_DF_SPECTRAL_SAMPLES samples uniformly on wavelength range
+        xyz *= (spectral.max_wavelength - spectral.min_wavelength) / (float) MDL_DF_SPECTRAL_SAMPLES;
+
+        // convert to linear sRGB
+        return mi::Float32_3(
+            dot(xyz, mi::Float32_3( 3.240600f, -1.537200f, -0.498600f)),
+            dot(xyz, mi::Float32_3(-0.968900f,  1.875800f,  0.041500f)),
+            dot(xyz, mi::Float32_3( 0.055700f, -0.204000f,  1.057000f)));
+    }
+
+\endcode
+
+\subsection mi_neuray_example_spectral_rendering_backend_notes Backend-Specific Notes
+
+The integration steps described above are common to all three reference examples. The following
+notes capture aspects that are specific to a particular backend and therefore do not show up
+in the df_native source but are required for a correct integration in DXR or Vulkan.
+
+\subsubsection mi_neuray_example_spectral_rendering_dxr_notes DXR
+
+In a recursive DXR pipeline, the path state does not live on a single C++ stack frame as in the
+native example: it is carried across closest-hit invocations through the ray payload. For
+spectral rendering the payload is adapted to include all per-path data that BSDF/EDF
+evaluations need to consume:
+
+- the per-path spectral weights (\c MDL_DF_SPECTRAL_SAMPLES floats instead of \c float3 now)
+- the active wavelengths for the current path (\c MDL_DF_SPECTRAL_SAMPLES floats), so each
+  closest-hit shader can re-establish \c state.spectral_wavelengths
+- the per-wavelength PDF ratios used by \c update_spectral_pdf_ratios
+  (\c MDL_DF_SPECTRAL_SAMPLES \c - \c 1 floats), so MIS is consistent across bounces.
+
+The active wavelengths must be copied from the payload into the MDL shading state at the
+beginning of every closest-hit shader, before any MDL-generated function is called:
+
+\code
+#if defined(MDL_SPECTRAL_RENDERING)
+    // copy the active wavelengths from the ray payload into the shading state
+    mdl_state.spectral_wavelengths = payload.spectral_wavelengths;
+#endif
+\endcode
+
+Because the payload is larger in spectral mode, the DXR pipeline state object must declare the
+correct maximum payload size up front. The dxr example computes it dynamically based on the
+spectral mode:
+
+\code
+size_t payload_size = 10 * sizeof(float) + 2 * sizeof(uint32_t);
+if (options->enable_spectral) {
+    // spectral weight and wavelengths, and the spectral PDF ratios
+    payload_size += (2 * MDL_DF_SPECTRAL_SAMPLES + (MDL_DF_SPECTRAL_SAMPLES - 1)) * sizeof(float);
+} else {
+    // float3 weight
+    payload_size += 3 * sizeof(float);
+}
+pipeline->set_max_payload_size(payload_size);
+\endcode
+
+\subsubsection mi_neuray_example_spectral_rendering_vulkan_notes Vulkan
+
+The df_vulkan example does not use the Vulkan ray tracing extension; it is a
+compute-shader-based path tracer. As a consequence it does not need a ray payload, and there is
+no equivalent of the DXR payload-size step. The spectral path state instead lives in a
+per-thread \c Ray_state struct that contains the same fields as the DXR payload (spectral
+weights, active wavelengths, per-wavelength PDF ratios). As in the DXR case, the wavelengths
+must still be copied into \c state.spectral_wavelengths before each MDL-generated BSDF/EDF
+function is invoked:
+
+\code
+#if defined(MDL_SPECTRAL_RENDERING)
+    mdl_state.spectral_wavelengths = ray_state.spectral_wavelengths;
+#endif
+\endcode
+
+In all GPU cases, the key invariant is that \c state.spectral_wavelengths must reflect the
+wavelengths of the current path before any MDL-generated BSDF/EDF function is called.
+
+\section example_spectral_rendering Example Source
+
+To compile the source code, GLFW and GLEW are required.
+For detailed instructions, please refer to the \link mi_neuray_getting_started Getting Started \endlink section.
+
+<b>Source Code Location:</b>
+  <tt>examples/mdl_sdk/df_native/example_df_native.cpp</tt>
+
+\include df_native/example_df_native.cpp
+
+<b>Source Code Location:</b>
+  <tt>examples/mdl_sdk/shared/texture_support_native.h</tt>
+
+\include shared/texture_support_native.h
+
+
+<div align="right">
+    [\link mi_neuray_example_axf_to_mdl Previous\endlink]
+    [\link mi_neuray_examples Up\endlink]
+</div>
+
+*/

@@ -478,6 +478,8 @@ void DAG_code_printer::print_mdl_type(
     case IType::TK_DOUBLE:           keyword("double"); break;
     case IType::TK_STRING:           keyword("string"); break;
     case IType::TK_COLOR:            keyword("color"); break;
+    case IType::TK_SPECTRAL_SAMPLE:  keyword("spectral_sample"); break;
+    case IType::TK_SPECTRUM:         keyword("spectrum"); break;
     case IType::TK_LIGHT_PROFILE:    keyword("light_profile"); break;
     case IType::TK_BSDF_MEASUREMENT: keyword("bsdf_measurement"); break;
     case IType::TK_PTR:

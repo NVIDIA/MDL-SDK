@@ -435,7 +435,7 @@ public:
     ///
     /// This templated member function is a wrapper of the non-template variant for the user's
     /// convenience. It eliminates the need to call
-    /// #mi::base::IInterface::get_interface(const Uuid &)
+    /// #mi::base::IInterface::get_interface(const mi::base::Uuid&)
     /// on the returned pointer, since the return type already is a pointer to the type \p T
     /// specified as template parameter.
     ///
@@ -478,7 +478,7 @@ public:
     ///
     /// This templated member function is a wrapper of the non-template variant for the user's
     /// convenience. It eliminates the need to call
-    /// #mi::base::IInterface::get_interface(const Uuid &)
+    /// #mi::base::IInterface::get_interface(const mi::base::Uuid&)
     /// on the returned pointer, since the return type already is a pointer to the type \p T
     /// specified as template parameter.
     ///
@@ -519,7 +519,7 @@ public:
     ///
     /// This templated member function is a wrapper of the non-template variant for the user's
     /// convenience. It eliminates the need to call
-    /// #mi::base::IInterface::get_interface(const Uuid &)
+    /// #mi::base::IInterface::get_interface(const mi::base::Uuid&)
     /// on the returned pointer, since the return type already is a pointer to the type \p T
     /// specified as template parameter.
     ///
@@ -557,7 +557,7 @@ public:
     ///
     /// This templated member function is a wrapper of the non-template variant for the user's
     /// convenience. It eliminates the need to call
-    /// #mi::base::IInterface::get_interface(const Uuid &)
+    /// #mi::base::IInterface::get_interface(const mi::base::Uuid&)
     /// on the returned pointer, since the return type already is a pointer to the type \p T
     /// specified as template parameter.
     ///
@@ -603,9 +603,6 @@ public:
     ///                     name.
     /// \return             The type name of the attribute (or part thereof), or \c nullptr if there
     ///                     is no attribute with the name \p name.
-    ///
-    /// \note The return value of this method is only valid until the next call of this method
-    ///       or any non-const methods on this instance.
     virtual const char* get_attribute_type_name( const char* name) const = 0;
 
     /// Sets the propagation type of the attribute \p name.

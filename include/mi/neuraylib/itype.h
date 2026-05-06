@@ -104,7 +104,7 @@ public:
     /// Returns the number of elements.
     virtual Size get_size() const = 0;
 
-    /// Returns the index for the given name, or -1 if there is no such struct category.
+    /// Returns the index for the given name, or ~0U if there is no such struct category.
     virtual Size get_index( const char* name) const = 0;
 
     /// Returns the name for the given index, or \c nullptr if there is no such struct category.
@@ -119,7 +119,7 @@ public:
     {
         const IStruct_category* ptr_struct_category = get_struct_category( index);
         if( !ptr_struct_category)
-            return 0;
+            return nullptr;
         const T* ptr_T = static_cast<const T*>(
             ptr_struct_category->get_interface( typename T::IID()));
         ptr_struct_category->release();
@@ -135,7 +135,7 @@ public:
     {
         const IStruct_category* ptr_struct_category = get_struct_category( name);
         if( !ptr_struct_category)
-            return 0;
+            return nullptr;
         const T* ptr_T = static_cast<const T*>(
             ptr_struct_category->get_interface( typename T::IID()));
         ptr_struct_category->release();
@@ -341,13 +341,13 @@ public:
     /// Returns the index of a value in linear time.
     ///
     /// \param name          The unqualified name of the value.
-    /// \return              The index of the value, or -1 if there is no such value.
+    /// \return              The index of the value, or ~0U if there is no such value.
     virtual Size find_value( const char* name) const = 0;
 
     /// Returns the index of a value in linear time.
     ///
     /// \param code          The code of the value.
-    /// \return              The index of the value, or -1 if there is no such value.
+    /// \return              The index of the value, or ~0U if there is no such value.
     virtual Size find_value( Sint32 code) const = 0;
 
     /// If this enum is a predefined one, return its ID, else #EID_USER.
@@ -481,7 +481,7 @@ public:
     /// Indicates whether the array is immediate-sized or deferred-sized.
     virtual bool is_immediate_sized() const = 0;
 
-    /// Returns the size of the array in case of immediate-sized arrays, and -1 otherwise.
+    /// Returns the size of the array in case of immediate-sized arrays, and ~0U otherwise.
     virtual Size get_size() const = 0;
 
     /// Returns the abstract size of the array in case of deferred-sized arrays, and \c nullptr
@@ -527,7 +527,7 @@ public:
     /// Returns the index of a field in linear time.
     ///
     /// \param name     The unqualified name of the field.
-    /// \return         The index of the field, or -1 if there is no such field.
+    /// \return         The index of the field, or ~0U if there is no such field.
     virtual Size find_field( const char* name) const = 0;
 
     /// If this struct is a predefined one, return its ID, else #SID_USER.
@@ -664,7 +664,7 @@ public:
     /// Returns the number of elements.
     virtual Size get_size() const = 0;
 
-    /// Returns the index for the given name, or -1 if there is no such type.
+    /// Returns the index for the given name, or ~0U if there is no such type.
     virtual Size get_index( const char* name) const = 0;
 
     /// Returns the name for the given index, or \c nullptr if there is no such type.

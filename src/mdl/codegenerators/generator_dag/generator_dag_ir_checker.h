@@ -69,6 +69,7 @@ public:
         EC_TEMP_INDEX_USED_TWICE,
         EC_WRONG_TEMP,
         EC_TEMP_INDEX_TOO_HIGH,
+        EC_DISTILLER_MARKER_NOT_ALLOWED,
     };
 
 public:
@@ -147,11 +148,13 @@ private:
 public:
     /// Constructor.
     ///
-    /// \param alloc          the allocator
-    /// \param call_resolver  an MDL call name resolver
+    /// \param alloc                   he allocator
+    /// \param call_resolver           an MDL call name resolver
+    /// \param allow_distiller_marker  if true, distiller marker nodes are allowed
     DAG_ir_checker(
-        IAllocator          *alloc,
-        ICall_name_resolver *call_resolver);
+        IAllocator                *alloc,
+        ICall_name_resolver const *call_resolver,
+        bool                      allow_distiller_marker);
 
 private:
     /// The allocator.
@@ -163,7 +166,7 @@ private:
     Node_vec m_temporaries;
 
     /// The call resolver.
-    ICall_name_resolver *m_call_resolver;
+    ICall_name_resolver const *m_call_resolver;
 
     /// The node factory that owns all nodes.
     DAG_node_factory_impl const *m_node_fact;
@@ -185,6 +188,9 @@ private:
 
     /// If true, collect temporaries.
     bool m_collect_temporary;
+
+    /// If true, distiller marker nodes are allowed.
+    bool m_allow_distiller_marker;
 };
 
 #else
@@ -216,6 +222,7 @@ public:
         EC_TEMP_INDEX_USED_TWICE,
         EC_WRONG_TEMP,
         EC_TEMP_INDEX_TOO_HIGH,
+        EC_DISTILLER_MARKER_NOT_ALLOWED,
     };
 
 public:
@@ -272,8 +279,9 @@ public:
 public:
     /// Constructor.
     DAG_ir_checker(
-        IAllocator          *,
-        ICall_name_resolver *)
+        IAllocator                *,
+        ICall_name_resolver const *,
+        bool)
     {
     }
 };

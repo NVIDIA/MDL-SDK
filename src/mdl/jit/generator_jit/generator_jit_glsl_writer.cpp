@@ -102,6 +102,7 @@ GLSLWriterBasePass::GLSLWriterBasePass(
 , m_glsl_required_extentions(nullptr)
 , m_ssbo_decl(nullptr)
 , m_glsl_uniform_ssbo_name(nullptr)
+, m_glsl_include_for_api_types(nullptr)
 , m_glsl_uniform_ssbo_binding(~0u)
 , m_glsl_uniform_ssbo_set(~0u)
 , m_next_unique_name_id(0u)
@@ -140,6 +141,8 @@ GLSLWriterBasePass::GLSLWriterBasePass(
         options.get_bool_option(MDL_JIT_OPTION_GLSL_PLACE_UNIFORMS_INTO_SSBO);
     m_glsl_uniform_ssbo_name =
         options.get_string_option(MDL_JIT_OPTION_GLSL_UNIFORM_SSBO_NAME);
+    m_glsl_include_for_api_types =
+        options.get_string_option(MDL_JIT_OPTION_GLSL_INCLUDE_FOR_API_TYPES);
     {
         char const *ssbo_binding =
             options.get_string_option(MDL_JIT_OPTION_GLSL_UNIFORM_SSBO_BINDING);
@@ -319,6 +322,10 @@ void GLSLWriterBasePass::set_glsl_target_context(glsl::Compilation_unit *unit)
     }
     if (m_glsl_required_extentions) {
         set_extensions(ctx, m_glsl_required_extentions, glsl::GLSLang_context::EB_REQUIRE);
+    }
+
+    if (m_glsl_include_for_api_types != nullptr && m_glsl_include_for_api_types[0] != '\0') {
+        ctx.update_extension("GL_GOOGLE_include_directive", glsl::GLSLang_context::EB_REQUIRE);
     }
 }
 
@@ -500,6 +507,7 @@ glsl::Type_name *GLSLWriterBasePass::get_type_name(
     glsl::Type *type)
 {
     glsl::Type::Modifiers mod = type->get_type_modifiers();
+    type = type->skip_type_alias();
 
     glsl::Type      *e_type    = inner_element_type(type);
     glsl::Name      *name      = m_decl_factory.create_name(zero_loc, e_type->get_sym());
@@ -513,6 +521,22 @@ glsl::Type_name *GLSLWriterBasePass::get_type_name(
     if (mod & glsl::Type::MK_CONST) {
         type_name->get_qualifier().set_storage_qualifier(glsl::SQ_CONST);
     }
+    if (mod & glsl::Type::MK_UNIFORM) {
+        type_name->get_qualifier().set_storage_qualifier(glsl::SQ_UNIFORM);
+    }
+    if (mod & glsl::Type::MK_VARYING) {
+        type_name->get_qualifier().set_storage_qualifier(glsl::SQ_VARYING);
+    }
+    if (mod & glsl::Type::MK_HIGHP) {
+        type_name->get_qualifier().set_precision_qualifier(glsl::PQ_HIGHP);
+    }
+    if (mod & glsl::Type::MK_MEDIUMP) {
+        type_name->get_qualifier().set_precision_qualifier(glsl::PQ_MEDIUMP);
+    }
+    if (mod & glsl::Type::MK_LOWP) {
+        type_name->get_qualifier().set_precision_qualifier(glsl::PQ_LOWP);
+    }
+    MDL_ASSERT((mod & ~glsl::Type::MK_CONST) == 0 && "Unhandled type modifier");
 
     return type_name;
 }
@@ -811,7 +835,15 @@ glsl::Type *GLSLWriterBasePass::convert_struct_type(
             snprintf(name_buf, sizeof(name_buf), "m_%u", i);
             sym = get_sym(name_buf);
         }
-        fields[n++] = add_struct_field(decl_struct, field_type, sym);
+
+        // Padding fields of API types exist in the LLVM struct for C++ alignment but are not
+        // needed in GLSL (the compiler handles alignment implicitly). Keep the field in the
+        // Type_struct at the correct element index for proper GEP index mapping, but omit it
+        // from the output declaration so both compilation units agree on the struct layout.
+        if (is_api_type && strcmp(sym->get_name(), "padding") == 0)
+            fields[n++] = glsl::Type_struct::Field(field_type, sym);
+        else
+            fields[n++] = add_struct_field(decl_struct, field_type, sym);
     }
 
     glsl::Type_struct *res = m_tc.get_struct(
@@ -831,6 +863,10 @@ glsl::Type *GLSLWriterBasePass::convert_struct_type(
         glsl::Definition_table::Scope_enter scope(m_def_tab, res, type_def);
 
         for (size_t i = 0; i < n; ++i) {
+            // Skip hidden padding fields: present in Type_struct for GEP index correctness
+            // but not in the output declaration, so no definition entry is needed.
+            if (is_api_type && strcmp(fields[i].get_symbol()->get_name(), "padding") == 0)
+                continue;
             (void)m_def_tab.enter_member_definition(
                 fields[i].get_symbol(),
                 fields[i].get_type(),
@@ -2122,7 +2158,12 @@ void GLSLWriterBasePass::finalize(
     }
 
     // generate the API type fragment
-    {
+    if (m_glsl_include_for_api_types != nullptr && m_glsl_include_for_api_types[0] != '\0') {
+        printer->print("#include \"");
+        printer->print(m_glsl_include_for_api_types);
+        printer->print("\"");
+        printer->nl(2);
+    } else {
         printer->print_comment("API types");
 
         int last_kind = -1;

@@ -139,13 +139,12 @@ inline Uint32 Atom32::operator-=( const Uint32 rhs)
 {
     Uint32 retval;
     asm volatile(
-        "neg %2\n"
         "movl %2,%0\n"
         "lock; xaddl %0,%1\n"
         "addl %2,%0\n"
         : "=&r"( retval), "+m"( m_value)
-        : "r"( rhs)
-        : "cc", "%2"
+        : "r"( -rhs)
+        : "cc"
         );
     return retval;
 }
@@ -231,14 +230,12 @@ inline Atom32& Atom32::operator=( const Atom32& rhs)
 
 inline Uint32 Atom32::operator+=( const Uint32 rhs)
 {
-    m_value += rhs;
-    return m_value;
+    return m_value += rhs;
 }
 
 inline Uint32 Atom32::operator-=( const Uint32 rhs)
 {
-    m_value -= rhs;
-    return m_value;
+    return m_value -= rhs;
 }
 
 inline Uint32 Atom32::operator++()

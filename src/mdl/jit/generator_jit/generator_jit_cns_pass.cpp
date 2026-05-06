@@ -959,8 +959,10 @@ void CNSLimitGraph::calcSEDsForLoop(SCC const &scc)
 // Remove irreducible control flow using Controlled Node Splitting.
 bool CNSLimitGraph::removeIrreducibleControlFlow()
 {
+#if 0
     size_t numBlocks = 0;
     size_t numInsts = 0;
+#endif
 
     bool changed = false;
 
@@ -1023,9 +1025,10 @@ bool CNSLimitGraph::removeIrreducibleControlFlow()
                << " copies (" << bestNum
                << " more instructions and " << best->blocks().size() * (best->pred_size() - 1)
             << " more blocks)\n";
-#endif
+
         numBlocks += best->blocks().size() * (best->pred_size() - 1);
         numInsts += bestNum;
+#endif
 
         for (Node *S : best->succs()) {
             S->pred_erase(best);

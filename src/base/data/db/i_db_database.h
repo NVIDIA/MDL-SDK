@@ -242,13 +242,16 @@ public:
     /// \name Thread pool and fragmented jobs
     //@{
 
-    /// Executes a job, splitting it into the given number of fragments (synchronous).
+    /// Executes a fragmented job, splitting it into the given number of fragments (synchronous).
+    ///
+    /// The fragments may be executed in any order and in any number of threads (but subject to
+    /// #Fragmented_job::get_thread_limit()).
+    ///
+    /// This method will not return before all fragments have been executed. See also the note
+    /// on #THREAD_POOL::Thread_pool::submit_job_and_wait().
     ///
     /// This method is for fragmented jobs without transaction context. See
     /// #Transaction::execute_fragmented() for executing fragmented jobs with transaction context.
-    ///
-    /// This method will not return before all fragments have been executed. The fragments may be
-    /// executed in any number of threads.
     ///
     /// \note This method is restricted to localhost-only jobs.
     ///
@@ -257,21 +260,23 @@ public:
     ///                                 number must be greater than zero.
     /// \return
     ///                                 -  0: Success.
-    ///                                 - -1: Invalid parameters (\p job is \c nullptr or \c count
+    ///                                 - -1: Invalid parameters (\p job is \c nullptr or \p count
     ///                                       is zero).
     ///                                 - -2: Invalid scheduling mode (transaction-less or
     ///                                       asynchronous execution is restricted to local jobs).
     ///                                 - -3: Invalid job priority (negative value).
     virtual mi::Sint32 execute_fragmented( Fragmented_job* job, size_t count) = 0;
 
-    /// Executes a job, splitting it into the given number of fragments (asynchronous).
+    /// Executes a fragmented job, splitting it into the given number of fragments (asynchronous).
+    ///
+    /// The fragments may be executed in any order and in any number of threads (but subject to
+    /// #Fragmented_job::get_thread_limit()).
+    ///
+    /// This method will return immediately, typically before all fragments have been executed.
     ///
     /// This method is for fragmented jobs without transaction context. See
     /// #Transaction::execute_fragmented_async() for executing fragmented jobs with transaction
     /// context.
-    ///
-    /// This will return immediately, typically before all fragments have been executed. The
-    /// fragments may be executed in any number of threads.
     ///
     /// \note This method is restricted to localhost-only jobs.
     ///
@@ -281,7 +286,7 @@ public:
     /// \param listener                 Provides a callback to be called when the job is done.
     /// \return
     ///                                 -  0: Success.
-    ///                                 - -1: Invalid parameters (\p job is \c nullptr or \c count
+    ///                                 - -1: Invalid parameters (\p job is \c nullptr or \p count
     ///                                       is zero).
     ///                                 - -2: Invalid scheduling mode (transaction-less or
     ///                                       asynchronous execution is restricted to local jobs).

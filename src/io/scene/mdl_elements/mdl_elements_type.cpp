@@ -55,12 +55,10 @@ class Struct_category final : public mi::base::Interface_implement<IStruct_categ
 {
 public:
     Struct_category(
-        Type_factory *owner,
         const char* symbol,
         IStruct_category::Predefined_id id,
         const mi::base::Handle<const IAnnotation_block>& annotations)
-      : m_owner( owner, mi::base::DUP_INTERFACE),
-        m_symbol( symbol),
+      : m_symbol( symbol),
         m_predefined_id( id),
         m_annotations( annotations)
     {
@@ -79,25 +77,6 @@ public:
         return m_annotations.get();
     }
 
-    mi::Uint32 release() const final
-    {
-        mi::Uint32 count = --refcount();
-        if( count > 0)
-            return count;
-
-        // TODO MDL-957 The remainder of this method is not thread-safe.
-        std::unique_lock<Type_factory> lock( *m_owner.get());
-        count = refcount();
-        if( count > 0)
-            return count;
-
-        m_owner->unregister_struct_category( this);
-
-        lock.unlock();
-        delete this;
-        return 0;
-    }
-
     mi::Size get_memory_consumption() const final
     {
         mi::Size size = sizeof( *this)
@@ -107,7 +86,6 @@ public:
     }
 
 private:
-    mutable mi::base::Handle<Type_factory> m_owner;
     const std::string m_symbol;
     const IStruct_category::Predefined_id m_predefined_id;
     const mi::base::Handle<const IAnnotation_block> m_annotations;
@@ -290,6 +268,13 @@ public:
     bool is_declarative() const override { return false; }
 };
 
+template <class T>
+class Type_base_declarative : public Type_base_immutable<T>
+{
+public:
+    bool is_declarative() const override { return true; }
+};
+
 
 class Type_alias : public Type_base<IType_alias>
 {
@@ -356,14 +341,12 @@ class Type_enum final : public Type_base<IType_enum>
 {
 public:
     Type_enum(
-        Type_factory* owner,
         const char* symbol,
         IType_enum::Predefined_id id,
         IType_enum::Values values,
         mi::base::Handle<const IAnnotation_block> annotations,
         IType_enum::Value_annotations value_annotations)
-      : m_owner( owner, mi::base::DUP_INTERFACE),
-        m_symbol( symbol),
+      : m_symbol( symbol),
         m_predefined_id( id),
         m_values( std::move( values)),
         m_annotations( std::move( annotations)),
@@ -437,27 +420,7 @@ public:
         return m_value_annotations[index].get();
     }
 
-    mi::Uint32 release() const final
-    {
-        mi::Uint32 count = --refcount();
-        if( count > 0)
-            return count;
-
-        // TODO MDL-957 The remainder of this method is not thread-safe.
-        std::unique_lock<Type_factory> lock( *m_owner.get());
-        count = refcount();
-        if( count > 0)
-            return count;
-
-        m_owner->unregister_enum_type( this);
-
-        lock.unlock();
-        delete this;
-        return 0;
-    }
-
 private:
-    mutable mi::base::Handle<Type_factory> m_owner;
     const std::string m_symbol;
     const IType_enum::Predefined_id m_predefined_id;
     const IType_enum::Values m_values;
@@ -633,7 +596,6 @@ class Type_struct final : public Type_base<IType_struct>
 
 public:
     Type_struct(
-        Type_factory *owner,
         const char* symbol,
         IType_struct::Predefined_id id,
         const IType_struct::Fields& fields,
@@ -641,8 +603,7 @@ public:
         IType_struct::Field_annotations field_annotations,
         bool is_declarative,
         const IStruct_category* struct_category)
-      : m_owner( owner, mi::base::DUP_INTERFACE),
-        m_symbol( symbol),
+      : m_symbol( symbol),
         m_predefined_id( id),
         m_fields( fields),
         m_annotations( annotations),
@@ -722,28 +683,7 @@ public:
         return m_struct_category.get();
     }
 
-
-    mi::Uint32 release() const final
-    {
-        mi::Uint32 count = --refcount();
-        if( count > 0)
-            return count;
-
-        // TODO MDL-957 The remainder of this method is not thread-safe.
-        std::unique_lock<Type_factory> lock( *m_owner.get());
-        count = refcount();
-        if( count > 0)
-            return count;
-
-        m_owner->unregister_struct_type( this);
-
-        lock.unlock();
-        delete this;
-        return 0;
-    }
-
 private:
-    mutable mi::base::Handle<Type_factory> m_owner;
     const std::string m_symbol;
     const IType_struct::Predefined_id m_predefined_id;
     const IType_struct::Fields m_fields;
@@ -785,7 +725,7 @@ public:
 };
 
 
-class Type_bsdf final : public Type_base_immutable<IType_bsdf>
+class Type_bsdf final : public Type_base_declarative<IType_bsdf>
 {
 public:
     // user defined default constructor required to be const-default-constructible
@@ -793,7 +733,7 @@ public:
 };
 
 
-class Type_hair_bsdf final : public Type_base_immutable<IType_hair_bsdf>
+class Type_hair_bsdf final : public Type_base_declarative<IType_hair_bsdf>
 {
 public:
     // user defined default constructor required to be const-default-constructible
@@ -801,7 +741,7 @@ public:
 };
 
 
-class Type_edf final : public Type_base_immutable<IType_edf>
+class Type_edf final : public Type_base_declarative<IType_edf>
 {
 public:
     // user defined default constructor required to be const-default-constructible
@@ -809,7 +749,7 @@ public:
 };
 
 
-class Type_vdf final : public Type_base_immutable<IType_vdf>
+class Type_vdf final : public Type_base_declarative<IType_vdf>
 {
 public:
     // user defined default constructor required to be const-default-constructible
@@ -985,8 +925,14 @@ const IStruct_category* Type_factory::create_struct_category( const char* symbol
     if( it == m_struct_category_symbols.end())
         return nullptr;
 
-    it->second->retain();
-    return it->second;
+    // Types with reference count 1 are only referenced by the factory, i.e., dead, and not visible
+    // for users.
+    const mi::base::Handle<const IStruct_category>& struct_category = it->second;
+    if( !is_alive( struct_category.get()))
+        return nullptr;
+
+    struct_category->retain();
+    return struct_category.get();
 }
 
 IStruct_category_list* Type_factory::create_struct_category_list( mi::Size initial_capacity) const
@@ -1003,6 +949,7 @@ const IStruct_category* Type_factory::get_predefined_struct_category(
     if( it == m_struct_category_ids.end())
         return nullptr;
 
+    // Skip aliveness check
     it->second->retain();
     return it->second;
 }
@@ -1075,8 +1022,14 @@ const IType_enum* Type_factory::create_enum( const char* symbol) const
     if( it == m_enum_symbols.end())
         return nullptr;
 
-    it->second->retain();
-    return it->second;
+    // Types with reference count 1 are only referenced by the factory, i.e., dead, and not visible
+    // for users.
+    const mi::base::Handle<const IType_enum>& type = it->second;
+    if( !is_alive( type.get()))
+        return nullptr;
+
+    type->retain();
+    return type.get();
 }
 
 const IType_float* Type_factory::create_float() const { return &TYPES::the_float_type; }
@@ -1229,8 +1182,14 @@ const IType_struct* Type_factory::create_struct( const char* symbol) const
     if( it == m_struct_symbols.end())
         return nullptr;
 
-    it->second->retain();
-    return it->second;
+    // Types with reference count 1 are only referenced by the factory, i.e., dead, and not visible
+    // for users.
+    const mi::base::Handle<const IType_struct>& type = it->second;
+    if( !is_alive( type.get()))
+        return nullptr;
+
+    type->retain();
+    return type.get();
 }
 
 const IType_texture* Type_factory::create_texture(
@@ -1290,6 +1249,7 @@ const IType_enum* Type_factory::get_predefined_enum(
     if( it == m_enum_ids.end())
         return nullptr;
 
+    // Skip aliveness check
     it->second->retain();
     return it->second;
 }
@@ -1303,6 +1263,7 @@ const IType_struct* Type_factory::get_predefined_struct(
     if( it == m_struct_ids.end())
         return nullptr;
 
+    // Skip aliveness check
     it->second->retain();
     return it->second;
 }
@@ -1618,7 +1579,8 @@ const IStruct_category* Type_factory::create_struct_category(
 
     {
         std::shared_lock<std::shared_mutex> lock( m_mutex);
-        const IStruct_category* result = lookup_struct_category( symbol, id, errors);
+        const IStruct_category* result = lookup_struct_category(
+            symbol, id, errors, /*unregister_dead*/ false);
         if( result || ( *errors != 0))
             return result;
     }
@@ -1627,26 +1589,29 @@ const IStruct_category* Type_factory::create_struct_category(
         std::unique_lock<std::shared_mutex> lock( m_mutex);
         // Repeat lookup. Another thread might have modified the maps between release of the shared
         // lock and acquisition of the unique lock.
-        const IStruct_category* result = lookup_struct_category( symbol, id, errors);
+        const IStruct_category* result = lookup_struct_category(
+            symbol, id, errors, /*unregister_dead*/ true);
         if( result || ( *errors != 0))
             return result;
 
         // Check that the symbol is not yet registered for an enum type.
-        if( m_enum_symbols.find( symbol) != m_enum_symbols.end()) {
+        if( is_alive_enum_type_and_unregister_dead_ones( symbol)) {
             *errors = -3;
             return nullptr;
         }
 
         // Check that the symbol is not yet registered for a struct type.
-        if( m_struct_symbols.find( symbol) != m_struct_symbols.end()) {
+        if( is_alive_struct_type_and_unregister_dead_ones( symbol)) {
             *errors = -3;
             return nullptr;
         }
 
         // Modify maps.
         const IStruct_category* struct_category = new Struct_category(
-            this, symbol, id, annotations);
-        m_struct_category_symbols[symbol] = struct_category;
+            symbol, id, annotations);
+
+        ASSERT( M_SCENE, !m_struct_category_symbols[symbol]);
+        m_struct_category_symbols[symbol] = make_handle_dup( struct_category);
         if( id != IStruct_category::CID_USER) {
             ASSERT( M_SCENE, !m_struct_category_ids[id]);
             m_struct_category_ids[id] = struct_category;
@@ -1676,7 +1641,8 @@ const IType_enum* Type_factory::create_enum(
 
     {
         std::shared_lock<std::shared_mutex> lock( m_mutex);
-        const IType_enum* result = lookup_enum( symbol, id, values, errors);
+        const IType_enum* result = lookup_enum(
+            symbol, id, values, errors, /*unregister_dead*/ false);
         if( result || ( *errors != 0))
             return result;
     }
@@ -1685,26 +1651,29 @@ const IType_enum* Type_factory::create_enum(
         std::unique_lock<std::shared_mutex> lock( m_mutex);
         // Repeat lookup. Another thread might have modified the maps between release of the shared
         // lock and acquisition of the unique lock.
-        const IType_enum* result = lookup_enum( symbol, id, values, errors);
+        const IType_enum* result = lookup_enum(
+            symbol, id, values, errors, /*unregister_dead*/ true);
         if( result || ( *errors != 0))
             return result;
 
         // Check that the symbol is not yet registered for a struct category.
-        if( m_struct_category_symbols.find( symbol) != m_struct_category_symbols.end()) {
+        if( is_alive_struct_category_and_unregister_dead_ones( symbol)) {
             *errors = -3;
             return nullptr;
         }
 
         // Check that the symbol is not yet registered for a struct type.
-        if( m_struct_symbols.find( symbol) != m_struct_symbols.end()) {
+        if( is_alive_struct_type_and_unregister_dead_ones( symbol)) {
             *errors = -3;
             return nullptr;
         }
 
         // Modify maps.
         const IType_enum* type = new TYPES::Type_enum(
-            this, symbol, id, values, annotations, value_annotations);
-        m_enum_symbols[symbol] = type;
+            symbol, id, values, annotations, value_annotations);
+
+        ASSERT( M_SCENE, !m_enum_symbols[symbol]);
+        m_enum_symbols[symbol] = make_handle_dup( type);
         if( id != IType_enum::EID_USER) {
             ASSERT( M_SCENE, !m_enum_ids[id]);
             m_enum_ids[id] = type;
@@ -1737,7 +1706,7 @@ const IType_struct* Type_factory::create_struct(
     {
         std::shared_lock<std::shared_mutex> lock( m_mutex);
         const IType_struct* result = lookup_struct(
-            symbol, id, fields, is_declarative, struct_category, errors);
+            symbol, id, fields, is_declarative, struct_category, errors, /*unregister_dead*/ false);
         if( result || ( *errors != 0))
             return result;
     }
@@ -1747,25 +1716,24 @@ const IType_struct* Type_factory::create_struct(
         // Repeat lookup. Another thread might have modified the maps between release of the shared
         // lock and acquisition of the unique lock.
         const IType_struct* result = lookup_struct(
-            symbol, id, fields, is_declarative, struct_category, errors);
+            symbol, id, fields, is_declarative, struct_category, errors, /*unregister_dead*/ true);
         if( result || ( *errors != 0))
             return result;
 
         // Check that the symbol is not yet registered for a struct category.
-        if( m_struct_category_symbols.find( symbol) != m_struct_category_symbols.end()) {
+        if( is_alive_struct_category_and_unregister_dead_ones( symbol)) {
             *errors = -3;
             return nullptr;
         }
 
         // Check that the symbol is not yet registered for an enum type.
-        if( m_enum_symbols.find( symbol) != m_enum_symbols.end()) {
+        if( is_alive_enum_type_and_unregister_dead_ones( symbol)) {
             *errors = -3;
             return nullptr;
         }
 
         // Modify maps.
         const IType_struct* type = new TYPES::Type_struct(
-            this,
             symbol,
             id,
             fields,
@@ -1773,7 +1741,9 @@ const IType_struct* Type_factory::create_struct(
             field_annotations,
             is_declarative,
             struct_category);
-        m_struct_symbols[symbol] = type;
+
+        ASSERT( M_SCENE, !m_struct_symbols[symbol]);
+        m_struct_symbols[symbol] = make_handle_dup( type);
         if( id != IType_struct::SID_USER) {
             ASSERT( M_SCENE, !m_struct_ids[id]);
             m_struct_ids[id] = type;
@@ -2514,24 +2484,6 @@ std::string Type_factory::get_mdl_type_name_static( const IType* type)
     return {};
 }
 
-void Type_factory::unregister_struct_category( const IStruct_category* struct_category)
-{
-    m_struct_category_symbols.erase( struct_category->get_symbol());
-    m_struct_category_ids.erase( struct_category->get_predefined_id());
-}
-
-void Type_factory::unregister_enum_type( const IType_enum* type)
-{
-    m_enum_symbols.erase( type->get_symbol());
-    m_enum_ids.erase( type->get_predefined_id());
-}
-
-void Type_factory::unregister_struct_type( const IType_struct* type)
-{
-    m_struct_symbols.erase( type->get_symbol());
-    m_struct_ids.erase( type->get_predefined_id());
-}
-
 mi::Sint32 Type_factory::compare_static(
     const IType_alias* lhs, const IType_alias* rhs)
 {
@@ -2761,46 +2713,66 @@ void Type_factory::dump( const IType_list* list, mi::Size depth, std::ostringstr
 const IStruct_category* Type_factory::lookup_struct_category(
     const char* symbol,
     IStruct_category::Predefined_id id,
-    mi::Sint32* errors)
+    mi::Sint32* errors,
+    bool unregister_dead)
 {
     auto it = m_struct_category_symbols.find( symbol);
-    if( m_struct_category_symbols.find( symbol) == m_struct_category_symbols.end()) {
+    if( it == m_struct_category_symbols.end()) {
         *errors = 0;
         return nullptr;
     }
 
-    const IStruct_category* struct_category = it->second;
-    if( !equivalent_struct_categories( struct_category, id)) {
+    // Types with reference count 1 are only referenced by the factory, i.e., dead, and not visible
+    // for users.
+    const mi::base::Handle<const IStruct_category>& struct_category = it->second;
+    if( !is_alive( struct_category.get())) {
+        if( unregister_dead)
+            unregister_struct_category( it);
+        *errors = 0;
+        return nullptr;
+    }
+
+    if( !equivalent_struct_categories( struct_category.get(), id)) {
         *errors = -4;
         return nullptr;
     }
 
     *errors = 0;
     struct_category->retain();
-    return struct_category;
+    return struct_category.get();
 }
 
 const IType_enum* Type_factory::lookup_enum(
     const char* symbol,
     IType_enum::Predefined_id id,
     const IType_enum::Values& values,
-    mi::Sint32* errors)
+    mi::Sint32* errors,
+    bool unregister_dead)
 {
     auto it = m_enum_symbols.find( symbol);
-    if( m_enum_symbols.find( symbol) == m_enum_symbols.end()) {
+    if( it == m_enum_symbols.end()) {
         *errors = 0;
         return nullptr;
     }
 
-    const IType_enum* type_enum = it->second;
-    if( !equivalent_enum_types( type_enum, id, values)) {
+    // Types with reference count 1 are only referenced by the factory, i.e., dead, and not visible
+    // for users.
+    const mi::base::Handle<const IType_enum>& type_enum = it->second;
+    if( !is_alive( type_enum.get())) {
+        if( unregister_dead)
+            unregister_enum_type( it);
+        *errors = 0;
+        return nullptr;
+    }
+
+    if( !equivalent_enum_types( type_enum.get(), id, values)) {
         *errors = -4;
         return nullptr;
     }
 
     *errors = 0;
     type_enum->retain();
-    return type_enum;
+    return type_enum.get();
 }
 
 const IType_struct* Type_factory::lookup_struct(
@@ -2809,7 +2781,8 @@ const IType_struct* Type_factory::lookup_struct(
     const IType_struct::Fields& fields,
     bool is_declarative,
     const IStruct_category* struct_category,
-    mi::Sint32* errors)
+    mi::Sint32* errors,
+    bool unregister_dead)
 {
     auto it = m_struct_symbols.find( symbol);
     if( it == m_struct_symbols.end()) {
@@ -2817,15 +2790,144 @@ const IType_struct* Type_factory::lookup_struct(
         return nullptr;
     }
 
-    const IType_struct* type_struct = it->second;
-    if( !equivalent_struct_types( type_struct, id, fields, is_declarative, struct_category)) {
+    // Types with reference count 1 are only referenced by the factory, i.e., dead, and not visible
+    // for users.
+    const mi::base::Handle<const IType_struct>& type_struct = it->second;
+    if( !is_alive( type_struct.get())) {
+        if( unregister_dead)
+            unregister_struct_type( it);
+        *errors = 0;
+        return nullptr;
+    }
+
+    if( !equivalent_struct_types( type_struct.get(), id, fields, is_declarative, struct_category)) {
         *errors = -4;
         return nullptr;
     }
 
     *errors = 0;
     type_struct->retain();
-    return type_struct;
+    return type_struct.get();
+}
+
+void Type_factory::unregister_struct_category( Struct_category_symbol_map::iterator it)
+{
+    const mi::base::Handle<const IStruct_category>& struct_category = it->second;
+
+    IStruct_category::Predefined_id id = struct_category->get_predefined_id();
+    if( id != IStruct_category::CID_USER) {
+        auto it_ids = m_struct_category_ids.find( id);
+        bool id_found1 = it_ids != m_struct_category_ids.end();
+        ASSERT( M_SCENE, id_found1);
+        (void) id_found1;
+        bool id_found2 = it_ids->second == struct_category.get();
+        ASSERT( M_SCENE, id_found2);
+        (void) id_found2;
+        m_struct_category_ids.erase( it_ids);
+    }
+
+    m_struct_category_symbols.erase( it);
+}
+
+void Type_factory::unregister_enum_type(  Enum_symbol_map::iterator it)
+{
+    const mi::base::Handle<const IType_enum>& type = it->second;
+
+    IType_enum::Predefined_id id = type->get_predefined_id();
+    if( id != IType_enum::EID_USER) {
+        auto it_ids = m_enum_ids.find( id);
+        bool id_found1 = it_ids != m_enum_ids.end();
+        ASSERT( M_SCENE, id_found1);
+        (void) id_found1;
+        bool id_found2 = it_ids->second == type.get();
+        ASSERT( M_SCENE, id_found2);
+        (void) id_found2;
+        m_enum_ids.erase( it_ids);
+    }
+
+    m_enum_symbols.erase( it);
+}
+
+void Type_factory::unregister_struct_type( Struct_symbol_map::iterator it)
+{
+    const mi::base::Handle<const IType_struct>& type = it->second;
+
+    IType_struct::Predefined_id id = type->get_predefined_id();
+    if( id != IType_struct::SID_USER) {
+        auto it_ids = m_struct_ids.find( id);
+        bool id_found1 = it_ids != m_struct_ids.end();
+        ASSERT( M_SCENE, id_found1);
+        (void) id_found1;
+        bool id_found2 = it_ids->second == type.get();
+        ASSERT( M_SCENE, id_found2);
+        (void) id_found2;
+        m_struct_ids.erase( it_ids);
+    }
+
+    m_struct_symbols.erase( it);
+}
+
+bool Type_factory::is_alive_struct_category_and_unregister_dead_ones( const char* symbol)
+{
+    auto it = m_struct_category_symbols.find( symbol);
+    if( it == m_struct_category_symbols.end())
+        return false;
+
+    // Struct categories with reference count 1 are only referenced by the factory, i.e., dead, and
+    // are not visible for users.
+    if( !is_alive( it->second.get())) {
+        unregister_struct_category( it);
+        return false;
+    }
+
+    return true;
+}
+
+bool Type_factory::is_alive_enum_type_and_unregister_dead_ones( const char* symbol)
+{
+    auto it = m_enum_symbols.find( symbol);
+    if( it == m_enum_symbols.end())
+        return false;
+
+    // Enum types with reference count 1 are only referenced by the factory, i.e., dead, and are
+    // not visible for users.
+    if( !is_alive( it->second.get())) {
+        unregister_enum_type( it);
+        return false;
+    }
+
+    return true;
+}
+
+bool Type_factory::is_alive_struct_type_and_unregister_dead_ones( const char* symbol)
+{
+    auto it = m_struct_symbols.find( symbol);
+    if( it == m_struct_symbols.end())
+        return false;
+
+    // Struct types with reference count 1 are only referenced by the factory, i.e., dead, and are
+    // not visible for users.
+    if( !is_alive( it->second.get())) {
+        unregister_struct_type( it);
+        return false;
+    }
+
+    return true;
+}
+
+bool Type_factory::is_alive( const IStruct_category* struct_category)
+{
+    return (struct_category->retain(), struct_category->release()) > 1;
+}
+
+bool Type_factory::is_alive( const IType_enum* type)
+{
+    return (type->retain(), type->release()) > 1;
+}
+
+bool Type_factory::is_alive( const IType_struct* type)
+{
+    return (type->retain(), type->release()) > 1;
 }
 
 bool Type_factory::equivalent_struct_categories(

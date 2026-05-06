@@ -634,9 +634,9 @@ __device__ inline bool trace_sphere(
         // reuse memory for function data
         union
         {
-            Bsdf_sample_data                sample_data;
+            Bsdf_sample_data<>                sample_data;
             Bsdf_evaluate_data<DF_HSM_NONE> eval_data;
-            Bsdf_pdf_data                   pdf_data;
+            Bsdf_pdf_data<>                   pdf_data;
         };
 
         // initialize shared fields

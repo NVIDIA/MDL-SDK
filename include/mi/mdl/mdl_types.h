@@ -63,6 +63,8 @@ public:
         TK_MATRIX,                  ///< A matrix type.
         TK_ARRAY,                   ///< An array type.
         TK_COLOR,                   ///< The color type.
+        TK_SPECTRAL_SAMPLE,         ///< The spectral sample type.
+        TK_SPECTRUM,                ///< The "full" spectrum type wrt state::wavelength_base.
         TK_FUNCTION,                ///< A function type.
         TK_STRUCT,                  ///< A struct type.
         TK_TEXTURE,                 ///< A texture type.
@@ -215,7 +217,7 @@ public:
     enum Predefined_id {
         EID_USER           = -1,  ///< This is a user defined enum type.
         EID_TEX_GAMMA_MODE = 0,   ///< This is the \c "::tex::gamma_mode" enum type.
-        EID_INTENSITY_MODE = 1,   ///< This is the MDL 1.1 \c "%::intensity_mode" enum type.
+        EID_INTENSITY_MODE = 1,   ///< This is the MDL 1.1 \c "::intensity_mode" enum type.
         EID_LAST           = EID_INTENSITY_MODE
     };
 
@@ -430,6 +432,28 @@ public:
     static Kind const s_kind = TK_COLOR;
 
     /// Get the type of the color (RGB or spectral) elements.
+    virtual IType_atomic const *get_element_type() const = 0;
+};
+
+/// The spectral sample type.
+class IType_spectral_sample : public IType_compound
+{
+public:
+    /// The kind of this subclass.
+    static Kind const s_kind = TK_SPECTRAL_SAMPLE;
+
+    /// Get the type of the spectral sample elements.
+    virtual IType_atomic const *get_element_type() const = 0;
+};
+
+/// The full spectrum type.
+class IType_spectrum : public IType_compound
+{
+public:
+    /// The kind of this subclass.
+    static Kind const s_kind = TK_SPECTRAL_SAMPLE;
+
+    /// Get the type of the spectrum elements.
     virtual IType_atomic const *get_element_type() const = 0;
 };
 
@@ -700,6 +724,8 @@ inline IType_compound *as<IType_compound>(IType *type) {
     case IType::TK_MATRIX:
     case IType::TK_ARRAY:
     case IType::TK_COLOR:
+    case IType::TK_SPECTRAL_SAMPLE:
+    case IType::TK_SPECTRUM:
     case IType::TK_STRUCT:
         return static_cast<IType_compound *>(type);
     default:
@@ -793,6 +819,8 @@ inline bool is<IType_compound>(IType const *type) {
     case IType::TK_MATRIX:
     case IType::TK_ARRAY:
     case IType::TK_COLOR:
+    case IType::TK_SPECTRAL_SAMPLE:
+    case IType::TK_SPECTRUM:
     case IType::TK_STRUCT:
         return true;
     default:
@@ -934,6 +962,12 @@ public:
 
     /// Create a new type color instance.
     virtual const IType_color *create_color() = 0;
+
+    /// Create a new type spectral sample instance.
+    virtual IType_spectral_sample const *create_spectral_sample() = 0;
+
+    /// Create a new type spectrum instance.
+    virtual IType_spectrum const *create_spectrum() = 0;
 
     /// A simple value helper class, a pair of an parameter type and name.
     struct Function_parameter {

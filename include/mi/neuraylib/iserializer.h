@@ -149,6 +149,9 @@ inline bool operator>=( const Tag& lhs, const Tag& rhs)
 }
 
 /// This value of the tag represents an invalid tag which can not be accessed.
+#if (__cplusplus >= 201703L)
+inline
+#endif
 const Tag NULL_TAG;
 
 /// All serializable objects have to be derived from this interface.

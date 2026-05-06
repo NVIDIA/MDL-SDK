@@ -92,7 +92,9 @@ create_unit_test_template(NAME test_set_get)
 create_unit_test_template(NAME test_types)
 create_unit_test_template(NAME test_types_array)
 create_unit_test_template(NAME test_types_compound)
+create_unit_test_template(NAME test_types_enum)
 create_unit_test_template(NAME test_types_map)
+create_unit_test_template(NAME test_types_structure)
 
 # add unit tests via Python scripts
 target_add_tool_dependency(TARGET prod-lib-mdl_sdk-test_types_at_api_boundary TOOL python)

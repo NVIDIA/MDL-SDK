@@ -33,7 +33,6 @@
 #include <iomanip>
 #include <numeric>
 #include <set>
-#include <sstream>
 
 #include <base/data/db/i_db_element.h>
 #include <base/data/sched/i_sched.h>
@@ -111,7 +110,7 @@ Info_impl::Info_impl(
     m_tag( tag),
     m_scope( scope),
     m_references( std::move( references)),
-    m_transaction( transaction),
+    m_state_and_visibility( transaction->get_state_and_visibility()),
     m_privacy_level( privacy_level)
 {
     MI_ASSERT( m_references.find( m_tag) == m_references.end());
@@ -130,7 +129,7 @@ Info_impl::Info_impl(
     m_job( job),
     m_tag( tag),
     m_scope( scope),
-    m_transaction( transaction),
+    m_state_and_visibility( transaction->get_state_and_visibility()),
     m_privacy_level( privacy_level),
     m_temporary( temporary)
 {
@@ -144,7 +143,7 @@ Info_impl::Info_impl(
   : Info_base( scope->get_id(), transaction->get_id(), version),
     m_tag( tag),
     m_scope( scope),
-    m_transaction( transaction),
+    m_state_and_visibility( transaction->get_state_and_visibility()),
     m_privacy_level( scope->get_level()),
     m_removal( true)
 {
@@ -214,50 +213,61 @@ void Info_impl::set_element_from_job_execution( DB::Element_base* element, DB::T
 namespace {
 
 /// Indicates whether the transaction has been committed.
-bool is_committed( const Transaction_impl_ptr& transaction)
+bool is_committed( const State_and_visibility_ptr& state_and_visibility)
 {
-    return transaction && (transaction->get_state() == Transaction_impl::COMMITTED);
+    return state_and_visibility && (state_and_visibility->m_state == Transaction_impl::COMMITTED);
 }
 
 /// Indicates whether the transaction has been aborted.
-bool is_aborted( const Transaction_impl_ptr& transaction)
+bool is_aborted( const State_and_visibility_ptr& state_and_visibility)
 {
-    return transaction && (transaction->get_state() == Transaction_impl::ABORTED);
+    return state_and_visibility && (state_and_visibility->m_state == Transaction_impl::ABORTED);
+}
+
+/// Indicates whether changes from a particular transaction are visible for transaction \p id.
+///
+/// \param creator_id             Transaction ID of the creator transaction.
+/// \param state_and_visibility   State and visibility of the creator transaction.
+/// \param id                     Are the changes visible in this transaction?
+///
+/// \note This method considers only the creation/commit sequence and states. It completely
+///       ignores the corresponding scopes.
+bool is_visible_for(
+    DB::Transaction_id creator_id,
+    const State_and_visibility_ptr& state_and_visibility,
+    DB::Transaction_id id)
+{
+    MI_ASSERT( state_and_visibility);
+
+    if( id == creator_id)
+        return true;
+
+    return (state_and_visibility->m_state == Transaction_impl::COMMITTED)
+        && (state_and_visibility->m_id <= id);
 }
 
 /// Indicates whether two transactions definitely have the same visibility.
 ///
 /// Assumes that globally visible transactions have already been cleared.
 ///
-/// Note that the computation based on the visibility ID is an approximation and the method errs
+/// Note that the computation based on the visibility is an approximation and the method errs
 /// on the safe side for GC purposes. It returns \c true if both transaction definitely have the
 /// same visibility. It might return \c false if the visibility is indeed identical, but this
 /// cannot be determined due to the approximation scheme.
-bool same_visibility( const Transaction_impl_ptr& lhs, const Transaction_impl_ptr& rhs)
+bool same_visibility(
+    const State_and_visibility_ptr& lhs, const State_and_visibility_ptr& rhs)
 {
-    // Indistinguishable transactions have same visibility (either identical IDs, or both globally
-    // visible).
-    if( lhs == rhs)
+    // Transactions which are globally visible have same visibility.
+    if( !lhs && !rhs)
         return true;
 
-    // The visibility is different if exactly one transaction is globally visible.
+    // Transactions with different global visibility have different visibility.
     if( !!lhs ^ !!rhs)
         return false;
 
-    // If one of them is still open (or both, but not identical), then the visibility is different.
+    // Check for identical/equal visibility information.
     MI_ASSERT( !!lhs && !!rhs);
-    Transaction_impl::State lhs_state = lhs->get_state();
-    Transaction_impl::State rhs_state = rhs->get_state();
-    if( lhs_state == Transaction_impl::OPEN || rhs_state == Transaction_impl::OPEN)
-        return false;
-
-    // Both transaction have been committed, i.e., the visibility ID has been set correctly.
-    MI_ASSERT( lhs_state == Transaction_impl::COMMITTED);
-    MI_ASSERT( rhs_state == Transaction_impl::COMMITTED);
-
-    // Compare visibility IDs (Could be improved by replacing each visibility ID by the lowest open
-    // transaction larger than or equal to that visibility ID.)
-    return lhs->get_visibility_id() == rhs->get_visibility_id();
+    return *lhs == *rhs;
 }
 
 /// Indicates whether the info is a removal info.
@@ -353,8 +363,8 @@ Info_impl* lookup_info(
             }
 
             // Check whether the info is visible for all open (and future) transactions.
-            const Transaction_impl_ptr& creator_transaction = it->get_transaction();
-            if( !creator_transaction) {
+            State_and_visibility_ptr state_and_visibility = it->get_state_and_visibility();
+            if( !state_and_visibility) {
                 // Visible local removal infos hide any previous infos in that scope.
                 if( is_local_removal( it))
                      break;
@@ -364,11 +374,10 @@ Info_impl* lookup_info(
                 return & *it;
             }
 
-            // Check whether the info is from an aborted transaction (those can never be found).
-            // With a synchronous garbage collection those infos should actually never survive the
-            // lock unless the user incorrectly pins them while aborting the transaction.
-            if( creator_transaction->get_state() == Transaction_impl::ABORTED) {
-                MI_ASSERT( !"Found info from aborted transaction");
+            // Check whether the info is from an aborted transaction. With a synchronous garbage
+            // collection these infos can only survive the GC collection if the GC period is
+            // larger than 1 or the user incorrectly pins them while aborting the transaction.
+            if( state_and_visibility->m_state == Transaction_impl::ABORTED) {
                 if( it == infos.begin())
                     break;
                 --it;
@@ -376,7 +385,8 @@ Info_impl* lookup_info(
             }
 
             // Check whether the info is visible for the given transaction ID.
-            if( creator_transaction->is_visible_for( transaction_id)) {
+            DB::Transaction_id creator_id = it->get_transaction_id();
+            if( is_visible_for( creator_id, state_and_visibility, transaction_id)) {
                 // Visible local removal infos hide any previous infos in that scope.
                 if( is_local_removal( it))
                      break;
@@ -395,6 +405,59 @@ Info_impl* lookup_info(
     }
 
     return nullptr;
+}
+
+/// Looks up a global removal info.
+///
+/// \param infos              The intrusive set to use for the look up.
+/// \param transaction_id     The transaction ID looking up the info.
+/// \return                   Returns \c true if a global removal info was found,
+///                           \c false otherwise.
+template <class T>
+bool lookup_global_removal_info( T& infos, DB::Transaction_id transaction_id)
+{
+    // Global removal infos are always in the global scope.
+    DB::Scope_id scope_id = 0;
+
+    auto it = find_less_or_equal( infos, scope_id, transaction_id, ~0U);
+    if( it == infos.end())
+        return false;
+
+    while( it->get_scope_id() == scope_id) {
+
+        // Check whether the info is visible for all open (and future) transactions.
+        State_and_visibility_ptr state_and_visibility = it->get_state_and_visibility();
+        if( !state_and_visibility) {
+            if( is_global_removal( it))
+                return true;
+            if( it == infos.begin())
+                break;
+            --it;
+            continue;
+        }
+
+        // Check whether the info is from an aborted transaction. With a synchronous garbage
+        // collection these infos can only survive the GC collection if the GC period is
+        // larger than 1 or the user incorrectly pins them while aborting the transaction.
+        if( state_and_visibility->m_state == Transaction_impl::ABORTED) {
+            if( it == infos.begin())
+                break;
+            --it;
+            continue;
+        }
+
+        // Check whether the info is visible for the given transaction ID.
+        DB::Transaction_id creator_id = it->get_transaction_id();
+        if( is_visible_for( creator_id, state_and_visibility, transaction_id))
+            if( is_global_removal( it))
+                return true;
+
+        if( it == infos.begin())
+            break;
+        --it;
+    }
+
+    return false;
 }
 
 } // namespace IMPL
@@ -440,6 +503,11 @@ Info_impl* Infos_per_tag::lookup_info(
     DB::Scope* scope, DB::Transaction_id transaction_id, DB::Privacy_level* level_found)
 {
     return IMPL::lookup_info( m_infos, scope, transaction_id, level_found);
+}
+
+bool Infos_per_tag::lookup_global_removal_info( DB::Transaction_id transaction_id)
+{
+    return IMPL::lookup_global_removal_info( m_infos, transaction_id);
 }
 
 void Infos_per_tag::set_removed()
@@ -632,6 +700,7 @@ Info_manager::Info_manager( Database_impl* database)
 {
     SYSTEM::Access_module<CONFIG::Config_module> config_module( false);
     const CONFIG::Config_registry& registry = config_module->get_configuration();
+
     std::string gc_method;
     if( registry.get_value( "dblight_gc_method", gc_method)) {
         if( gc_method == "full_sweeps_only")
@@ -644,10 +713,27 @@ Info_manager::Info_manager( Database_impl* database)
             LOG::mod_log->error( M_DB, LOG::Mod_log::C_DATABASE,
                 R"(Invalid value "%s" for debug option "dblight_gc_method".)", gc_method.c_str());
     }
+    if( m_gc_method != GC_GENERAL_CANDIDATES_THEN_PIN_COUNT_ZERO)
+        LOG::mod_log->info( M_DB, LOG::Mod_log::C_DATABASE,
+            "GC method set to %s.", gc_method.c_str());
+
+    CONFIG::update_value( registry, "dblight_gc_period", m_gc_period);
+    if( m_gc_period != 1)
+        LOG::mod_log->info( M_DB, LOG::Mod_log::C_DATABASE,
+            "GC period set to %zu.", m_gc_period);
+
+    CONFIG::update_value( registry, "dblight_gc_interval", m_gc_interval);
+    if( m_gc_interval != 1.0)
+        LOG::mod_log->info( M_DB, LOG::Mod_log::C_DATABASE,
+            "GC interval set to %lf.", m_gc_interval);
 }
 
 Info_manager::~Info_manager()
 {
+    THREAD::Block block( &m_database->get_lock());
+
+    garbage_collection( /*force*/ true, /*update_lowest_open_transaction_ids*/ false);
+
     // Check that there are no GC candidates left, otherwise the GC might have missed something.
     MI_ASSERT( m_gc_candidates_general.empty());
     MI_ASSERT( m_gc_candidates_pin_count_zero.empty());
@@ -692,20 +778,18 @@ void Info_manager::store(
     increment_pin_counts( references);
 
     // Create info (destroys references).
-    auto* info = new Info_impl(
-        element, scope, transaction, version, tag, privacy_level, references);
+    auto info = make_ptr_no_add_ref( new Info_impl(
+        element, scope, transaction, version, tag, privacy_level, references));
 
     // Insert info into the sets of infos for that tag/name/scope.
-    infos_per_tag->insert_info( info);
+    infos_per_tag->insert_info( info.get());
     if( infos_per_name)
-        infos_per_name->insert_info( info);
-    scope->insert_info( info);
+        infos_per_name->insert_info( info.get());
+    scope->insert_info( info.get());
 
     // Consider tag as a candidate for garbage collection.
     if( m_gc_method == GC_GENERAL_CANDIDATES_THEN_PIN_COUNT_ZERO)
         m_gc_candidates_general.insert( tag);
-
-    info->unpin();
 }
 
 void Info_manager::store(
@@ -740,19 +824,18 @@ void Info_manager::store(
     }
 
     // Create info.
-    auto* info = new Info_impl( job, scope, transaction, version, tag, privacy_level, temporary);
+    auto info = make_ptr_no_add_ref(
+        new Info_impl( job, scope, transaction, version, tag, privacy_level, temporary));
 
     // Insert info into the sets of infos for that tag/name/scope.
-    infos_per_tag->insert_info( info);
+    infos_per_tag->insert_info( info.get());
     if( infos_per_name)
-        infos_per_name->insert_info( info);
-    scope->insert_info( info);
+        infos_per_name->insert_info( info.get());
+    scope->insert_info( info.get());
 
     // Consider tag as a candidate for garbage collection.
     if( m_gc_method == GC_GENERAL_CANDIDATES_THEN_PIN_COUNT_ZERO)
         m_gc_candidates_general.insert( tag);
-
-    info->unpin();
 }
 
 void Info_manager::store(
@@ -884,58 +967,47 @@ bool Info_manager::remove(
     Infos_per_name* ipn = nullptr;
     if( is_global_removal) {
 
-        // Prevent double global removals (still counts as successful request).
-        if( ipt->get_is_removed())
-            return true;
-
         // Make sure that global removals are recorded as such.
         if( scope->get_id() != 0)
             scope = static_cast<Scope_impl*>( m_database->get_scope_manager()->lookup_scope( 0));
 
     } else {
 
-        Info_impl* info = ipt->lookup_info( scope, transaction->get_id());
+        auto info = make_ptr_no_add_ref<Info_impl>(
+            ipt->lookup_info( scope, transaction->get_id()));
         if( !info)
             return false;
 
         // Reject local removals without a version in the current scope.
-        if( info->get_scope_id() != scope->get_id()) {
-            info->unpin();
+        if( info->get_scope_id() != scope->get_id())
             return false;
-        }
 
         ipn = info->get_infos_per_name();
-        info->unpin();
+        info.reset();
 
         // Reject local removals without another version in a more global scope (otherwise we can
         // end up with invalid tag references).
         auto* parent_scope = static_cast<Scope_impl*>( scope->get_parent());
-        Info_impl* parent_info = ipt->lookup_info( parent_scope, transaction->get_id());
+        auto parent_info = make_ptr_no_add_ref<Info_impl>(
+            ipt->lookup_info( parent_scope, transaction->get_id()));
         if( !parent_info)
             return false;
-
-        parent_info->unpin();
     }
 
     // Create removal info.
-    auto* info = new Info_impl( scope, transaction, version, tag);
+    auto info = make_ptr_no_add_ref( new Info_impl( scope, transaction, version, tag));
 
     // Insert info into the sets of infos for that tag/scope (name only for local removals and if
     // present).
-    ipt->insert_info( info);
-    scope->insert_info( info);
+    ipt->insert_info( info.get());
+    scope->insert_info( info.get());
     if( ipn)
-        ipn->insert_info( info);
+        ipn->insert_info( info.get());
 
     // Consider tag as a candidate for garbage collection.
     if( m_gc_method == GC_GENERAL_CANDIDATES_THEN_PIN_COUNT_ZERO)
         m_gc_candidates_general.insert( tag);
 
-    // Prevent double global removals.
-    if( is_global_removal)
-        ipt->set_removed();
-
-    info->unpin();
     return true;
 }
 
@@ -945,11 +1017,14 @@ void Info_manager::consider_tag_for_gc( DB::Tag tag)
         m_gc_candidates_general.insert( tag);
 }
 
-void Info_manager::garbage_collection( bool update_lowest_open_transaction_ids)
+void Info_manager::garbage_collection( bool force, bool update_lowest_open_transaction_ids)
 {
     Statistics_helper helper( g_garbage_collection);
 
     m_database->get_lock().check_is_owned();
+
+    if( !do_run_garbage_collection( force))
+        return;
 
     if( update_lowest_open_transaction_ids)
         m_database->get_scope_manager()->update_lowest_open_transaction_ids();
@@ -1065,7 +1140,8 @@ mi::Uint32 Info_manager::get_tag_reference_count( DB::Tag tag)
     return ipt->get_pin_count();
 }
 
-bool Info_manager::get_tag_is_removed( DB::Tag tag)
+bool Info_manager::get_tag_is_removed(
+    DB::Tag tag, DB::Scope* scope, DB::Transaction_id transaction_id)
 {
     m_database->get_lock().check_is_owned_shared_or_exclusive();
 
@@ -1074,7 +1150,13 @@ bool Info_manager::get_tag_is_removed( DB::Tag tag)
     if( !ipt)
         return false;
 
-    return ipt->get_is_removed();
+    if( ipt->get_is_removed())
+        return true;
+
+    if( ipt->lookup_global_removal_info( transaction_id))
+        return true;
+
+    return false;
 }
 
 namespace {
@@ -1086,12 +1168,12 @@ std::ostream& operator<<( std::ostream& s, const DB::Tag_set& tag_set)
         ordered_tag_set.insert( item);
 
     bool first = true;
-    s << "{";
+    s << '{';
 
     for( const auto& tag: ordered_tag_set) {
         if( !first)
-            s << ",";
-        s << " " << tag();
+            s << ',';
+        s << ' ' << tag();
         first = false;
     }
 
@@ -1111,22 +1193,28 @@ void dump( std::ostream& s, bool mask_pointer_values, const Infos_per_name* ipn,
     size_t j2 = 0;
     for( const auto& i: ipn_set) {
 
-        s << "    Index " << j2++;
+        s << "    Index " << j1 << "/" << j2++;
         if( !mask_pointer_values)
             s << " at " << &i;
         s << ": ";
         s << "scope ID = " << i.get_scope_id() << ", ";
         // Omit the scope pointer. With a correct synchronous GC the cleared state should never be
         // visible from the outside.
-        s << "transaction ID = " << i.get_transaction_id()();
-        const auto& t = i.get_transaction();
-        if( !t)
-            s << " (cleared)";
-        else if( mask_pointer_values)
-            s << " (set)";
-        else
-            s << " (" << t.get() << ")";
+        s << "creator transaction ID = " << i.get_transaction_id()();
         s << ", version = " << i.get_version();
+        const auto& state_and_visibility = i.get_state_and_visibility();
+        s << ", creator transaction state = ";
+        if( !state_and_visibility)
+            s << "COMMITTED";
+        else
+            s << state_and_visibility->m_state;
+        s << ", visibility ID = ";
+        if( !state_and_visibility)
+            s << "(globally visible)";
+        else if (state_and_visibility->m_state == Transaction_impl::COMMITTED)
+            s << state_and_visibility->m_id.get_uint();
+        else
+            s << "(current transaction only)";
         s << ", pin count = " << i.get_pin_count();
         s << ", tag = " << i.get_tag()();
         s << ", privacy level = " << static_cast<mi::Uint32>( i.get_privacy_level());
@@ -1180,22 +1268,28 @@ void dump( std::ostream& s, bool mask_pointer_values, const Infos_per_tag* ipt, 
         const char* name = i.get_name();
         std::string name_str = name ? (std::string( "\"") + name + "\"") : "(null)";
 
-        s << "    Index " << j2++;
+        s << "    Index " << j1 << "/" << j2++;
         if( !mask_pointer_values)
             s << " at " << &i;
         s << ": ";
         s << "scope ID = " << i.get_scope_id() << ", ";
         // Omit the scope pointer. With a correct synchronous GC the cleared state should never be
         // visible from the outside.
-        s << "transaction ID = " << i.get_transaction_id()();
-        const auto& t = i.get_transaction();
-        if( !t)
-            s << " (cleared)";
-        else if( mask_pointer_values)
-            s << " (set)";
-        else
-            s << " (" << t.get() << ")";
+        s << "creator transaction ID = " << i.get_transaction_id()();
         s << ", version = " << i.get_version();
+        const auto& state_and_visibility = i.get_state_and_visibility();
+        s << ", creator transaction state = ";
+        if( !state_and_visibility)
+            s << "COMMITTED";
+        else
+            s << state_and_visibility->m_state;
+        s << ", visibility ID = ";
+        if( !state_and_visibility)
+            s << "(globally visible)";
+        else if (state_and_visibility->m_state == Transaction_impl::COMMITTED)
+            s << state_and_visibility->m_id.get_uint();
+        else
+            s << "(current transaction only)";
         s << ", pin count = " << i.get_pin_count();
         s << ", tag = " << i.get_tag()();
         s << ", privacy level = " << static_cast<mi::Uint32>( i.get_privacy_level());
@@ -1265,8 +1359,7 @@ void Info_manager::dump( std::ostream& s, bool verbose, bool mask_pointer_values
             names.insert( ipn.first);
         for( const auto& name: names)
             DBLIGHT::dump( s, mask_pointer_values, m_infos_by_name[name], j1++);
-        if( !m_infos_by_name.empty())
-            s << std::endl;
+        s << std::endl;
     }
 
     s << "Count of infos by distinct tags: " << m_infos_by_tag.size() << std::endl;
@@ -1276,31 +1369,13 @@ void Info_manager::dump( std::ostream& s, bool verbose, bool mask_pointer_values
         auto dump_as_lambda = [&s, mask_pointer_values, &j1]( Infos_per_tag* ipt)
         { DBLIGHT::dump( s, mask_pointer_values, ipt, j1++); };
         m_infos_by_tag.apply( dump_as_lambda);
-        if( !m_infos_by_tag.empty())
-            s << std::endl;
+        s << std::endl;
     }
 
-    std::map<SERIAL::Class_id, size_t> counts;
-    auto count_as_lambda = [&s, &counts]( Infos_per_tag* ipt)
-    {
-        for( const Info_impl& info: ipt->get_infos()) {
-            DB::Element_base* element = info.get_element();
-            if( element) {
-                SERIAL::Class_id class_id = element->get_class_id();
-                ++counts[class_id];
-            }
-            SCHED::Job_base* job = info.get_job();
-            if( job) {
-                SERIAL::Class_id class_id = job->get_class_id();
-                ++counts[class_id];
-            }
-        }
-    };
-    m_infos_by_tag.apply( count_as_lambda);
-
+    Statistics stats;
     size_t sum_count = 0;
-    for( const auto& count: counts)
-        sum_count += count.second;
+    size_t sum_sizes = 0;
+    get_statistics( stats, sum_count, sum_sizes);
 
     s << "Count of all infos: " << sum_count << std::endl;
     s << "Count of infos by class IDs:" << std::endl;
@@ -1308,9 +1383,9 @@ void Info_manager::dump( std::ostream& s, bool verbose, bool mask_pointer_values
     std::ios old_state( nullptr);
     old_state.copyfmt( s);
 
-    for( const auto& entry: counts) {
-        s << std::setbase( 10) << std::noshowbase << std::setfill( ' ') << std::setw( 6);
-        s << entry.second << " ";
+    for( const auto& entry: stats) {
+        s << std::setbase( 10) << std::noshowbase << std::setfill( ' ') << std::setw( 5);
+        s << entry.second.m_count << "   ";
         s << std::setbase( 16) << std::showbase << std::setfill( '0') << std::setw( 10);
         s << entry.first << " ";
         s << decode_class_id( entry.first) << std::endl;
@@ -1318,6 +1393,263 @@ void Info_manager::dump( std::ostream& s, bool verbose, bool mask_pointer_values
     s.copyfmt( old_state);
 
     s << std::endl;
+}
+
+bool Info_manager::do_run_garbage_collection( bool force)
+{
+    if( force) {
+        m_gc_counter = 0;
+        if( m_gc_period > 1)
+            m_gc_last_timestamp = std::chrono::system_clock::now();
+        return true;
+    }
+
+    if( ++m_gc_counter >= m_gc_period) {
+        m_gc_counter = 0;
+        if( m_gc_period > 1)
+            m_gc_last_timestamp = std::chrono::system_clock::now();
+        return true;
+    }
+
+    std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
+    double interval = std::chrono::duration<double>( now - m_gc_last_timestamp).count();
+    if( interval >  m_gc_interval) {
+        m_gc_counter = 0;
+        m_gc_last_timestamp = now;
+        return true;
+    }
+
+    return false;
+}
+
+void Info_manager::dump_html_tags( std::ostream& s, const Html_context& context)
+{
+    m_database->get_lock().check_is_owned_shared_or_exclusive();
+
+    s << "<div>Number of different tags: " << m_infos_by_tag.size() << "</div>\n";
+    s << "<p></p>\n";
+
+    s << "<table border cellspacing=0 cellpadding=5>\n";
+    s << "<tr>\n";
+    s << "<th>Tag</th>\n";
+    s << "<th># Infos</th>\n";
+    s << "<th>Ref. count</th>\n";
+    s << "<th>Removed</th>\n";
+    s << "</tr>\n";
+
+    auto dump_as_lambda = [&s, &context]( Infos_per_tag* ipt)
+    {
+        s << "<tr>\n";
+        s << "<td align=right><a href=\"" << context.m_tag_url_prefix << ipt->get_tag()() << "\">";
+        s << ipt->get_tag()();
+        s << "</a></td>\n";
+        s << "<td align=right>"  << ipt->get_infos().get_size() << "</td>\n";
+        s << "<td align=right>"  << ipt->get_pin_count() << "</td>\n";
+        s << "<td align=center>" << to_yes_no( ipt->get_is_removed()) << "</td>\n";
+        s << "</tr>\n";
+    };
+
+    m_infos_by_tag.apply( dump_as_lambda);
+
+    s << "</table>\n";
+}
+
+void Info_manager::dump_html_names( std::ostream& s, const Html_context& context)
+{
+    m_database->get_lock().check_is_owned_shared_or_exclusive();
+
+    s << "<div>Number of different names: " << m_infos_by_name.size() << "</div>\n";
+    s << "<p></p>\n";
+
+    s << "<table border cellspacing=0 cellpadding=5>\n";
+    s << "<tr>\n";
+    s << "<th>Name</th>\n";
+    s << "<th># Infos</th>\n";
+    s << "</tr>\n";
+
+    std::set<std::string> names;
+    for( const auto& ipn: m_infos_by_name)
+        names.insert( ipn.first);
+
+    for( const auto& name: names) {
+        std::string name_html = context.m_html_encoder( name);
+        std::string name_url  = context.m_name_url_prefix + context.m_url_encoder( name);
+        s << "<tr>\n";
+        s << "<td><a href=\"" << name_url << "\">" << name_html << "</a></td>\n";
+        s << "<td align=right>" << m_infos_by_name[name]->get_infos().get_size() << "</td>\n";
+        s << "</tr>\n";
+    };
+
+    s << "</table>\n";
+}
+
+void Info_manager::dump_html_tag( std::ostream& s, const Html_context& context, DB::Tag tag)
+{
+    m_database->get_lock().check_is_owned_shared_or_exclusive();
+
+    Infos_per_tag* infos_per_tag = m_infos_by_tag.find( tag);
+    if( !infos_per_tag) {
+        s << "<p>No such tag</p>\n";
+        return;
+    }
+
+    const auto& infos = infos_per_tag->get_infos();
+
+    s << "<div>Number of versions: " << infos.size() << "</div>\n";
+    s << "<div>Pin count: " << infos_per_tag->get_pin_count() << "</div>\n";
+    s << "<div>Removed: " << to_yes_no( infos_per_tag->get_is_removed()) << "</div>\n";
+
+    s << "<h2>Versions</h2>\n";
+    bool add_tag = false;
+    dump_html_info_header( s, context, add_tag);
+    for( const auto& info: infos)
+        dump_html_info( s, context, info, add_tag);
+    s << "</table>\n";
+
+    DB::Tag_set reverse_refs = get_reverse_references( tag);
+
+    s << "<h2>Reverse references</h2>\n";
+    s << "<table border cellspacing=0 cellpadding=5>\n";
+    s << "<tr>\n";
+    s << "<th>Count</th>\n";
+    s << "<th>Reverse references</th>\n";
+    s << "</tr>\n";
+    s << "<tr>\n";
+    s << "<td>" << reverse_refs.size() << "</td>\n";
+    s << "<td>\n";
+    dump_html_tag_set( s, context, reverse_refs);
+    s << "</td>\n";
+    s << "</tr>\n";
+    s << "</table>\n";
+}
+
+void Info_manager::dump_html_name(
+    std::ostream& s, const Html_context& context, const std::string& name)
+{
+    m_database->get_lock().check_is_owned_shared_or_exclusive();
+
+    Infos_by_name::iterator it = m_infos_by_name.find( name);
+    if( it == m_infos_by_name.end()) {
+        s << "<p>No such name</p>\n";
+        return;
+    }
+
+    const auto& infos = it->second->get_infos();
+
+    s << "<div>Number of versions: " << infos.size() << "</div>\n";
+
+    s << "<h2>Versions</h2>\n";
+    bool add_tag = true;
+    dump_html_info_header( s, context, add_tag);
+    for( const auto& info: infos)
+        dump_html_info( s, context, info, add_tag);
+    s << "</table>\n";
+}
+
+void Info_manager::dump_html_garbage_collection( std::ostream& s, const Html_context& context)
+{
+    m_database->get_lock().check_is_owned_shared_or_exclusive();
+
+    s << "<table border cellspacing=0 cellpadding=5>\n";
+    s << "<tr>\n";
+    s << "<th>Setting</th>\n";
+    s << "<th>Value</th>\n";
+    s << "</tr>\n";
+
+    dump_html_string_setting( s, "GC method", context.m_html_encoder( get_gc_method_str()));
+    dump_html_size_t_setting( s, "GC period", m_gc_period);
+    dump_html_size_t_setting( s, "GC counter", m_gc_counter);
+
+    std::ios old_state( nullptr);
+    old_state.copyfmt( s);
+    s << std::fixed << std::setprecision( 1);
+    dump_html_double_setting( s, "GC interval", m_gc_interval, " s");
+    s.copyfmt( old_state);
+
+    s << "</table>\n";
+    s << "<p></p>\n";
+
+    s << "<table border cellspacing=0 cellpadding=5>\n";
+    s << "<tr>\n";
+    s << "<th>Count</th>\n";
+    s << "<th>Candidates general</th>\n";
+    s << "</tr>\n";
+    s << "<tr>\n";
+    s << "<td>" << m_gc_candidates_general.size() << "</td>\n";
+    s << "<td>";
+    dump_html_tag_set( s, context, m_gc_candidates_general);
+    s << "</td>\n";
+    s << "</tr>\n";
+    s << "</table>\n";
+    s << "<p></p>\n";
+
+    s << "<table border cellspacing=0 cellpadding=5>\n";
+    s << "<tr>\n";
+    s << "<th>Count</th>\n";
+    s << "<th>Candidates pin count zero</th>\n";
+    s << "</tr>\n";
+    s << "<tr>\n";
+    s << "<td>" << m_gc_candidates_pin_count_zero.size() << "</td>\n";
+    s << "<td>";
+    dump_html_tag_set( s, context, m_gc_candidates_pin_count_zero);
+    s << "</td>\n";
+    s << "</tr>\n";
+    s << "</table>\n";
+}
+
+void Info_manager::dump_html_statistics( std::ostream& s, const Html_context& context)
+{
+    m_database->get_lock().check_is_owned_shared_or_exclusive();
+
+    Statistics stats;
+    size_t sum_count = 0;
+    size_t sum_sizes = 0;
+    get_statistics( stats, sum_count, sum_sizes);
+
+    s << "<table border cellspacing=0 cellpadding=5>\n";
+    s << "<tr>\n";
+    s << "<th>Count</th>\n";
+    s << "<th>Avg Size</th>\n";
+    s << "<th>Total Size</th>\n";
+    s << "<th>Class ID</th>\n";
+    s << "</tr>\n";
+
+    std::ios old_state( nullptr);
+    old_state.copyfmt( s);
+
+    for( const auto& entry: stats) {
+        size_t avg_size   = (entry.second.m_size/entry.second.m_count + 512) / 1024;
+        size_t total_size = (entry.second.m_size + 512) / 1024;
+        s << "<tr>\n";
+        s << std::setbase( 10) << std::noshowbase ;
+        s << "<td align=right>" << entry.second.m_count << "</td>\n";
+        s << std::setbase( 10) << std::noshowbase;
+        s << "<td align=right>" << avg_size << " kB</td>\n";
+        s << std::setbase( 10) << std::noshowbase;
+        s << "<td align=right>" << total_size << " kB</td>\n";
+        s << "<td>";
+        s << std::setbase( 16) << std::showbase << std::setfill( '0') << std::setw( 10);
+        s << entry.first;
+        s << std::setw( 0);
+        s << " " << context.m_html_encoder( decode_class_id( entry.first)) << "</td>\n";
+        s << "</tr>\n";
+    }
+
+    s << "<tr>\n";
+    s << std::setbase( 10) << std::noshowbase ;
+    s << "<td align=right>" << sum_count << "</td>\n";
+    s << std::setbase( 10) << std::noshowbase;
+    if( sum_count == 0) sum_count = 1;
+    s << "<td align=right>" << (sum_sizes/sum_count + 512) / 1024 << " kB</td>\n";
+    s << std::setbase( 10) << std::noshowbase;
+    s << "<td align=right>" << (sum_sizes + 512) / 1024 << " kB</td>\n";
+    s << std::setbase( 16) << std::showbase;
+    s << "<td>Total</td>\n";
+    s << "</tr>\n";
+
+    s << "</table>\n";
+
+    s.copyfmt( old_state);
 }
 
 void Info_manager::cleanup_tag_general( DB::Tag tag, bool& progress)
@@ -1346,15 +1678,24 @@ void Info_manager::cleanup_tag_general( DB::Tag tag, bool& progress)
         }
 
         // Erase infos from aborted transactions.
-        const Transaction_impl_ptr& transaction = current->get_transaction();
-        if( is_aborted( transaction)) {
+        const State_and_visibility_ptr& state_and_visibility = current->get_state_and_visibility();
+        if( is_aborted( state_and_visibility)) {
             current = cleanup_info( infos_per_tag, current);
             progress = true;
             continue;
         }
 
         // Erase temporary infos from committed transactions.
-        if( is_committed( transaction) && current->get_is_temporary()) {
+        bool committed = is_committed( state_and_visibility);
+        if( committed && current->get_is_temporary()) {
+            current = cleanup_info( infos_per_tag, current);
+            progress = true;
+            continue;
+        }
+
+        // Erase infos from removed scopes.
+        Scope_impl* scope = current->get_scope();
+        if( !scope) {
             current = cleanup_info( infos_per_tag, current);
             progress = true;
             continue;
@@ -1365,37 +1706,31 @@ void Info_manager::cleanup_tag_general( DB::Tag tag, bool& progress)
         //
         // Note that the check for the committed state implies that it is not the lowest open
         // transaction and is required to rule out the ID equality check in is_visible_for().
-        Scope_impl* scope = current->get_scope();
-        DB::Transaction_id lowest_open_id;
-        if( scope)
-            lowest_open_id = scope->get_lowest_open_transaction_id();
-        bool globally_visible = !transaction || !scope
-            || (is_committed( transaction) && transaction->is_visible_for( lowest_open_id));
+        DB::Transaction_id creator_id = current->get_transaction_id();
+        DB::Transaction_id lowest_open_id = scope->get_lowest_open_transaction_id();
+        bool globally_visible = !state_and_visibility
+            || (committed && is_visible_for( creator_id, state_and_visibility, lowest_open_id));
 
-        // Clear creator transaction for infos that are globally visible. This is required to
-        // eventually release the transaction, but does not count as GC progress w.r.t. the infos.
-        if( transaction) {
+        // Clear creator transaction for infos that are globally visible. This is just book-keeping
+        // and does not count as GC progress w.r.t. the infos.
+        if( state_and_visibility) {
             if( globally_visible) {
-                current->clear_transaction();
-                MI_ASSERT( !transaction);
+                current->release_state_and_visiblity();
+                MI_ASSERT( !state_and_visibility);
             } else {
                 temporarily_skipped = true;
             }
         }
 
-        // Erase infos from removed scopes.
-        if( !current->get_scope()) {
-            current = cleanup_info( infos_per_tag, current);
-            progress = true;
-            continue;
-        }
-
         // Process globally visible removal infos.
         if( is_global_removal( current)) {
             if( globally_visible) {
-                mi::Uint32 pin_count = infos_per_tag->unpin();
-                if( (pin_count == 0) && (m_gc_method != GC_FULL_SWEEPS_ONLY))
-                    m_gc_candidates_pin_count_zero.insert( tag);
+                if( !infos_per_tag->get_is_removed()) {
+                    infos_per_tag->set_removed();
+                    mi::Uint32 pin_count = infos_per_tag->unpin();
+                    if( (pin_count == 0) && (m_gc_method != GC_FULL_SWEEPS_ONLY))
+                        m_gc_candidates_pin_count_zero.insert( tag);
+                }
                 current = cleanup_info( infos_per_tag, current);
                 progress = true;
                 continue;
@@ -1448,13 +1783,15 @@ void Info_manager::cleanup_tag_general( DB::Tag tag, bool& progress)
             // the same visibility, unless one of them is a global removal (which are processed
             // individually further up), the current info is a local removal (processed further
             // down in a different iteration of the loop), or the next info is temporary.
-            const Transaction_impl_ptr& current_transaction = current->get_transaction();
-            const Transaction_impl_ptr& next_transaction = next->get_transaction();
             if(    same_scope
                 && !is_removal( current)
                 && !is_global_removal( next)
                 && !next->get_is_temporary()) {
-                if(    same_visibility( current_transaction, next_transaction)
+
+                const auto& current_sav = current->get_state_and_visibility();
+                const auto& next_sav    = next->get_state_and_visibility();
+
+                if(    same_visibility( current_sav, next_sav)
                     && (current->get_pin_count() == 0)) {
                     current = cleanup_info( infos_per_tag, current);
                     progress = true;
@@ -1521,6 +1858,8 @@ void Info_manager::cleanup_tag_with_pin_count_zero( Infos_per_tag* infos_per_tag
 
     } else {
 
+        if( m_gc_method != GC_FULL_SWEEPS_ONLY)
+            m_gc_candidates_pin_count_zero.insert( tag);
         progress = false;
 
     }
@@ -1586,6 +1925,188 @@ void Info_manager::decrement_pin_counts( const DB::Tag_set& tag_set, bool from_g
         if( (pin_count == 0) && (m_gc_method != GC_FULL_SWEEPS_ONLY))
             m_gc_candidates_pin_count_zero.insert( tag);
     }
+}
+
+void Info_manager::get_statistics( Statistics& stats, size_t& sum_count, size_t& sum_sizes) const
+{
+    m_database->get_lock().check_is_owned_shared_or_exclusive();
+
+    stats.clear();
+
+    auto get_stats = [&stats]( Infos_per_tag* ipt)
+    {
+        for( const Info_impl& info: ipt->get_infos()) {
+            DB::Element_base* element = info.get_element();
+            if( element) {
+                SERIAL::Class_id class_id = element->get_class_id();
+                Count_and_size& cs = stats[class_id];
+                ++cs.m_count;
+                cs.m_size += element->get_size();
+            }
+            SCHED::Job_base* job = info.get_job();
+            if( job) {
+                SERIAL::Class_id class_id = job->get_class_id();
+                Count_and_size& cs = stats[class_id];
+                ++cs.m_count;
+                cs.m_size += job->get_size();
+            }
+        }
+    };
+    m_infos_by_tag.apply( get_stats);
+
+    sum_count = 0;
+    for( const auto& entry: stats)
+        sum_count += entry.second.m_count;
+
+    sum_sizes = 0;
+    for( const auto& entry: stats)
+        sum_sizes += entry.second.m_size;
+}
+
+void Info_manager::dump_html_info_header(
+    std::ostream& s, const Html_context& context, bool add_tag)
+{
+    s << "<table border cellspacing=0 cellpadding=5>\n";
+    s << "<tr>\n";
+    s << "<th>" << (add_tag ? "Tag" : "Name") << "</th>\n";
+    s << "<th>Class ID</th>\n";
+    s << "<th>Scope ID</th>\n";
+    s << "<th>Creator TX</th>\n";
+    s << "<th>Version</th>\n";
+    s << "<th>Creator TX State</th>\n";
+    s << "<th>Visibility ID</th>\n";
+    s << "<th>Pin count</th>\n";
+    s << "<th>Removed</th>\n";
+    s << "<th># Ref.</th>\n";
+    s << "<th>References</th>\n";
+    s << "</tr>\n";
+}
+
+
+void Info_manager::dump_html_info(
+    std::ostream& s, const Html_context& context, const Info_impl& info, bool add_tag)
+{
+    m_database->get_lock().check_is_owned_shared_or_exclusive();
+
+    DB::Tag tag = info.get_tag();
+
+    const char* name      = info.get_name();
+    std::string name_html = name ? context.m_html_encoder( name) : "-";
+    std::string name_url  = name ? context.m_url_encoder( name)  : "";
+
+    SERIAL::Class_id class_id = SERIAL::class_id_unknown;
+    if( info.get_element())
+        class_id = info.get_element()->get_class_id();
+    else if( info.get_job())
+        class_id = info.get_job()->get_class_id();
+
+    const State_and_visibility_ptr& sv = info.get_state_and_visibility();
+    std::ostringstream state;
+    if( !sv)
+        state << "COMMITTED";
+    else
+        state << sv->m_state;
+    std::string visibility;
+    if( !sv)
+        visibility = "(globally visible)";
+    else if( sv->m_state == Transaction_impl::OPEN)
+        visibility = "(transaction only)";
+    else
+        visibility = std::to_string( sv->m_id());
+
+    const DB::Tag_set& references = info.get_references();
+
+    s << "<tr>\n";
+    if( add_tag) {
+        s << "<td align=right>";
+        s << "<a href=\"" << context.m_tag_url_prefix << tag() << "\">" << tag() << "</a>";
+        s << "</td>\n";
+    } else if( name) {
+        s << "<td>";
+        s << "<a href=\"" << context.m_name_url_prefix << name_url << "\">" << name_html << "</a>";
+        s << "</td>\n";
+    } else
+        s << "<td>" << name_html << "</td>\n";
+
+    if( class_id != SERIAL::class_id_unknown) {
+        s << "<td>";
+        std::ios old_state( nullptr);
+        old_state.copyfmt( s);
+        s << std::setbase( 16) << std::showbase << std::setfill( '0') << std::setw( 10);
+        s << class_id;
+        s.copyfmt( old_state);
+        s  << " " << context.m_html_encoder( decode_class_id( class_id)) << "</td>\n";
+    } else {
+        s << "<td>-</td>\n";
+    }
+
+    s << "<td align=right>"  << info.get_scope_id() << "</td>\n";
+    s << "<td align=right>"  << info.get_transaction_id()() << "</td>\n";
+    s << "<td align=right>"  << info.get_version() << "</td>\n";
+    s << "<td align=center>" << state.str() << "</td>\n";
+    s << "<td align=right>"  << visibility << "</td>\n";
+    s << "<td align=right>"  << info.get_pin_count() << "</td>\n";
+    s << "<td align=center>" << to_yes_no( info.get_is_removal()) << "</td>\n";
+    s << "<td align=right>"  << references.size() << "</td>\n";
+
+    s << "<td>\n";
+    dump_html_tag_set( s, context, references);
+    s << "</td>\n";
+
+    s << "</tr>\n";
+}
+
+void Info_manager::dump_html_tag_set(
+    std::ostream& s, const Html_context& context, const DB::Tag_set& tag_set)
+{
+    if( tag_set.empty()) {
+        s << "-";
+        return;
+    }
+
+    std::set<DB::Tag> ordered_tag_set;
+    for( const auto& tag: tag_set)
+        ordered_tag_set.insert( tag);
+
+    for( const DB::Tag& tag: ordered_tag_set)
+        s << "<a href=\"" << context.m_tag_url_prefix << tag() << "\">" << tag() << "</a>\n";
+}
+
+DB::Tag_set Info_manager::get_reverse_references( DB::Tag tag) const
+{
+    m_database->get_lock().check_is_owned();
+
+    DB::Tag_set result;
+
+    auto get_reverse_refs = [&tag, &result]( Infos_per_tag* ipt)
+    {
+        for( const Info_impl& info: ipt->get_infos()) {
+            DB::Element_base* element = info.get_element();
+            if( !element)
+                continue;
+            const DB::Tag_set& references = info.get_references();
+            if( references.find( tag) != references.end()) {
+                result.insert( info.get_tag());
+                break;
+            }
+        }
+    };
+    m_infos_by_tag.apply( get_reverse_refs);
+
+    return result;
+}
+
+std::string Info_manager::get_gc_method_str() const
+{
+    switch( m_gc_method) {
+        case Info_manager::GC_FULL_SWEEPS_ONLY:
+            return "full_sweeps_only";
+        case Info_manager::GC_FULL_SWEEP_THEN_PIN_COUNT_ZERO:
+            return "full_sweep_then_pin_count_zero";
+        case Info_manager::GC_GENERAL_CANDIDATES_THEN_PIN_COUNT_ZERO:
+            return "general_candidates_then_pin_count_zero";
+    }
+    return {};
 }
 
 } // namespace DBLIGHT

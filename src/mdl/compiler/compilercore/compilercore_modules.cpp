@@ -54,6 +54,7 @@
 #include "compilercore_tools.h"
 #include "compilercore_fatal.h"
 #include "compilercore_file_resolution.h"
+#include "compilercore_array_ref.h"
 #include "compilercore_func_hash.h"
 
 #ifndef M_PIf
@@ -91,7 +92,7 @@ public:
             return false;
         }
 
-     
+
         string mangled_name = m_dag_mangler.mangle(def, (char const *)NULL, true);
         return mangled_name == m_signature;
     }
@@ -217,6 +218,7 @@ Module::Module(
 , m_is_compiler_owned((flags & (MF_IS_STDLIB|MF_IS_OWNED)) != 0)
 , m_is_debug((flags & MF_IS_DEBUG) != 0)
 , m_is_hashed((flags & MF_IS_HASHED) != 0)
+, m_is_deprecated(false)
 , m_sema_version(NULL)
 , m_mdl_version(version)
 , m_msg_list(alloc, friedly_file_name(file_name, module_name))
@@ -239,7 +241,6 @@ Module::Module(
 , m_res_table(&m_arena)
 , m_func_hashes(Func_hash_map::key_compare(), alloc)
 , m_find_signature_cache(0, Definition_map::hasher(), Definition_map::key_equal(), alloc)
-, m_syn_creator(*this)
 {
     MDL_ASSERT(file_name != NULL);
     if (!m_is_compiler_owned) {
@@ -313,6 +314,7 @@ void Module::get_version(IMDL::MDL_version version, int &major, int &minor)
     case IMDL::MDL_VERSION_1_8:     major = 1; minor = 8; return;
     case IMDL::MDL_VERSION_1_9:     major = 1; minor = 9; return;
     case IMDL::MDL_VERSION_1_10:    major = 1; minor = 10; return;
+    case IMDL::MDL_VERSION_1_11:    major = 1; minor = 11; return;
     case IMDL::MDL_VERSION_EXP:     major = 99; minor = 99; return;
     }
     MDL_ASSERT(!"MDL version not known");
@@ -1496,6 +1498,25 @@ Definition const *Module::parse_annotation_params(
     return def;
 }
 
+// Find a type given by its name.
+IType const *Module::find_type(
+    char const *name) const
+{
+    ISymbol const *sym = m_sym_tab.lookup_symbol(name);
+    if (sym == NULL) {
+        // type does not exist in this module
+        return NULL;
+    }
+
+    Scope *global = m_def_tab.get_global_scope();
+    if (Definition const *def = global->find_definition_in_scope(sym)) {
+        if (def->get_kind() == Definition::DK_TYPE) {
+            return def->get_type();
+        }
+    }
+    return NULL;
+}
+
 // Lookup an exact annotation definition given by its name and an array
 // of all (positional) parameter types.
 IDefinition const *Module::find_annotation(
@@ -1883,7 +1904,7 @@ IAnnotation_block *Module::clone_annotation_block(
         IDefinition const *def = anno->get_name()->get_definition();
 
         // `def' can be NULL at this point during parsing if a syntax error in an
-        // annotation block is encountered. 
+        // annotation block is encountered.
         if (def != NULL) {
             if (def->get_semantics() == IDefinition::DS_VERSION_NUMBER_ANNOTATION &&
                 m_mdl_version >= IMDL::MDL_VERSION_1_3) {
@@ -2270,6 +2291,8 @@ restart:
     case IType::TK_AUTO:
     case IType::TK_ERROR:
     case IType::TK_FUNCTION:
+    case IType::TK_SPECTRAL_SAMPLE:
+    case IType::TK_SPECTRUM:
         return factory->create_bad();
 
     case IType::TK_ALIAS:
@@ -2362,6 +2385,8 @@ restart:
     case IType::TK_VOID:
     case IType::TK_AUTO:
     case IType::TK_ERROR:
+    case IType::TK_SPECTRAL_SAMPLE:
+    case IType::TK_SPECTRUM:
     case IType::TK_ARRAY:
     case IType::TK_LIGHT_PROFILE:
     case IType::TK_TEXTURE:
@@ -2523,6 +2548,8 @@ static bool equivalent_type(
             return true;
         }
     case IType::TK_COLOR:
+    case IType::TK_SPECTRAL_SAMPLE:
+    case IType::TK_SPECTRUM:
         return true;
     case IType::TK_FUNCTION:
         {
@@ -3252,6 +3279,24 @@ IDefinition const *Module::find_stdlib_signature(
     return m_compiler->find_stdlib_signature(module_name, signature);
 }
 
+// Mark the module as deprecated.
+void Module::mark_deprecated(IValue_string const *msg)
+{
+    m_is_deprecated = true;
+    m_deprecated_msg_map[NULL] = msg;
+}
+
+// Get the deprecated message for the module if any.
+bool Module::is_deprecated(IValue_string const *&msg) const
+{
+    Deprecated_msg_map::const_iterator it = m_deprecated_msg_map.find(NULL);
+    if (it != m_deprecated_msg_map.end()) {
+        msg = it->second;
+        return true;
+    }
+    return false;
+}
+
 // Set a deprecated message for a given definition.
 void Module::set_deprecated_message(Definition const *def, IValue_string const *msg)
 {
@@ -3321,6 +3366,8 @@ void Module::serialize(Module_serializer &serializer) const
     DOUT(("debug: %s\n", m_is_debug ? "true" : "false"));
     serializer.write_bool(m_is_hashed);
     DOUT(("func hashes: %s\n", m_is_hashed ? "true" : "false"));
+    serializer.write_bool(m_is_deprecated);
+    DOUT(("deprecated: %s\n", m_is_deprecated ? "true" : "false"));
 
     serializer.write_encoded_tag(size_t(m_mdl_version));
     DOUT(("version: %u\n", m_mdl_version));
@@ -3676,6 +3723,8 @@ public:
         case IType::TK_VOID:
         case IType::TK_AUTO:
         case IType::TK_COLOR:
+        case IType::TK_SPECTRAL_SAMPLE:
+        case IType::TK_SPECTRUM:
         case IType::TK_ERROR:
             // atomic types
             return true;
@@ -3971,6 +4020,8 @@ Module const *Module::deserialize(Module_deserializer &deserializer)
     DOUT(("debug: %s\n", is_debug ? "true" : "false"));
     bool is_hashed = deserializer.read_bool();
     DOUT(("func hashes: %s\n", is_hashed ? "true" : "false"));
+    bool is_deprecated = deserializer.read_bool();
+    DOUT(("deprecated: %s\n", is_deprecated ? "true" : "false"));
 
     IMDL::MDL_version mdl_version = IMDL::MDL_version(deserializer.read_encoded_tag());
     DOUT(("version: %u\n", mdl_version));
@@ -3989,6 +4040,7 @@ Module const *Module::deserialize(Module_deserializer &deserializer)
     mod->m_is_compiler_owned = is_compiler_owned;
     mod->m_is_debug          = is_debug;
     mod->m_is_hashed         = is_hashed;
+    mod->m_is_deprecated     = is_deprecated;
 
     // deserialize the message list
     mod->m_msg_list.deserialize(deserializer);
@@ -4353,337 +4405,6 @@ IExpression_literal const *Module::create_string_literal(char const *value)
     return m_expr_factory.create_literal(v);
 }
 
-// Create a parameterless stdlib call to <name1> or <name1>::<name2>.
-IExpression_call *Module::Syntactical_stdlib_call_creator::create_stdlib_call(
-    IExpression const *args[],
-    size_t            n_args,
-    char const        *name1,
-    char const        *name2)
-{
-    Name_factory &nf = *m_module.get_name_factory();
-
-    IQualified_name *qn = nf.create_qualified_name();
-
-    {
-        ISymbol const *s = nf.create_symbol(name1);
-        ISimple_name const *sn = nf.create_simple_name(s);
-        qn->add_component(sn);
-    }
-    if (name2 != NULL) {
-        ISymbol const *s = nf.create_symbol(name2);
-        ISimple_name const *sn = nf.create_simple_name(s);
-        qn->add_component(sn);
-    }
-
-    IType_name *tn = nf.create_type_name(qn);
-
-    Expression_factory &ef = *m_module.get_expression_factory();
-
-    IExpression_reference *callee = ef.create_reference(tn);
-    IExpression_call *call = ef.create_call(callee);
-
-    for (size_t i = 0; i < n_args; ++i) {
-        IArgument const *arg = ef.create_positional_argument(args[i]);
-        call->add_argument(arg);
-    }
-
-    return call;
-}
-
-// Alters one call argument according to the given promotion rules.
-int Module::promote_call_arguments(
-    IExpression_call     *call,
-    IArgument const      *arg,
-    int                  param_index,
-    unsigned             rules,
-    IStdlib_call_creator *creator)
-{
-    if (creator == NULL) {
-        // use the simple syntactical stdlib call creator if none was given
-        creator = &m_syn_creator;
-    }
-
-    for (; rules != 0;) {
-        unsigned rules_at_start = rules;
-
-        if (rules & PR_SPOT_EDF_ADD_SPREAD_PARAM) {
-            if (param_index == 0) {
-                // add M_PI as 1. argument
-                IExpression const *e = create_float_literal(M_PIf);
-                IArgument const *narg = m_expr_factory.create_positional_argument(e);
-                call->add_argument(narg);
-                ++param_index;
-                rules &= ~PR_SPOT_EDF_ADD_SPREAD_PARAM;
-            }
-        }
-        if (rules & PC_MEASURED_EDF_ADD_MULTIPLIER) {
-            if (param_index == 0) {
-                // add 1.0 as 1. argument
-                IExpression const *e = create_float_literal(1.0f);
-                IArgument const *narg = m_expr_factory.create_positional_argument(e);
-                call->add_argument(narg);
-                ++param_index;
-                rules &= ~PC_MEASURED_EDF_ADD_MULTIPLIER;
-            }
-        }
-        if (rules & PR_MEASURED_EDF_ADD_TANGENT_U) {
-            if (param_index == 3) {
-                // add state::tangent_u(0) as 4. argument
-                IExpression const *arg = create_int_literal(0);
-                IExpression_call *tu_call =
-                    creator->create_stdlib_call(&arg, 1, "state", "texture_tangent_u");
-
-                IArgument const *narg = m_expr_factory.create_positional_argument(tu_call);
-                call->add_argument(narg);
-                ++param_index;
-                rules &= ~PR_MEASURED_EDF_ADD_TANGENT_U;
-            }
-        }
-        if (rules & PR_FRESNEL_LAYER_TO_COLOR) {
-            if (param_index == 1) {
-                // wrap the 1. argument by a color constructor
-                IExpression const *e = arg->get_argument_expr();
-                IExpression_call *color_call = creator->create_stdlib_call(&e, 1, "color");
-
-                const_cast<IArgument *>(arg)->set_argument_expr(color_call);
-                rules &= ~PR_FRESNEL_LAYER_TO_COLOR;
-            }
-        }
-        if (rules & PR_WIDTH_HEIGHT_ADD_UV_TILE) {
-            if (param_index == 0) {
-                // add int2(0) as 1. argument
-                IExpression const *e = create_int2_literal(0);
-                IArgument const *narg = m_expr_factory.create_positional_argument(e);
-                call->add_argument(narg);
-                ++param_index;
-                rules &= ~PR_WIDTH_HEIGHT_ADD_UV_TILE;
-            }
-        }
-        if (rules & PR_TEXEL_ADD_UV_TILE) {
-            if (param_index == 1) {
-                // add int2(0) as 2. argument
-                IExpression const *e = create_int2_literal(0);
-                IArgument const *narg = m_expr_factory.create_positional_argument(e);
-                call->add_argument(narg);
-                ++param_index;
-                rules &= ~PR_TEXEL_ADD_UV_TILE;
-            }
-        }
-        if (rules & PR_ROUNDED_CORNER_ADD_ROUNDNESS) {
-            if (param_index == 1) {
-                // add roundness as 2. argument
-                IExpression const *e = create_float_literal(1.0f);
-                IArgument const *narg = m_expr_factory.create_positional_argument(e);
-                call->add_argument(narg);
-                ++param_index;
-                rules &= ~PR_ROUNDED_CORNER_ADD_ROUNDNESS;
-            }
-        }
-        if (rules & PR_MATERIAL_ADD_HAIR) {
-            if (param_index == 5) {
-                // MDL 1.4 -> 1.5: add default hair_bsdf() call
-                IExpression_call *hair_call = creator->create_stdlib_call(NULL, 0, "hair_bsdf");
-
-                IArgument const *a = call->get_argument(5);
-                IArgument const *narg = NULL;
-                if (a->get_kind() == IArgument::AK_POSITIONAL) {
-                    narg = m_expr_factory.create_positional_argument(hair_call);
-                } else {
-                    ISymbol const *sh = m_name_factory.create_symbol("hair");
-                    ISimple_name const *sn_hair = m_name_factory.create_simple_name(sh);
-                    narg = m_expr_factory.create_named_argument(sn_hair, hair_call);
-                }
-                call->add_argument(narg);
-                ++param_index;
-                rules &= ~PR_MATERIAL_ADD_HAIR;
-            }
-        }
-        if (rules & PR_INSERT_COLOR_0_AFTER_3) {
-            if (param_index == 2) {
-                // insert color(0) after 3. argument
-                IExpression const *e = create_color_literal(0.0f);
-                IArgument const *narg = m_expr_factory.create_positional_argument(e);
-                call->add_argument(narg);
-                ++param_index;
-                rules &= ~PR_INSERT_COLOR_0_AFTER_3;
-            }
-        }
-        if (rules & PR_MATERIAL_VOLUME_ADD_EMISSION_INTENSITY) {
-            if (param_index == 2) {
-                // MDL 1.6 -> 1.7: add default emission_intensity
-                IExpression const *e = create_color_literal(0.0f);
-
-                IArgument const *a = call->get_argument(2);
-                IArgument const *narg = NULL;
-                if (a->get_kind() == IArgument::AK_POSITIONAL) {
-                    narg = m_expr_factory.create_positional_argument(e);
-                } else {
-                    ISymbol const *sh = m_name_factory.create_symbol("emission_intensity");
-                    ISimple_name const *sn_hair = m_name_factory.create_simple_name(sh);
-                    narg = m_expr_factory.create_named_argument(sn_hair, e);
-                }
-                call->add_argument(narg);
-                ++param_index;
-                rules &= ~PR_INSERT_COLOR_0_AFTER_3;
-            }
-        }
-        if (rules & (PR_INSERT_DIFF_REFL_BSDF_AFTER_3 | PR_INSERT_DIFF_REFL_BSDF_10_AFTER_3)) {
-            if (param_index == 2) {
-                // insert a call to diffuse_reflection_bsdf(color(1.0), 0.0, color(0.0), "") after
-                // 3. param
-                IExpression const *args[4];
-                size_t i = 0;
-                args[i++] = create_color_literal(1.0f);
-                args[i++] = create_float_literal(0.0f);
-                if (rules & PR_INSERT_DIFF_REFL_BSDF_10_AFTER_3) {
-                    args[i++] = create_color_literal(0.0f);
-                }
-                args[i++] = create_string_literal("");
-
-                size_t n_args = rules & PR_INSERT_DIFF_REFL_BSDF_10_AFTER_3 ? 4 : 3;
-
-                IExpression_call *bsdf_call =
-                    creator->create_stdlib_call(args, n_args, "df", "diffuse_reflection_bsdf");
-
-                IArgument const *a = call->get_argument(2);
-                IArgument const *narg = NULL;
-                if (a->get_kind() == IArgument::AK_POSITIONAL) {
-                    narg = m_expr_factory.create_positional_argument(bsdf_call);
-                } else {
-                    ISymbol const *sh = m_name_factory.create_symbol("multiscatter");
-                    ISimple_name const *sn_multiscatter = m_name_factory.create_simple_name(sh);
-                    narg = m_expr_factory.create_named_argument(sn_multiscatter, bsdf_call);
-                }
-                call->add_argument(narg);
-                ++param_index;
-
-                // both rules are mutual exclusive, so it is same to deactivate both
-                rules &= ~(PR_INSERT_DIFF_REFL_BSDF_AFTER_3 | PR_INSERT_DIFF_REFL_BSDF_10_AFTER_3);
-            }
-        }
-        if (rules & PR_INSERT_FLOAT_0_AFTER_1) {
-            if (param_index == 0) {
-                // insert 0.0 as 1. argument
-                IExpression const *e = create_float_literal(0.0f);
-                IArgument const *narg = m_expr_factory.create_positional_argument(e);
-                call->add_argument(narg);
-                ++param_index;
-                rules &= ~PR_INSERT_FLOAT_0_AFTER_1;
-            }
-        }
-        if (rules & PR_INSERT_FLOAT_0_AFTER_2) {
-            if (param_index == 1) {
-                // insert 0.0 after 2. argument
-                IExpression const *e = create_float_literal(0.0f);
-                IArgument const *narg = m_expr_factory.create_positional_argument(e);
-                call->add_argument(narg);
-                ++param_index;
-                rules &= ~PR_INSERT_FLOAT_0_AFTER_2;
-            }
-        }
-        if (rules & PR_INSERT_FLOAT_0_AFTER_3) {
-            if (param_index == 2) {
-                // insert 0.0 after 3. argument
-                IExpression const *e = create_float_literal(0.0f);
-                IArgument const *narg = m_expr_factory.create_positional_argument(e);
-                call->add_argument(narg);
-                ++param_index;
-                rules &= ~PR_INSERT_FLOAT_0_AFTER_3;
-            }
-        }
-        if (rules & PR_INSERT_FLOAT_0_AFTER_6) {
-            if (param_index == 5) {
-                // insert a 0.0 after 6. argument
-                IExpression const *e = create_float_literal(0.0f);
-                IArgument const *narg = m_expr_factory.create_positional_argument(e);
-                call->add_argument(narg);
-                ++param_index;
-                rules &= ~PR_INSERT_FLOAT_0_AFTER_6;
-            }
-        }
-        if (rules & PR_INSERT_FLOAT_0_AFTER_8) {
-            if (param_index == 7) {
-                // insert 0.0 after 8. argument
-                IExpression const *e = create_float_literal(0.0f);
-                IArgument const *narg = m_expr_factory.create_positional_argument(e);
-                call->add_argument(narg);
-                ++param_index;
-                rules &= ~PR_INSERT_FLOAT_0_AFTER_8;
-            }
-        }
-        if (rules & PR_INSERT_EMPTY_STRING_AFTER_2) {
-            if (param_index == 1) {
-                // insert "" after 2. argument
-                IExpression const *e = create_string_literal("");
-                IArgument const *narg = m_expr_factory.create_positional_argument(e);
-                call->add_argument(narg);
-                ++param_index;
-                rules &= ~PR_INSERT_EMPTY_STRING_AFTER_2;
-            }
-        }
-        if (rules & PR_ADD_FALSE_AS_LAST) {
-            if (param_index == call->get_argument_count() - 1) {
-                // add false as additional argument
-                IValue_bool const *v = m_value_factory.create_bool(false);
-                IExpression const *e = m_expr_factory.create_literal(v);
-
-                IArgument const *narg = m_expr_factory.create_positional_argument(e);
-                call->add_argument(narg);
-                ++param_index;
-                rules &= ~PR_ADD_FALSE_AS_LAST;
-            }
-        }
-        if (rules & PR_INSERT_COLOR_0_AFTER_2) {
-            if (param_index == 1) {
-                // insert color(0) after 2. argument
-                IExpression const *e = create_color_literal(0.0f);
-                IArgument const *narg = m_expr_factory.create_positional_argument(e);
-                call->add_argument(narg);
-                ++param_index;
-                rules &= ~PR_INSERT_COLOR_0_AFTER_2;
-            }
-        }
-        if (rules & PR_INSERT_COLOR_1_AFTER_2) {
-            if (param_index == 1) {
-                // insert color(1) after 2. argument
-                IExpression const *e = create_color_literal(1.0f);
-                IArgument const *narg = m_expr_factory.create_positional_argument(e);
-                call->add_argument(narg);
-                ++param_index;
-                rules &= ~PR_INSERT_COLOR_1_AFTER_2;
-            }
-        }
-        if (rules & PR_ADD_INTENSITY_RADIANT_EXTNCE) {
-            if (param_index == 1) {
-                // MDL 1.0 -> 1.1: add default intensity_mode
-                IType_enum const *e_type =
-                    m_type_factory.get_predefined_enum(IType_enum::EID_INTENSITY_MODE);
-                IValue const *v = m_value_factory.create_enum(e_type, 0);
-
-                IExpression const *e = m_expr_factory.create_literal(v);
-
-                IArgument const *a = call->get_argument(1);
-                IArgument const *narg = NULL;
-                if (a->get_kind() == IArgument::AK_POSITIONAL) {
-                    narg = m_expr_factory.create_positional_argument(e);
-                } else {
-                    ISymbol const *sh = m_name_factory.create_symbol("mode");
-                    ISimple_name const *sn_hair = m_name_factory.create_simple_name(sh);
-                    narg = m_expr_factory.create_named_argument(sn_hair, e);
-                }
-                call->add_argument(narg);
-                ++param_index;
-                rules &= ~PR_ADD_INTENSITY_RADIANT_EXTNCE;
-            }
-        }
-
-        if (rules_at_start == rules) {
-            // no rule had matched, exit
-            break;
-        }
-    }
-    return param_index;
-}
 
 // Check if the given definition is owned by this module.
 bool Module::is_owner(IDefinition const *def) const
@@ -4877,6 +4598,8 @@ static IType_name *construct_type_name(
     case IType::TK_VOID:
     case IType::TK_AUTO:
     case IType::TK_ERROR:
+    case IType::TK_SPECTRAL_SAMPLE:
+    case IType::TK_SPECTRUM:
         // should not happen
         MDL_ASSERT(!"unexpected type kind");
         return NULL;
@@ -4908,6 +4631,18 @@ static IType_name *construct_type_name(
             printer->print(type);
 
             char const *name = buffer->get_data();
+
+            // for user-defined types, skip module prefix, if defined in owner module
+            if (is<IType_enum>(type) || is<IType_struct>(type)) {
+                char const *module_name = owner->get_name();
+                size_t module_name_len = strlen(module_name);
+
+                if (strncmp(module_name, name, module_name_len) == 0 &&
+                        name[module_name_len] == ':' &&
+                        name[module_name_len + 1] == ':') {
+                    name += module_name_len + 2;
+                }
+            }
 
             Name_factory *nf = owner->get_name_factory();
 
@@ -5026,17 +4761,394 @@ static IArgument const *promote_argument(
     return arg;
 }
 
+/// Clone modifier that recursively promotes nested expressions via promote_expr.
+class Promote_modifier : public IClone_modifier {
+public:
+    /// Clone a reference expression.
+    ///
+    /// \param ref the reference expression to clone
+    ///
+    /// \return the cloned reference expression
+    IExpression *clone_expr_reference(IExpression_reference const *ref) MDL_FINAL {
+        return const_cast<IExpression_reference *>(ref);
+    }
+
+    /// Clone a call expression.
+    ///
+    /// \param call the call expression to clone
+    ///
+    /// \return the cloned call expression
+    IExpression *clone_expr_call(IExpression_call const *call) MDL_FINAL {
+        return const_cast<IExpression *>(promote_expr(m_mod, call));
+    }
+
+    /// Clone a literal.
+    ///
+    /// \param lit the literal to clone
+    ///
+    /// \return the cloned literal
+    IExpression *clone_literal(IExpression_literal const *lit) MDL_FINAL {
+        return const_cast<IExpression_literal *>(lit);
+    }
+
+    /// Clone a qualified name.
+    ///
+    /// \param qname the qualified name to clone
+    ///
+    /// \return the cloned qualified name
+    IQualified_name *clone_name(IQualified_name const *qname) MDL_FINAL {
+        return const_cast<IQualified_name *>(qname);
+    }
+
+    /// Adapt the position owner.
+    ///
+    /// \param expr the expression to adapt
+    void adapt_position_owner(IExpression *) MDL_FINAL {
+        // do nothing
+    }
+
+public:
+    /// Constructor.
+    ///
+    /// \param mod the module to promote the expression in
+    Promote_modifier(Module &mod) : m_mod(mod) {}
+
+private:
+    Module &m_mod;
+};
+
+/// Create a syntactical (no definition lookup) stdlib call.
+///
+/// \param mod     the module to create the call in
+/// \param args    the arguments of the call
+/// \param name1   the name of the called entity or its package
+/// \param name2   if non-NULL,the name of the called entity
+///
+/// \return the created call
+static IExpression_call *create_syntactical_call(
+    Module                              &mod,
+    Array_ref<IExpression const *>      args,
+    char const                          *name1,
+    char const                          *name2 = NULL)
+{
+    Name_factory &nf = *mod.get_name_factory();
+
+    IQualified_name *qn = nf.create_qualified_name();
+    {
+        ISymbol const *s = nf.create_symbol(name1);
+        qn->add_component(nf.create_simple_name(s));
+    }
+    if (name2 != NULL) {
+        ISymbol const *s = nf.create_symbol(name2);
+        qn->add_component(nf.create_simple_name(s));
+    }
+
+    IType_name *tn = nf.create_type_name(qn);
+
+    Expression_factory &ef = *mod.get_expression_factory();
+    IExpression_call *call = ef.create_call(ef.create_reference(tn));
+
+    for (size_t i = 0, n = args.size(); i < n; ++i) {
+        call->add_argument(ef.create_positional_argument(args[i]));
+    }
+    return call;
+}
+
+/// Create a positional or named argument depending on the style of the call.
+///
+/// \param mod         the module to create the argument in
+/// \param call        the call to create the argument for
+/// \param dst_idx     the index of the argument to create
+/// \param expr        the expression to create the argument for
+/// \param param_name  the name of the parameter
+///
+/// \return the created argument
+static IArgument const *create_name_or_pos_argument(
+    Module             &mod,
+    IExpression_call   *call,
+    size_t             dst_idx,
+    IExpression const  *expr,
+    char const         *param_name)
+{
+    Expression_factory &ef = *mod.get_expression_factory();
+
+    if (dst_idx > 0) {
+        --dst_idx;
+    }
+    IArgument const *a = call->get_argument(dst_idx);
+    if (a != NULL && a->get_kind() == IArgument::AK_NAMED) {
+        Name_factory &nf = *mod.get_name_factory();
+        return ef.create_named_argument(
+            nf.create_simple_name(nf.create_symbol(param_name)), expr);
+    }
+    return ef.create_positional_argument(expr);
+}
+
+// Apply parameter transforms to build the arguments of a promoted call.
+void apply_param_transforms(
+    Module                    &mod,
+    IExpression_call const    *src_call,
+    IExpression_call          *dst_call,
+    IClone_modifier           *modifier,
+    Param_transform_vec const &xforms)
+{
+    Expression_factory &ef = *mod.get_expression_factory();
+
+    size_t n_src    = src_call->get_argument_count();
+    size_t n_xforms = xforms.size();
+
+    size_t n_dst = n_src;
+    for (size_t k = 0; k < n_xforms; ++k) {
+        Parameter_action action = xforms[k].get_action();
+        switch (action) {
+        case PA_NOTHING:
+            // do nothing
+            break;
+        case PA_INS_HAIR:
+        case PA_INS_EMISSION_INTENSITY:
+        case PA_INS_SELECTOR:
+        case PA_INS_MULTISCATTER_TINT:
+        case PA_INS_MULTISCATTER:
+        case PA_INS_F82_FACTOR:
+        case PA_INS_MULTIPLIER:
+        case PA_INS_TANGENT_U:
+        case PA_INS_SPREAD:
+        case PS_INS_ROUNDNESS:
+        case PA_INS_UV_TILE:
+        case PA_INS_FRAME:
+        case PA_INS_BACKSCATTER:
+        case PA_INS_COLLAPSED:
+        case PA_INS_INTENSITY_MODE:
+            // insert an argument
+            ++n_dst;
+            break;
+        case PA_WRP_COLOR_CONSTR:
+        case PA_UNWRP_COLOR_CONSTR:
+            // number of arguments are not changed
+            break;
+        case PA_REM_PARAM:
+            // remove one argument
+            --n_dst;
+            break;
+        }
+    }
+
+    for (size_t dst_idx = 0, src_idx = 0, action_idx = 0; dst_idx < n_dst; ++dst_idx) {
+        if (action_idx < n_xforms && xforms[action_idx].get_index() == dst_idx) {
+            Parameter_action action = xforms[action_idx].get_action();
+            ++action_idx;
+
+            switch (action) {
+            case PA_NOTHING:
+                // no action
+                {
+                    IArgument const *arg = mod.clone_arg(src_call->get_argument(src_idx), modifier);
+                    dst_call->add_argument(arg);
+                    ++src_idx;
+                }
+                break;
+
+            case PA_INS_HAIR:
+                // insert hair_bsdf hair = hair_bsdf()
+                dst_call->add_argument(create_name_or_pos_argument(
+                    mod, dst_call, dst_idx,
+                    create_syntactical_call(mod, Array_ref<IExpression const *>(), "hair_bsdf"),
+                    "hair"));
+                break;
+
+            case PA_INS_EMISSION_INTENSITY:
+                // insert color emission_intensity = color(0.0)
+                dst_call->add_argument(create_name_or_pos_argument(
+                    mod, dst_call, dst_idx,
+                    mod.create_color_literal(0.0f),
+                    "emission_intensity"));
+                break;
+
+            case PA_INS_SELECTOR:
+                // insert string selector = ""
+                dst_call->add_argument(create_name_or_pos_argument(
+                    mod, dst_call, dst_idx,
+                    mod.create_string_literal(""),
+                    "selector"));
+                break;
+
+            case PA_INS_MULTISCATTER_TINT:
+                // insert color multiscatter_tint = color(0.0)
+                dst_call->add_argument(create_name_or_pos_argument(
+                    mod, dst_call, dst_idx,
+                    mod.create_color_literal(0.0f),
+                    "multiscatter_tint"));
+                break;
+
+            case PA_INS_MULTISCATTER:
+                // insert bsdf multiscatter = diffuse_reflection_bsdf()
+                dst_call->add_argument(create_name_or_pos_argument(
+                    mod, dst_call, dst_idx,
+                    create_syntactical_call(
+                        mod, Array_ref<IExpression const *>(), "df", "diffuse_reflection_bsdf"),
+                    "multiscatter"));
+                break;
+
+            case PA_INS_F82_FACTOR:
+                // insert color f82_factor = color(1.0)
+                dst_call->add_argument(create_name_or_pos_argument(
+                    mod, dst_call, dst_idx,
+                    mod.create_color_literal(1.0f),
+                    "f82_factor"));
+                break;
+
+            case PA_INS_MULTIPLIER:
+                // insert float multiplier = 1.0
+                dst_call->add_argument(create_name_or_pos_argument(
+                    mod, dst_call, dst_idx,
+                    mod.create_float_literal(1.0f),
+                    "multiplier"));
+                break;
+
+            case PA_INS_TANGENT_U:
+                // insert float3 tangent_u = state::texture_tangent_u(0)
+                {
+                    IExpression const *arg = mod.create_int_literal(0);
+                    IExpression_call *tu_call =
+                        create_syntactical_call(mod, arg, "state", "texture_tangent_u");
+                    dst_call->add_argument(create_name_or_pos_argument(
+                        mod, dst_call, dst_idx, tu_call, "tangent_u"));
+                }
+                break;
+
+            case PA_INS_SPREAD:
+                // insert float spread = math::PI
+                dst_call->add_argument(create_name_or_pos_argument(
+                    mod, dst_call, dst_idx,
+                    mod.create_float_literal(M_PIf), "spread"));
+                break;
+
+            case PS_INS_ROUNDNESS:
+                // insert float roundness = 1.0
+                dst_call->add_argument(create_name_or_pos_argument(
+                    mod, dst_call, dst_idx,
+                    mod.create_float_literal(1.0f), "roundness"));
+                break;
+
+            case PA_INS_UV_TILE:
+                // insert int2 uv_tile = int2(0,0)
+                dst_call->add_argument(create_name_or_pos_argument(
+                    mod, dst_call, dst_idx,
+                    mod.create_int2_literal(0), "uv_tile"));
+                break;
+
+            case PA_INS_FRAME:
+                // insert float frame = 0.0
+                dst_call->add_argument(create_name_or_pos_argument(
+                    mod, dst_call, dst_idx,
+                    mod.create_float_literal(0.0f), "frame"));
+                break;
+
+            case PA_INS_BACKSCATTER:
+                // insert backscatter_modifier backscatter = ..._NONE
+                {
+                    string df_name("::df", mod.get_allocator());
+                    mi::base::Handle<MDL> compiler(mod.get_compiler());
+                    Module const *df_mod = compiler->find_builtin_module(df_name);
+                    MDL_ASSERT(df_mod != NULL);
+                    IType const *tp = df_mod->find_type("backscatter_modifier");
+                    IType_enum const *e_type =
+                        cast<IType_enum>(mod.get_type_factory()->import(tp));
+                    IValue const *v =
+                        mod.get_value_factory()->create_enum(e_type, 0);
+                    dst_call->add_argument(create_name_or_pos_argument(
+                        mod, dst_call, dst_idx, ef.create_literal(v), "backscatter"));
+                }
+                break;
+
+            case PA_INS_COLLAPSED:
+                // insert bool collapsed = false
+                {
+                    IValue_bool const *v = mod.get_value_factory()->create_bool(false);
+                    dst_call->add_argument(create_name_or_pos_argument(
+                        mod, dst_call, dst_idx, ef.create_literal(v), "collapsed"));
+                }
+                break;
+
+            case PA_INS_INTENSITY_MODE:
+                // insert intensity_mode mode = intensity_radiant_exitance
+                {
+                    IType_enum const *e_type =
+                        mod.get_type_factory()->get_predefined_enum(
+                            IType_enum::EID_INTENSITY_MODE);
+                    IValue const *v =
+                        mod.get_value_factory()->create_enum(e_type, 0);
+                    dst_call->add_argument(create_name_or_pos_argument(
+                        mod, dst_call, dst_idx, ef.create_literal(v), "mode"));
+                }
+                break;
+
+            // wrap argument a by color(a)
+            case PA_WRP_COLOR_CONSTR:
+                {
+                    IArgument const *arg =
+                        mod.clone_arg(src_call->get_argument(src_idx), modifier);
+                    IExpression const *e = arg->get_argument_expr();
+                    IExpression_call *color_call =
+                        create_syntactical_call(mod, e, "color");
+                    const_cast<IArgument *>(arg)->set_argument_expr(color_call);
+                    dst_call->add_argument(arg);
+                    ++src_idx;
+                }
+                break;
+
+            case PA_UNWRP_COLOR_CONSTR:
+                // unwrap argument a from color(a)
+                {
+                    IArgument const *arg = src_call->get_argument(src_idx);
+                    IExpression_call const *color_call =
+                        cast<IExpression_call>(arg->get_argument_expr());
+
+                    IExpression const *expr =
+                        color_call->get_argument(0)->get_argument_expr();
+                    expr = mod.clone_expr(expr, modifier);
+                    if (arg->get_kind() == IArgument::AK_NAMED) {
+                        IArgument_named const *n_arg = cast<IArgument_named>(arg);
+                        ISimple_name const *name =
+                            mod.clone_name(n_arg->get_parameter_name());
+                        dst_call->add_argument(ef.create_named_argument(name, expr));
+                    } else {
+                        dst_call->add_argument(ef.create_positional_argument(expr));
+                    }
+                    ++src_idx;
+                }
+                break;
+
+            // remove a parameter
+            case PA_REM_PARAM:
+                ++src_idx;
+                --dst_idx;
+                break;
+            }
+        } else {
+            // just clone it
+            IArgument const *arg =
+                mod.clone_arg(src_call->get_argument(src_idx), modifier);
+            dst_call->add_argument(arg);
+            ++src_idx;
+        }
+    }
+}
+
 /// Promote a given function call to the version of a given module.
 ///
-/// \param[in]  mod    the destination module
-/// \param[in]  tn     the type name of the call reference
-/// \param[out] rules  the promotion rule set that must be applied to the call arguments
+/// \param[in]  mod       the destination module
+/// \param[in]  tn        the type name of the call reference
+/// \param[out] xforms    parameter transforms to apply to the call arguments
+/// \param[out] semantic  semantic effect of the promotion
 static IType_name const *promote_name(
-    Module           &mod,
-    IType_name const *tn,
-    unsigned         &rules)
+    Module              &mod,
+    IType_name const    *tn,
+    Param_transform_vec &xforms,
+    Promotion_semantic  &semantic)
 {
-    rules = Module::PR_NO_CHANGE;
+    xforms.clear();
+    semantic = PS_NONE;
     if (tn->is_array()) {
         return tn;
     }
@@ -5055,12 +5167,14 @@ static IType_name const *promote_name(
         sym = sn->get_symbol();
         if (strcmp(sym->get_name(), "material$1.4") == 0) {
             if (mod_major > 1 || (mod_major == 1 && mod_minor > 4)) {
-                rules = Module::PR_MATERIAL_ADD_HAIR;
+                // insert hair_bsdf hair = hair_bsdf()
+                xforms.push_back(Param_transform(6, PA_INS_HAIR));
             }
             n = "material";
         } else if (strcmp(sym->get_name(), "material_volume$1.6") == 0) {
             if (mod_major > 1 || (mod_major == 1 && mod_minor > 6)) {
-                rules = Module::PR_MATERIAL_VOLUME_ADD_EMISSION_INTENSITY;
+                // insert color emission_intensity = color(0.0)
+                xforms.push_back(Param_transform(3, PA_INS_EMISSION_INTENSITY));
             }
             n = "material_volume";
         } else {
@@ -5134,24 +5248,31 @@ static IType_name const *promote_name(
                         if (minor == 0) {
                             // all functions deprecated after MDL 1.0
                             if (n == "spot_edf") {
-                                rules = Module::PR_SPOT_EDF_ADD_SPREAD_PARAM;
+                                // insert float spread = math::PI
+                                xforms.push_back(Param_transform(1, PA_INS_SPREAD));
                             } else if (n == "measured_edf") {
                                 if (mod_major > 1 || (mod_major == 1 && mod_minor >= 1)) {
-                                    rules |= Module::PC_MEASURED_EDF_ADD_MULTIPLIER;
+                                    // insert float multiplier = 1.0
+                                    xforms.push_back(Param_transform(1, PA_INS_MULTIPLIER));
                                 }
                                 if (mod_major > 1 || (mod_major == 1 && mod_minor >= 2)) {
-                                    rules |= Module::PR_MEASURED_EDF_ADD_TANGENT_U;
+                                    // insert float3 tangent_u = state::texture_tangent_u(0)
+                                    xforms.push_back(Param_transform(4, PA_INS_TANGENT_U));
                                 }
                             }
                         } else if (minor == 1) {
                             // all functions deprecated after MDL 1.1
                             if (n == "measured_edf") {
-                                rules = Module::PR_MEASURED_EDF_ADD_TANGENT_U;
+                                // insert float3 tangent_u = state::texture_tangent_u(0)
+                                xforms.push_back(Param_transform(4, PA_INS_TANGENT_U));
                             }
                         } else if (minor == 3) {
                             // all functions deprecated after MDL 1.3
                             if (n == "fresnel_layer") {
-                                rules = Module::PR_FRESNEL_LAYER_TO_COLOR;
+                                // wrap argument a by color(a)
+                                xforms.push_back(Param_transform(1, PA_WRP_COLOR_CONSTR));
+                                // call color_fresnel_layer() instead of fresnel_layer()
+                                semantic = PS_UPD_TO_COLOR_FRESNEL_LAYER;
                                 n = "color_fresnel_layer";
                             }
                         } else if (minor == 5) {
@@ -5164,18 +5285,18 @@ static IType_name const *promote_name(
                                 n == "microfacet_ggx_vcavities_bsdf" ||
                                 n == "ward_geisler_moroder_bsdf")
                             {
-                                // insert multiscatter_tint default parameter
-                                rules = Module::PR_INSERT_COLOR_0_AFTER_3;
+                                // insert color multiscatter_tint = color(0.0)
+                                xforms.push_back(Param_transform(3, PA_INS_MULTISCATTER_TINT));
                             }
                         } else if (minor == 10) {
                             // all functions deprecated after MDL 1.10
                             if (n == "diffuse_reflection_bsdf") {
-                                // insert multiscatter_tint default parameter
-                                rules = Module::PR_INSERT_COLOR_0_AFTER_2;
+                                // insert color multiscatter_tint = color(0.0)
+                                xforms.push_back(Param_transform(2, PA_INS_MULTISCATTER_TINT));
                             } else if (n == "directional_factor" ||
                                 n == "color_custom_curve_layer") {
-                                // insert f82_factor default parameter
-                                rules = Module::PR_INSERT_COLOR_1_AFTER_2;
+                                // insert color f82_factor = color(1.0)
+                                xforms.push_back(Param_transform(2, PA_INS_F82_FACTOR));
                             }
                         }
                     }
@@ -5184,7 +5305,8 @@ static IType_name const *promote_name(
                         if (minor == 2) {
                             // all functions deprecated after MDL 1.2
                             if (n == "rounded_corner_normal") {
-                                rules = Module::PR_ROUNDED_CORNER_ADD_ROUNDNESS;
+                                // insert float roundness = 1.0
+                                xforms.push_back(Param_transform(2, PS_INS_ROUNDNESS));
                             }
                         }
                     }
@@ -5192,20 +5314,17 @@ static IType_name const *promote_name(
                     if (major == 1) {
                         if (minor == 3) {
                             // all functions deprecated after MDL 1.3
-                            if (n == "width") {
-                                rules = Module::PR_WIDTH_HEIGHT_ADD_UV_TILE;
-                            } else if (n == "height") {
-                                rules = Module::PR_WIDTH_HEIGHT_ADD_UV_TILE;
-                            } else if (n == "texel_float") {
-                                rules = Module::PR_TEXEL_ADD_UV_TILE;
-                            } else if (n == "texel_float2") {
-                                rules = Module::PR_TEXEL_ADD_UV_TILE;
-                            } else if (n == "texel_float3") {
-                                rules = Module::PR_TEXEL_ADD_UV_TILE;
-                            } else if (n == "texel_float4") {
-                                rules = Module::PR_TEXEL_ADD_UV_TILE;
-                            } else if (n == "texel_color") {
-                                rules = Module::PR_TEXEL_ADD_UV_TILE;
+                            if (n == "width" || n == "height") {
+                                // insert int2 uv_tile = int2(0,0)
+                                xforms.push_back(Param_transform(1, PA_INS_UV_TILE));
+                            } else if (n == "texel_float" ||
+                                n == "texel_float2" ||
+                                n == "texel_float3" ||
+                                n == "texel_float4" ||
+                                n == "texel_color")
+                            {
+                                // insert int2 uv_tile = int2(0,0)
+                                xforms.push_back(Param_transform(2, PA_INS_UV_TILE));
                             }
                         }
                     }
@@ -5251,6 +5370,11 @@ static IType_name const *promote_name(
 }
 
 /// Promote the given expression.
+///
+/// \param mod     the module to promote the expression in
+/// \param expr    the expression to promote
+///
+/// \return the promoted expression
 static IExpression const *promote_expr(
     Module            &mod,
     IExpression const *expr)
@@ -5295,22 +5419,27 @@ static IExpression const *promote_expr(
             IExpression_call const *c_expr = cast<IExpression_call>(expr);
             IExpression const *r           = c_expr->get_reference();
 
-            unsigned rules = Module::PR_NO_CHANGE;
+            Param_transform_vec xforms(mod.get_allocator());
+            Promotion_semantic semantic = PS_NONE;
             if (IExpression_reference const *ref = as<IExpression_reference>(r)) {
                 IType_name const *tn = ref->get_name();
 
-                tn = promote_name(mod, tn, rules);
+                tn = promote_name(mod, tn, xforms, semantic);
 
                 r = mod.get_expression_factory()->create_reference(tn);
             }
 
             IExpression_call *call = mod.get_expression_factory()->create_call(r);
 
-            for (int i = 0, j = 0, n = c_expr->get_argument_count(); i < n; ++i, ++j) {
-                IArgument const *arg = promote_argument(mod, c_expr->get_argument(i));
-                call->add_argument(arg);
-
-                j = mod.promote_call_arguments(call, arg, j, rules, /*creator=*/NULL);
+            if (!xforms.empty()) {
+                Promote_modifier modifier(mod);
+                apply_param_transforms(
+                    mod, c_expr, call, &modifier, xforms);
+            } else {
+                for (int i = 0, n = c_expr->get_argument_count(); i < n; ++i) {
+                    IArgument const *arg = promote_argument(mod, c_expr->get_argument(i));
+                    call->add_argument(arg);
+                }
             }
             call->set_type(expr->get_type());
             return call;

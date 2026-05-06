@@ -95,6 +95,9 @@ public:
     /// - \c "libbsdf_flags_in_bsdf_data": If enabled, the generated code will use the optional
     ///   \c "flags" field in the BSDF data structures.
     ///   Possible values: \c "on", \c "off". Default: \c "off".
+    /// - \c "libbsdf_enable_spectral": If enabled, the generated code will use the spectral color
+    ///   mode.
+    ///   Possible values: \c "on", \c "off". Default: \c "off".
     ///
     /// The following options are supported by the NATIVE backend only:
     /// - \c "use_builtin_resource_handler": Enables/disables the built-in texture runtime.
@@ -144,6 +147,12 @@ public:
     ///   texture runtime is used, only the \c adapt_normal entry of the vtable needs to be set.
     ///   For HLSL: The expected function is
     ///   \c "float3 mdl_adapt_normal(Shading_state_material state, float3 normal)".
+    ///   Possible values:
+    ///   \c "on", \c "off". Default: \c "off".
+    /// - \c "enable_init_loop_generation": Enables/disables generation of a loop in the init
+    ///   function for only calling large functions in a single place. If enabled, calls to large
+    ///   functions will be combined into single call sites, resulting in smaller code size and
+    ///   faster compile times when all function calls are inlined in later stages of compilation.
     ///   Possible values:
     ///   \c "on", \c "off". Default: \c "off".
     ///
@@ -254,6 +263,13 @@ public:
     /// - \c "glsl_remap_functions": Specifies a comma separated remap list of MDL functions. The
     ///                              entries must be specified as &lt;old_name&gt;=&lt;new_name&gt;.
     ///                              Both names have to be in mangled form.
+    ///   Default: \c "".
+    /// - \c "glsl_include_for_api_types": If non-empty, specifies a path used to emit an
+    ///   \c "#include" directive in place of the inline API type definitions in the generated
+    ///   GLSL code. The \c "GL_GOOGLE_include_directive" extension will be set to \c "require"
+    ///   automatically.
+    ///   If empty, the API type definitions are emitted inline.
+    ///   Possible values: any path string, or ""
     ///   Default: \c "".
     /// - \c "glsl_state_animation_time_mode": Specify the implementation mode of
     ///                                        state::animation_time().
@@ -491,8 +507,10 @@ public:
         IMdl_execution_context* context) = 0;
 
     /// Transforms an MDL distribution function to target code.
-    /// For a BSDF it results in four functions, suffixed with \c "_init", \c "_sample",
-    /// \c "_evaluate" and \c "_pdf".
+    ///
+    /// It results in four or five functions, suffixed with \c "_init", \c "_sample",
+    /// \c "_evaluate", \c "_pdf", and \c "_auxiliary" (if the \c "enable_auxiliary" backend
+    /// option is enabled).
     ///
     /// \param transaction    The transaction to be used.
     /// \param material       The compiled MDL material.
@@ -501,12 +519,8 @@ public:
     /// \param base_fname     The base name of the generated functions.
     ///                       If \c nullptr is passed, \c "lambda" will be used.
     /// \param[inout] context An execution context which can be used
-    ///                       to pass compilation options to the MDL compiler. The
-    ///                       following options are supported by this operation:
-    ///                       - bool "include_geometry_normal". If \c true, the \c
-    ///                       "geometry.normal" field will be applied to the MDL state prior
-    ///                       to evaluation of the given DF (default: \c true).
-    ///                       .
+    ///                       to pass compilation options to the MDL compiler.
+    ///                       Currently, no options are supported by this operation.
     ///                       During material translation, messages like errors and
     ///                       warnings will be passed to the context for
     ///                       later evaluation by the caller. Can be \c nullptr.
@@ -530,25 +544,23 @@ public:
         IMdl_execution_context* context) = 0;
 
     /// Transforms (multiple) distribution functions and expressions of a material to target code.
-    /// For each distribution function this results in four functions, suffixed with \c "_init",
-    /// \c "_sample", \c "_evaluate", and \c "_pdf". Functions can be selected by providing a list
-    /// of \c Target_function_descriptions. Each of them needs to define the \c path, the root
-    /// of the expression that should be translated. After calling this function, each element of
-    /// the list will contain information for later usage in the application,
-    /// e.g., the \c argument_block_index and the \c function_index.
+    ///
+    /// Functions can be selected by providing a list of \c Target_function_descriptions.
+    /// Each of them needs to define the \c path, the root of the expression that should
+    /// be translated.
+    /// For each distribution function it results in three to five functions, suffixed with
+    /// \c "_init" (if first requested path was not \c "init"), \c "_sample", \c "_evaluate",
+    /// \c "_pdf", and \c "_auxiliary" (if the \c "enable_auxiliary" backend option is enabled).
+    /// After calling this function, each element of the list will contain information for later
+    /// usage in the application, e.g., the \c argument_block_index and the \c function_index.
     ///
     /// \param transaction              The transaction to be used.
     /// \param material                 The compiled MDL material.
     /// \param function_descriptions    The list of descriptions of function to translate.
     /// \param description_count        The size of the list of descriptions.
     /// \param[inout] context           An execution context which can be used
-    ///                                 to pass compilation options to the MDL compiler. The
-    ///                                 following options are supported for this operation:
-    ///                                 - bool "include_geometry_normal". If \c true, the \c
-    ///                                   "geometry.normal" field will be applied to the MDL
-    ///                                   state prior to evaluation of the given DF (default:
-    ///                                   \c true).
-    ///                                 .
+    ///                                 to pass compilation options to the MDL compiler.
+    ///                                 Currently, no options are supported by this operation.
     ///                                 During material compilation messages like errors and
     ///                                 warnings will be passed to the context for
     ///                                 later evaluation by the caller. Can be \c nullptr.
@@ -602,6 +614,7 @@ public:
         const ILink_unit* lu, IMdl_execution_context* context) = 0;
 
     /// Restores an instance of \c ITarget_code from a buffer.
+    ///
     /// Deserialization can fail for outdated input date, which is not an error. Check the context
     /// messages for details.
     ///
@@ -626,6 +639,7 @@ public:
         IMdl_execution_context* context) const = 0;
 
     /// Restores an instance of \c ITarget_code from a buffer.
+    ///
     /// Deserialization can fail for outdated input date, which is not an error. Check the context
     /// messages for details.
     ///
@@ -675,6 +689,8 @@ public:
     ///
     /// See \ref mi_neuray_ptx_texture_lookup_call_modes for more details about texture handlers
     /// for the PTX backend.
+    /// \if MDL_SDK_API See \ref mi_neuray_example_execution_glsl for more details about texture
+    /// handlers for the GLSL backend. \endif
     ///
     /// \param resource  the resource value
     ///
@@ -1215,7 +1231,7 @@ public:
     ///
     /// \param index   The index of the callable function.
     ///
-    /// \return The index of the target argument block for this function or ~0 if not used.
+    /// \return The index of the target argument block for this function or ~0U if not used.
     virtual Size get_callable_function_argument_block_index( Size index) const = 0;
 
     /// Run this code on the native CPU.
@@ -1312,7 +1328,7 @@ public:
     ///    - -2: cannot execute: not native code or the given function is not a BSDF sample function
     virtual Sint32 execute_bsdf_sample(
         Size index,
-        Bsdf_sample_data *data,
+        Bsdf_sample_data_base *data,
         const Shading_state_material& state,
         Texture_handler_base* tex_handler,
         const ITarget_argument_block *cap_args) const = 0;
@@ -1362,7 +1378,7 @@ public:
     ///         function
     virtual Sint32 execute_bsdf_pdf(
         Size index,
-        Bsdf_pdf_data *data,
+        Bsdf_pdf_data_base *data,
         const Shading_state_material& state,
         Texture_handler_base* tex_handler,
         const ITarget_argument_block *cap_args) const = 0;
@@ -1439,7 +1455,7 @@ public:
     ///    - -2: cannot execute: not native code or the given function is not a EDF sample function
     virtual Sint32 execute_edf_sample(
         Size index,
-        Edf_sample_data *data,
+        Edf_sample_data_base *data,
         const Shading_state_material& state,
         Texture_handler_base* tex_handler,
         const ITarget_argument_block *cap_args) const = 0;
@@ -1636,8 +1652,9 @@ public:
 
     /// Add an MDL distribution function to this link unit.
     ///
-    /// For a BSDF it results in four functions, suffixed with \c "_init", \c "_sample",
-    /// \c "_evaluate" and \c "_pdf".
+    /// It results in four or five functions, suffixed with \c "_init", \c "_sample",
+    /// \c "_evaluate", \c "_pdf", and \c "_auxiliary" (if the \c "enable_auxiliary" backend
+    /// option is enabled).
     ///
     /// \param material         The compiled MDL material.
     /// \param path             The path from the material root to the expression that
@@ -1645,12 +1662,8 @@ public:
     /// \param base_fname       The base name of the generated functions.
     ///                         If \c nullptr is passed, \c "lambda" will be used.
     /// \param[inout] context   An execution context which can be used
-    ///                         to pass compilation options to the MDL compiler. The
-    ///                         following options are supported for this operation:
-    ///                         - bool "include_geometry_normal". If \c true, the \c
-    ///                           "geometry.normal" field will be applied to the MDL
-    ///                           state prior to evaluation of the given DF (default: \c true).
-    ///                         .
+    ///                         to pass compilation options to the MDL compiler.
+    ///                         Currently, no options are supported by this operation.
     ///                         During material compilation messages like errors and
     ///                         warnings will be passed to the context for
     ///                         later evaluation by the caller. Can be \c nullptr.
@@ -1676,14 +1689,15 @@ public:
         IMdl_execution_context* context) = 0;
 
     /// Add (multiple) MDL distribution functions and expressions of a material to this link unit.
+    ///
     /// Functions can be selected by providing a list of \c Target_function_descriptions.
     /// If the first function in the list uses the path "init", one init function will be generated,
     /// precalculating values which will be used by the other requested functions.
     /// Each other entry in the list needs to define the \c path, the root of the expression that
     /// should be translated.
-    /// For each distribution function it results in three or four functions, suffixed with
+    /// For each distribution function it results in three to five functions, suffixed with
     /// \c "_init" (if first requested path was not \c "init"), \c "_sample", \c "_evaluate",
-    /// and \c "_pdf".
+    /// \c "_pdf", and \c "_auxiliary" (if the \c "enable_auxiliary" backend option is enabled).
     /// After calling this function, each element of the list will contain information for later
     /// usage in the application, e.g., the \c argument_block_index and the \c function_index.
     ///
@@ -1691,13 +1705,8 @@ public:
     /// \param[inout] function_descriptions The list of descriptions of function to translate.
     /// \param description_count        The size of the list of descriptions.
     /// \param[inout] context           An execution context which can be used
-    ///                                 to pass compilation options to the MDL compiler. The
-    ///                                 following options are supported for this operation:
-    ///                                 - bool "include_geometry_normal". If \c true, the \c
-    ///                                   "geometry.normal" field will be applied to the MDL
-    ///                                   state prior to evaluation of the given DF (default:
-    ///                                   \c true).
-    ///                                 .
+    ///                                 to pass compilation options to the MDL compiler.
+    ///                                 Currently, no options are supported by this operation.
     ///                                 During material compilation messages like errors and
     ///                                 warnings will be passed to the context for
     ///                                 later evaluation by the caller. Can be \c nullptr.
@@ -1784,8 +1793,7 @@ struct Target_function_description
         , base_fname(base_function_name)
         , argument_block_index(~Size(0))
         , function_index(~Size(0))
-        ,
-         return_code(~Sint32(0)) // not processed
+        , return_code(-1)
     {
     }
 
@@ -1800,14 +1808,14 @@ struct Target_function_description
     const char* base_fname;
 
     /// The index of argument block that belongs to the compiled material the function is
-    /// generated from or ~0 if none of the added function required arguments.
+    /// generated from or ~0U if none of the added function required arguments.
     /// It allows to get the layout and a writable pointer to argument data. This is an output
     /// parameter which is available after adding the function to the link unit.
     Size argument_block_index;
 
     /// The index of the generated function for accessing the callable function information of
-    /// the link unit or ~0 if the selected function is an invalid distribution function.
-    /// ~0 is not an error case, it just means, that evaluating the function will result in 0.
+    /// the link unit or ~0U if the selected function is an invalid distribution function.
+    /// ~0U is not an error case, it just means, that evaluating the function will result in 0.
     /// In case the function is a distribution function, the returned index will be the
     /// index of the \c init function, while \c sample, \c evaluate, and \c pdf will be
     /// accessible by the consecutive indices, i.e., function_index + 1, function_index + 2,
@@ -1825,8 +1833,7 @@ struct Target_function_description
     /// #mi::neuraylib::ILink_unit::add_material_expression() (multiplied by 10) and
     /// #mi::neuraylib::ILink_unit::add_material_df (multiplied by 100).
     ///  -     0:  Success.
-    ///  -    ~0:  The function has not yet been processed
-    ///  -    -1:  Invalid parameters (\c nullptr).
+    ///  -    -1:  Invalid parameters (\c nullptr). Also the initialization value.
     ///  -    -2:  Invalid path (non-existing).
     ///  -    -7:  The backend does not implement this function, yet.
     ///

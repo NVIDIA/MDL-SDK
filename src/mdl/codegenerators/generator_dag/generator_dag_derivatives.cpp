@@ -877,6 +877,16 @@ Bitset Derivative_infos::call_wants_arg_derivatives(DAG_call const *call, bool w
             arg_derivs.set_bits();
         }
         return arg_derivs;
+    case IDefinition::DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_IOR:
+    case IDefinition::DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_REFLECTANCE:
+    case IDefinition::DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_LUMINANCE:
+    case IDefinition::DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_VOLUME_COEFFICIENT:
+        // want-derivatives applies to the color argument, if set
+        if (want_derivatives) {
+            arg_derivs.set_bit(0);  // mark as any derivatives requested
+            arg_derivs.set_bit(1);  // first (and only) argument wants derivatives
+        }
+        return arg_derivs;
     case IDefinition::Semantics(IDefinition::DS_OP_BASE + IExpression::OK_TERNARY):
         // want-derivatives only applies to second and third argument, if set
         if (want_derivatives) {
@@ -933,18 +943,119 @@ Func_deriv_info *Derivative_infos::alloc_function_derivative_infos(size_t num_pa
 }
 
 
-// ------------------------------- Deriv_DAG_builder helper -------------------------------
+// ------------------------------- DAG_rebuilder helper -------------------------------
+
+/// Determine which spectral conversion intrinsic should be applied to a color field of a struct.
+IDefinition::Semantics get_spectral_conversion_type(
+    IType_struct const *struct_type,
+    char const         *param_name)
+{
+    char const *type_name = struct_type->get_symbol()->get_name();
+
+    // Check predefined material struct types
+    switch (struct_type->get_predefined_id()) {
+    case IType_struct::SID_MATERIAL:
+        // material.ior uses IOR conversion
+        if (strcmp(param_name, "ior") == 0) {
+            return IDefinition::DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_IOR;
+        }
+        break;
+
+    case IType_struct::SID_MATERIAL_EMISSION:
+        // emission.intensity uses luminance conversion
+        if (strcmp(param_name, "intensity") == 0) {
+            return IDefinition::DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_LUMINANCE;
+        }
+        break;
+
+    case IType_struct::SID_MATERIAL_VOLUME:
+        // volume.emission_intensity uses luminance conversion
+        if (strcmp(param_name, "emission_intensity") == 0) {
+            return IDefinition::DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_LUMINANCE;
+        }
+
+        // volume.absorption_coefficient and volume.scattering_coefficient use volume
+        // coefficient conversion
+        if (strcmp(param_name, "absorption_coefficient") == 0 ||
+                strcmp(param_name, "scattering_coefficient") == 0) {
+            return IDefinition::DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_VOLUME_COEFFICIENT;
+        }
+        break;
+
+    default:
+        break;
+    }
+
+    // Check for df::color_bsdf_component and df::color_edf_component
+    if (struct_type->is_declarative() &&
+            (strcmp(type_name, "::df::color_bsdf_component") == 0 ||
+            strcmp(type_name, "::df::color_edf_component") == 0)) {
+        // weight uses reflectance conversion
+        if (strcmp(param_name, "weight") == 0) {
+            return IDefinition::DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_REFLECTANCE;
+        }
+        return IDefinition::DS_UNKNOWN;
+    }
+
+    return IDefinition::DS_UNKNOWN;
+}
+
+/// Determine which spectral conversion intrinsic should be applied to a color parameter of a
+/// DAG call.
+IDefinition::Semantics get_spectral_conversion_type(
+    DAG_call const *call,
+    char const     *param_name,
+    IType const    *param_type)
+{
+    // Only convert color-typed parameters
+    param_type = param_type->skip_type_alias();
+    if (param_type->get_kind() != IType::TK_COLOR) {
+        return IDefinition::DS_UNKNOWN;
+    }
+
+    IDefinition::Semantics call_semantic = call->get_semantic();
+
+    // Check for struct constructors: delegate to the struct-type overload
+    if (call_semantic == IDefinition::DS_ELEM_CONSTRUCTOR) {
+        if (IType_struct const *call_type = as<IType_struct>(call->get_type())) {
+            return get_spectral_conversion_type(call_type, param_name);
+        }
+    }
+
+    // For BSDF/EDF/VDF calls
+    if (call_semantic >= IDefinition::DS_INTRINSIC_DF_FIRST &&
+            call_semantic <= IDefinition::DS_INTRINSIC_DF_LAST) {
+        // IOR parameters use IOR conversion
+        if (strcmp(param_name, "ior") == 0) {
+            return IDefinition::DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_IOR;
+        }
+
+        // For absorption and extinction coefficients, use IOR conversion to have smooth spectra
+        // without limiting to [0, 1] range
+        if (strcmp(param_name, "absorption_coefficient") == 0 ||
+                strcmp(param_name, "extinction_coefficient") == 0) {
+            return IDefinition::DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_IOR;
+        }
+
+        // Other color parameters (tint, reflectance, transmittance, etc.) use reflectance
+        return IDefinition::DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_REFLECTANCE;
+    }
+
+    return IDefinition::DS_UNKNOWN;
+}
 
 // Constructor.
-Deriv_DAG_builder::Deriv_DAG_builder(
+DAG_rebuilder::DAG_rebuilder(
     IAllocator *alloc,
     Lambda_function &lambda,
-    Derivative_infos &deriv_infos)
+    Derivative_infos *deriv_infos,
+    bool enable_spectral_conversions)
 : m_alloc(alloc)
 , m_lambda(lambda)
 , m_vf(*lambda.get_value_factory())
 , m_tf(*lambda.get_type_factory())
 , m_deriv_infos(deriv_infos)
+, m_enable_spectral_conversions(enable_spectral_conversions)
 , m_deriv_type_map(alloc)
 , m_result_cache(alloc)
 , m_name_id(0)
@@ -956,7 +1067,7 @@ Deriv_DAG_builder::Deriv_DAG_builder(
 }
 
 // Gets or creates an MDL derivative type for a given type.
-IType_struct const *Deriv_DAG_builder::get_deriv_type(IType const *type)
+IType_struct const *DAG_rebuilder::get_deriv_type(IType const *type)
 {
     Deriv_type_map::const_iterator it = m_deriv_type_map.find(type);
     if (it != m_deriv_type_map.end()) return it->second;
@@ -993,7 +1104,7 @@ IType_struct const *Deriv_DAG_builder::get_deriv_type(IType const *type)
         IType_struct::Field(type, sym_dx),
         IType_struct::Field(type, sym_dy)
     };
-    IType_struct const *deriv_type = m_tf.create_struct(/*is_declarative=*/ false, sym, 
+    IType_struct const *deriv_type = m_tf.create_struct(/*is_declarative=*/ false, sym,
         /*category_name=*/ NULL, fields, 3);
 
     m_deriv_type_map[type] = deriv_type;
@@ -1001,7 +1112,7 @@ IType_struct const *Deriv_DAG_builder::get_deriv_type(IType const *type)
 }
 
 // Creates a zero value for use a dx or dy component of a dual.
-IValue const *Deriv_DAG_builder::create_dual_comp_zero(IType const *type)
+IValue const *DAG_rebuilder::create_dual_comp_zero(IType const *type)
 {
     switch (type->get_kind()) {
     case IType::TK_ALIAS:
@@ -1033,7 +1144,12 @@ IValue const *Deriv_DAG_builder::create_dual_comp_zero(IType const *type)
     case IType::TK_VECTOR:
     case IType::TK_MATRIX:
     case IType::TK_COLOR:
+    case IType::TK_SPECTRUM:
         return m_vf.create_zero(type);
+
+    case IType::TK_SPECTRAL_SAMPLE:
+        MDL_ASSERT(!"no constant representation for spectral samples");
+        return m_vf.create_zero(type);  // returns a bad
 
     case IType::TK_LIGHT_PROFILE:
     case IType::TK_BSDF:
@@ -1056,8 +1172,81 @@ IValue const *Deriv_DAG_builder::create_dual_comp_zero(IType const *type)
     return NULL;
 }
 
+// Apply spectral conversion to an argument using a known conversion semantic.
+DAG_node const *DAG_rebuilder::apply_spectral_conversion(
+    IDefinition::Semantics  conv_semantic,
+    DAG_node const         *arg)
+{
+    if (conv_semantic == IDefinition::DS_UNKNOWN) {
+        return arg;
+    }
+
+    // Check for constant color values. We can optimize these cases, which are independent
+    // of the sampled wavelengths:
+    //  - color(0, 0, 0) -> spectral_sample(0)
+    //  - color(1, 1, 1) and not a luminance conversion -> spectral_sample(1)
+    if (DAG_constant const *c = as<DAG_constant>(arg)) {
+        IValue const *v = c->get_value();
+        if (IValue_rgb_color const *rgb = as<IValue_rgb_color>(v)) {
+            if (rgb->is_zero()) {
+                return m_lambda.create_constant(
+                    m_vf.create_spectral_sample_zero(), arg->get_dbg_info());
+            }
+            if (rgb->is_one() &&
+                    conv_semantic != IDefinition::DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_LUMINANCE) {
+                return m_lambda.create_constant(
+                    m_vf.create_spectral_sample_one(), arg->get_dbg_info());
+            }
+        }
+    }
+
+    // Wrap the argument with the appropriate spectral conversion intrinsic
+    char const *conv_name;
+
+    switch (conv_semantic) {
+    case IDefinition::DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_IOR:
+        conv_name = "rgb_to_spectral_ior()";
+        break;
+    case IDefinition::DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_REFLECTANCE:
+        conv_name = "rgb_to_spectral_reflectance()";
+        break;
+    case IDefinition::DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_LUMINANCE:
+        conv_name = "rgb_to_spectral_luminance()";
+        break;
+    case IDefinition::DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_VOLUME_COEFFICIENT:
+        conv_name = "rgb_to_spectral_volume_coefficient()";
+        break;
+    default:
+        MDL_ASSERT(!"Invalid conversion type");
+        conv_semantic = IDefinition::DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_REFLECTANCE;
+        conv_name = "rgb_to_spectral_reflectance()";
+        break;
+    }
+
+    DAG_call::Call_argument conv_arg[1] = {
+        DAG_call::Call_argument(arg, "rgb") };
+
+    return m_lambda.create_call(
+        conv_name,
+        conv_semantic,
+        conv_arg, 1,
+        m_tf.create_spectral_sample(),
+        arg->get_dbg_info());
+}
+
+// Apply spectral conversion to an argument if needed.
+DAG_node const *DAG_rebuilder::apply_spectral_conversion(
+    DAG_call const *call,
+    DAG_node const *arg,
+    char const     *param_name)
+{
+    return apply_spectral_conversion(
+        get_spectral_conversion_type(call, param_name, arg->get_type()),
+        arg);
+}
+
 // Rebuild an expression with derivative information applied.
-DAG_node const *Deriv_DAG_builder::rebuild(DAG_node const *expr, bool want_derivatives)
+DAG_node const *DAG_rebuilder::rebuild(DAG_node const *expr, bool want_derivatives)
 {
     DAG_node const *cache_key = reinterpret_cast<DAG_node const *>(
         reinterpret_cast<std::uintptr_t>(expr) | (want_derivatives ? 1 : 0));
@@ -1078,19 +1267,60 @@ DAG_node const *Deriv_DAG_builder::rebuild(DAG_node const *expr, bool want_deriv
 
     case DAG_node::EK_CONSTANT:
         {
+            DAG_constant const *dag_const = cast<DAG_constant>(expr);
+
+            if (m_enable_spectral_conversions) {
+                // If this is a struct constant with color fields that need spectral conversion,
+                // expand it into an element constructor call so that apply_spectral_conversion
+                // can wrap each color field individually.
+                //
+                // For constants, we need to handle:
+                //  - material struct
+                //  - material surface struct
+                //  - material emission struct
+                //  - material volume struct
+                //  - df::color_bsdf_component struct
+                //  - df::color_edf_component struct
+                //
+                // Custom AOV fields cannot be accessed by libbsdf, so they are not handled here.
+
+                if (IValue_struct const *sv = as<IValue_struct>(dag_const->get_value())) {
+                    IType_struct const *st = sv->get_type();
+                    char const *type_name = st->get_symbol()->get_name();
+
+                    bool needs_expansion = false;
+                    if (st->get_predefined_id() == IType_struct::SID_MATERIAL ||
+                            st->get_predefined_id() == IType_struct::SID_MATERIAL_SURFACE ||
+                            st->get_predefined_id() == IType_struct::SID_MATERIAL_EMISSION ||
+                            st->get_predefined_id() == IType_struct::SID_MATERIAL_VOLUME) {
+                        needs_expansion = true;
+                    } else if (st->is_declarative() &&
+                            (strcmp(type_name, "::df::color_bsdf_component") == 0 ||
+                            strcmp(type_name, "::df::color_edf_component") == 0)) {
+                        needs_expansion = true;
+                    }
+
+                    if (needs_expansion) {
+                        DAG_call const *elem_ctor =
+                            m_lambda.get_node_factory().value_to_constructor(dag_const);
+                        res = rebuild(elem_ctor, want_derivatives);
+                        break;
+                    }
+                }
+            }
+
             if (!want_derivatives) {
                 return expr;
             }
 
             // create (val, 0, 0) constant
-            DAG_constant const *dag_const = cast<DAG_constant>(expr);
             IValue const *expr_val = m_vf.import(dag_const->get_value());
             IValue const *null_val = create_dual_comp_zero(expr_val->get_type());
 
             IType_struct const *deriv_type = get_deriv_type(expr->get_type());
             IValue const *vals[3] = { expr_val, null_val, null_val };
             IValue const *res_val = m_vf.create_struct(deriv_type, vals, 3);
-            res = m_lambda.create_constant(res_val);
+            res = m_lambda.create_constant(res_val, expr->get_dbg_info());
         }
         break;
 
@@ -1115,8 +1345,13 @@ DAG_node const *Deriv_DAG_builder::rebuild(DAG_node const *expr, bool want_deriv
     case DAG_node::EK_CALL:
         {
             DAG_call const *call = cast<DAG_call>(expr);
-            Bitset want_arg_derivs(
-                m_deriv_infos.call_wants_arg_derivatives(call, want_derivatives));
+            IDefinition::Semantics sema = call->get_semantic();
+
+            Bitset want_arg_derivs(m_alloc, size_t(call->get_argument_count() + 1));
+            if (m_deriv_infos != NULL) {
+                want_arg_derivs.copy_data(
+                    m_deriv_infos->call_wants_arg_derivatives(call, want_derivatives));
+            }
 
             string call_name(m_alloc);
             if (want_derivatives) {
@@ -1127,15 +1362,18 @@ DAG_node const *Deriv_DAG_builder::rebuild(DAG_node const *expr, bool want_deriv
             int n_args = call->get_argument_count();
             Small_VLA<DAG_call::Call_argument, 8> args(m_alloc, size_t(n_args));
             for (int i = 0; i < n_args; ++i) {
-                DAG_node const *arg = call->get_argument(i);
-
                 bool calc_arg_derivs = want_arg_derivs.test_bit(i + 1);
 
+                args[i].arg = call->get_argument(i);
                 args[i].param_name = call->get_parameter_name(i);
-                args[i].arg = rebuild(arg, calc_arg_derivs);
+
+                if (m_enable_spectral_conversions) {
+                    args[i].arg = apply_spectral_conversion(call, args[i].arg, args[i].param_name);
+                }
+
+                args[i].arg = rebuild(args[i].arg, calc_arg_derivs);
             }
 
-            IDefinition::Semantics sema = call->get_semantic();
             res = m_lambda.create_call(
                 call_name.c_str(),
                 sema,
@@ -1149,8 +1387,8 @@ DAG_node const *Deriv_DAG_builder::rebuild(DAG_node const *expr, bool want_deriv
         return NULL;
     }
 
-    if (want_derivatives) {
-        m_deriv_infos.mark_calc_derivatives(res);
+    if (want_derivatives && m_deriv_infos != NULL) {
+        m_deriv_infos->mark_calc_derivatives(res);
     }
 
     m_result_cache[cache_key] = res;

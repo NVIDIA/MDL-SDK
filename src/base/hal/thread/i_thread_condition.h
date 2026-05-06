@@ -98,13 +98,12 @@
 #else
 #include <mi/base/miwindows.h>
 #endif
-#include <base/lib/mem/i_mem_allocatable.h>
 
 namespace MI {
 namespace THREAD {
 
 /// The Condition class that implements a signaling mechanism between threads.
-class Condition : public MEM::Allocatable
+class Condition
 {
 
 public:

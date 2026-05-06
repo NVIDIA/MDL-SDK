@@ -56,6 +56,7 @@
 #include <mi/base/handle.h>
 
 #include "idata_interfaces.h"
+#include "i_idata_string_cache.h"
 
 namespace MI {
 
@@ -114,6 +115,10 @@ public:
     mi::Sint32 set_value( const char* key, mi::base::IInterface* value) final;
 
     mi::Sint32 set_value( mi::Size index, mi::base::IInterface* value) final;
+
+    using I::get_value;
+
+    using I::set_value;
 
     // public API methods (ICompound)
 
@@ -207,8 +212,8 @@ private:
     /// (in other words the instance itself owns the storage).
     mi::base::Handle<const mi::base::IInterface> m_owner;
 
-    /// Caches the last return value of get_key().
-    mutable std::string m_cached_key;
+    /// Caches the return values of get_key().
+    mutable String_cache m_string_cache;
 };
 
 /// Default/proxy implementation of vector-like interfaces derived from ICompound

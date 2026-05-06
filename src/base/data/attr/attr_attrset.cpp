@@ -36,7 +36,6 @@
 #include <base/system/main/types.h>
 #include <base/data/db/i_db_transaction.h>
 #include <base/data/serial/i_serializer.h>
-#include <base/lib/cont/i_cont_rle_array.h>
 #include <base/lib/log/i_log_logger.h>
 
 #include <limits>
@@ -369,40 +368,15 @@ void collect_tags_rec(Type_iterator& iter, DB::Tag_set& result)
             // increase offset by the array element type's size since an array has no size itself
             value += size;
         }
-        // rle arrays reset the value pointers accordingly
-        else if (iter->get_typecode() == TYPE_RLE_UINT_PTR) {
-            // nothing to do here since we are looking for Tag-typed data
-#if 0
-            Rle_array<Uint>* array = *(Rle_array<Uint>**)value;
-            Rle_chunk_iterator<Uint> iterator = array->begin_chunk();
-            size_t size = array->get_index_size();
-            for (size_t i=0; i < size; ++i) {
-                out_array->push_back(iterator.data(), iterator.count());
-                ++iterator;
-            }
-#endif
-            value += sizeof(CONT::Rle_array<Uint>*);
-        }
         // structs can be handled recursively
-        else if (iter->get_typecode() == TYPE_STRUCT || iter->get_typecode() == TYPE_ATTACHABLE
-            || iter->get_typecode() == TYPE_CALL)
+        else if (iter->get_typecode() == TYPE_STRUCT)
         {
             size_t size = iter->sizeof_elem();
             for (Uint a=0; a < arraysize; ++a) {
                 // in case of TYPE_CALL, the value points right to the function's tag
-                if (iter->get_typecode() == TYPE_CALL) {
-                    DB::Tag tag(*reinterpret_cast<DB::Tag*>(value));
-                    if (tag.is_valid())
-                        result.insert(tag);
-                    // need to reset the value pointer such that following Type_iterator sub is
-                    // correct
-                    value += 2*Type::sizeof_one(TYPE_STRING);
-                }
                 Type_iterator sub(&iter, value);
                 collect_tags_rec(sub, result);
                 value += size;
-                if (iter->get_typecode() == TYPE_CALL)
-                    value -= 2*Type::sizeof_one(TYPE_STRING);
             }
         }
         else {
@@ -451,8 +425,7 @@ void Attribute_set::get_references(
 // Retrieve all tags from the given Attribute.
 void get_references(
     const Attribute& attr,
-    DB::Tag_set& result,
-    Compare type_comparison)
+    DB::Tag_set& result)
 {
     // iterate over all elements and collect all is_tag()-typed ones
     for (Uint i=0; i < attr.get_listsize(); ++i) {
@@ -504,15 +477,6 @@ SERIAL::Serializable *Attribute_set::deserialize(
 //
 // dump attribute set to debug messages, for debugging only.
 //
-#if 0
-const char* get(bool v)
-{
-    if (v)
-        return "true";
-    else
-        return "false";
-}
-#endif
 
 void Attribute_set::dump() const
 {
@@ -582,22 +546,6 @@ void print_type_value(
     size_t array_size = typ.get_arraysize();
 
     switch (code) {
-      case TYPE_RGB: {
-        Uint8 *ptr = (Uint8*)val_ptr;
-        mod_log->debug(M_ATTR, Mod_log::C_DATABASE,
-            "  (%d, %d, %d), arraysize %" FMT_SIZE_T ", name %s",
-            (int)ptr[0], (int)ptr[1], (int)ptr[2],
-            array_size, typ.get_name()?typ.get_name():"<nil>");
-        break;
-      }
-      case TYPE_RGBA: {
-        Uint8 *ptr = (Uint8*)val_ptr;
-        mod_log->debug(M_ATTR, Mod_log::C_DATABASE,
-            "  (%d, %d, %d, %d), arraysize %" FMT_SIZE_T ", name %s",
-            (int)ptr[0], (int)ptr[1], (int)ptr[2], (int)ptr[3],
-            array_size, typ.get_name());
-        break;
-      }
       case TYPE_COLOR: {
         Scalar *ptr = (Scalar*)val_ptr;
         mod_log->debug(M_ATTR, Mod_log::C_DATABASE,
@@ -702,10 +650,6 @@ void print_type_value(
         }
         break;
       }
-      case TYPE_ID:
-      case TYPE_PARAMETER:
-      case TYPE_TEMPORARY:
-      case TYPE_LIGHT:
       case TYPE_INT32: {
         Uint32 *ptr = (Uint32*)val_ptr;
         mod_log->debug(M_ATTR, Mod_log::C_DATABASE,
@@ -716,28 +660,6 @@ void print_type_value(
       case TYPE_STRUCT: {
         mod_log->debug(M_ATTR, Mod_log::C_DATABASE,
             "\tnow diving into struct \"%s\"...", typ.get_name());
-        break;
-      }
-      case TYPE_ATTACHABLE: {
-        mod_log->debug(M_ATTR, Mod_log::C_DATABASE,
-            "\tnow diving into ref proxy \"%s\"...", typ.get_name());
-        break;
-      }
-      case TYPE_CALL: {
-        mod_log->debug(M_ATTR, Mod_log::C_DATABASE,
-            "\tnow diving into call \"%s\"...", typ.get_name());
-        break;
-      }
-      case TYPE_RLE_UINT_PTR: {
-        CONT::Rle_array<Uint> **val = (CONT::Rle_array<Uint>**)val_ptr;
-        CONT::Rle_array<Uint> *ptr = *val;
-        mod_log->debug(M_ATTR, Mod_log::C_DATABASE,
-            "  %" FMT_SIZE_T " elements, name %s",
-            ptr->size(), typ.get_name());
-        for (size_t i=0; i<ptr->size(); ++i)
-            mod_log->debug(M_ATTR, Mod_log::C_DATABASE,
-                "  elem[%" FMT_SIZE_T "] = %u",
-                i, (*ptr)[i]);
         break;
       }
       case TYPE_ARRAY: {
@@ -756,3 +678,4 @@ void print_type_value(
 
 
 }
+

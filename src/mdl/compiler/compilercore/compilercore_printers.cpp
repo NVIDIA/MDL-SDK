@@ -45,9 +45,6 @@
 #include <mi/mdl/mdl_streams.h>
 #include <mi/mdl/mdl_generated_dag.h>
 
-#include <string>
-
-#include <iostream>
 #include <cstdio>
 #include <cstdarg>
 #include <cassert>
@@ -57,7 +54,6 @@
 #include "compilercore_cc_conf.h"
 #include "compilercore_mangle.h"
 #include "compilercore_printers.h"
-#include "compilercore_streams.h"
 #include "compilercore_tools.h"
 #include "compilercore_wchar_support.h"
 
@@ -70,7 +66,7 @@ inline bool isfinite(double v)
 }
 
 /// Captured output stream.
-class Captured_color_stream : public Allocator_interface_implement<IOutput_stream_colored>
+class Captured_color_stream MDL_FINAL : public Allocator_interface_implement<IOutput_stream_colored>
 {
     typedef Allocator_interface_implement<IOutput_stream_colored> Base;
 
@@ -328,6 +324,20 @@ restart:
     case IType::TK_DOUBLE:           tn = "double"; break;
     case IType::TK_STRING:           tn = "string"; break;
     case IType::TK_COLOR:            tn = "color"; break;
+    case IType::TK_SPECTRAL_SAMPLE:
+        this->push_color(ISyntax_coloring::C_COMMENT);
+        this->write("/* spectral_sample */");
+        this->pop_color();
+        this->write(' ');
+        tn = "color";
+        break;
+    case IType::TK_SPECTRUM:
+        this->push_color(ISyntax_coloring::C_COMMENT);
+        this->write("/* spectrum */");
+        this->pop_color();
+        this->write(' ');
+        tn = "color";
+        break;
     case IType::TK_LIGHT_PROFILE:    tn = "light_profile"; break;
     case IType::TK_BSDF_MEASUREMENT: tn = "bsdf_measurement"; break;
     case IType::TK_VOID:             tn = "void"; break;
@@ -1283,6 +1293,30 @@ void Printer::print(IValue const *value)
             print(')');
         }
         break;
+    case IValue::VK_SPECTRUM:
+        {
+            IValue_spectrum const *color = cast<IValue_spectrum>(value);
+            keyword("color");
+            print("(state::wavelength_base(), float[](");
+            for (size_t i = 0, n = color->get_component_count(); i < n; ++i) {
+                if (i > 0) {
+                    print(", ");
+                }
+                print(color->get_value(i));
+            }
+            print("))");
+        }
+        break;
+    case IValue::VK_SPECTRAL_SAMPLE:
+        {
+            // may only be spectral sample zero or one
+            IValue_spectral_sample const *sample = cast<IValue_spectral_sample>(value);
+            keyword("color");
+            print("(");
+            print(sample->get_value(0));
+            print(")");
+        }
+        break;
     case IValue::VK_STRUCT:
         {
             IValue_struct const *v = cast<IValue_struct>(value);
@@ -1587,7 +1621,7 @@ void Printer::print(IExpression const *expr, int priority)
             if (op_priority < priority) {
                 print('(');
             }
-            
+
             print(c->get_condition(), op_priority);
 
             print(" ? ");
@@ -2897,6 +2931,9 @@ void Printer::print_mdl_versions(IDefinition const *idef, bool insert)
             case IMDL::MDL_VERSION_1_10:
                 print(" Since MDL 1.10");
                 break;
+            case IMDL::MDL_VERSION_1_11:
+                print(" Since MDL 1.11");
+                break;
             case IMDL::MDL_VERSION_EXP:
                 print(" Since MDL experimental");
                 break;
@@ -2933,6 +2970,9 @@ void Printer::print_mdl_versions(IDefinition const *idef, bool insert)
                 break;
             case IMDL::MDL_VERSION_1_10:
                 print(" Removed in MDL 1.10");
+                break;
+            case IMDL::MDL_VERSION_1_11:
+                print(" Removed in MDL 1.11");
                 break;
             case IMDL::MDL_VERSION_EXP:
                 print(" Removed in MDL experimental");
@@ -3062,7 +3102,6 @@ public:
         IOutput_stream                  *ostr,
         IMDL_exporter_resource_callback *resource_cb)
     : Base(alloc, ostr)
-    , m_alloc(alloc)
     , m_sym_stack(Symbol_stack::container_type(get_allocator()))
     , m_resource_cb(resource_cb)
     , m_module(NULL)
@@ -3139,9 +3178,6 @@ public:
     void set_colors(Color_table const &table, bool enable);
 
 private:
-    /// The allocator.
-    IAllocator *m_alloc;
-
     typedef stack<ISymbol const *>::Type Symbol_stack;
 
     /// Temporary used symbol stack.

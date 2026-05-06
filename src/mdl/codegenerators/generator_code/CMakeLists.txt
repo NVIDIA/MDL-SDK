@@ -33,6 +33,7 @@ set(PROJECT_NAME mdl-codegenerators-generator_code)
 set(PROJECT_HEADERS 
     "generator_code.h"
 	"generator_code_executable_base.h"
+	"generator_code_resource_manager.h"
 	"generator_code_thread_context.h"
 	"generator_code_tools.h"
     )
@@ -40,6 +41,7 @@ set(PROJECT_HEADERS
 set(PROJECT_SOURCES 
     "generator_code.cpp"
 	"generator_code_executable_base.cpp"
+	"generator_code_resource_manager.cpp"
 	"generator_code_thread_context.cpp"
     ${PROJECT_HEADERS}
     )

@@ -171,8 +171,9 @@ public:
   bool PrepareForThinLTO;
   bool PerformThinLTO;
   bool DivergentTarget;
-  bool AvoidPointerPHIs;  // this will disable sinking loads and stores in SimplifyCFG
-  bool EnableVectorizer;  // allow to disable the vectorizer completely
+  bool AvoidPointerPHIs;    // this will disable sinking loads and stores in SimplifyCFG
+  bool EnableVectorizer;    // allow to disable the vectorizer completely
+  bool SimplifyCondBranch;  // allow to disable optimization of conditional branches in SimplifyCFG
   unsigned LicmMssaOptCap;
   unsigned LicmMssaNoAccForPromotionCap;
 

@@ -45,6 +45,7 @@ class Declaration;
 class Expr_factory;
 class Stmt;
 class Stmt_factory;
+class Symbol_table;
 class Value_factory;
 
 /// Very simple GLSL optimizer.

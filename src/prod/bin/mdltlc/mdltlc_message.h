@@ -50,6 +50,8 @@ class Message {
     const int m_line;
     const int m_column;
     const char *m_message;
+    const char *m_source_line;
+    const char *m_source_underline;
 
   public:
 
@@ -59,7 +61,9 @@ class Message {
             const char *filename,
             int line,
             int column,
-            const char *message);
+            const char *message,
+            const char *source_line = nullptr,
+            const char *source_underline = nullptr);
 
     /// Return the message's severity;
     Severity get_severity() const { return m_severity; }
@@ -78,6 +82,15 @@ class Message {
 
     /// Return the message's message;
     const char *get_message() const { return m_message; }
+
+    /// Return true if the message has a source excerpt.
+    bool has_source_excerpt() const { return m_source_line != nullptr; }
+
+    /// Return the source line for this message, if any.
+    const char *get_source_line() const { return m_source_line; }
+
+    /// Return the underline for this message's source line, if any.
+    const char *get_source_underline() const { return m_source_underline; }
 };
 
 typedef mi::mdl::vector<Message*>::Type Message_list;

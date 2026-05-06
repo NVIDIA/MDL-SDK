@@ -39,7 +39,6 @@
 #include "generator_jit_code_printer.h"
 #include "generator_jit_generated_code.h"
 #include "generator_jit_llvm.h"
-#include "generator_jit_opt_pass_gate.h"
 
 namespace mi {
 namespace mdl {
@@ -189,6 +188,8 @@ public:
                 case IType::TK_VECTOR:
                 case IType::TK_MATRIX:
                 case IType::TK_COLOR:
+                case IType::TK_SPECTRAL_SAMPLE:
+                case IType::TK_SPECTRUM:
                 {
                     IType_compound const *comp_type =
                         static_cast<IType_compound const *>(mdl_type);
@@ -265,6 +266,8 @@ private:
             MAP_KIND( TK_MATRIX,           VK_MATRIX);
             MAP_KIND( TK_ARRAY,            VK_ARRAY);
             MAP_KIND( TK_COLOR,            VK_RGB_COLOR);
+            MAP_KIND( TK_SPECTRAL_SAMPLE,  VK_BAD);  // not possible, because wavelengths vary
+            MAP_KIND( TK_SPECTRUM,         VK_SPECTRUM);
             MAP_KIND( TK_FUNCTION,         VK_BAD);
             MAP_KIND( TK_STRUCT,           VK_STRUCT);
             MAP_KIND( TK_TEXTURE,          VK_TEXTURE);
@@ -321,6 +324,7 @@ private:
             case IType::TK_MATRIX:
             case IType::TK_ARRAY:
             case IType::TK_COLOR:
+            case IType::TK_SPECTRUM:
             case IType::TK_STRUCT:
             {
                 IType_compound const *comp_type = static_cast<IType_compound const *>(mdl_type);
@@ -342,6 +346,7 @@ private:
             case IType::TK_EDF:
             case IType::TK_VDF:
             case IType::TK_FUNCTION:
+            case IType::TK_SPECTRAL_SAMPLE:
             case IType::TK_PTR:
             case IType::TK_REF:
             case IType::TK_VOID:
@@ -477,8 +482,9 @@ IGenerated_code_value_layout::State Generated_code_value_layout::get_nested_stat
         case mi::mdl::IValue::VK_MATRIX:
         case mi::mdl::IValue::VK_ARRAY:
         case mi::mdl::IValue::VK_RGB_COLOR:
+        case mi::mdl::IValue::VK_SPECTRUM:
         {
-            // homogenous types have same state for all of them
+            // homogeneous types have same state for all of them
             Layout_struct const *child_layout = reinterpret_cast<Layout_struct const *>(
                 &m_layout_data[layout->children_state_offs]);
 
@@ -506,6 +512,7 @@ IGenerated_code_value_layout::State Generated_code_value_layout::get_nested_stat
         case mi::mdl::IValue::VK_TEXTURE:
         case mi::mdl::IValue::VK_LIGHT_PROFILE:
         case mi::mdl::IValue::VK_BSDF_MEASUREMENT:
+        case mi::mdl::IValue::VK_SPECTRAL_SAMPLE:
         {
             MDL_ASSERT(!"unexpected value type");
             return IGenerated_code_value_layout::State(~mi::Uint32(0), ~mi::Uint32(0));
@@ -601,6 +608,7 @@ int Generated_code_value_layout::set_value(
     case mi::mdl::IValue::VK_MATRIX:
     case mi::mdl::IValue::VK_ARRAY:
     case mi::mdl::IValue::VK_RGB_COLOR:
+    case mi::mdl::IValue::VK_SPECTRUM:
         {
             // homogeneous types have same state for all of them
             mi::mdl::IValue_compound const *v = cast<mi::mdl::IValue_compound>(value);
@@ -660,6 +668,7 @@ int Generated_code_value_layout::set_value(
 
     case mi::mdl::IValue::VK_BAD:
     case mi::mdl::IValue::VK_INVALID_REF:
+    case mi::mdl::IValue::VK_SPECTRAL_SAMPLE:
         MDL_ASSERT(!"unexpected value type");
         return -5;
     }
@@ -799,112 +808,6 @@ Generated_code_source::State_usage Generated_code_source::get_state_usage() cons
     return m_render_state_usage;
 }
 
-// Constructor.
-Generated_code_source::Source_res_manag::Source_res_manag(
-    IAllocator              *alloc,
-    Resource_attr_map const *resource_attr_map)
-: m_alloc(alloc)
-, m_resource_attr_map(alloc)
-, m_res_indexes(
-    0, Tag_index_map::hasher(), Tag_index_map::key_equal(), alloc)
-, m_string_indexes(
-    0, String_index_map::hasher(), String_index_map::key_equal(), alloc)
-, m_curr_res_idx(0)
-, m_curr_string_idx(0)
-{
-    if (resource_attr_map != NULL) {
-        // import
-        m_resource_attr_map.insert(resource_attr_map->begin(), resource_attr_map->end());
-    }
-}
-
-// Register the given resource value and return its 1-based index in the resource table.
-// Index 0 represents an invalid resource reference.
-size_t Generated_code_source::Source_res_manag::get_resource_index(
-    Resource_tag_tuple::Kind   kind,
-    char const                 *url,
-    int                        tag,
-    IType_texture::Shape,
-    IValue_texture::gamma_mode,
-    char const                 *selector)
-{
-    if (!m_resource_attr_map.empty()) {
-        // If the tag is not known, attempt a lookup without taking the tag into account.
-        Resource_tag_tuple key(kind, url, selector, tag == 0 ? Resource_equal_to::IGNORE_TAG : tag);
-
-        Resource_attr_map::const_iterator it(m_resource_attr_map.find(key));
-        if (it != m_resource_attr_map.end()) {
-            mi::mdl::Resource_attr_entry const &e = it->second;
-            return e.index;
-        }
-        // Bad: we have a resource map, but could not find the requested resource.
-        // This means the integration was not able to retrieve it from the material
-        // and has not loaded it. Return 0 (invalid) here, the resource *is* missing.
-        return 0;
-    }
-
-    switch (kind) {
-    case Resource_tag_tuple::RK_TEXTURE_GAMMA_DEFAULT:
-    case Resource_tag_tuple::RK_TEXTURE_GAMMA_LINEAR:
-    case Resource_tag_tuple::RK_TEXTURE_GAMMA_SRGB:
-    case Resource_tag_tuple::RK_LIGHT_PROFILE:
-    case Resource_tag_tuple::RK_BSDF_MEASUREMENT:
-    case Resource_tag_tuple::RK_SIMPLE_GLOSSY_MULTISCATTER:
-    case Resource_tag_tuple::RK_BACKSCATTERING_GLOSSY_MULTISCATTER:
-    case Resource_tag_tuple::RK_BECKMANN_SMITH_MULTISCATTER:
-    case Resource_tag_tuple::RK_GGX_SMITH_MULTISCATTER:
-    case Resource_tag_tuple::RK_BECKMANN_VC_MULTISCATTER:
-    case Resource_tag_tuple::RK_GGX_VC_MULTISCATTER:
-    case Resource_tag_tuple::RK_WARD_GEISLER_MORODER_MULTISCATTER:
-    case Resource_tag_tuple::RK_SHEEN_MULTISCATTER:
-    case Resource_tag_tuple::RK_MICROFLAKE_SHEEN_GENERAL:
-    case Resource_tag_tuple::RK_MICROFLAKE_SHEEN_MULTISCATTER:
-        // we support textures, light profiles, bsdf_measurements, and bsdf_data textures
-        {
-            Tag_index_map::const_iterator it = m_res_indexes.find(tag);
-            if (it != m_res_indexes.end())
-                return it->second;
-
-            size_t idx = ++m_curr_res_idx;
-            m_res_indexes[tag] = idx;
-            return idx;
-        }
-
-    default:
-        // those should never occur in functions
-        MDL_ASSERT(!"Unexpected resource type");
-        return tag;
-    }
-}
-
-// Register a string constant and return its 1 based index in the string table.
-size_t Generated_code_source::Source_res_manag::get_string_index(IValue_string const *s)
-{
-    string str(s->get_value(), m_alloc);
-
-    String_index_map::const_iterator it = m_string_indexes.find(str);
-    if (it != m_string_indexes.end())
-        return it->second;
-
-    if (m_curr_res_idx == 0) {
-        // zero is reserved for "Not-a-known-String"
-        m_string_indexes[string("<NULL>", m_alloc)] = 0;
-    }
-
-    size_t idx = ++m_curr_string_idx;
-    m_string_indexes[str] = idx;
-    return idx;
-}
-
-// Imports a new resource attribute map.
-void Generated_code_source::Source_res_manag::import_resource_attribute_map(
-    Resource_attr_map const *resource_attr_map)
-{
-    if (resource_attr_map != NULL) {
-        m_resource_attr_map.insert(resource_attr_map->begin(), resource_attr_map->end());
-    }
-}
-
 // --------------------------- Generated_code_lambda_function ----------------------------
 
 // Constructor.
@@ -1000,6 +903,8 @@ void Generated_code_lambda_function::init(
     if (res_handler == NULL)
         return;
 
+    m_res_data.m_resource_handler = res_handler;
+
     size_t n_res_entries = m_res_entries.size();
     if (n_res_entries == 0)
         return;
@@ -1007,8 +912,6 @@ void Generated_code_lambda_function::init(
     m_res_data.m_obj_size = (res_handler->get_data_size() + 15) & ~size_t(15);
     if (m_res_data.m_obj_size == 0)
         return;
-
-    m_res_data.m_resource_handler = res_handler;
 
     mi::mdl::IAllocator *alloc = m_jitted_code->get_allocator();
 

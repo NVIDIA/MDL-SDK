@@ -71,6 +71,7 @@ index.
   - \ref mi_neuray_example_mdl_browser "Illustration of how we believe MDL materials should be presented to the user"
   - \ref mi_neuray_example_modules "Inspecting the parameters of material and function definitions"
   - \ref mi_neuray_example_instantiation "Instantiating material and function definitions"
+  - \ref mi_neuray_example_spectral_rendering "Integrating spectral rendering support into your rendering application"
   - \ref mi_neuray_example_start_shutdown "Interfaces and handles"
   - \ref mi_neuray_example_optix7 "Limiting the number of exported PTX functions"
   - \ref mi_neuray_example_optix7 "Linking and optimizing generated MDL code with renderer code"

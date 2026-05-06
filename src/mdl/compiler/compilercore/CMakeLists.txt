@@ -101,6 +101,7 @@ set(PROJECT_HEADERS
     "compilercore_options.h"
     "compilercore_overload.h"
     "compilercore_positions.h"
+    "compilercore_promotion.h"
     "compilercore_predefined_symbols.h"
     "compilercore_printers.h"
     "compilercore_rawbitset.h"

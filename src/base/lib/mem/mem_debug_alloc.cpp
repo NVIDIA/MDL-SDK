@@ -197,9 +197,7 @@ public:
 
     /// Constructor for a new debug command lexer.
     Debug_cmd_lexer(const char *input)
-    : m_has_token(0)
-    , m_cur_token(tok_error)
-    , m_s(NULL)
+    : m_s(NULL)
     , m_len(0)
     , m_num(0)
     , m_curr_pos(input)
@@ -280,8 +278,6 @@ private:
     }
 
 private:
-    int        m_has_token;
-    unsigned   m_cur_token;
     char const *m_s;
     size_t     m_len;
     size_t     m_num;

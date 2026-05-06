@@ -56,7 +56,6 @@
 #include <mi/base/lock.h>
 
 #include "compilercore_cc_conf.h"
-#include "compilercore_allocator.h"
 #include "compilercore_debug_tools.h"
 
 #include "compilercore_modules.h"
@@ -196,9 +195,7 @@ public:
 
     /// Constructor for a new debug command lexer.
     Debug_cmd_lexer(char const *input)
-    : m_has_token(0)
-    , m_cur_token(tok_error)
-    , m_s(NULL)
+    : m_s(NULL)
     , m_len(0)
     , m_num(0)
     , m_curr_pos(input)
@@ -283,8 +280,6 @@ private:
     }
 
 private:
-    int        m_has_token;
-    unsigned   m_cur_token;
     char const *m_s;
     size_t     m_len;
     size_t     m_num;
@@ -497,7 +492,7 @@ DebugMallocAllocator::DebugMallocAllocator(mi::base::IAllocator *alloc)
 , m_internal_alloc(alloc, mi::base::DUP_INTERFACE)
 , m_first(NULL)
 , m_last(NULL)
-, m_errors(NULL) 
+, m_errors(NULL)
 , m_next_block_num(0)
 , m_num_captures_frames(5)
 , m_num_skip_frames(3)

@@ -56,3 +56,16 @@ set(LINKER_DEPENDENCIES_MDL_JIT
     mdl-jit-generator_jit
     mdl-runtime
     CACHE INTERNAL "" FORCE)
+
+set(LINKER_DEPENDENCIES_MDL_NO_JIT
+    mdl-codegenerators-generator_code
+    mdl-codegenerators-generator_dag
+    mdl-compiler-compiler_glsl
+    mdl-compiler-compiler_hlsl
+    mdl-compiler-compilercore
+    mdl-distiller-dist
+    mdl-integration-i18n
+    mdl-integration-mdlnr
+    mdl-no_jit-generator_stub
+    mdl-runtime
+    CACHE INTERNAL "" FORCE)

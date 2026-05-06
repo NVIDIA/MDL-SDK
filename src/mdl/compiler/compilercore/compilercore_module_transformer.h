@@ -39,9 +39,9 @@
 
 #include "compilercore_allocator.h"
 #include "compilercore_mdl.h"
+#include "compilercore_promotion.h"
 #include "compilercore_messages.h"
 #include "compilercore_modules.h"
-#include "compilercore_options.h"
 #include "compilercore_visitor.h"
 
 namespace mi {
@@ -124,18 +124,20 @@ public:
     /// \param expr  the expression whose position must be adapted
     void adapt_position_owner(IExpression *expr) MDL_FINAL;
 
-    /// Compute the promotions rules when a call (represented by a definition) will be
-    /// promoted from one MDL version to a target version.
+    /// Compute the parameter transforms needed when a call (represented by a definition)
+    /// will be promoted from one MDL version to a target version.
     ///
-    /// \param[in] dst_version  the target version
-    /// \param[in] src_version  the version of the source module (that owns the call)
-    /// \param[in] def          the call definition
+    /// \param[in]  dst_version  the target version
+    /// \param[in]  src_version  the version of the source module (that owns the call)
+    /// \param[in]  def          the call definition
+    /// \param[out] xforms       receives the parameter transforms
     ///
-    /// \return necessary rules to modify the arguments of the call
-    static unsigned get_promotion_rules(
-        IMDL::MDL_version dst_version,
-        IMDL::MDL_version src_version,
-        IDefinition const *def);
+    /// \return the semantic effect of the promotion (e.g. call another bsdf function)
+    static Promotion_semantic get_promotion_rules(
+        IMDL::MDL_version  dst_version,
+        IMDL::MDL_version  src_version,
+        IDefinition const  *def,
+        Param_transform_vec &xforms);
 
     /// Promote a call reference from a given MDL version to the target MDL version.
     ///
@@ -143,7 +145,9 @@ public:
     /// \param[in]  src_version  the version of the source module (that owns the call)
     /// \param[in]  ref          the callee reference
     /// \param[in]  modifier     a clone modifier for cloning expressions
-    /// \param[out] rules        output: necessary rules to modify the arguments of the call
+    /// \param[out] xforms       output: parameter transforms to apply to the call arguments
+    /// \param[out] semantic     output: semantic effect of the promotion
+    ///                          (e.g. call another bsdf function instead of fresnel_layer())
     ///
     /// \return the (potentially modified) callee reference
     static IExpression_reference const *promote_call_reference(
@@ -151,7 +155,8 @@ public:
         IMDL::MDL_version           src_version,
         IExpression_reference const *ref,
         IClone_modifier             *modifier,
-        unsigned                    &rules);
+        Param_transform_vec         &xforms,
+        Promotion_semantic          &semantic);
 
 protected:
 

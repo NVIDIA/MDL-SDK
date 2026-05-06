@@ -673,7 +673,7 @@ extern "C" __global__ void __closesthit__radiance()
         const float z3 = rnd(seed);
         const float z4 = rnd(seed);
 
-        mi::neuraylib::Bsdf_sample_data sample_data;
+        mi::neuraylib::Bsdf_sample_data<> sample_data;
         if (is_inside && !thin_walled)
         {
             sample_data.ior1.x = MI_NEURAYLIB_BSDF_USE_MATERIAL_IOR;

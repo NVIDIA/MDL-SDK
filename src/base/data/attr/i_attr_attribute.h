@@ -25,18 +25,19 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  **************************************************************************************************/
- 
+
 /// \file
 /// \brief Attribute class definition.
 
 #ifndef BASE_DATA_ATTR_I_ATTR_ATTRIBUTE_H
 #define BASE_DATA_ATTR_I_ATTR_ATTRIBUTE_H
 
+#include <mi/math/color.h>
+
 #include <base/data/db/i_db_tag.h>
 #include <base/data/serial/i_serial_serializable.h>
-#include <base/lib/cont/i_cont_array.h>
 #include <base/system/main/types.h>
-#include <mi/math/color.h>
+
 
 #include "i_attr_type.h"
 #include "i_attr_types.h"
@@ -44,69 +45,6 @@
 
 namespace MI {
 namespace ATTR {
-
-/// Attachments are stored in Attributes to define shaders that provide values for the attribute.
-/// They have the form "a" = <shadertag>."b", where "a" is the name of the attribute member field,
-/// <shadertag> is the shader to call, and "b" is the name of a field in the return struct of the
-/// shader. If the whole attribute value is assigned and not a struct subfield, "a" is a null
-/// pointer. If the whole shader return is assigned, "b" is a null pointer. The attribute can also
-/// be attached to a phenomenon interface, in which case "b" is the name of a phenomenon interface
-/// field, and m_is_interface is true. "a" and "b" may be structured too, as in
-/// "tex[5].substruct.field"; in such structures it is possible to chain more than one attachment.
-///
-/// \todo For now, the safe and basic approach is copying Attachments around all of the time. This
-/// will result in a performance hit and has to be fixed as soon as the ownership/object lifetime
-/// issues are clear to optimize Attachment handling appropriately.
-///
-/// An attachment can be made to the entire attribute or to a struct member or list element. When
-/// the attachment is made to an element of an attribute, the m_member_name field describes the
-/// member being attached.
-///
-/// For example if the attribute is a list attribute and the attachment is made to a list element,
-/// m_member_name will begin with "[n]" where 'n' is the index of the list element.
-///
-/// If the attribute is a struct and the attachment is made to a struct member, m_member_name
-/// will begin with the member name.
-///
-/// Combinations can occur with lists and/or nested structs. The following are
-/// all valid example values for m_member_name:
-/// "[3].diffuse"      -- Refers to the 'diffuse' struct member of the 3rd list
-///                       element
-/// "texture.map"     --  Refers to a sub-struct member named map. 'texture' is
-///                       also a struct member. The original declaration for the
-///                       parameter might have looked something like:
-///
-/// \code
-///                       struct "my_parameter" {
-///                         struct "texture" {
-///                           texture map
-///                           scalar weight
-///                         }
-///                         Color some_other_member
-///                       }
-/// \endcode
-///                       In this example "my_parameter" is the attribute.
-///
-/// The m_target Tag refers to the shader that is the target of the attachment. When the attachment
-/// is made to a phenomenon interface parameter m_is_interface is true. Otherwise the target of
-/// the attachment is the output of a shader.
-///
-/// The m_target_name string identifies a sub-element of the target if the the attachment is not
-/// being made to the entire target. The syntax for this string is the same as described for the
-/// m_member_name string.
-///
-/// Attachments can be chained to describe multiple attachments to struct members or list elements.
-/// Each Attachment overrides the literal value provided in the attribute's m_values field.
-struct Attachment
-{
-    Attachment();
-
-    std::string m_member_name;                  ///< ""=whole attr, else target field
-    DB::Tag m_target;                                   ///< src shader that provides values
-    std::string m_target_name;                  ///< ""=whole return,else result field
-    bool m_is_interface;                                ///< target is a phen interface param
-};
-
 
 /// An Attribute represents a value and can be attached to an Element.
 ///
@@ -156,14 +94,12 @@ class Attribute : public SERIAL::Serializable
     /// \param type_asize number of elements > 0
     /// \param override inheritance: parent overrides child
     /// \param global not inheritance, nailed to element
-    /// \param is_const is value immutable?
     explicit Attribute(
         Type_code       type,
         const char      *name,
         Uint            type_asize = 1,
         Attribute_propagation override=PROPAGATION_STANDARD,
-        bool            global=false,
-        bool            is_const=false);
+        bool            global=false);
 
     /// Another convenience constructor for the derived Attribute_object.
     /// \param id identifies attribute for lookups
@@ -171,14 +107,12 @@ class Attribute : public SERIAL::Serializable
     /// \param type_asize number of elements > 0
     /// \param override inheritance: parent overrides child
     /// \param global not inheritance, nailed to element
-    /// \param is_const is value immutable?
     explicit Attribute(
         Attribute_id    id,
         Type_code       type,
         Uint            type_asize = 1,
         Attribute_propagation override=PROPAGATION_STANDARD,
-        bool            global=false,
-        bool            is_const=false);
+        bool            global=false);
 
     // Destructor.
     ~Attribute();
@@ -316,19 +250,6 @@ class Attribute : public SERIAL::Serializable
         const T& v,
         Uint n=0);
 
-    /// Add an attachment to the internal list.
-    /// \param attachment the attachment
-    void add_attachment(
-        const Attachment &attachment);
-
-    /// Remove an attachment from the internal list.
-    /// \param member_name null=whole attr, else target field
-    void remove_attachment(
-        const char *member_name);
-
-    /// Return the list of attachments.
-    const CONT::Array<Attachment>& get_attachments() const;
-
     /// User-defined attributes are named, but the attribute system deals only
     /// with integer IDs. Create a new ID for a name. 0 is reserved and is never returned.
     /// \param name new name to register
@@ -430,7 +351,6 @@ class Attribute : public SERIAL::Serializable
   protected:
     Type m_type;                                ///< data type, toplevel member type provides name
     char* m_values;                             ///< binary data block described by type tree
-    CONT::Array<Attachment> m_attachments;      ///< a list of attachments, may be empty
 
     /// Constructors for Attribute_object.
     //@{
@@ -457,15 +377,13 @@ class Attribute : public SERIAL::Serializable
     /// \param list_size if attribute list, list size > 1
     /// \param override inheritance: parent overrides child
     /// \param global not inheritance, nailed to element
-    /// \param is_const is value immutable?
     explicit Attribute(
         Type_code       type,
         const char      *name,
         Uint            type_asize,
         Uint            list_size,
         Attribute_propagation override,
-        bool            global,
-        bool            is_const);
+        bool            global);
 
     /// Another convenience constructor for the derived Attribute_object.
     /// \param id identifies attribute for lookups
@@ -474,15 +392,13 @@ class Attribute : public SERIAL::Serializable
     /// \param list_size if attribute list, list size > 1
     /// \param override inheritance: parent overrides child
     /// \param global not inheritance, nailed to element
-    /// \param is_const is value immutable?
     explicit Attribute(
         Attribute_id    id,
         Type_code       type,
         Uint            type_asize,
         Uint            list_size,
         Attribute_propagation override,
-        bool            global,
-        bool            is_const);
+        bool            global);
     //@}
 
     /// Internal list-aware functions to access the binary value block for Attribute_objects.
@@ -598,7 +514,7 @@ class Attribute : public SERIAL::Serializable
     const char *get_value_string_i(
         Uint            i,
         Uint            n = 0) const;
-    
+
     /// Templatized get, to hide casts.
     /// \note Since a const-reference is returned, the type of the attribute needs to match
     /// exactly. No implicit conversions will be performed.
@@ -639,9 +555,9 @@ protected:
     /// Common constructor code.
     void init(
         Attribute_id id, Attribute_propagation override,
-        Uint list_size, bool is_const, bool is_global);
+        Uint list_size, bool is_global);
 private:
-    friend void get_references(const Attribute&, DB::Tag_set&, Compare);
+    friend void get_references(const Attribute&, DB::Tag_set&);
 
     /// The Attribute_set uses the listsize retrieval. See above comments - needs to be reviewed.
     friend class Attribute_set;
@@ -660,3 +576,4 @@ void swap(
 #include "attr_inline_attr.h"
 
 #endif
+

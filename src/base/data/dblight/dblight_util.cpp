@@ -32,9 +32,167 @@
 
 #include <ostream>
 
+#include <base/lib/config/config.h>
+#include <base/lib/log/i_log_logger.h>
+#include <base/util/registry/i_config_registry.h>
+#include <base/system/main/access_module.h>
+
 namespace MI {
 
 namespace DBLIGHT {
+
+Flexible_lock::Flexible_lock( Lock_implementation impl)
+  : m_lock_implementation( impl)
+{
+    SYSTEM::Access_module<CONFIG::Config_module> config_module( false);
+    const CONFIG::Config_registry& registry = config_module->get_configuration();
+
+    std::string lock_implementation;
+    if( registry.get_value( "dblight_lock_implementation", lock_implementation)) {
+        if( lock_implementation == "shared_lock")
+            m_lock_implementation = SHARED_LOCK;
+        else if( lock_implementation == "shared_lock_but_used_exclusively")
+            m_lock_implementation = SHARED_LOCK_BUT_USED_EXCLUSIVELY;
+        else if( lock_implementation == "exclusive_lock")
+            m_lock_implementation = EXCLUSIVE_LOCK;
+        else
+            LOG::mod_log->error( M_DB, LOG::Mod_log::C_DATABASE,
+                R"(Invalid value "%s" for debug option "dblight_lock_implementation".)",
+                lock_implementation.c_str());
+    }
+    if( m_lock_implementation != SHARED_LOCK)
+        LOG::mod_log->info( M_DB, LOG::Mod_log::C_DATABASE,
+            "Lock implementation set to %s.", lock_implementation.c_str());
+}
+
+std::string Flexible_lock::get_lock_impl_str() const
+{
+    switch( m_lock_implementation) {
+        case SHARED_LOCK:                      return "shared_lock";
+        case SHARED_LOCK_BUT_USED_EXCLUSIVELY: return "shared_lock_but_used_exclusively";
+        case EXCLUSIVE_LOCK:                   return "exclusive_lock";
+    }
+    return {};
+}
+
+void Flexible_lock::lock_shared()
+{
+    if( m_lock_implementation == SHARED_LOCK)
+        m_shared_lock.lock_shared();
+    else if( m_lock_implementation == SHARED_LOCK_BUT_USED_EXCLUSIVELY)
+        m_shared_lock.lock();
+    else
+        m_lock.lock();
+}
+
+bool Flexible_lock::try_lock_shared()
+{
+    if( m_lock_implementation == SHARED_LOCK)
+        return m_shared_lock.try_lock_shared();
+    else if( m_lock_implementation == SHARED_LOCK_BUT_USED_EXCLUSIVELY)
+        return m_shared_lock.try_lock();
+    else
+        return m_lock.try_lock();
+}
+
+void Flexible_lock::unlock_shared()
+{
+    if( m_lock_implementation == SHARED_LOCK)
+        m_shared_lock.unlock_shared();
+    else if( m_lock_implementation == SHARED_LOCK_BUT_USED_EXCLUSIVELY)
+        m_shared_lock.unlock();
+    else
+        m_lock.unlock();
+}
+
+void Flexible_lock::check_is_owned_shared()
+{
+    if( m_lock_implementation == SHARED_LOCK)
+        m_shared_lock.check_is_owned_shared();
+    else if( m_lock_implementation == SHARED_LOCK_BUT_USED_EXCLUSIVELY)
+        m_shared_lock.check_is_owned();
+    else
+        m_lock.check_is_owned();
+}
+
+void Flexible_lock::lock()
+{
+    if( m_lock_implementation != EXCLUSIVE_LOCK)
+        m_shared_lock.lock();
+    else
+        m_lock.lock();
+}
+
+bool Flexible_lock::try_lock()
+{
+    if( m_lock_implementation != EXCLUSIVE_LOCK)
+        return m_shared_lock.try_lock();
+    else
+        return m_lock.try_lock();
+}
+
+void Flexible_lock::unlock()
+{
+    if( m_lock_implementation != EXCLUSIVE_LOCK)
+        m_shared_lock.unlock();
+    else
+        m_lock.unlock();
+}
+
+void Flexible_lock::check_is_owned()
+{
+    if( m_lock_implementation != EXCLUSIVE_LOCK)
+        m_shared_lock.check_is_owned();
+    else
+        m_lock.check_is_owned();
+}
+
+void Flexible_lock::check_is_owned_shared_or_exclusive()
+{
+    if( m_lock_implementation != EXCLUSIVE_LOCK)
+        m_shared_lock.check_is_owned_shared_or_exclusive();
+    else
+        m_lock.check_is_owned();
+}
+
+const char* to_yes_no( bool value)
+{
+    return value ? "yes" : "no";
+}
+
+template <class T>
+void dump_html_settings(
+    std::ostream& s,
+    const char* name,
+    const T& value,
+    const char* alignment,
+    const char* suffix = "")
+{
+    s << "<tr>\n";
+    s << "<td>" << name << "</td>\n";
+    s << "<td align=" << alignment << ">" << value << suffix << "</td>\n";
+    s << "</tr>\n";
+}
+
+void dump_html_bool_settings( std::ostream& s, const char* name, bool value)
+{
+    dump_html_settings( s, name, to_yes_no( value), "right", "");
+}
+
+void dump_html_double_setting( std::ostream& s, const char* name, double value, const char* suffix)
+{
+    dump_html_settings( s, name, value, "right", suffix);
+}
+
+void dump_html_size_t_setting( std::ostream& s, const char* name, size_t value)
+{
+    dump_html_settings( s, name, value, "right", "");
+}
+
+void dump_html_string_setting( std::ostream& s, const char* name, const std::string& value)
+{
+    dump_html_settings( s, name, value, "center", "");
+}
 
 THREAD::Lock g_stats_lock;
 

@@ -46,14 +46,10 @@ namespace base
 /** \defgroup mi_base_iallocator Memory Management
     \ingroup mi_base
 
-    The memory management provides an interface for allocators including a default implementation.
+    The memory management provides an interface for allocators.
 
     You can request dynamic memory from an allocator implementation through
-    an #mi::base::IAllocator interface. A default implementation based on
-    global new and delete operators is #mi::base::Default_allocator.
-
-    You can adapt an allocator to become a standard STL allocator using
-    #mi::base::Std_allocator.
+    an #mi::base::IAllocator interface.
 */
 
 /** \addtogroup mi_base_iallocator

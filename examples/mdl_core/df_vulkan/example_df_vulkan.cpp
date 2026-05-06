@@ -26,9 +26,9 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
- // examples/mdl_core/df_vulkan/example_df_vulkan.cpp
- //
- // Simple Vulkan renderer using compiled BSDFs with a material parameter editor GUI.
+// examples/mdl_core/df_vulkan/example_df_vulkan.cpp
+//
+// Simple Vulkan renderer using compiled BSDFs with a material parameter editor GUI.
 
 #include "example_shared_backends.h"
 #include "example_vulkan_shared.h"
@@ -499,7 +499,7 @@ private:
     std::unique_ptr<Argument_block> m_argument_block;
 
     Render_params m_render_params;
-    bool m_camera_moved = true; // Force a clear in first frame
+    bool m_restart_progressive = true; // Restart progressive rendering in the next frame
     bool m_material_changed = false; // If the argument buffer needs to be updated
     uint32_t m_display_buffer_index = 0; // Which buffer to display
     bool m_show_gui = true;
@@ -753,7 +753,7 @@ void Df_vulkan_app::update(float elapsed_seconds, uint32_t frame_index)
     if (!m_options.no_window && m_show_gui)
         do_settings_and_stats_gui();
 
-    if (m_camera_moved)
+    if (m_restart_progressive)
         m_render_params.progressive_iteration = 0;
 
     // Update current frame's render params uniform buffer
@@ -789,13 +789,13 @@ void Df_vulkan_app::render(VkCommandBuffer command_buffer, uint32_t frame_index,
         m_path_trace_pipeline_layout, 0, 1, &m_path_trace_descriptor_sets[frame_index],
         0, nullptr);
 
-    if (m_camera_moved)
+    if (m_restart_progressive)
     {
-        m_camera_moved = false;
+        m_restart_progressive = false;
 
         for (const Vulkan_texture& accum_image : m_accum_images)
         {
-            VkClearColorValue clear_color = { 0.0f, 0.0f, 0.0f, 0.0f };
+            VkClearColorValue clear_color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
 
             VkImageSubresourceRange clear_range;
             clear_range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -874,7 +874,7 @@ void Df_vulkan_app::key_callback(int key, int action, int mods)
             m_show_gui = !m_show_gui;
 
         if (key == GLFW_KEY_R)
-            m_camera_moved = true;
+            m_restart_progressive = true;
 
         if (key >= GLFW_KEY_1 && key <= GLFW_KEY_6)
             m_display_buffer_index = key - GLFW_KEY_1;
@@ -908,7 +908,7 @@ void Df_vulkan_app::mouse_scroll_callback(float offset_x, float offset_y)
             m_camera_state.zoom += 1.0f;
 
         update_camera_render_params(m_camera_state);
-        m_camera_moved = true;
+        m_restart_progressive = true;
     }
 
     ImGui_ImplGlfw_ScrollCallback(m_window, offset_x, offset_y);
@@ -931,14 +931,14 @@ void Df_vulkan_app::mouse_move_callback(float pos_x, float pos_y)
             m_camera_state.theta, static_cast<float>(1.0f * M_PI));
 
         update_camera_render_params(m_camera_state);
-        m_camera_moved = true;
+        m_restart_progressive = true;
     }
 }
 
 // Gets called when the window is resized.
 void Df_vulkan_app::resized_callback(uint32_t width, uint32_t height)
 {
-    m_camera_moved = true;
+    m_restart_progressive = true;
 }
 
 // Type trait to get the value type for a given type.
@@ -1174,7 +1174,7 @@ void Df_vulkan_app::do_settings_and_stats_gui()
         ImGui::Text("Parameter editing requires class compilation.");
 
     if (changed)
-        m_camera_moved = true;
+        m_restart_progressive = true;
 
     ImGui::End();
     ImGui::Render();
@@ -2043,7 +2043,7 @@ void print_usage(char const* prog_name)
         << "                              (default: output.exr)\n"
         << "  --spp <num>                 samples per pixel, only used for --no_window (default: 4096)\n"
         << "  --spi <num>                 samples per render loop iteration (default: 8)\n"
-        << "  --max_path_length <num>     maximum path length (default: 4)\n"
+        << "  --max_path_length <num>     maximum path length (default: 4, clamped to 2..100)\n"
         << "  -f|--fov <fov>              the camera field of view in degrees (default: 96.0)\n"
         << "  --camera <x> <y> <z>        set the camera position (default: 0 0 3).\n"
         << "                              The camera will always look towards (0, 0, 0)\n"
@@ -2099,7 +2099,7 @@ void parse_command_line(int argc, char* argv[], Options& options)
             else if (arg == "--spi" && i < argc - 1)
                 options.samples_per_iteration = std::atoi(argv[++i]);
             else if (arg == "--max_path_length" && i < argc - 1)
-                options.max_path_length = std::atoi(argv[++i]);
+                options.max_path_length = std::min(std::max(atoi(argv[++i]), 2), 100);
             else if ((arg == "-f" || arg == "--fov") && i < argc - 1)
                 options.cam_fov = static_cast<float>(std::atof(argv[++i]));
             else if (arg == "--camera" && i < argc - 3)
@@ -2220,20 +2220,14 @@ int MAIN_UTF8(int argc, char* argv[])
         std::cout << "Generating GLSL code for material " << options.material_name << "\n";
 
         auto t0 = std::chrono::steady_clock::now();
+        mi::Uint32 flags = 0;
         Material_instance material_instance(
-            material_be_compiler.create_material_instance(options.material_name));
+            material_be_compiler.create_and_init_material_instance(
+                options.material_name, options.use_class_compilation, flags));
         auto t1 = std::chrono::steady_clock::now();
         check_success(material_instance);
         std::cout << "Create material instance: " << std::chrono::duration<float>(t1 - t0).count() << "s\n";
 
-        mi::Uint32 flags = 0;
-        t0 = std::chrono::steady_clock::now();
-        mi::mdl::Dag_error_code error_code =
-            material_be_compiler.initialize_material_instance(
-                material_instance, {}, options.use_class_compilation, flags);
-        t1 = std::chrono::steady_clock::now();
-        check_success(error_code == mi::mdl::EC_NONE);
-        std::cout << "Initialize material instance: " << std::chrono::duration<float>(t1 - t0).count() << "s\n";
 
         // Specify which functions to generate
         std::vector<Target_function_description> function_descs;
@@ -2316,10 +2310,9 @@ int MAIN_UTF8(int argc, char* argv[])
             function_descs.emplace_back("backface.emission.intensity", "mdl_backface_emission_intensity");
 
         bool success = material_be_compiler.add_material(
-            options.material_name,
+            material_instance,
             function_descs.data(),
-            function_descs.size(),
-            options.use_class_compilation);
+            function_descs.size());
         if (!success)
         {
             material_be_compiler.print_messages();
@@ -2329,11 +2322,11 @@ int MAIN_UTF8(int argc, char* argv[])
         // Compile cutout_opacity also as standalone version to be used in the anyhit programs
         // to avoid costly precalculation of expressions only used by other expressions.
         // This can be especially useful for anyhit shaders in ray tracing pipelines.
-        success = material_be_compiler.add_material_subexpr(
-            options.material_name,
-            "geometry.cutout_opacity",
-            "mdl_standalone_cutout_opacity",
-            options.use_class_compilation);
+        Target_function_description cutout_opacity_function_desc(
+            "geometry.cutout_opacity", "mdl_standalone_cutout_opacity");
+        success = material_be_compiler.add_material(
+            material_instance,
+            &cutout_opacity_function_desc, 1);
         if (!success)
         {
             material_be_compiler.print_messages();

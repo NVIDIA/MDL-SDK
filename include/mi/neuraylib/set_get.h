@@ -227,8 +227,8 @@ inline mi::Sint32 set_value( mi::IData* data, const mi::Bbox3& value)
 
 /// This variant handles elements of collections identified via an additional index.
 ///
-/// See also #mi::set_value(mi::IData*,const T*,mi::Size n) and
-/// #mi::set_value(mi::IData*,const std::vector<T>&) to set entire arrays.
+/// See also mi::set_value(mi::IData*,const T*,mi::Size) and
+/// mi::set_value(mi::IData*,const std::vector<T>&) to set entire arrays.
 ///
 /// \param data            The instance of #mi::IData to modify.
 /// \param index           The index of the affected collection element.
@@ -254,8 +254,8 @@ mi::Sint32 set_value( mi::IData* data, mi::Size index, const T& value)
 
 /// This variant handles elements of collections identified via an additional key.
 ///
-/// See also #mi::set_value(mi::IData*,const T*,mi::Size n) and
-/// #mi::set_value(mi::IData*,const std::vector<T>&) to set entire arrays.
+/// See also mi::set_value(mi::IData*,const T*,mi::Size) and
+/// mi::set_value(mi::IData*,const std::vector<T>&) to set entire arrays.
 ///
 /// \param data            The instance of #mi::IData to modify.
 /// \param key             The key of the affected collection element.
@@ -323,7 +323,7 @@ mi::Sint32 set_value( mi::IData* data, const T* values, mi::Size n)
 
 /// This variant handles entire arrays (as std::vector).
 ///
-/// See also #mi::set_value(mi::IData*,const T*,mi::Size) for C-like arrays.
+/// See also mi::set_value(mi::IData*,const T*,mi::Size) for C-like arrays.
 ///
 /// \param data            The instance of #mi::IData to modify.
 /// \param values          The new values to be set. If \p data is a dynamic array, then it is
@@ -512,8 +512,8 @@ inline mi::Sint32 get_value( const mi::IData* data, mi::Bbox3& value)
 
 /// This variant handles elements of collections identified via an additional index.
 ///
-/// See also #mi::get_value(const mi::IData*,T*,mi::Size n) and
-/// #mi::get_value(const mi::IData*,std::vector<T>&) to read entire arrays.
+/// See also mi::get_value(const mi::IData*,T*,mi::Size) and
+/// mi::get_value(const mi::IData*,std::vector<T>&) to read entire arrays.
 ///
 /// \param data            The instance of #mi::IData to read.
 /// \param index           The index of the affected collection element.
@@ -538,8 +538,8 @@ mi::Sint32 get_value( const mi::IData* data, mi::Size index, T& value)
 
 /// This variant handles elements of collections identified via an additional key.
 ///
-/// See also #mi::get_value(const mi::IData*,T*,mi::Size n) and
-/// #mi::get_value(const mi::IData*,std::vector<T>&) to read entire arrays.
+/// See also mi::get_value(const mi::IData*,T*,mi::Size) and
+/// mi::get_value(const mi::IData*,std::vector<T>&) to read entire arrays.
 ///
 /// \param data            The instance of #mi::IData to read.
 /// \param key             The key of the affected collection element.
@@ -564,7 +564,7 @@ mi::Sint32 get_value( const mi::IData* data, const char* key, T& value)
 
 /// This variant handles entire arrays (as C-like arrays).
 ///
-/// See also #mi::get_value(const IData*,std::vector<T>&) for std::vector support.
+/// See also #mi::get_value(const mi::IData*,std::vector<T>&) for std::vector support.
 ///
 /// \param data            The instance of #mi::IData to read.
 /// \param values          The new values will be stored here (as pointer to a C-like array).
@@ -599,7 +599,7 @@ mi::Sint32 get_value( const mi::IData* data, T* values, mi::Size n)
 
 /// This variant handles entire arrays (as std::vector).
 ///
-/// See also #mi::get_value(const IData*,T*,mi::Size) for C-like arrays.
+/// See also mi::get_value(const mi::IData*,T*,mi::Size) for C-like arrays.
 ///
 /// \param data            The instance of #mi::IData to read.
 /// \param values          The new values will be stored here. The vector will be resized
@@ -620,7 +620,7 @@ mi::Sint32 get_value( const mi::IData* data, std::vector<T>& values)
 
 /// This variant handles strings as std::string.
 ///
-/// See also #mi::get_value(const IData*,const char*&) for C-strings.
+/// See also #mi::get_value(const mi::IData*,const char*&) for C-strings.
 ///
 /// \param data            The instance of #mi::IData to read.
 /// \param value           The new values will be stored here.
@@ -746,7 +746,7 @@ mi::Sint32 set_value(
 /// Simplifies setting the value of an attribute from the corresponding classes from the %base and
 /// %math API (variant for entire arrays as std::vector).
 ///
-/// See also #mi::set_value(mi::neuraylib::IAttribute_set*,const char*,const T*,mi::Size) for
+/// See also mi::set_value(mi::neuraylib::IAttribute_set*,const char*,const T*,mi::Size) for
 /// C-like arrays.
 ///
 /// \param attribute_set   The affected attribute set.
@@ -872,7 +872,7 @@ mi::Sint32 get_value(
 /// Simplifies reading the value of an attribute into the corresponding classes from the %base and
 /// %math API (variant for entire arrays as std::vector).
 ///
-/// See also #mi::get_value(const mi::neuraylib::IAttribute_set*,const char*,T*,mi::Size) for C-like
+/// See also mi::get_value(const mi::neuraylib::IAttribute_set*,const char*,T*,mi::Size) for C-like
 /// arrays.
 ///
 /// \param attribute_set   The affected attribute set.

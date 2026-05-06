@@ -33,7 +33,6 @@
 
 #include <mi/base/interface_declare.h>
 #include <mi/neuraylib/itype.h>
-#include <mi/neuraylib/version.h> // for MI_NEURAYLIB_DEPRECATED_ENUM_VALUE
 
 namespace mi {
 
@@ -91,28 +90,6 @@ public:
         bool is_declarative,
         IMdl_execution_context* context) = 0;
 
-#ifdef MI_NEURAYLIB_DEPRECATED_15_0
-    inline Sint32 add_variant(
-        const char* name,
-        const char* prototype_name,
-        const IExpression_list* defaults,
-        const IAnnotation_block* annotations,
-        const IAnnotation_block* return_annotations,
-        bool is_exported,
-        IMdl_execution_context* context)
-    {
-        return add_variant(
-            name,
-            prototype_name,
-            defaults,
-            annotations,
-            return_annotations,
-            is_exported,
-            false,
-            context);
-    }
-#endif // MI_NEURAYLIB_DEPRECATED_15_0
-
     /// Adds a material or function to the module.
     ///
     /// \param name                    The simple name of the material or function.
@@ -155,25 +132,6 @@ public:
         bool is_declarative,
         IType::Modifier frequency_qualifier,
         IMdl_execution_context* context) = 0;
-
-#ifdef MI_NEURAYLIB_DEPRECATED_15_0
-    inline Sint32 add_function(
-        const char* name,
-        const IExpression* body,
-        const IType_list* parameters,
-        const IExpression_list* defaults,
-        const IAnnotation_list* parameter_annotations,
-        const IAnnotation_block* annotations,
-        const IAnnotation_block* return_annotations,
-        bool is_exported,
-        IType::Modifier frequency_qualifier,
-        IMdl_execution_context* context)
-    {
-        return add_function(
-            name, body, 0, parameters, defaults, parameter_annotations, annotations,
-            return_annotations, is_exported, false, frequency_qualifier, context);
-    }
-#endif // MI_NEURAYLIB_DEPRECATED_15_0
 
     /// Adds an annotation to the module.
     ///
@@ -263,29 +221,6 @@ public:
         bool is_declarative,
         const IStruct_category* struct_category,
         IMdl_execution_context* context) = 0;
-
-#ifdef MI_NEURAYLIB_DEPRECATED_15_0
-    inline Sint32 add_struct_type(
-        const char* name,
-        const IType_list* fields,
-        const IExpression_list* field_defaults,
-        const IAnnotation_list* field_annotations,
-        const IAnnotation_block* annotations,
-        bool is_exported,
-        IMdl_execution_context* context)
-    {
-        return add_struct_type(
-            name,
-            fields,
-            field_defaults,
-            field_annotations,
-            annotations,
-            is_exported,
-            false,
-            0,
-            context);
-    }
-#endif // MI_NEURAYLIB_DEPRECATED_15_0
 
     /// Adds a constant to the module.
     ///

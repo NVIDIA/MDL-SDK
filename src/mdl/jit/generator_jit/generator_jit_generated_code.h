@@ -43,9 +43,9 @@
 #include <mdl/codegenerators/generator_dag/generator_dag_lambda_function.h>
 #include <mdl/codegenerators/generator_dag/generator_dag_tools.h>
 #include <mdl/codegenerators/generator_code/generator_code_executable_base.h>
+#include <mdl/codegenerators/generator_code/generator_code_resource_manager.h>
 
 #include "generator_jit_generated_code_value_layout.h"
-#include "generator_jit_res_manager.h"
 
 #include <llvm/ExecutionEngine/Orc/Core.h>
 
@@ -102,68 +102,6 @@ public:
 
     typedef vector<size_t>::Type Offset_vec;
 
-    /// The resource manager for generated source code.
-    class Source_res_manag : public IResource_manager {
-        typedef mi::mdl::hash_map<unsigned, size_t>::Type         Tag_index_map;
-        typedef mi::mdl::hash_map<
-            mi::mdl::string, size_t, string_hash<string> >::Type  String_index_map;
-    public:
-        /// Constructor.
-        ///
-        /// \param alloc         The allocator.
-        /// \param resource_attr_map  If non-NULL, import this map to resolve resources
-        Source_res_manag(
-            IAllocator              *alloc,
-            Resource_attr_map const *resource_attr_map);
-
-        /// Returns the resource index for the given resource usable by the target code resource
-        /// handler for the corresponding resource type.
-        ///
-        /// \param kind        the resource kind
-        /// \param url         the resource url (might be NULL)
-        /// \param tag         the resource tag (if assigned)
-        /// \param shape       if the resource is a texture: its shape
-        /// \param gamma_mode  if the resource is a texture: its gamma mode
-        /// \param selector    if the resource is a texture: its selector
-        ///
-        /// \returns a resource index or 0 if no resource index can be returned
-        size_t get_resource_index(
-            Resource_tag_tuple::Kind   kind,
-            char const                 *url,
-            int                        tag,
-            IType_texture::Shape       shape,
-            IValue_texture::gamma_mode gamma_mode,
-            char const                 *selector) MDL_FINAL;
-
-        /// Register a string constant and return its 1 based index in the string table.
-        ///
-        /// \param string  the MDL string value to register
-        size_t get_string_index(IValue_string const *string) MDL_FINAL;
-
-        /// Imports a new resource attribute map.
-        ///
-        /// \param resource_attr_map  if non-NULL, the map to be imported
-        void import_resource_attribute_map(Resource_attr_map const *resource_attr_map);
-
-    private:
-        /// The current allocator.
-        IAllocator              *m_alloc;
-
-        /// The accumulated resource-attribute-map.
-        Resource_attr_map       m_resource_attr_map;
-
-        /// Lookup-table for resource indexes.
-        Tag_index_map           m_res_indexes;
-
-        /// Lookup-table for string indexes;
-        String_index_map        m_string_indexes;
-
-        /// The current resource index.
-        size_t m_curr_res_idx;
-
-        /// The current string index.
-        size_t m_curr_string_idx;
-    };
 
 public:
     /// Acquires a const interface.
@@ -346,7 +284,7 @@ public:
     ///
     /// This version registers all resource values with the compiled lambda function, so
     /// resource-callbacks can be used.
-    class Lambda_res_manag : public IResource_manager {
+    class Lambda_res_manag MDL_FINAL : public IResource_manager {
         typedef mi::mdl::hash_map<unsigned, size_t>::Type        Tag_index_map;
         typedef mi::mdl::hash_map<
             mi::mdl::string, size_t, string_hash<string> >::Type String_index_map;

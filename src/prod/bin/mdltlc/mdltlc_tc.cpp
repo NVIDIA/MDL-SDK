@@ -79,12 +79,16 @@ bool Compilation_unit::is_material_struct(Type const *t) {
     return false;
 }
 
-bool Compilation_unit::is_material_or_bsdf(Type const *t) {
+bool Compilation_unit::is_valid_rule_type(Type const *t) {
     return is<Type_bsdf>(t)
         || is<Type_vdf>(t)
         || is<Type_edf>(t)
         || is<Type_hair_bsdf>(t)
-        || is<Type_material>(t);
+        || is<Type_material>(t)
+        || is<Type_material_surface>(t)
+        || is<Type_material_emission>(t)
+        || is<Type_material_volume>(t)
+        || is<Type_material_geometry>(t);
 }
 
 /// Typecheck the AST for a rule.
@@ -117,15 +121,15 @@ void Compilation_unit::type_check_rule(Rule &rule, Environment &global_env) {
         return;
     }
 
-    if (!is_material_or_bsdf(t_lhs)) {
+    if (!is_valid_rule_type(t_lhs)) {
         error(rule.get_location(),
-              "the left-hand side of a rule must be a bsdf or a material");
+              "the left-hand side of a rule must have a distribution function or material type");
         return;
     }
 
-    if (!is_material_or_bsdf(t_rhs)) {
+    if (!is_valid_rule_type(t_rhs)) {
         error(rule.get_location(),
-              "the right-hand side of a rule must be a bsdf or a material");
+              "the right-hand side of a rule must have a distribution function or material type");
         return;
     }
 
@@ -612,8 +616,8 @@ Type *Compilation_unit::type_check_pattern(Expr *expr, Environment &env) {
             && !is<Type_material_volume>(t)
             && !is<Type_material_emission>(t)
             && !is<Type_material_geometry>(t)
-            && !is_material_or_bsdf(t)) {
-            error(expr->get_location(), "call in pattern must have bsdf or material return type");
+            && !is_valid_rule_type(t)) {
+            error(expr->get_location(), "call in pattern must have a distribution function or material return type");
             expr->set_type(m_error_type);
             return m_error_type;
         }
@@ -769,7 +773,7 @@ Type *Compilation_unit::type_check_call(Expr *expr, Environment &env,
 
         bool skip_check = false;
         if (Expr_ref *ref = as<Expr_ref>(callee)) {
-            Symbol const *callee_name = ref->get_name();
+            Symbol const *callee_name= ref->get_name();
             if (strcmp(callee_name->get_name(), "bsdf_marker") == 0) {
                 skip_check = true;
             }

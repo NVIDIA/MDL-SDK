@@ -33,7 +33,6 @@
 
 #include <mi/base/handle.h>
 #include <mi/base/interface_declare.h>
-#include <mi/neuraylib/iuser_class_factory.h>
 
 namespace mi {
 
@@ -48,9 +47,15 @@ namespace neuraylib {
 
 class IExporter;
 class IImporter;
+class IUser_class_factory;
 
-/// This interface is used to extent the \neurayApiName.
-/// For example it offers methods to load and to set up plugins.
+/// This interface is used to extend the \neurayApiName.
+///
+/// \if MDL_SDK_API
+/// It offers methods to register enum and structure declarations.
+/// \else
+/// It offers methods to register user classes, importers, exporters, enum and structure declarations.
+/// \endif
 class IExtension_api : public
     mi::base::Interface_declare<0xdf2dd31e,0xeeaf,0x40b2,0x8c,0x5f,0x0a,0xb2,0xad,0x44,0x61,0x91>
 {
@@ -58,6 +63,9 @@ public:
     /// \name User classes
     //@{
 
+    /// \if MDL_SDK_API
+    /// Not supported.
+    /// \else
     /// Registers a class with the \neurayApiName.
     ///
     /// All user-defined classes to be used with the \neurayApiName must be registered. The only
@@ -78,9 +86,13 @@ public:
     ///                     - -2: Invalid parameters (\c nullptr).
     ///                     - -3: The method may not be called at that point of time.
     ///                     - -4: Invalid class name.
+    /// \endif
     virtual Sint32 register_class(
         const char* class_name, base::Uuid uuid, IUser_class_factory* factory) = 0;
 
+    /// \if MDL_SDK_API
+    /// Not supported.
+    /// \else
     /// Registers a class with the \neurayApiName.
     ///
     /// All user-defined classes to be used with the \neurayApiName must be registered. The only
@@ -102,13 +114,13 @@ public:
     ///                     - -2: Invalid parameters (\c nullptr).
     ///                     - -3: The method may not be called at that point of time.
     ///                     - -4: Invalid class name.
+    /// \endif
     template <class T>
-    Sint32 register_class( const char* class_name)
-    {
-        mi::base::Handle<IUser_class_factory> factory( new User_class_factory<T>());
-        return register_class( class_name, typename T::IID(), factory.get());
-    }
+    Sint32 register_class( const char* class_name);
 
+    /// \if MDL_SDK_API
+    /// Not supported.
+    /// \else
     /// Unregisters a class with the \neurayApiName.
     ///
     /// Class unregistration must be done in #mi::neuraylib::IPlugin::exit() or after
@@ -124,8 +136,12 @@ public:
     ///                     - -2: Invalid parameters (\c nullptr).
     ///                     - -3: The method may not be called at that point of time.
     ///                     - -4: Invalid class name.
+    /// \endif
     virtual Sint32 unregister_class( const char* class_name, base::Uuid uuid) = 0;
 
+    /// \if MDL_SDK_API
+    /// Not supported.
+    /// \else
     /// Unregisters a class with the \neurayApiName.
     ///
     /// Class unregistration must be done in #mi::neuraylib::IPlugin::exit() or after
@@ -143,6 +159,7 @@ public:
     ///                     - -2: Invalid parameters (\c nullptr).
     ///                     - -3: The method may not be called at that point of time.
     ///                     - -4: Invalid class name.
+    /// \endif
     template <class T>
     Sint32 unregister_class( const char* class_name)
     {
@@ -153,6 +170,9 @@ public:
     /// \name Importers and exporters
     //@{
 
+    /// \ifnot IRAY_API
+    /// Not supported.
+    /// \else
     /// Registers a new importer with the \neurayApiName.
     ///
     /// Importer registration must be done in #mi::neuraylib::IPlugin::exit() or before
@@ -163,8 +183,12 @@ public:
     ///                     -  0: Success.
     ///                     - -1: Invalid parameters (\c nullptr).
     ///                     - -2: The method may not be called at that point of time.
+    /// \endif
     virtual Sint32 register_importer( IImporter* importer) = 0;
 
+    /// \ifnot IRAY_API
+    /// Not supported.
+    /// \else
     /// Registers a new exporter with the \neurayApiName.
     ///
     /// Importer registration must be done in #mi::neuraylib::IPlugin::exit() or before
@@ -175,8 +199,12 @@ public:
     ///                     -  0: Success.
     ///                     - -1: Invalid parameters (\c nullptr).
     ///                     - -2: The method may not be called at that point of time.
+    /// \endif
     virtual Sint32 register_exporter( IExporter* exporter) = 0;
 
+    /// \ifnot IRAY_API
+    /// Not supported.
+    /// \else
     /// Unregisters an importer registered with the \neurayApiName.
     ///
     /// Unregistration must be done in #mi::neuraylib::IPlugin::exit() or after
@@ -188,8 +216,12 @@ public:
     ///                     - -1: Invalid parameters (\c nullptr).
     ///                     - -2: The method may not be called at that point of time.
     ///                     - -3: This importer is not registered.
+    /// \endif
     virtual Sint32 unregister_importer( IImporter* importer) = 0;
 
+    /// \ifnot IRAY_API
+    /// Not supported.
+    /// \else
     /// Unregisters an exporter registered with the \neurayApiName.
     ///
     /// Unregistration must be done in #mi::neuraylib::IPlugin::exit() or after
@@ -201,9 +233,11 @@ public:
     ///                     - -1: Invalid parameters (\c nullptr).
     ///                     - -2: The method may not be called at that point of time.
     ///                     - -3: This exporter is not registered.
+    /// \endif
     virtual Sint32 unregister_exporter( IExporter* exporter) = 0;
 
     //@}
+
     /// \name Structure declarations
     //@{
 

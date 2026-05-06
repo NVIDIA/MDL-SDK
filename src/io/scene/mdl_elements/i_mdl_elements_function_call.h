@@ -122,7 +122,7 @@ public:
 
     mi::Sint32 reset_argument( DB::Transaction* transaction, const char* name);
 
-    const IExpression_list* get_enable_if_conditions() const;
+    bool is_valid( DB::Transaction* transaction, Execution_context* context) const;
 
     /// \param target_type                 The intended type of the compiled material. Needs to be
     ///                                    from the struct category "::material_category". Can be
@@ -159,6 +159,14 @@ public:
     /// Returns the DB name of the definition.
     const char* get_definition_db_name() const { return m_definition_db_name.c_str(); }
 
+    /// Returns the \c enable_if conditions of all parameters.
+    ///
+    /// \note Not all parameters have a condition. Hence, the indices in the returned expression
+    ///       list do not necessarily coincide with the parameter indices of this definition.
+    ///       Therefore, conditions should be retrieved via the name of the parameter instead of
+    ///       its index.
+    const IExpression_list* get_enable_if_conditions() const;
+
     /// Swaps *this and \p other.
     ///
     /// Used by the API to move the content of just constructed DB elements into the already
@@ -194,6 +202,9 @@ public:
 
     /// Creates a DAG material instance for this DB material instance.
     ///
+    /// \note A warning is generated if it is detected that a thin-walled material instance has
+    ///       different transmission for surface and backface.
+    ///
     /// \param transaction                 The transaction.
     /// \param use_temporaries             Indicates whether temporaries are used to represent
     ///                                    common subexpressions.
@@ -213,9 +224,6 @@ public:
     ///                                          parameter.
     /// \return                            The DAG material instance, or \c nullptr in case of
     ///                                    failure.
-    ///
-    /// \note If it is detected, that a thin-walled material instance has different
-    ///       transmission for surface and backface, a warning is generated.
     const mi::mdl::IMaterial_instance* create_dag_material_instance(
         DB::Transaction* transaction,
         bool use_temporaries,
@@ -229,15 +237,21 @@ public:
     ///                      \c nullptr.
     void dump( DB::Transaction* transaction) const;
 
-    /// Checks, if the function call and its arguments still refer to valid definitions.
+    /// Returns \c true if the definition is valid, \c false otherwise.
+    ///
+    /// A definition can become invalid if the module it has been defined in or another module
+    /// imported by that module has been reloaded. In the first case, the definition can no longer
+    /// be used. In the second case, the definition can be validated by reloading the module it has
+    /// been defined in.
+    ///
+    /// \param modules_checked   Used to avoid repeated computations.
+    /// \param call_tags_stack   Used to detect cycles. The outermost tag is missing when called
+    ///                          from the overload in this class (this does not cause incorrect
+    ///                          behavior, just slightly suboptimal cycle detection).
     bool is_valid(
         DB::Transaction* transaction,
-        Execution_context* context) const;
-
-    /// Checks, if the function call and its arguments still refer to valid definitions.
-    bool is_valid(
-        DB::Transaction* transaction,
-        DB::Tag_set& tags_seen,
+        DB::Tag_set& modules_checked,
+        DB::Tag_set& call_tags_stack,
         Execution_context* context) const;
 
     /// Attempts to repair an invalid function call by trying to promote its definition

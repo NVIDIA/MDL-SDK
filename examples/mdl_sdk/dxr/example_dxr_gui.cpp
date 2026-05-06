@@ -37,7 +37,9 @@
 #include <gui/gui.h>
 #include <gui/gui_material_properties.h>
 
+#include <algorithm>
 #include <cstdio>
+#include <imgui.h>
 #include <iostream>
 #include <memory>
 #include <stdexcept>
@@ -186,6 +188,30 @@ void Gui_section_rendering::update(mi::neuraylib::ITransaction* /*transaction*/)
     {
         m_scene_data->restart_progressive_rendering();
     }
+
+    if (m_options->enable_spectral)
+    {
+        if (Gui_control::slider(
+            "Min Wavelength (nm)", "Minimum wavelength for spectral rendering.",
+            &m_scene_data->spectral_min_wavelength, &m_options->spectral_min_wavelength,
+            Gui_control::Flags::None, 380.0f, 780.0f))
+        {
+            if (m_scene_data->spectral_max_wavelength < m_scene_data->spectral_min_wavelength) {
+                m_scene_data->spectral_max_wavelength = m_scene_data->spectral_min_wavelength;
+            }
+            m_scene_data->restart_progressive_rendering();
+        }
+        if (Gui_control::slider(
+            "Max Wavelength (nm)", "Maximum wavelength for spectral rendering.",
+            &m_scene_data->spectral_max_wavelength, &m_options->spectral_max_wavelength,
+            Gui_control::Flags::None, 380.0f, 780.0f))
+        {
+            if (m_scene_data->spectral_min_wavelength > m_scene_data->spectral_max_wavelength) {
+                m_scene_data->spectral_min_wavelength = m_scene_data->spectral_max_wavelength;
+            }
+            m_scene_data->restart_progressive_rendering();
+        }
+    }
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -194,11 +220,13 @@ Gui_section_camera::Gui_section_camera(
     Example_dxr* app,
     mi::examples::gui::Root* gui,
     Scene_constants* scene_data,
-    mdl_d3d12::Camera_controls* camera_controls)
+    mdl_d3d12::Camera_controls* camera_controls,
+    const Example_dxr_options* options)
     : mi::examples::gui::Section(gui, "Camera", true)
     , m_app(app)
     , m_scene_data(scene_data)
     , m_camera_controls(camera_controls)
+    , m_options(options)
 {
 }
 
@@ -209,6 +237,56 @@ void Gui_section_camera::update(mi::neuraylib::ITransaction* /*transaction*/)
     float default_1_0 = 1.0f;
     float default_fov = 45.0f;
     const float* no_float = nullptr;
+
+    if (m_options && m_options->show_camera)
+    {
+        mdl_d3d12::Scene_node* node = m_camera_controls->get_target();
+        Transform trafo;
+        if (node && Transform::try_from_matrix(node->get_global_transformation(), trafo))
+        {
+            DirectX::XMVECTOR forward = DirectX::XMVector3Rotate(
+                DirectX::XMVectorSet(0.0f, 0.0f, -1.0f, 0.0f), trafo.rotation);
+            forward = DirectX::XMVector3Normalize(forward);
+            DirectX::XMVECTOR pos_v = DirectX::XMLoadFloat3(&trafo.translation);
+            float focus_distance = 1.0f;
+            const Bounding_box& aabb = m_app->get_scene()->get_root()->get_global_bounding_box();
+            if (aabb.is_valid())
+                focus_distance = std::max(1.0f, length(aabb.size()) * 0.01f);
+            DirectX::XMVECTOR focus_v = DirectX::XMVectorMultiplyAdd(
+                forward, DirectX::XMVectorReplicate(focus_distance), pos_v);
+            DirectX::XMFLOAT3 focus;
+            DirectX::XMStoreFloat3(&focus, focus_v);
+
+            ImGui::TextUnformatted("World-space pose (for --camera):");
+            ImGui::Text(
+                "Position  %.6f  %.6f  %.6f",
+                trafo.translation.x, trafo.translation.y, trafo.translation.z);
+            ImGui::Text("Focus     %.6f  %.6f  %.6f", focus.x, focus.y, focus.z);
+            ImGui::TextUnformatted(
+                "Focus lies on the view axis; distance scales with scene size. "
+                "Same orientation as `--camera` with world up (0,1,0).");
+
+            char cmd[384];
+            snprintf(
+                cmd,
+                sizeof(cmd),
+                "--camera %.6f %.6f %.6f %.6f %.6f %.6f",
+                trafo.translation.x,
+                trafo.translation.y,
+                trafo.translation.z,
+                focus.x,
+                focus.y,
+                focus.z);
+            if (ImGui::SmallButton("Copy line to clipboard"))
+                ImGui::SetClipboardText(cmd);
+            ImGui::SameLine();
+            ImGui::TextUnformatted(cmd);
+        }
+        else
+            ImGui::TextUnformatted("Camera pose unavailable.");
+
+        ImGui::Separator();
+    }
 
     mi::examples::gui::Control::drag("Movement Speed", "use CTRL + Left-Click to set explicit values.",
         &m_camera_controls->movement_speed, &default_1_0,

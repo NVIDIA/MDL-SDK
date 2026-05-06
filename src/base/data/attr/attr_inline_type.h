@@ -56,13 +56,10 @@ ATTR::Type_code to_valid_range(const ATTR::Type_code code)
 // return true if the two types agree exactly, including all child types. This
 // is useful to check that the values are compatible, for example for shader
 // parameter inheritance and assignment. Names are not compared.
-MI_INLINE bool Type::operator==(
+inline bool Type::operator==(
     const Type  &other) const
 {
-    if (m_typecode != other.m_typecode  ||
-        m_const    != other.m_const     ||
-        m_spare    != other.m_spare)
-
+    if (m_typecode != other.m_typecode)
         return false;                           // toplevel type mismatch
 
     if (m_arraysize != other.m_arraysize)
@@ -92,7 +89,7 @@ MI_INLINE bool Type::operator==(
 }
 
 
-MI_INLINE bool Type::operator!=(
+inline bool Type::operator!=(
     const Type  &other) const
 {
     return !(*this == other);
@@ -100,71 +97,61 @@ MI_INLINE bool Type::operator!=(
 
 
 // read access functions
-MI_INLINE const char *Type::get_name() const
+inline const char *Type::get_name() const
 {
     return m_name.empty()? 0 : m_name.c_str();
 }
 
 
-MI_INLINE Type_code Type::get_typecode() const
+inline Type_code Type::get_typecode() const
 {
     return (Type_code)m_typecode;
 }
 
 
-MI_INLINE bool Type::get_const() const
-{
-    return m_const;
-}
-
-
-MI_INLINE Uint Type::get_arraysize() const
+inline Uint Type::get_arraysize() const
 {
     return m_arraysize;
 }
 
 
-MI_INLINE const Type *Type::get_next() const
+inline const Type *Type::get_next() const
 {
     return m_next;
 }
 
-MI_INLINE const Type *Type::get_child() const
+inline const Type *Type::get_child() const
 {
     return m_child;
 }
 
-MI_INLINE Type *Type::get_next()
+inline Type *Type::get_next()
 {
     return m_next;
 }
 
 
-MI_INLINE Type* Type::get_child()
+inline Type* Type::get_child()
 {
-    ASSERT(M_ATTR,
-        get_typecode() == TYPE_STRUCT ||
-        get_typecode() == TYPE_ARRAY ||
-        get_typecode() == TYPE_ATTACHABLE ||
-        get_typecode() == TYPE_CALL);
+    ASSERT(M_ATTR, get_typecode() == TYPE_STRUCT || get_typecode() == TYPE_ARRAY);
     return m_child;
 }
 
 
-MI_INLINE std::vector<std::pair<int, std::string> >** Type::set_enum()
+inline std::vector<std::pair<int, std::string> >** Type::set_enum()
 {
     ASSERT(M_ATTR, m_typecode == TYPE_ENUM);
     return &m_enum;
 }
 
 
-MI_INLINE std::vector<std::pair<int, std::string> >* Type::get_enum() const
+inline std::vector<std::pair<int, std::string> >* Type::get_enum() const
 {
     ASSERT(M_ATTR, m_typecode == TYPE_ENUM);
     return m_enum;
 }
 
-MI_INLINE void Type::set_name(
+inline void Type::set_name(
     const char          *name)          // new field name
 {
     if (name)
@@ -178,7 +165,7 @@ MI_INLINE void Type::set_name(
 // Set the next Type.
 //
 
-MI_INLINE void Type::set_next(
+inline void Type::set_next(
     const Type &next)                   // new successor
 {
     delete m_next;
@@ -192,7 +179,7 @@ MI_INLINE void Type::set_next(
 // size. Structs have size 0 since their members are not included either.
 //
 
-MI_INLINE size_t Type::sizeof_one(
+inline size_t Type::sizeof_one(
     Type_code           type)           // return size of one of this type
 {
     return m_typeinfo[type].comp * m_typeinfo[type].size;
@@ -203,7 +190,7 @@ MI_INLINE size_t Type::sizeof_one(
 // return the ascii name of a type. Useful for all sorts of user messages.
 //
 
-MI_INLINE const char *Type::type_name(
+inline const char *Type::type_name(
     Type_code           type)           // type to look up
 {
     type = to_valid_range(type);
@@ -215,7 +202,7 @@ MI_INLINE const char *Type::type_name(
 // return how a type is composed of component types, ie. a Color is 4 Scalars.
 //
 
-MI_INLINE Uint Type::component_count(
+inline Uint Type::component_count(
     Type_code           type)           // type, ie. Color -> 4 components
 {
     type = to_valid_range(type);
@@ -223,14 +210,14 @@ MI_INLINE Uint Type::component_count(
 }
 
 
-MI_INLINE Type_code Type::component_type(
+inline Type_code Type::component_type(
     Type_code           type)           // type, ie. Color -> Scalar
 {
     type = to_valid_range(type);
     return m_typeinfo[type].base;
 }
 
-MI_INLINE const char *Type::component_name( //-V524 PVS
+inline const char *Type::component_name( //-V524 PVS
     Type_code           type)           // type, ie. Color -> Scalar
 {
     type = to_valid_range(type);
@@ -242,29 +229,21 @@ MI_INLINE const char *Type::component_name( //-V524 PVS
 // This base class implementation return false in any case.
 //
 
-MI_INLINE bool Type::is_type_subclass(
+inline bool Type::is_type_subclass(
     SERIAL::Class_id id) const          // id of the requested subclass
 {
     return false;
 }
 
 // write access functions. Setting next/child deletes the entire old chain.
-MI_INLINE void Type::set_typecode(
+inline void Type::set_typecode(
     Type_code           typecode)
 {
-    ASSERT(M_ATTR, typecode != TYPE_ID);
     m_typecode = typecode;
 }
 
 
-MI_INLINE void Type::set_const(
-    bool                isconst)
-{
-    m_const = isconst;
-}
-
-
-MI_INLINE void Type::set_arraysize(
+inline void Type::set_arraysize(
     Uint arraysize)
 {
     // this method is only useful called on TYPE_ARRAY types
@@ -282,7 +261,7 @@ MI_INLINE void Type::set_arraysize(
     }
 }
 
-MI_INLINE void Type::set_type_name(
+inline void Type::set_type_name(
     const std::string& str)
 {
     m_type_name = str;
@@ -292,7 +271,7 @@ MI_INLINE void Type::set_type_name(
 // return the alignment of one member of this type. The alignment is an address
 // multiple where a compiler would store a value of this type. For example, an
 // integer is always stored at an address that is a multiple of 4, so return 4.
-MI_INLINE size_t Type::align_one() const
+inline size_t Type::align_one() const
 {
     size_t s = m_arraysize ? m_typeinfo[m_typecode].size
                            : sizeof(Dynamic_array *);
@@ -305,31 +284,21 @@ MI_INLINE size_t Type::align_one() const
 // This is the alignment of the largest simple element of the tree. For example
 // a nested struct that has a double anywhere in it must itself have the
 // alignment of a double (8).
-MI_INLINE size_t Type::align_all() const
+inline size_t Type::align_all() const
 {
-    if (m_typecode != TYPE_STRUCT && m_typecode != TYPE_ARRAY && m_typecode != TYPE_ATTACHABLE
-        && m_typecode != TYPE_CALL)
+    if (m_typecode != TYPE_STRUCT && m_typecode != TYPE_ARRAY)
     {
        return align_one();
     }
 
     const Type* start_type = m_child;
     // handle special case of an array of structs
-    if (m_typecode == TYPE_ARRAY && m_child &&
-        (m_child->get_typecode() == TYPE_STRUCT || m_child->get_typecode() == TYPE_ATTACHABLE
-        || m_child->get_typecode() == TYPE_CALL))
+    if (m_typecode == TYPE_ARRAY && m_child && (m_child->get_typecode() == TYPE_STRUCT))
     {
         start_type = m_child->m_child;
     }
 
     size_t align = 1;
-    // in the TYPE_CALL case, set initial alignment to the two string pointers
-    if (m_typecode == TYPE_CALL ||
-        (m_typecode == TYPE_ARRAY && m_child && m_child->get_typecode() == TYPE_CALL))
-    {
-        bool is_dynamic_array = m_typecode != TYPE_ARRAY && m_arraysize == 0;
-        align = is_dynamic_array? sizeof(Dynamic_array*) : m_typeinfo[TYPE_STRING].size;
-    }
     for (const Type* t=start_type; t; t=t->m_next) {
         size_t subalign = t->align_all();
         if (subalign > align)
@@ -345,7 +314,7 @@ MI_INLINE size_t Type::align_all() const
 // the size of the struct is returned but not the actual arry pointed to. Note
 // that Dynamic_array has a null int to make the alignment predictable on
 // 64-bit machines. Structs have size 0 since their members are not included.
-MI_INLINE size_t Type::sizeof_one() const
+inline size_t Type::sizeof_one() const
 {
     return m_arraysize
         ? m_arraysize * m_typeinfo[m_typecode].comp
@@ -355,7 +324,7 @@ MI_INLINE size_t Type::sizeof_one() const
 
 
 // return the ascii name of a type. Useful for all sorts of user messages.
-MI_INLINE const char *Type::type_name() const
+inline const char *Type::type_name() const
 {
     return m_typeinfo[m_typecode].name;
 }
@@ -364,7 +333,7 @@ MI_INLINE const char *Type::type_name() const
 // return info on how a type is put together from components. Ie, a Color is
 // 4 components, each of which is a Scalar. This helps code like image/image
 // and serializers that can get away with far smaller switches.
-MI_INLINE Uint Type::component_count() const
+inline Uint Type::component_count() const
 {
     if (m_typecode != TYPE_ARRAY)
         return m_typeinfo[m_typecode].comp;
@@ -382,7 +351,7 @@ MI_INLINE Uint Type::component_count() const
 }
 
 
-MI_INLINE Type_code Type::component_type() const
+inline Type_code Type::component_type() const
 {
     if (m_typecode != TYPE_ARRAY)
         return m_typeinfo[m_typecode].base;
@@ -403,7 +372,7 @@ MI_INLINE Type_code Type::component_type() const
 // substructures. This is used to make decisions about garbage collection.
 // Include the size of the subtree anchored here; it would be messy to ask
 // the caller to do that.
-MI_INLINE size_t Type::get_size() const
+inline size_t Type::get_size() const
 {
     size_t child_size = 0;
     if (m_typecode != TYPE_ENUM)
@@ -418,13 +387,13 @@ MI_INLINE size_t Type::get_size() const
 
 
 // unique class ID so that the receiving host knows which class to create
-MI_INLINE SERIAL::Class_id Type::get_class_id() const
+inline SERIAL::Class_id Type::get_class_id() const
 {
     return id;
 }
 
 
-MI_INLINE size_t Type::sizeof_all() const
+inline size_t Type::sizeof_all() const
 {
     // dynamic arrays without top-level TYPE_ARRAY node
     if (get_typecode() != TYPE_ARRAY && m_arraysize == 0)
@@ -441,24 +410,18 @@ MI_INLINE size_t Type::sizeof_all() const
 
 
 // size of one element in an array
-MI_INLINE size_t Type::sizeof_elem() const
+inline size_t Type::sizeof_elem() const
 {
     if (get_typecode() == TYPE_ARRAY) {
         if (get_child())
             return get_child()->sizeof_elem();
     }
     Type_code tc = get_typecode();
-    if (tc != TYPE_STRUCT && tc != TYPE_ATTACHABLE && tc != TYPE_CALL)
+    if (tc != TYPE_STRUCT)
         return sizeof_one(tc);
 
     size_t total = 0;
     size_t align = 1;
-    // add the two string pointers in case of TYPE_CALL - actually is one Tag and one pointer now,
-    // but using the original two char * makes it easier
-    if (tc == TYPE_CALL) {
-        total += 2*Type::sizeof_one(TYPE_STRING);
-        align = Type::sizeof_one(TYPE_STRING);
-    }
     for (const Type *t=get_child(); t; t=t->get_next()) {
         size_t subalign = t->align_all();
         if (subalign > align)                           // align by largest
@@ -471,7 +434,7 @@ MI_INLINE size_t Type::sizeof_elem() const
 }
 
 
-MI_INLINE const Type* Type::lookup(
+inline const Type* Type::lookup(
     const char* name,
     char* base_address,
     char** ret_address,

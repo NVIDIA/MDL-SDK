@@ -383,19 +383,9 @@ public:
     {
         mi::base::Handle<mi::mdl::ILambda_function> root_lambda(dist_func->get_root_lambda());
         mi::base::Handle<mi::mdl::ILambda_function> old_lambda = m_cur_lambda;
-
-        // all resources will be registered in the main lambda
         m_cur_lambda = mi::base::make_handle_dup(root_lambda.get());
 
-        for (size_t i = 0, n = dist_func->get_main_function_count(); i < n; ++i) {
-            mi::base::Handle<mi::mdl::ILambda_function> main_func(dist_func->get_main_function(i));
-            root_lambda->enumerate_resources(m_call_resolver, *this, main_func->get_body());
-        }
-
-        for (size_t i = 0, n = dist_func->get_expr_lambda_count(); i < n; ++i) {
-            mi::base::Handle<mi::mdl::ILambda_function> expr_lambda(dist_func->get_expr_lambda(i));
-            expr_lambda->enumerate_resources(m_call_resolver, *this, expr_lambda->get_body());
-        }
+        root_lambda->enumerate_resources(m_call_resolver, *this, root_lambda->get_body());
 
         m_cur_lambda = old_lambda;
     }
@@ -829,7 +819,27 @@ enum Backend_options
     BACKEND_OPTIONS_ENABLE_RO_SEGMENT = 1 << 6,
     // if enabled, the generated code will use the optional "flags" field in the BSDF data structs
     BACKEND_OPTIONS_ENABLE_BSDF_FLAGS = 1 << 7,
+    // if enabled, it enabled spectral rendering in the generated code
+    BACKEND_OPTIONS_ENABLE_SPECTRAL = 1 << 8,
 };
+
+/// Map a spectral conversion intrinsic semantic to the function name used in DAG calls.
+/// Returns nullptr if the semantic does not correspond to a spectral conversion.
+static inline const char *spectral_conv_name(mi::mdl::IDefinition::Semantics semantic)
+{
+    switch (semantic) {
+    case mi::mdl::IDefinition::DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_REFLECTANCE:
+        return "rgb_to_spectral_reflectance()";
+    case mi::mdl::IDefinition::DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_LUMINANCE:
+        return "rgb_to_spectral_luminance()";
+    case mi::mdl::IDefinition::DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_VOLUME_COEFFICIENT:
+        return "rgb_to_spectral_volume_coefficient()";
+    case mi::mdl::IDefinition::DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_IOR:
+        return "rgb_to_spectral_ior()";
+    default:
+        return nullptr;
+    }
+}
 
 class Material_backend_compiler : public Material_compiler {
 public:
@@ -859,6 +869,7 @@ public:
         , m_link_unit()
         , m_res_col(mdl_compiler, m_jit_be.get(), m_module_manager)
         , m_enable_derivatives(backend_options & BACKEND_OPTIONS_ENABLE_DERIVATIVES)
+        , m_enable_spectral(backend_options & BACKEND_OPTIONS_ENABLE_SPECTRAL)
         , m_gen_base_name_suffix_counter(0)
     {
         // Set the JIT backend options: we use a private code generator here, so it is safe to
@@ -908,6 +919,11 @@ public:
             options.set_option(MDL_JIT_OPTION_USE_RENDERER_ADAPT_MICROFACET_ROUGHNESS, "true");
         }
 
+        if (backend_options & BACKEND_OPTIONS_ENABLE_SPECTRAL) {
+            // Option "jit_libbsdf_spectral": Default is disabled.
+            options.set_option(MDL_JIT_OPTION_ENABLE_LIBBSDF_SPECTRAL, "true");
+        }
+
         // Option "jit_tex_lookup_call_mode": Default mode is vtable mode.
         if (target_backend == mi::mdl::ICode_generator::Target_language::TL_NATIVE)
         {
@@ -951,54 +967,28 @@ public:
             /*num_texture_results=*/ num_texture_results));
     }
 
-    /// Add a subexpression of a given material to the link unit.
+    /// Add (multiple) MDL distribution functions and expressions of a material to this link unit.
     ///
-    /// \param path               the path of the sub-expression
-    /// \param fname              the name of the generated function from the added expression
-    /// \param class_compilation  if true, use class compilation
-    bool add_material_subexpr(
-        std::string const& material_name,
-        char const*        path,
-        char const*        fname,
-        bool               class_compilation = false);
-
-    /// Add a distribution function of a given material to the link unit.
+    /// Functions can be selected by providing a list of \c Target_function_descriptions.
+    /// If the first function in the list uses the path "init", one init function will be generated,
+    /// precalculating values which will be used by the other requested functions.
+    /// Each other entry in the list needs to define the \c path, the root of the expression that
+    /// should be translated.
+    /// For each distribution function it results in three to five functions, suffixed with
+    /// \c "_init" (if first requested path was not \c "init"), \c "_sample", \c "_evaluate",
+    /// \c "_pdf", and \c "_auxiliary" (if the \c "enable_auxiliary" backend option is enabled).
+    /// After calling this function, each element of the list will contain information for later
+    /// usage in the application, e.g., the \c argument_block_index and the \c function_index.
     ///
-    /// \param path               the path of the sub-expression
-    /// \param fname              the name of the generated function from the added expression
-    /// \param class_compilation  if true, use class compilation
-    bool add_material_df(
-        std::string const& material_name,
-        char const*        path,
-        char const*        fname,
-        bool               class_compilation = false);
-
-    /// Add (multiple) MDL distribution function and expressions of a material to this link unit.
-    /// For each distribution function it results in four functions, suffixed with \c "_init",
-    /// \c "_sample", \c "_evaluate", and \c "_pdf". Functions can be selected by providing a
-    /// a list of \c Target_function_descriptions. Each of them needs to define the \c path, the root
-    /// of the expression that should be translated. After calling this function, each element of
-    /// the list will contain information for later usage in the application,
-    /// e.g., the \c argument_block_index and the \c function_index.
-    ///
-    /// \param material_name                mdl path of the material to generate from
+    /// \param mat_instance                 material instance to generate from
     /// \param function_descriptions        description of functions to generate
     /// \param description_count            number of descriptions passed
-    /// \param class_compilation            if true, use class compilation
-    /// \param flags                        material instantiation flags
+    ///
+    /// \return true on success, false otherwise
     bool add_material(
-        std::string const&           material_name,
+        const Material_instance&     mat_instance,
         Target_function_description* function_descriptions,
-        size_t                       description_count,
-        bool                         class_compilation = false,
-        mi::Uint32                   flags = 0);
-
-    bool add_material(
-        mi::base::Handle <mi::mdl::IMaterial_instance> imat_instance,
-        Target_function_description* function_descriptions,
-        size_t                       description_count,
-        bool                         class_compilation = false,
-        mi::Uint32                   flags = 0);
+        size_t                       description_count);
 
     /// Generate target code for the current link unit.
     /// Note, the Target_code is only valid as long as this Material_backend_compiler exists.
@@ -1018,37 +1008,37 @@ public:
     /// \param material_name      a fully qualified MDL material name
     /// \param class_compilation  true, if class_compilation should be used
     /// \param flags              material instantiation flags
-    mi::base::Handle<mi::mdl::IMaterial_instance>
-        create_and_init_material_instance(
+    Material_instance create_and_init_material_instance(
             std::string const& material_name,
             bool              class_compilation,
-            mi::Uint32        flags)
+            mi::Uint32        flags = 0)
     {
         Material_instance mat_inst = create_material_instance(material_name);
-        if (!mat_inst)
-            return mi::base::Handle<mi::mdl::IMaterial_instance>();
+        if (mat_inst) {
+            mi::mdl::Dag_error_code err = initialize_material_instance(
+                mat_inst, {}, class_compilation, flags);
+            // TODO: does not generate a message
+            check_success(err == mi::mdl::EC_NONE);
 
-        mi::mdl::Dag_error_code err = initialize_material_instance(
-            mat_inst, {}, class_compilation, flags);
-        // TODO: does not generate a message
-        check_success(err == mi::mdl::EC_NONE);
-
-        m_mat_instances.push_back(mat_inst);
-
-        return mat_inst.get_material_instance();
+            // do not yet store this instance in the list of material instances, it must
+            // be ensured, that material instances AND its argument blocks are synched, so ALWAYS
+            // store them at the same place
+            // m_mat_instances.push_back(mat_inst);
+        }
+        return mat_inst;
     }
 private:
 
     bool add_material_single_init(
-        mi::mdl::IMaterial_instance* material_instance,
+        const Material_instance&     mat_instance,
         Target_function_description* function_descriptions,
         size_t                       description_count);
 
     /// Collect the resources in the arguments of a material instance and registers them with
     /// a lambda function.
     void collect_material_argument_resources(
-        mi::mdl::IMaterial_instance* mat_instance,
-        mi::mdl::ILambda_function*   lambda);
+        const Material_instance&   mat_instance,
+        mi::mdl::ILambda_function* lambda);
 
 protected:
     mi::mdl::ICode_generator::Target_language      m_target_backend;
@@ -1060,6 +1050,7 @@ protected:
     std::vector<size_t>                    m_arg_block_indexes;
     std::vector<Argument_block>            m_arg_blocks;
     bool                                   m_enable_derivatives;
+    bool                                   m_enable_spectral;
     size_t                                 m_gen_base_name_suffix_counter;
 };
 
@@ -1117,7 +1108,7 @@ Target_code* Material_backend_compiler::generate_target_code()
 // Collect the resources in the arguments of a material instance and registers them with a lambda
 // function.
 void Material_backend_compiler::collect_material_argument_resources(
-    mi::mdl::IMaterial_instance* mat_instance,
+    const Material_instance&   mat_instance,
     mi::mdl::ILambda_function* lambda)
 {
     m_res_col.set_current_lambda(lambda);
@@ -1144,35 +1135,6 @@ void Material_backend_compiler::collect_material_argument_resources(
 
     m_res_col.set_current_lambda(nullptr);
 }
-
-// Add a subexpression of a given material to the link unit.
-bool Material_backend_compiler::add_material_subexpr(
-    const std::string& material_name,
-    char const* path,
-    const char* fname,
-    bool        class_compilation)
-{
-    Target_function_description desc;
-    desc.path = path;
-    desc.base_fname = fname;
-    add_material(material_name, &desc, 1, class_compilation);
-    return desc.return_code == 0;
-}
-
-// Add a distribution function of a given material to the link unit.
-bool Material_backend_compiler::add_material_df(
-    std::string const& material_name,
-    char const* path,
-    char const* base_fname,
-    bool        class_compilation)
-{
-    Target_function_description desc;
-    desc.path = path;
-    desc.base_fname = base_fname;
-    add_material(material_name, &desc, 1, class_compilation);
-    return desc.return_code == 0;
-}
-
 
 namespace
 {
@@ -1201,7 +1163,7 @@ namespace
 }
 
 bool Material_backend_compiler::add_material_single_init(
-    mi::mdl::IMaterial_instance* material_instance,
+    const Material_instance&     mat_instance,
     Target_function_description* function_descriptions,
     size_t                       description_count)
 {
@@ -1246,92 +1208,60 @@ bool Material_backend_compiler::add_material_single_init(
     root_lambda->set_name(base_fname_list[0].c_str());
 
     // add all material parameters to the lambda function
-    for (size_t i = 0, n = material_instance->get_parameter_count(); i < n; ++i)
+    for (size_t i = 0, n = mat_instance->get_parameter_count(); i < n; ++i)
     {
-        const mi::mdl::IValue* value = material_instance->get_parameter_default(i);
+        const mi::mdl::IValue* value = mat_instance->get_parameter_default(i);
 
         size_t idx = root_lambda->add_parameter(
             value->get_type(),
-            material_instance->get_parameter_name(i));
+            mat_instance->get_parameter_name(i));
 
         // map the i'th material parameter to this new parameter
         root_lambda->set_parameter_mapping(i, idx);
     }
-    
-    // import full material into the main lambda
+
+    // initialize the distribution function
     if (dist_func->initialize(
-        material_instance,
-        func_list.data(),
-        func_list.size(),
-        /*include_geometry_normal=*/ true,
-        /*calc_derivatives=*/ m_enable_derivatives,
-        /*allow_double_expr_lambdas=*/ false,
-        &m_module_manager) != mi::mdl::IDistribution_function::EC_NONE)
+            mat_instance.get_material_instance().get(),
+            func_list.data(),
+            func_list.size(),
+            m_enable_derivatives,
+            m_enable_spectral,
+            &m_module_manager) != mi::mdl::IDistribution_function::EC_NONE)
         return false;
 
     // collect the resources of the distribution function and the material arguments
     m_res_col.collect(dist_func.get());
-    collect_material_argument_resources(material_instance, root_lambda.get());
+    collect_material_argument_resources(mat_instance, root_lambda.get());
 
     // argument block index for the entire material
     size_t arg_block_index = size_t(~0);
 
-    std::vector<size_t> main_func_indices(func_list.size() + 1); // +1 for init function
+    std::vector<size_t> req_func_indices(description_count);  // first is init function
     if (!m_link_unit->add(
         dist_func.get(),
         nullptr,
         &m_module_manager,
         &arg_block_index,
-        main_func_indices.data(),
-        main_func_indices.size()))
+        req_func_indices.data(),
+        req_func_indices.size()))
     {
         for (size_t i = 0; i < description_count; ++i)
             function_descriptions[i].return_code = -1;
         return false;
     }
-    
+
+    m_mat_instances.push_back(mat_instance);
     m_arg_block_indexes.push_back(arg_block_index);
 
-    // fill output field for the init function, which is always added first
-    function_descriptions[0].function_index = main_func_indices[0];
-    function_descriptions[0].distribution_kind = mi::mdl::IGenerated_code_executable::DK_NONE;
-    function_descriptions[0].argument_block_index = arg_block_index;
-    function_descriptions[0].return_code = 0;
-
-    // fill output fields for the other main functions
-    for (mi::Size i = 1; i < description_count; ++i)
+    // fill output fields
+    for (mi::Size i = 0; i < description_count; ++i)
     {
-        function_descriptions[i].function_index = main_func_indices[i];
+        function_descriptions[i].function_index = req_func_indices[i];
         function_descriptions[i].argument_block_index = arg_block_index;
+        function_descriptions[i].distribution_kind =
+            m_link_unit->get_distribution_kind(req_func_indices[i]);
         function_descriptions[i].return_code = 0;
-
-        mi::base::Handle<mi::mdl::ILambda_function> main_func(
-            dist_func->get_main_function(i - 1));
-        mi::mdl::DAG_node const* main_node = main_func->get_body();
-        mi::mdl::IType const* main_type = main_node->get_type()->skip_type_alias();
-        switch (main_type->get_kind())
-        {
-        case mi::mdl::IType::TK_BSDF:
-            function_descriptions[i].distribution_kind
-                = mi::mdl::IGenerated_code_executable::DK_BSDF;
-            break;
-        case mi::mdl::IType::TK_HAIR_BSDF:
-            function_descriptions[i].distribution_kind
-                = mi::mdl::IGenerated_code_executable::DK_HAIR_BSDF;
-            break;
-        case mi::mdl::IType::TK_EDF:
-            function_descriptions[i].distribution_kind
-                = mi::mdl::IGenerated_code_executable::DK_EDF;
-            break;
-        case mi::mdl::IType::TK_VDF:
-            function_descriptions[i].distribution_kind
-                = mi::mdl::IGenerated_code_executable::DK_INVALID;
-            break;
-        default:
-            function_descriptions[i].distribution_kind
-                = mi::mdl::IGenerated_code_executable::DK_NONE;
-            break;
-        }
     }
 
     return true;
@@ -1339,24 +1269,16 @@ bool Material_backend_compiler::add_material_single_init(
 
 // Add (multiple) MDL distribution function and expressions of a material to this link unit.
 bool Material_backend_compiler::add_material(
-    const std::string&           material_name,
+    const Material_instance&     mat_instance,
     Target_function_description* function_descriptions,
-    size_t                       description_count,
-    bool                         class_compilation,
-    mi::Uint32                   flags)
+    size_t                       description_count)
 {
-    // Load the given module and create a material instance
-    mi::base::Handle<mi::mdl::IMaterial_instance> mat_instance(
-        create_and_init_material_instance(material_name.c_str(), class_compilation, flags));
-    if (!mat_instance)
-        return false;
-
     if (description_count > 0
         && function_descriptions[0].path
         && strcmp(function_descriptions[0].path, "init") == 0)
     {
         return add_material_single_init(
-            mat_instance.get(), function_descriptions, description_count);
+            mat_instance, function_descriptions, description_count);
     }
 
     // argument block index for the entire material
@@ -1383,7 +1305,7 @@ bool Material_backend_compiler::add_material(
 
         // Access the requested material expression node
         const mi::mdl::DAG_node* expr_node = get_dag_arg(
-            mat_instance->get_constructor(), tokens_c, mat_instance.get());
+            mat_instance->get_constructor(), tokens_c, mat_instance.get_material_instance().get());
         if (!expr_node)
         {
             function_descriptions[i].return_code = -1;
@@ -1445,7 +1367,7 @@ bool Material_backend_compiler::add_material(
                 break;
             }
 
-            // Create new distribution function object and access the main lambda
+            // Create new distribution function object and access the root lambda
             mi::base::Handle<mi::mdl::IDistribution_function> dist_func(
                 m_dag_be->create_distribution_function());
             mi::base::Handle<mi::mdl::ILambda_function> root_lambda(
@@ -1468,42 +1390,40 @@ bool Material_backend_compiler::add_material(
                 root_lambda->set_parameter_mapping(i, idx);
             }
 
-            // Import full material into the main lambda
             mi::mdl::IDistribution_function::Requested_function req_func(
                 function_descriptions[i].path, function_name.c_str());
 
             // Initialize the distribution function
             if (dist_func->initialize(
-                mat_instance.get(),
-                &req_func,
-                1,
-                /*include_geometry_normal=*/ true,
-                /*calc_derivatives=*/ m_enable_derivatives,
-                /*allow_double_expr_lambdas=*/ false,
-                &m_module_manager) != mi::mdl::IDistribution_function::EC_NONE)
+                    mat_instance.get_material_instance().get(),
+                    &req_func,
+                    /*num_req_functions=*/ 1,
+                    m_enable_derivatives,
+                    m_enable_spectral,
+                    &m_module_manager) != mi::mdl::IDistribution_function::EC_NONE)
                 return false;
 
             // Collect the resources of the distribution function and the material arguments
             m_res_col.collect(dist_func.get());
-            collect_material_argument_resources(mat_instance.get(), root_lambda.get());
+            collect_material_argument_resources(mat_instance, root_lambda.get());
 
             // Add the lambda function to the link unit. Note that it is save to pass
-            // no module cache here, as we do not use dropt_import_entries() in the Core API
-            size_t main_func_indices[2];
+            // no module cache here, as we do not use drop_import_entries() in the Core API
+            size_t req_func_indices[2];
             if (!m_link_unit->add(
                 dist_func.get(),
                 /*module_cache=*/nullptr,
                 &m_module_manager,
                 &arg_block_index,
-                main_func_indices,
-                2))
+                req_func_indices,
+                /*num_req_functions=*/ 2))
             {
                 function_descriptions[i].return_code = -1;
                 continue;
             }
 
             // for distribution functions, let function_index point to the init function
-            function_descriptions[i].function_index = main_func_indices[0];
+            function_descriptions[i].function_index = req_func_indices[0];
             break;
         }
 
@@ -1531,6 +1451,27 @@ bool Material_backend_compiler::add_material(
             // Copy the expression into the lambda function
             // (making sure the expression is owned by it).
             expr_node = lambda->import_expr(mat_instance->get_dag_unit(), expr_node);
+
+            // Wrap the body with a spectral conversion intrinsic if spectral mode is enabled
+            // and the expression is a color type.
+            if (m_enable_spectral &&
+                    mi::mdl::is<mi::mdl::IType_color>(expr_node->get_type()->skip_type_alias())) {
+                mi::mdl::IDefinition::Semantics conv_semantic =
+                    mat_instance->get_spectral_conversion(function_descriptions[i].path);
+                if (const char *conv_name = spectral_conv_name(conv_semantic)) {
+                    mi::mdl::IType_factory *tf = lambda->get_type_factory();
+                    mi::mdl::DAG_call::Call_argument conv_arg[1] = {
+                        mi::mdl::DAG_call::Call_argument(expr_node, "rgb")
+                    };
+                    expr_node = lambda->create_call(
+                        conv_name,
+                        conv_semantic,
+                        conv_arg, 1,
+                        tf->create_spectral_sample(),
+                        expr_node->get_dbg_info());
+                }
+            }
+
             lambda->set_body(expr_node);
 
             if (m_enable_derivatives)
@@ -1538,7 +1479,7 @@ bool Material_backend_compiler::add_material(
 
             // Collect the resources of the lambda and the material arguments
             m_res_col.collect(lambda.get());
-            collect_material_argument_resources(mat_instance.get(), lambda.get());
+            collect_material_argument_resources(mat_instance, lambda.get());
 
             // set further infos that are passed back
             function_descriptions[i].distribution_kind =
@@ -1562,239 +1503,7 @@ bool Material_backend_compiler::add_material(
         }
     }
 
-    m_arg_block_indexes.push_back(arg_block_index);
-
-    // pass out the block index
-    for (size_t i = 0; i < description_count; ++i)
-    {
-        function_descriptions[i].argument_block_index = arg_block_index;
-        function_descriptions[i].return_code = 0;
-    }
-
-    return true;
-}
-
-// Add (multiple) MDL distribution function and expressions of a material to this link unit.
-bool Material_backend_compiler::add_material(
-    mi::base::Handle <mi::mdl::IMaterial_instance> imat_instance,
-    Target_function_description* function_descriptions,
-    size_t                       description_count,
-    bool                         class_compilation,
-    mi::Uint32                   flags)
-{
-    m_mat_instances[0].set_material_instance(imat_instance);
-
-    if (description_count > 0
-        && function_descriptions[0].path
-        && strcmp(function_descriptions[0].path, "init") == 0)
-    {
-        return add_material_single_init(
-            imat_instance.get(), function_descriptions, description_count);
-    }
-
-    // argument block index for the entire material
-    // (initialized by the first function that requires material arguments)
-    size_t arg_block_index = size_t(~0);
-
-    // increment once for each add_material invocation
-    m_gen_base_name_suffix_counter++;
-
-    // iterate over functions to generate
-    for (size_t i = 0; i < description_count; ++i)
-    {
-        if (!function_descriptions[i].path)
-        {
-            function_descriptions[i].return_code = -1;
-            return false;
-        }
-
-        // parse path into . separated tokens
-        auto tokens = split_path_tokens(function_descriptions[i].path);
-        std::vector<const char*> tokens_c;
-        for (auto&& t : tokens)
-            tokens_c.push_back(t.c_str());
-
-        // Access the requested material expression node
-        const mi::mdl::DAG_node* expr_node = get_dag_arg(
-            imat_instance->get_constructor(), tokens_c, imat_instance.get());
-        if (!expr_node)
-        {
-            function_descriptions[i].return_code = -1;
-            return false;
-        }
-
-        // use the provided base name or generate one
-        std::stringstream sstr;
-        if (function_descriptions[i].base_fname && function_descriptions[i].base_fname[0])
-            sstr << function_descriptions[i].base_fname;
-        else
-        {
-            sstr << "lambda_" << m_gen_base_name_suffix_counter;
-            sstr << "__" << function_descriptions[i].path;
-        }
-
-        std::string function_name = sstr.str();
-        std::replace(function_name.begin(), function_name.end(), '.', '_');
-
-        switch (expr_node->get_type()->get_kind())
-        {
-        case mi::mdl::IType::TK_BSDF:
-        case mi::mdl::IType::TK_EDF:
-            //case mi::mdl::IType::TK_VDF:
-        {
-            // set further infos that are passed back
-            switch (expr_node->get_type()->get_kind())
-            {
-            case mi::mdl::IType::TK_BSDF:
-                function_descriptions[i].distribution_kind
-                    = mi::mdl::IGenerated_code_executable::DK_BSDF;
-                break;
-
-            case mi::mdl::IType::TK_EDF:
-                function_descriptions[i].distribution_kind
-                    = mi::mdl::IGenerated_code_executable::DK_EDF;
-                break;
-
-                // case mi::mdl::IType::TK_VDF:
-                //     function_descriptions[i].distribution_kind
-                //       = mi::mdl::IGenerated_code_executable::DK_VDF;
-                //     break;
-
-            default:
-                function_descriptions[i].distribution_kind =
-                    mi::mdl::IGenerated_code_executable::DK_INVALID;
-                function_descriptions[i].return_code = -1;
-                return false;
-            }
-
-            // check if the distribution function is the default one, e.g. 'bsdf()'
-            // if that's the case we don't need to translate as the evaluation of the function
-            // will result in zero
-            if (expr_node->get_kind() == mi::mdl::DAG_node::EK_CONSTANT &&
-                mi::mdl::as<mi::mdl::DAG_constant>(expr_node)->get_value()->get_kind()
-                == mi::mdl::IValue::VK_INVALID_REF)
-            {
-                function_descriptions[i].function_index = ~0;
-                break;
-            }
-
-            // Create new distribution function object and access the main lambda
-            mi::base::Handle<mi::mdl::IDistribution_function> dist_func(
-                m_dag_be->create_distribution_function());
-            mi::base::Handle<mi::mdl::ILambda_function> root_lambda(
-                dist_func->get_root_lambda());
-
-            // set the name of the init function
-            std::string init_name = function_name + "_init";
-            root_lambda->set_name(init_name.c_str());
-
-            // Add all material parameters to the lambda function
-            for (size_t i = 0, n = imat_instance->get_parameter_count(); i < n; ++i)
-            {
-                mi::mdl::IValue const* value = imat_instance->get_parameter_default(i);
-
-                size_t idx = root_lambda->add_parameter(
-                    value->get_type(),
-                    imat_instance->get_parameter_name(i));
-
-                // Map the i'th material parameter to this new parameter
-                root_lambda->set_parameter_mapping(i, idx);
-            }
-
-            // Import full material into the main lambda
-            mi::mdl::IDistribution_function::Requested_function req_func(
-                function_descriptions[i].path, function_name.c_str());
-
-            // Initialize the distribution function
-            if (dist_func->initialize(
-                imat_instance.get(),
-                &req_func,
-                1,
-                /*include_geometry_normal=*/ true,
-                /*calc_derivatives=*/ m_enable_derivatives,
-                /*allow_double_expr_lambdas=*/ false,
-                &m_module_manager) != mi::mdl::IDistribution_function::EC_NONE)
-                return false;
-
-            // Collect the resources of the distribution function and the material arguments
-            m_res_col.collect(dist_func.get());
-            collect_material_argument_resources(imat_instance.get(), root_lambda.get());
-
-            // Add the lambda function to the link unit. Note that it is save to pass
-            // no module cache here, as we do not use dropt_import_entries() in the Core API
-            size_t main_func_indices[2];
-            if (!m_link_unit->add(
-                dist_func.get(),
-                /*module_cache=*/nullptr,
-                &m_module_manager,
-                &arg_block_index,
-                main_func_indices,
-                2))
-            {
-                function_descriptions[i].return_code = -1;
-                continue;
-            }
-
-            // for distribution functions, let function_index point to the init function
-            function_descriptions[i].function_index = main_func_indices[0];
-            break;
-        }
-
-        default:
-        {
-            // Create a lambda function
-            mi::base::Handle<mi::mdl::ILambda_function> lambda(
-                m_dag_be->create_lambda_function(mi::mdl::ILambda_function::LEC_CORE));
-
-            lambda->set_name(function_name.c_str());
-
-            // Add all material parameters to the lambda function
-            for (size_t i = 0, n = imat_instance->get_parameter_count(); i < n; ++i)
-            {
-                mi::mdl::IValue const* value = imat_instance->get_parameter_default(i);
-
-                size_t idx = lambda->add_parameter(
-                    value->get_type(),
-                    imat_instance->get_parameter_name(i));
-
-                // Map the i'th material parameter to this new parameter
-                lambda->set_parameter_mapping(i, idx);
-            }
-
-            // Copy the expression into the lambda function
-            // (making sure the expression is owned by it).
-            expr_node = lambda->import_expr(imat_instance->get_dag_unit(), expr_node);
-            lambda->set_body(expr_node);
-
-            if (m_enable_derivatives)
-                lambda->initialize_derivative_infos(&m_module_manager);
-
-            // Collect the resources of the lambda and the material arguments
-            m_res_col.collect(lambda.get());
-            collect_material_argument_resources(imat_instance.get(), lambda.get());
-
-            // set further infos that are passed back
-            function_descriptions[i].distribution_kind =
-                mi::mdl::IGenerated_code_executable::DK_NONE;
-
-            // Add the lambda function to the link unit. Note that it is save to pass
-            // no module cache here, as we do not use dropt_import_entries() in the Core API
-            if (!m_link_unit->add(
-                lambda.get(),
-                /*module_cache=*/nullptr,
-                &m_module_manager,
-                mi::mdl::IGenerated_code_executable::FK_LAMBDA,
-                &arg_block_index,
-                &function_descriptions[i].function_index))
-            {
-                function_descriptions[i].return_code = -1;
-                continue;
-            }
-            break;
-        }
-        }
-    }
-
+    m_mat_instances.push_back(mat_instance);
     m_arg_block_indexes.push_back(arg_block_index);
 
     // pass out the block index

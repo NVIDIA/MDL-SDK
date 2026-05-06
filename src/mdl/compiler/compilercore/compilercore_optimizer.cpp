@@ -888,7 +888,16 @@ IStatement const *Optimizer::local_opt(IStatement const *c_stmt)
 /// Check if all necessary sub expression are literals, so this expression should be folded.
 static bool should_be_folded(IExpression const *expr)
 {
-    if (is<IExpression_binary>(expr)) {
+    if (IExpression_reference const *ref = as<IExpression_reference>(expr)) {
+        if (!ref->is_array_constructor()) {
+            IDefinition const *idef = ref->get_definition();
+
+            if (idef->get_kind() == IDefinition::DK_CONSTANT) {
+                // do not fold references to constants
+                return false;
+            }
+        }
+    } else if (is<IExpression_binary>(expr)) {
         IExpression_binary const *bin_expr = cast<IExpression_binary>(expr);
         if (bin_expr->get_operator() == IExpression_binary::OK_SELECT) {
             // need special handling for the SELECT operator, which requires only the left

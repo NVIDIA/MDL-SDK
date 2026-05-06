@@ -192,11 +192,7 @@ mi::Sint32 Db_element_impl_base::store(
     DB::Privacy_level store_level = privacy;
 
     // prevent overwriting an existing DB element with one of a different type
-#ifndef MI_API_API_NEURAY_USE_NAME_TO_TAG_UNSAFE
     DB::Tag tag = db_transaction->name_to_tag( name, DB::Transaction::STORE_CONTEXT);
-#else // MI_API_API_NEURAY_USE_NAME_TO_TAG_UNSAFE
-    DB::Tag tag = db_transaction->name_to_tag_unsafe( name);
-#endif // MI_API_API_NEURAY_USE_NAME_TO_TAG_UNSAFE
     if( tag) {
         SERIAL::Class_id class_id = db_transaction->get_class_id( tag);
         if(    (class_id == MDL::ID_MDL_MODULE)
@@ -211,12 +207,8 @@ mi::Sint32 Db_element_impl_base::store(
         }
     }
 
-#ifndef MI_API_API_NEURAY_USE_NAME_TO_TAG_UNSAFE
     if( !tag)
         tag = db_transaction->reserve_tag();
-#else // MI_API_API_NEURAY_USE_NAME_TO_TAG_UNSAFE
-    tag = transaction->get_tag_for_store( tag);
-#endif // MI_API_API_NEURAY_USE_NAME_TO_TAG_UNSAFE
 
     // use DB::JOURNAL_ALL instead of journal flags in m_journal_flags: for initial stores it does
     // not really matter, but for overwriting existing elements we do not know the journal flags
@@ -255,8 +247,17 @@ Transaction_impl* Db_element_impl_base::get_transaction() const
     switch( m_state) {
         case STATE_ACCESS:
         case STATE_EDIT:
-        case STATE_POINTER:
+        case STATE_POINTER: {
+            if( !m_transaction)
+                return nullptr;
+            DB::Transaction* db_transaction = m_transaction->get_db_transaction();
+            if( !db_transaction->is_open()) {
+                LOG::mod_log->error( M_NEURAY_API, LOG::Mod_log::C_DATABASE,
+                    "Invalid use of non-open transaction.");
+                return nullptr;
+            }
             return m_transaction;
+        }
         case STATE_INVALID:
             return nullptr;
     }
@@ -269,8 +270,17 @@ DB::Transaction* Db_element_impl_base::get_db_transaction() const
     switch( m_state) {
         case STATE_ACCESS:
         case STATE_EDIT:
-        case STATE_POINTER:
-            return m_transaction ? m_transaction->get_db_transaction() : nullptr;
+        case STATE_POINTER: {
+            if( !m_transaction)
+                return nullptr;
+            DB::Transaction* db_transaction = m_transaction->get_db_transaction();
+            if( !db_transaction->is_open()) {
+                LOG::mod_log->error( M_NEURAY_API, LOG::Mod_log::C_DATABASE,
+                    "Invalid use of non-open transaction.");
+                return nullptr;
+            }
+            return db_transaction;
+        }
         case STATE_INVALID:
             return nullptr;
     }

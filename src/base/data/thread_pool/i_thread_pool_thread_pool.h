@@ -109,16 +109,22 @@ public:
 
     /// Sets the CPU load limit.
     ///
-    /// If it is reduced it might take some time until the current CPU load obeys the limit.
-    /// The value is clamped against the CPU load license limit.
+    /// The passed value is clamped against the CPU load license limit.
+    ///
+    /// Limit changes might takes some time until they become effective. An increased limit will
+    /// be taken into account once a new job is submitted or an executed job finishes. A reduced
+    /// limit will be taken into account once enough jobs have finished.
     ///
     /// Returns \c true in case of success (iff \c limit is greater to or equal to 1.0).
     bool set_cpu_load_limit( mi::Float32 limit);
 
     /// Sets the GPU load limit.
     ///
-    /// If it is reduced it might take some time until the current GPU load obeys the limit.
-    /// The value is clamped against the GPU load license limit.
+    /// The passed value is clamped against the GPU load license limit.
+    ///
+    /// Limit changes might takes some time until they become effective. An increased limit will
+    /// be taken into account once a new job is submitted or an executed job finishes. A reduced
+    /// limit will be taken into account once enough jobs have finished.
     ///
     /// Returns \c true in case of success (iff \c limit is greater to or equal to 1.0).
     bool set_gpu_load_limit( mi::Float32 limit);
@@ -193,6 +199,11 @@ public:
     ///
     /// The job is executed synchronously, i.e., the method blocks until the job has been executed.
     /// Jobs may not be submitted from suspended worker threads.
+    ///
+    /// \note The method returns as soon as the job has been executed. This does \em not imply that
+    ///       the thread pool no longer holds a reference to the job. In particular, for splittable
+    ///       jobs the thread pool might invoke once more the job methods to verify that no more
+    ///       work needs to be done.
     ///
     /// \see #submit() for asynchronous execution
     void submit_job_and_wait( IJob* job);

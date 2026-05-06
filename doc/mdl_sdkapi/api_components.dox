@@ -41,6 +41,7 @@ configuration interfaces), while other API components might only be available wh
   <tr><th>Interface                                </th><th>always available</th></tr>
   <tr><td>#mi::neuraylib::IDatabase                </td><td>no </td></tr>
   <tr><td>#mi::neuraylib::IDebug_configuration     </td><td>yes</td></tr>
+  <tr><td>#mi::neuraylib::IExtension_api           </td><td>yes</td></tr>
   <tr><td>#mi::neuraylib::IFactory                 </td><td>yes</td></tr>
   <tr><td>#mi::neuraylib::IImage_api               </td><td>no </td></tr>
   <tr><td>#mi::neuraylib::ILogging_configuration   </td><td>yes</td></tr>

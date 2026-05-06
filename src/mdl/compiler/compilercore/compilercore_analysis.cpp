@@ -28,11 +28,13 @@
 
 #include "pch.h"
 
-#include <cstdarg>
 #include <cctype>
 #include <cstdio>
 #include <cfloat>
 #include <cstring>
+
+#define _USE_MATH_DEFINES
+#include <cmath>
 
 #include <algorithm>
 #include <list>
@@ -40,6 +42,8 @@
 #include <base/system/main/types.h>
 
 #include <mi/mdl/mdl_translator_plugin.h>
+#include <mi/mdl/mdl_expressions.h>
+#include <mi/mdl/mdl_names.h>
 
 #include "compilercore_allocator.h"
 #include "compilercore_malloc_allocator.h"
@@ -50,6 +54,7 @@
 #include "compilercore_streams.h"
 #include "compilercore_def_table.h"
 #include "compilercore_errors.h"
+#include "compilercore_factories.h"
 #include "compilercore_builder.h"
 #include "compilercore_mdl.h"
 #include "compilercore_tools.h"
@@ -759,6 +764,9 @@ static void replace_since_version(
         case 10:
             flags |= unsigned(IMDL::MDL_VERSION_1_10);
             break;
+        case 11:
+            flags |= unsigned(IMDL::MDL_VERSION_1_11);
+            break;
         default:
             MDL_ASSERT(!"Unsupported version");
             break;
@@ -814,6 +822,9 @@ static void replace_removed_version(
             break;
         case 10:
             flags |= (unsigned(IMDL::MDL_VERSION_1_10) << 8);
+            break;
+        case 11:
+            flags |= (unsigned(IMDL::MDL_VERSION_1_11) << 8);
             break;
         default:
             MDL_ASSERT(!"Unsupported version");
@@ -979,24 +990,28 @@ static bool is_material_constructor(Definition const *def)
 /* ------------------------------ Helper classes ------------------------------- */
 
 /// Helper class to modify a default initializer.
-class Default_initializer_modifier : public IClone_modifier, Module::IStdlib_call_creator
+class Default_initializer_modifier : public IClone_modifier
 {
     typedef IClone_modifier Base;
 public:
 
     /// Constructor.
     ///
-    /// \param ana           the name and type analysis object
-    /// \param num_args      number of arguments of the processed call
-    /// \param origin        the original module from which the initializer is cloned if any
+    /// \param ana                 the name and type analysis object
+    /// \param num_args            number of arguments of the processed call
+    /// \param origin              the original module from which the initializer is cloned if any
+    /// \param resolve_resources   whether to resolve resources and generate errors if resources
+    ///                            are missing
     explicit Default_initializer_modifier(
         NT_analysis    &ana,
         size_t         num_args,
-        Module const   *origin)
+        Module const   *origin,
+        bool           resolve_resources)
     : Base()
     , m_ana(ana)
     , m_dst(ana.m_module)
     , m_src(origin)
+    , m_resolve_resources(resolve_resources)
     , m_dst_version(m_dst.get_mdl_version())
     , m_src_version(m_dst_version)
     , m_param_expr(ana.get_allocator(), num_args)
@@ -1044,13 +1059,13 @@ public:
     ///
     /// \param odef         the original definition
     /// \param dst_version  the destination MDL version
-    /// \param rules        promotion rules
+    /// \param semantic     the semantic effect of the promotion
     ///
     /// \return the "promoted" definition
     Definition const *find_version_overload(
         Definition const  *odef,
         IMDL::MDL_version dst_version,
-        unsigned          rules)
+        Promotion_semantic semantic)
     {
         Definition const *def = odef;
 
@@ -1083,7 +1098,7 @@ public:
             def = imported != NULL ? imported : def;
         }
 
-        if (rules & Module::PR_CNG_TO_COLOR_FRESNEL_LAYER) {
+        if (semantic == PS_UPD_TO_COLOR_FRESNEL_LAYER) {
             // argh, replace the definition completely
             Scope const *scope = def->get_def_scope();
 
@@ -1271,7 +1286,7 @@ public:
             if (IValue_resource const *r = as<IValue_resource>(value)) {
                 // check if the URL is relative. If yes, update it
                 char const *url = r->get_string_value();
-                if (url != NULL && url[0] != '/') {
+                if (url != NULL && url[0] != '/' && m_resolve_resources) {
                     Messages_impl ignore_msg(m_dst.get_allocator(), m_src->get_filename());
 
                     File_resolver resolver(
@@ -1436,18 +1451,17 @@ public:
     /// Create a parameterless stdlib call to <name1> or <name1>::<name2>.
     ///
     /// \param args    call arguments
-    /// \param n_args  number of call arguments that will be added
     /// \param name1   an MDL identifier
     /// \param name2   an MDL identifier or NULL
     IExpression_call *create_stdlib_call(
-        IExpression const *args[],
-        size_t            n_args,
-        char const        *name1,
-        char const        *name2 = NULL) MDL_FINAL
+        Array_ref<IExpression const *> args,
+        char const                     *name1,
+        char const                     *name2 = NULL)
     {
         Module const     *owner = NULL;
         Definition const *def   = NULL;
         char const       *ent   = name1;
+        size_t           n_args = args.size();
 
         // try to find the definition
         if (name2 == NULL) {
@@ -1488,6 +1502,8 @@ public:
                     {
                         def = next;
                     }
+
+                    bool match = false;
                     for (Definition const *prev = def; prev != NULL; prev = def->get_prev_def()) {
                         def = prev;
 
@@ -1505,7 +1521,7 @@ public:
                             // modules, BUT in the interesting cases we "known" in advance that
                             // all types are predefined and owned by the compiler, so we ignore
                             // the "expensive" checks here
-                            bool match = true;
+                            match = true;
                             for (size_t i = 0; i < n_args; ++i) {
                                 IType const *p_type;
                                 ISymbol const *p_sym;
@@ -1525,6 +1541,10 @@ public:
                             // should be the error type otherwise
                             MDL_ASSERT(is<IType_error>(type) && "overload set contains wrong type");
                         }
+                    }
+                    if (!match) {
+                        // no match found, fall into assert
+                        def = NULL;
                     }
                     MDL_ASSERT(def != NULL && "overload not found in create_stdlib_call");
                 }
@@ -1582,15 +1602,44 @@ public:
         return call;
     }
 
+    /// Create a positional or named argument depending on the style of the call.
+    ///
+    /// \param call        the call being built
+    /// \param dst_idx     the destination argument index
+    /// \param expr        the expression for the new argument
+    /// \param param_name  the parameter name (used if the call uses named arguments)
+    IArgument const *create_name_or_positional_argument(
+        IExpression_call   *call,
+        size_t             dst_idx,
+        IExpression const  *expr,
+        char const         *param_name)
+    {
+        Expression_factory &ef = *m_dst.get_expression_factory();
+
+        if (dst_idx > 0) {
+            // try to retrieve the style from previous argument
+            --dst_idx;
+        }
+        IArgument const *a = call->get_argument(dst_idx);
+        if (a != NULL && a->get_kind() == IArgument::AK_NAMED) {
+            Name_factory &nf = *m_dst.get_name_factory();
+            return ef.create_named_argument(
+                nf.create_simple_name(nf.create_symbol(param_name)), expr);
+        }
+        return ef.create_positional_argument(expr);
+    }
+
     /// Promote a call if necessary.
     ///
-    /// \param call    the call to promote
-    /// \param callee  the callee of the call
-    /// \param rules   promote rules
+    /// \param c_expr    the call to promote
+    /// \param callee    the callee of the call
+    /// \param xforms    parameter transforms to apply
+    /// \param semantic  the semantic effect of the promotion
     IExpression_call *promote_call(
         IExpression_call const      *c_expr,
         IExpression_reference const *callee,
-        unsigned                    rules)
+        Param_transform_vec const   &xforms,
+        Promotion_semantic          semantic)
     {
         Definition const *def = impl_cast<Definition>(callee->get_definition());
 
@@ -1603,7 +1652,7 @@ public:
                 def->get_kind() == IDefinition::DK_CONSTRUCTOR);
 
             // update the definition here, the promotion of the AST will follow
-            def = find_version_overload(def, m_dst_version, rules);
+            def = find_version_overload(def, m_dst_version, semantic);
         }
 
         callee = clone_reference(callee, def);
@@ -1615,13 +1664,259 @@ public:
 
         m_ana.update_call_graph(def);
 
-        IExpression_call *call = m_dst.get_expression_factory()->create_call(callee);
+        Expression_factory &ef = *m_dst.get_expression_factory();
+
+        IExpression_call *call = ef.create_call(callee);
         copy_position(call, c_expr);
 
-        for (int i = 0, j = 0, n = c_expr->get_argument_count(); i < n; ++i, ++j) {
-            IArgument const *arg = m_dst.clone_arg(c_expr->get_argument(i), this);
-            call->add_argument(arg);
-            j = m_dst.promote_call_arguments(call, arg, j, rules, /*creator=*/this);
+        size_t n_src     = c_expr->get_argument_count();
+        size_t n_xforms  = xforms.size();
+
+        // compute destination argument count
+        size_t n_dst = n_src;
+        for (size_t k = 0; k < n_xforms; ++k) {
+            Parameter_action action = xforms[k].get_action();
+            switch (action) {
+            case PA_NOTHING:
+                // do nothing
+                break;
+            case PA_INS_HAIR:
+            case PA_INS_EMISSION_INTENSITY:
+            case PA_INS_SELECTOR:
+            case PA_INS_MULTISCATTER_TINT:
+            case PA_INS_MULTISCATTER:
+            case PA_INS_F82_FACTOR:
+            case PA_INS_MULTIPLIER:
+            case PA_INS_TANGENT_U:
+            case PA_INS_SPREAD:
+            case PS_INS_ROUNDNESS:
+            case PA_INS_UV_TILE:
+            case PA_INS_FRAME:
+            case PA_INS_BACKSCATTER:
+            case PA_INS_COLLAPSED:
+            case PA_INS_INTENSITY_MODE:
+                // insert an argument
+                ++n_dst;
+                break;
+            case PA_WRP_COLOR_CONSTR:
+            case PA_UNWRP_COLOR_CONSTR:
+                // number of arguments are not changed
+                break;
+            case PA_REM_PARAM:
+                // remove one argument
+                --n_dst;
+                break;
+            }
+        }
+
+        for (size_t dst_idx = 0, src_idx = 0, action_idx = 0; dst_idx < n_dst; ++dst_idx) {
+            if (action_idx < n_xforms && xforms[action_idx].get_index() == dst_idx) {
+                Parameter_action action = xforms[action_idx].get_action();
+                ++action_idx;
+
+                switch (action) {
+                case PA_NOTHING:
+                    // no action
+                    {
+                        IArgument const *arg =
+                            m_dst.clone_arg(c_expr->get_argument(src_idx), this);
+                        call->add_argument(arg);
+                        ++src_idx;
+                    }
+                    break;
+
+                case PA_INS_HAIR:
+                    // insert hair_bsdf hair = hair_bsdf()
+                    call->add_argument(create_name_or_positional_argument(
+                        call, dst_idx,
+                        create_stdlib_call(Array_ref<IExpression const *>(), "hair_bsdf"), "hair"));
+                    break;
+
+                case PA_INS_EMISSION_INTENSITY:
+                    // insert color emission_intensity = color(0.0)
+                    call->add_argument(create_name_or_positional_argument(
+                        call, dst_idx,
+                        m_dst.create_color_literal(0.0f), "emission_intensity"));
+                    break;
+
+                case PA_INS_SELECTOR:
+                    // insert string selector = ""
+                    call->add_argument(create_name_or_positional_argument(
+                        call, dst_idx,
+                        m_dst.create_string_literal(""), "selector"));
+                    break;
+
+                case PA_INS_MULTISCATTER_TINT:
+                    // insert color multiscatter_tint = color(0.0)
+                    call->add_argument(create_name_or_positional_argument(
+                        call, dst_idx,
+                        m_dst.create_color_literal(0.0f), "multiscatter_tint"));
+                    break;
+
+                case PA_INS_MULTISCATTER:
+                    {
+                        // insert bsdf multiscatter = diffuse_reflection_bsdf()
+                        IExpression const *args[4];
+                        size_t i = 0;
+                        args[i++] = m_dst.create_color_literal(1.0f);
+                        args[i++] = m_dst.create_float_literal(0.0f);
+                        if (m_dst_version >= IMDL::MDL_VERSION_1_10) {
+                            // MDL 1.10+: insert multiscatter_tint parameter
+                            args[i++] = m_dst.create_color_literal(0.0f);
+                        }
+                        args[i++] = m_dst.create_string_literal("");
+                        call->add_argument(create_name_or_positional_argument(
+                            call, dst_idx,
+                            create_stdlib_call(
+                                Array_ref<IExpression const *>(args, i),
+                                "df", "diffuse_reflection_bsdf"),
+                            "multiscatter"));
+                    }
+                    break;
+
+                case PA_INS_F82_FACTOR:
+                    // insert color f82_factor = color(1.0)
+                    call->add_argument(create_name_or_positional_argument(
+                        call, dst_idx,
+                        m_dst.create_color_literal(1.0f), "f82_factor"));
+                    break;
+
+                case PA_INS_MULTIPLIER:
+                    // insert float multiplier = 1.0
+                    call->add_argument(create_name_or_positional_argument(
+                        call, dst_idx,
+                        m_dst.create_float_literal(1.0f), "multiplier"));
+                    break;
+
+                case PA_INS_TANGENT_U:
+                    // insert float3 tangent_u = state::texture_tangent_u(0)
+                    {
+                        IExpression const *arg = m_dst.create_int_literal(0);
+                        IExpression_call *tu_call =
+                            create_stdlib_call(arg, "state", "texture_tangent_u");
+                        call->add_argument(create_name_or_positional_argument(
+                            call, dst_idx, tu_call, "tangent_u"));
+                    }
+                    break;
+
+                case PA_INS_SPREAD:
+                    // insert float spread = math::PI
+                    call->add_argument(create_name_or_positional_argument(
+                        call, dst_idx,
+                        m_dst.create_float_literal(float(M_PI)), "spread"));
+                    break;
+
+                case PS_INS_ROUNDNESS:
+                    // insert float roundness = 1.0
+                    call->add_argument(create_name_or_positional_argument(
+                        call, dst_idx,
+                        m_dst.create_float_literal(1.0f), "roundness"));
+                    break;
+
+                case PA_INS_UV_TILE:
+                    // insert int2 uv_tile = int2(0,0)
+                    call->add_argument(create_name_or_positional_argument(
+                        call, dst_idx,
+                        m_dst.create_int2_literal(0), "uv_tile"));
+                    break;
+
+                case PA_INS_FRAME:
+                    // insert float frame = 0.0
+                    call->add_argument(create_name_or_positional_argument(
+                        call, dst_idx,
+                        m_dst.create_float_literal(0.0f), "frame"));
+                    break;
+
+                case PA_INS_BACKSCATTER:
+                    // insert backscatter_modifier backscatter = ..._NONE
+                    {
+                        string df_name("::df", m_dst.get_allocator());
+                        Module const *df_mod = m_ana.m_compiler->find_builtin_module(df_name);
+                        MDL_ASSERT(df_mod != NULL);
+                        IType const *tp = df_mod->find_type("backscatter_modifier");
+                        IType_enum const *e_type =
+                            cast<IType_enum>(m_dst.get_type_factory()->import(tp));
+                        IValue const *v =
+                            m_dst.get_value_factory()->create_enum(e_type, 0);
+                        call->add_argument(create_name_or_positional_argument(
+                            call, dst_idx, ef.create_literal(v), "backscatter"));
+                    }
+                    break;
+
+                case PA_INS_COLLAPSED:
+                    // insert bool collapsed = false
+                    {
+                        IValue_bool const *v =
+                            m_dst.get_value_factory()->create_bool(false);
+                        call->add_argument(create_name_or_positional_argument(
+                            call, dst_idx, ef.create_literal(v), "collapsed"));
+                    }
+                    break;
+
+                case PA_INS_INTENSITY_MODE:
+                    // insert intensity_mode mode = intensity_radiant_exitance
+                    {
+                        IType_enum const *e_type =
+                            m_dst.get_type_factory()->get_predefined_enum(
+                                IType_enum::EID_INTENSITY_MODE);
+                        IValue const *v =
+                            m_dst.get_value_factory()->create_enum(e_type, 0);
+                        call->add_argument(create_name_or_positional_argument(
+                            call, dst_idx, ef.create_literal(v), "mode"));
+                    }
+                    break;
+
+                // wrap argument a by color(a)
+                case PA_WRP_COLOR_CONSTR:
+                    {
+                        IArgument const *arg =
+                            m_dst.clone_arg(c_expr->get_argument(src_idx), this);
+                        IExpression const *e = arg->get_argument_expr();
+                        IExpression_call *color_call =
+                            create_stdlib_call(e, "color");
+                        const_cast<IArgument *>(arg)->set_argument_expr(color_call);
+                        call->add_argument(arg);
+                        ++src_idx;
+                    }
+                    break;
+
+                case PA_UNWRP_COLOR_CONSTR:
+                    // unwrap argument a from color(a)
+                    {
+                        IArgument const        *arg        = c_expr->get_argument(src_idx);
+                        IExpression_call const *color_call = cast<IExpression_call>(
+                            arg->get_argument_expr());
+
+                        IExpression const *expr = color_call->get_argument(0)->get_argument_expr();
+                        expr = m_dst.clone_expr(expr, /*modifier=*/NULL);
+                        if (arg->get_kind() == IArgument::AK_NAMED) {
+                            IArgument_named const *n_arg = cast<IArgument_named>(arg);
+                            ISimple_name const    *name  =
+                                m_dst.clone_name(n_arg->get_parameter_name());
+
+                            Expression_factory &ef = *m_dst.get_expression_factory();
+                            call->add_argument(ef.create_named_argument(name, expr));
+                        } else {
+                            call->add_argument(ef.create_positional_argument(expr));
+                        }
+                        // source parameter processed
+                        ++src_idx;
+                    }
+                    break;
+
+                // remove a parameter
+                case PA_REM_PARAM:
+                    ++src_idx;
+                    --dst_idx;
+                    break;
+                }
+            } else {
+                // just clone it
+                IArgument const *arg =
+                    m_dst.clone_arg(c_expr->get_argument(src_idx), this);
+                call->add_argument(arg);
+                ++src_idx;
+            }
         }
 
         return call;
@@ -1655,12 +1950,12 @@ public:
                 if (!callee->is_array_constructor()) {
                     Definition const *def = impl_cast<Definition>(callee->get_definition());
 
-                    unsigned rules =
-                        Module_inliner::get_promotion_rules(m_dst_version, m_src_version, def);
+                    Param_transform_vec xforms(m_dst.get_allocator());
+                    Promotion_semantic semantic = Module_inliner::get_promotion_rules(
+                        m_dst_version, m_src_version, def, xforms);
 
-                    if (rules != 0) {
-                        // we found a call that will need promotion, handle this gracefully
-                        return promote_call(c_expr, callee, rules);
+                    if (!xforms.empty()) {
+                        return promote_call(c_expr, callee, xforms, semantic);
                     }
                 }
             }
@@ -1687,6 +1982,9 @@ private:
 
     /// The source module if any.
     Module const *m_src;
+
+    /// If true, resolve resources and generate errors if resources are missing.
+    bool m_resolve_resources = true;
 
     /// The version of the destination module.
     IMDL::MDL_version m_dst_version;
@@ -2169,14 +2467,14 @@ void Analysis::error_strict(
 }
 
 // Creates a new warning.
-void Analysis::warning(int code, Err_location const &loc, Error_params const &params)
+bool Analysis::warning(int code, Err_location const &loc, Error_params const &params)
 {
     bool marked_as_error = m_warnings_are_errors.test_bit(code);
 
     if (!marked_as_error && (m_all_warnings_are_off || m_disabled_warnings.test_bit(code))) {
         // suppress this warning
         m_last_msg_idx = ~size_t(0);
-        return;
+        return false;
     }
 
     bool is_error = marked_as_error || m_all_warnings_are_errors;
@@ -2189,6 +2487,7 @@ void Analysis::warning(int code, Err_location const &loc, Error_params const &pa
     m_last_msg_idx = is_error ?
         msgs.add_error_message(code, MESSAGE_CLASS, fname_id, loc.get_position(), msg.c_str()) :
         msgs.add_warning_message(code, MESSAGE_CLASS, fname_id, loc.get_position(), msg.c_str());
+    return is_error;
 }
 
 // Add a note to the last error.
@@ -2304,30 +2603,52 @@ IType const *Analysis::get_result_type(IDefinition const *def)
 }
 
 // Called by IExpression::fold() if an exception occurs.
-void Analysis::Const_fold_expression::exception(
+bool Analysis::Const_fold_expression::exception(
     Reason            r,
     IExpression const *expr,
     int               index,
     int               length)
 {
-    m_error_state = true;
-
     switch (r) {
     case IConst_fold_handler::ER_INT_DIVISION_BY_ZERO:
+        m_error_state = true;
         m_ana.error(
             DIVISION_BY_ZERO_IN_CONSTANT_EXPR,
             expr->access_position(),
             Error_params(m_ana));
-        return;
+        return true;
+    case IConst_fold_handler::ER_INT_DIVISION_OVERFLOW:
+        {
+            IExpression_binary const *bin_expr = cast<IExpression_binary>(expr);
+            IExpression_binary::Operator op = bin_expr->get_operator();
+
+            int result = 0;
+            if (op == IExpression_binary::OK_DIVIDE) {
+                result = 0x80000000;
+            } else if (op == IExpression_binary::OK_MODULO) {
+                result = 0;
+            }
+            bool is_error = m_ana.warning(
+                INTEGER_DIVISION_OVERFLOW_IN_CONSTANT_EXPR,
+                expr->access_position(),
+                Error_params(m_ana).add(op).add(result));
+            if (is_error) {
+                // warning was promoted to an error, then stop here
+                m_error_state = true;
+            }
+        }
+        return m_error_state;
     case IConst_fold_handler::ER_INVALID_FLOAT_OPERATION:
+        m_error_state = true;
         m_ana.error(
             INVALID_FLOAT_OPERATION_IN_CONSTANT_EXPR,
             expr->access_position(),
             Error_params(m_ana));
-        return;
+        return m_error_state;
     case IConst_fold_handler::ER_INDEX_OUT_OF_BOUND:
+        m_error_state = true;
         if (index < 0) {
-            m_ana.error(
+            m_ana.warning(
                 ARRAY_INDEX_OUT_OF_RANGE,
                 expr->access_position(),
                 Error_params(m_ana).add(index).add("<").add("0"));
@@ -2337,9 +2658,10 @@ void Analysis::Const_fold_expression::exception(
                 expr->access_position(),
                 Error_params(m_ana).add(index).add(">=").add(length));
         }
-        return;
+        return m_error_state;
     }
     MDL_ASSERT(!"Unsupported exception reason");
+    return true;
 }
 
 // Called by IExpression_reference::fold() to lookup a value of a (constant) variable.
@@ -3556,7 +3878,7 @@ void NT_analysis::enter_stdlib_constants()
         Value_factory *val_fac = m_module.get_value_factory();
         int           i;
 
-        i = m_compiler->get_compiler_int_option(&m_ctx, MDL::option_state_wavelength_base_max, 1);
+        i = m_compiler->get_compiler_int_option(&m_ctx, MDL::option_state_wavelength_base_max, 4);
         create_exported_decl(m_st->get_symbol("WAVELENGTH_BASE_MAX"), val_fac->create_int(i), 1);
     }
 }
@@ -3604,13 +3926,19 @@ restart:
         break;
     case IType::TK_PTR:
     case IType::TK_REF:
-        MDL_ASSERT(!"pointer/reference type occured unexpected");
+        MDL_ASSERT(!"pointer/reference type occurred unexpected");
         return false;
     case IType::TK_VOID:
-        MDL_ASSERT(!"void type occured unexpected");
+        MDL_ASSERT(!"void type occurred unexpected");
         return false;
     case IType::TK_AUTO:
-        MDL_ASSERT(!"auto type occured unexpected");
+        MDL_ASSERT(!"auto type occurred unexpected");
+        return false;
+    case IType::TK_SPECTRAL_SAMPLE:
+        MDL_ASSERT(!"spectral sample type occurred unexpected");
+        return false;
+    case IType::TK_SPECTRUM:
+        MDL_ASSERT(!"spectrum type occurred unexpected");
         return false;
     case IType::TK_ERROR:
         // to suppress further errors say true here
@@ -4344,6 +4672,15 @@ Module const *NT_analysis::load_module_to_import(
     // Emit warning/error if standard module is imported with weak relative
     // name from search path root.
     check_weak_stdlib_import(rel_name->access_position(), user_import_name.c_str(), imp_mod);
+
+    // warn if the imported module is deprecated
+    IValue_string const *msg = NULL;
+    if (imp_mod->is_deprecated(msg)) {
+        warning(
+            DEPRECATED_MODULE_IMPORT,
+            rel_name->access_position(),
+            Error_params(*this).add(imp_mod->get_name()).add_opt_message(msg));
+    }
 
     return imp_mod;
 }
@@ -5204,16 +5541,24 @@ restart:
 
     case IType::TK_PTR:
     case IType::TK_REF:
-        MDL_ASSERT(!"pointer/reference type occured unexpected");
+        MDL_ASSERT(!"pointer/reference type occurred unexpected");
         return false;
 
     case IType::TK_VOID:
-        MDL_ASSERT(!"void type occured unexpected");
+        MDL_ASSERT(!"void type occurred unexpected");
         return false;
 
     case IType::TK_AUTO:
-        MDL_ASSERT(!"auto type occured unexpected");
+        MDL_ASSERT(!"auto type occurred unexpected");
         return true;
+
+    case IType::TK_SPECTRAL_SAMPLE:
+        MDL_ASSERT(!"spectral sample type occurred unexpected");
+        return false;
+
+    case IType::TK_SPECTRUM:
+        MDL_ASSERT(!"spectrum type occurred unexpected");
+        return false;
 
     case IType::TK_ERROR:
         // error already reported
@@ -5262,16 +5607,24 @@ restart:
 
     case IType::TK_PTR:
     case IType::TK_REF:
-        MDL_ASSERT(!"pointer/reference type occured unexpected");
+        MDL_ASSERT(!"pointer/reference type occurred unexpected");
         return type;
 
     case IType::TK_VOID:
-        MDL_ASSERT(!"void type occured unexpected");
+        MDL_ASSERT(!"void type occurred unexpected");
         return type;
 
     case IType::TK_AUTO:
-        MDL_ASSERT(!"auto type occured unexpected");
+        MDL_ASSERT(!"auto type occurred unexpected");
         return NULL;
+
+    case IType::TK_SPECTRAL_SAMPLE:
+        MDL_ASSERT(!"spectral sample type occurred unexpected");
+        return type;
+
+    case IType::TK_SPECTRUM:
+        MDL_ASSERT(!"spectrum type occurred unexpected");
+        return type;
 
     case IType::TK_ERROR:
         // error already reported
@@ -5344,6 +5697,8 @@ restart:
     case IType::TK_VECTOR:
     case IType::TK_MATRIX:
     case IType::TK_COLOR:
+    case IType::TK_SPECTRAL_SAMPLE:
+    case IType::TK_SPECTRUM:
     case IType::TK_LIGHT_PROFILE:
     case IType::TK_TEXTURE:
     case IType::TK_BSDF_MEASUREMENT:
@@ -5486,16 +5841,24 @@ bool Analysis::is_allowed_array_type(
 
         case IType::TK_PTR:
         case IType::TK_REF:
-            MDL_ASSERT(!"pointer/reference type occured unexpected");
+            MDL_ASSERT(!"pointer/reference type occurred unexpected");
             return false;
 
         case IType::TK_VOID:
-            MDL_ASSERT(!"void type occured unexpected");
+            MDL_ASSERT(!"void type occurred unexpected");
             return false;
 
         case IType::TK_AUTO:
-            MDL_ASSERT(!"auto type occured unexpected");
+            MDL_ASSERT(!"auto type occurred unexpected");
             return true;
+
+        case IType::TK_SPECTRAL_SAMPLE:
+            MDL_ASSERT(!"spectral sample type occurred unexpected");
+            return false;
+
+        case IType::TK_SPECTRUM:
+            MDL_ASSERT(!"spectrum type occurred unexpected");
+            return false;
 
         case IType::TK_ERROR:
             // error was already reported
@@ -5583,15 +5946,23 @@ static IType const *has_forbidden_parameter_type(
 
         case IType::TK_PTR:
         case IType::TK_REF:
-            MDL_ASSERT(!"pointer/reference type occured unexpected");
+            MDL_ASSERT(!"pointer/reference type occurred unexpected");
             return type;
 
         case IType::TK_VOID:
-            MDL_ASSERT(!"void type occured unexpected");
+            MDL_ASSERT(!"void type occurred unexpected");
             return type;
 
         case IType::TK_AUTO:
             // Placeholder types are not allowed on parameters.
+            return type;
+
+        case IType::TK_SPECTRAL_SAMPLE:
+            MDL_ASSERT(!"spectral sample type occurred unexpected");
+            return type;
+
+        case IType::TK_SPECTRUM:
+            MDL_ASSERT(!"spectrum type occurred unexpected");
             return type;
 
         case IType::TK_ERROR:
@@ -5705,16 +6076,23 @@ IType const *NT_analysis::has_forbidden_material_parameter_type(
 
         case IType::TK_PTR:
         case IType::TK_REF:
-            MDL_ASSERT(!"pointer/reference type occured unexpected");
+            MDL_ASSERT(!"pointer/reference type occurred unexpected");
             return type;
 
         case IType::TK_VOID:
-            MDL_ASSERT(!"void type occured unexpected");
+            MDL_ASSERT(!"void type occurred unexpected");
             return type;
 
         case IType::TK_AUTO:
-            MDL_ASSERT(!"auto type occured unexpected");
+            MDL_ASSERT(!"auto type occurred unexpected");
             return NULL;
+
+        case IType::TK_SPECTRAL_SAMPLE:
+            MDL_ASSERT(!"spectral sample type occurred unexpected");
+            return type;
+        case IType::TK_SPECTRUM:
+            MDL_ASSERT(!"spectrum type occurred unexpected");
+            return type;
 
         case IType::TK_ERROR:
             // error was already reported
@@ -7052,7 +7430,7 @@ error_found:
         }
 
         Small_VLA<IExpression const *, 8> new_defs(m_module.get_allocator(), n_params);
-        memset(new_defs.data(), 0, sizeof(new_defs[0]) * n_params);
+        memset(new_defs.data(), 0, sizeof(new_defs.data()[0]) * n_params);
 
         has_error = !collect_preset_defaults(instance_def, call, new_defs);
         if (has_error) {
@@ -7105,7 +7483,8 @@ error_found:
             Definition_table::Scope_enter scope(*m_def_tab, con_def);
 
             // finish constructor
-            Default_initializer_modifier def_modifier(*this, n_params, origin.get());
+            Default_initializer_modifier def_modifier(
+                *this, n_params, origin.get(), m_resolve_resources);
 
             bool has_initializers = false;
             bool need_default_arg = false;
@@ -7882,7 +8261,7 @@ error_found:
         }
 
         Small_VLA<IExpression const *, 8> new_defs(m_module.get_allocator(), n_params);
-        memset(new_defs.data(), 0, sizeof(new_defs[0]) * n_params);
+        memset(new_defs.data(), 0, sizeof(new_defs.data()[0]) * n_params);
 
         has_error = !collect_preset_defaults(instance_def, call, new_defs);
         if (has_error) {
@@ -7938,7 +8317,8 @@ error_found:
             Definition_table::Scope_enter scope(*m_def_tab, con_def);
 
             // finish constructor
-            Default_initializer_modifier def_modifier(*this, n_params, origin.get());
+            Default_initializer_modifier def_modifier(
+                *this, n_params, origin.get(), m_resolve_resources);
 
             bool has_initializers = false;
             bool need_default_arg = false;
@@ -8192,7 +8572,7 @@ NT_analysis::Definition_list NT_analysis::resolve_operator_overload(
             best_matches.clear();
             Signature_entry entry(
                 (IType const *const *)Arena_memdup(
-                    arena, signature.data(), signature.size() * sizeof(signature[0])),
+                    arena, signature.data(), signature.size() * sizeof(signature.data()[0])),
                 /*bounds=*/NULL,
                 signature.size(),
                 def);
@@ -8201,7 +8581,7 @@ NT_analysis::Definition_list NT_analysis::resolve_operator_overload(
         } else if (this_value == best_value) {
             Signature_entry entry(
                 (IType const *const *)Arena_memdup(
-                    arena, signature.data(), signature.size() * sizeof(signature[0])),
+                    arena, signature.data(), signature.size() * sizeof(signature.data()[0])),
                 /*bounds=*/NULL,
                 signature.size(),
                 def);
@@ -8702,7 +9082,7 @@ IExpression_call *NT_analysis::create_type_conversion_call(
     int n_params = f_type->get_parameter_count();
     if (n_params > 1) {
         // FIXME: need origin
-        Default_initializer_modifier def_modifier(*this, n_params, NULL);
+        Default_initializer_modifier def_modifier(*this, n_params, NULL, m_resolve_resources);
 
         for (int i = 1; i < n_params; ++i) {
             IExpression const *expr = get_default_param_initializer(def, i);
@@ -9333,7 +9713,7 @@ bool NT_analysis::can_assign_param(
     IType_struct const* arg_struct_ty   = as<IType_struct>(arg_type);
     if (param_struct_ty && arg_struct_ty) {
         // If the struct types are different, they must have the same category. The case of
-        // identical types was tested at the start of this functions, so we only check that 
+        // identical types was tested at the start of this functions, so we only check that
         // there is a category and that both categories are the same.
         IStruct_category const *param_cat = param_struct_ty->get_category();
         IStruct_category const *arg_cat   = arg_struct_ty->get_category();
@@ -9788,7 +10168,7 @@ NT_analysis::Definition_list NT_analysis::resolve_overload(
             best_matches.clear();
             Signature_entry entry(
                 (IType const *const *)Arena_memdup(
-                    arena, signature.data(), signature.size() * sizeof(signature[0])),
+                    arena, signature.data(), signature.size() * sizeof(signature.data()[0])),
                 (bool const *)Arena_memdup(
                     arena, bounds.data(), bounds.size() * sizeof(bounds[0])),
                 signature.size(),
@@ -9798,7 +10178,7 @@ NT_analysis::Definition_list NT_analysis::resolve_overload(
         } else if (this_value == best_value) {
             Signature_entry entry(
                 (IType const *const *)Arena_memdup(
-                    arena, signature.data(), signature.size() * sizeof(signature[0])),
+                    arena, signature.data(), signature.size() * sizeof(signature.data()[0])),
                 (bool const *)Arena_memdup(
                     arena, bounds.data(), bounds.size() * sizeof(bounds[0])),
                 signature.size(),
@@ -10395,9 +10775,9 @@ NT_analysis::Definition_list NT_analysis::resolve_annotation_overload(
             best_matches.clear();
             Signature_entry entry(
                 (IType const *const *)Arena_memdup(
-                    arena, signature.data(), signature.size() * sizeof(signature[0])),
+                    arena, signature.data(), signature.size() * sizeof(signature.data()[0])),
                 (bool const *)Arena_memdup(
-                    arena, bounds.data(), bounds.size() * sizeof(bounds[0])),
+                    arena, bounds.data(), bounds.size() * sizeof(bounds.data()[0])),
                 signature.size(),
                 candidate);
             best_matches.push_back(entry);
@@ -10405,9 +10785,9 @@ NT_analysis::Definition_list NT_analysis::resolve_annotation_overload(
         } else if (this_value == best_value) {
             Signature_entry entry(
                 (IType const *const *)Arena_memdup(
-                    arena, signature.data(), signature.size() * sizeof(signature[0])),
+                    arena, signature.data(), signature.size() * sizeof(signature.data()[0])),
                 (bool const *)Arena_memdup(
-                    arena, bounds.data(), bounds.size() * sizeof(bounds[0])),
+                    arena, bounds.data(), bounds.size() * sizeof(bounds.data()[0])),
                 signature.size(),
                 candidate);
             if (kill_less_specific(best_matches, entry)) {
@@ -11304,7 +11684,7 @@ Definition const *NT_analysis::reformat_const_default_struct_constructor(
     size_t param_count = f_type->get_parameter_count();
 
     // Use origin to rewrite resource URLs
-    Default_initializer_modifier def_modifier(*this, param_count, origin);
+    Default_initializer_modifier def_modifier(*this, param_count, origin, m_resolve_resources);
 
     Expression_factory *fact = m_module.get_expression_factory();
     for (size_t i = 0; i < param_count; ++i) {
@@ -11429,7 +11809,8 @@ void NT_analysis::reformat_arguments(
     IDeclaration const *decl = callee_def->get_declaration();
 
     // Use origin to rewrite resource URLs
-    Default_initializer_modifier def_modifier(*this, func_type->get_parameter_count(), origin);
+    Default_initializer_modifier def_modifier(
+        *this, func_type->get_parameter_count(), origin, m_resolve_resources);
 
     if (function_mode) {
         // make all arguments positional
@@ -11669,7 +12050,8 @@ void NT_analysis::reformat_annotation_arguments(
         anno_def = orig_callee_def;
     }
 
-    Default_initializer_modifier def_modifier(*this, func_type->get_parameter_count(), NULL);
+    Default_initializer_modifier def_modifier(
+        *this, func_type->get_parameter_count(), NULL, m_resolve_resources);
 
     // first the positional arguments
     for (size_t k = 0; k < pos_arg_count; ++k) {
@@ -14055,7 +14437,7 @@ IExpression *NT_analysis::post_visit(IExpression_unary *un_expr)
 
     IType const *res_type = get_result_type(def);
 
-    // Note: we do NOT check for a declarative type here: there is no unary operation that 
+    // Note: we do NOT check for a declarative type here: there is no unary operation that
     // changes the type, so we can safely ignore this
 
     un_expr->set_type(check_performance_restriction(res_type, un_expr->access_position()));
@@ -15440,6 +15822,24 @@ Definition const *NT_analysis::handle_known_annotation(
                     }
                 }
                 return def;
+            case Definition::DS_DEPRECATED_ANNOTATION:
+                if (has_deprecated_anno(m_module.get_mdl_version())) {
+                    IValue_string const *msg = NULL;
+                    if (anno->get_argument_count() == 1) {
+                        // handle the deprecated() annotation with a message
+                        msg = as<IValue_string>(get_const_parameter_value(m_module, anno, 0));
+                    }
+
+                    m_module.mark_deprecated(msg);
+
+                    warning(
+                        DEPRECATED_MODULE,
+                        anno->access_position(),
+                        Error_params(*this).add_opt_message(msg));
+                    return def;
+                }
+                break;
+
             case Definition::DS_THROWS_ANNOTATION:
             case Definition::DS_SINCE_ANNOTATION:
             case Definition::DS_REMOVED_ANNOTATION:
@@ -15452,7 +15852,6 @@ Definition const *NT_analysis::handle_known_annotation(
             case Definition::DS_NOINLINE_ANNOTATION:
             case Definition::DS_SOFT_RANGE_ANNOTATION:
             case Definition::DS_HARD_RANGE_ANNOTATION:
-            case Definition::DS_DEPRECATED_ANNOTATION:
             case Definition::DS_UI_ORDER_ANNOTATION:
             case Definition::DS_USAGE_ANNOTATION:
             case Definition::DS_ENABLE_IF_ANNOTATION:
@@ -18304,24 +18703,15 @@ void NT_analysis::handle_resource_url(
         if (url[0] == '/') {
             // an absolute url, keep it.
             abs_url = url;
-        } else if ((url[0] == '.' && url[1] == '/') ||
-                 (url[0] == '.' && url[1] == '.' && url[2] == '/' )) {
-            // strict relative, make absolute
-            abs_url = make_absolute_package(
-                get_allocator(), url, m_module.get_name());
+        } else if (url[0] == ':' && url[1] == ':') {
+            // a previously processed relative resource (e.g. cloned from an imported module)
+            // has its module name already prepended, keep it.
+            abs_url = url;
         } else {
-            if (m_module.get_mdl_version() >= IMDL::MDL_VERSION_1_6) {
-                // formally weak relatives are mapped to strict
-                string murl("./", get_allocator());
-                murl += url;
-                abs_url = make_absolute_package(
-                    get_allocator(), murl.c_str(), m_module.get_name());
-            } else {
-                // weak relative, prepend module name separated by "::"
-                abs_url = m_module.get_name();
-                abs_url += "::";
-                abs_url += url;
-            }
+            // relative, prepend module name separated by "::"
+            abs_url = m_module.get_name();
+            abs_url += "::";
+            abs_url += url;
         }
         // unknown file name
         abs_file_name = "";

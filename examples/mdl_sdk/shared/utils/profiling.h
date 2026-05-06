@@ -30,8 +30,8 @@
 //
 // Code shared by all examples
 
-#ifndef MDL_D3D12_PROFILING_H
-#define MDL_D3D12_PROFILING_H
+#ifndef MDL_SHARED_UTILS_PROFILING_H
+#define MDL_SHARED_UTILS_PROFILING_H
 
 #include <chrono>
 #include <string>
@@ -70,4 +70,4 @@ namespace mi { namespace examples { namespace profiling
     };
 } } } // mi::examples::profiling
 
-#endif  // MDL_D3D12_PROFILING_H
+#endif  // MDL_SHARED_UTILS_PROFILING_H

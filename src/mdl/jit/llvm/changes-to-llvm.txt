@@ -54,3 +54,8 @@ Changes:
    in InstCombinerImpl::visitMul() and InstCombinerImpl::visitAdd()
  - include <cstdint> in include/llvm/Support/Signals.h and lib/Target/X86/MCTargetDesc/X86MCTargetDesc.h
  - remove extra template qualifier on ~ChangeReporter in lib/Passes/StandardInstrumentations.cpp
+ - make "SimplifyCondBranch" option of SimplifyCFGPass available via PassManagerBuilder to allow
+   disabling this option for GLSL/HLSL to generate better code and properly set and reset the option
+   for functions with OptForFuzzing attribute
+ - added ptx80, ptx81, ptx82, ptx83, ptx84, ptx85, ptx86, ptx87, ptx88, ptx90, ptx91, ptx92, fixed
+   sm_90 requieres ptx80

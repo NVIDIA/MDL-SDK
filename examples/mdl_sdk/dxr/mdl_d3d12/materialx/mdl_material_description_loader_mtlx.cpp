@@ -57,7 +57,7 @@ Mdl_material_description_loader_mtlx::Mdl_material_description_loader_mtlx(
 
 bool Mdl_material_description_loader_mtlx::match_gltf_name(const std::string& gltf_name) const
 {
-    return strstr(gltf_name.c_str(), ".mtlx") != nullptr;
+    return mi::examples::materialx::is_materialx_resource(gltf_name);
 }
 
 // ------------------------------------------------------------------------------------------------

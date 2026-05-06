@@ -197,11 +197,10 @@ mi::Sint32 Expression_call::set_call( const char* name)
     mi::base::Handle<MDL::IValue_factory> vf( ef->get_value_factory());
     mi::base::Handle<MDL::IType_factory> tf( vf->get_type_factory());
 
-    SERIAL::Class_id class_id = db_transaction->get_class_id( tag);
-    if( class_id != MDL::ID_MDL_FUNCTION_CALL)
+    DB::Access<MDL::Mdl_function_call> call( tag, db_transaction);
+    if( !call)
         return -3;
 
-    DB::Access<MDL::Mdl_function_call> call( tag, db_transaction);
     if( call->is_immutable())
         return -5; // prevent user-calls to default functions
 
@@ -222,9 +221,10 @@ const char* Expression_direct_call::get_definition() const
 {
     auto* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
-    DB::Tag tag = m_expr->get_definition(db_transaction);
-    if (!tag.is_valid())
+    DB::Tag tag = m_expr->get_definition( db_transaction);
+    if( !tag)
         return nullptr;
+
     return db_transaction->tag_to_name( tag);
 }
 
@@ -511,14 +511,10 @@ mi::neuraylib::IExpression_call* Expression_factory::create_call( const char* na
 
     DB::Transaction* db_transaction = get_db_transaction();
     DB::Tag tag = db_transaction->name_to_tag( name);
-    if( !tag)
-        return nullptr;
-
-    SERIAL::Class_id class_id = db_transaction->get_class_id( tag);
-    if( class_id != MDL::ID_MDL_FUNCTION_CALL)
-        return nullptr;
-
     DB::Access<MDL::Mdl_function_call> call( tag, db_transaction);
+    if( !call)
+        return nullptr;
+
     if( call->is_immutable())
         return nullptr; // prevent user-calls to default functions
 
@@ -553,28 +549,20 @@ mi::neuraylib::IExpression_direct_call* Expression_factory::create_direct_call(
         return nullptr;
     }
 
-    DB::Transaction* db_transaction = get_db_transaction();
-    DB::Tag tag = db_transaction->name_to_tag( name);
-    if( !tag) {
-        if( errors)
-            *errors = -7;
-        return nullptr;
-    }
-
     // Note that this method does not directly invoke the internal counterpart, but invokes
     // methods on the DB elements that add additional checks and fill in defaults.
 
-    mi::base::Handle<MDL::IExpression_list> arguments_int(
-        get_internal_expression_list( arguments));
-
-    SERIAL::Class_id class_id = db_transaction->get_class_id( tag);
-    if( class_id != MDL::ID_MDL_FUNCTION_DEFINITION) {
+    DB::Transaction* db_transaction = get_db_transaction();
+    DB::Tag tag = db_transaction->name_to_tag( name);
+    DB::Access<MDL::Mdl_function_definition> def( tag, db_transaction);
+    if( !def) {
         if( errors)
             *errors = -7;
         return nullptr;
     }
 
-    DB::Access<MDL::Mdl_function_definition> def( tag, db_transaction);
+    mi::base::Handle<MDL::IExpression_list> arguments_int(
+        get_internal_expression_list( arguments));
     mi::base::Handle<MDL::IExpression_direct_call> result_int(
         def->create_direct_call( db_transaction, arguments_int.get(), errors));
     if( !result_int)

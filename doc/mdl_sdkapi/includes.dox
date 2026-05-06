@@ -97,7 +97,7 @@ supported. Their naming and organization might change in the future.
 <table border="2" cellpadding="3" cellspacing="3">
   <tr valign="bottom">
     <th>\neurayAdjectiveName Include Files Grouped by Component</th>
-    <th>Description</th></tr>
+    <th>Description</th>
     <th>Documentation</th>
   </tr>
   <tr valign="top">

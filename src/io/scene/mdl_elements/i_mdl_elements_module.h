@@ -82,7 +82,6 @@ static const SERIAL::Class_id ID_MDL_MODULE = 0x5f4d6d6f; // '_Mmo'
 class Mdl_module : public SCENE::Scene_element<Mdl_module, ID_MDL_MODULE>
 {
 public:
-
     /// Factory (public, loads the module from file and creates the DB element if needed).
     ///
     /// Looks up the DB element for \p module_name. If it exists, the method returns 0. Otherwise,
@@ -188,6 +187,16 @@ public:
 
     const char* get_material_name( DB::Transaction* transaction, mi::Size index) const;
 
+    /// Does not contain all/any resources if context options
+    /// MDL_CTX_OPTION_KEEP_ORIGINAL_RESOURCE_FILE_PATHS or MDL_CTX_OPTION_RESOLVE_RESOURCES are
+    /// set.
+    mi::Size get_resources_count() const;
+
+    /// Does not contain all/any resources if context options
+    /// MDL_CTX_OPTION_KEEP_ORIGINAL_RESOURCE_FILE_PATHS or MDL_CTX_OPTION_RESOLVE_RESOURCES are
+    /// set.
+    const IValue_resource* get_resource( mi::Size index) const;
+
     const IAnnotation_block* get_annotations() const;
 
     mi::Size get_annotation_definition_count() const;
@@ -209,15 +218,7 @@ public:
         const char* name,
         const std::vector<const char*>& parameter_types) const;
 
-    /// Does not contain all/any resources if context options
-    /// MDL_CTX_OPTION_KEEP_ORIGINAL_RESOURCE_FILE_PATHS or MDL_CTX_OPTION_RESOLVE_RESOURCES are
-    /// set.
-    mi::Size get_resources_count() const;
-
-    /// Does not contain all/any resources if context options
-    /// MDL_CTX_OPTION_KEEP_ORIGINAL_RESOURCE_FILE_PATHS or MDL_CTX_OPTION_RESOLVE_RESOURCES are
-    /// set.
-    const IValue_resource* get_resource( mi::Size index) const;
+    bool is_valid( DB::Transaction* transaction, Execution_context* context) const;
 
     mi::Sint32 reload(
         DB::Transaction* transaction,
@@ -239,38 +240,6 @@ public:
 
     /// Returns the DAG representation of this module.
     const mi::mdl::IGenerated_code_dag* get_code_dag() const;
-
-    /// Returns true if the tag versions of all imported modules still match
-    /// the tag versions stored in this module.
-    bool is_valid(
-        DB::Transaction* transaction,
-        Execution_context* context) const;
-
-    /// Improved version of SERIAL::Serializable::dump().
-    ///
-    /// \param transaction   The DB transaction (for name lookups and tag versions). Can be
-    ///                      \c nullptr.
-    void dump( DB::Transaction* transaction) const;
-
-    // methods of SERIAL::Serializable
-
-    const SERIAL::Serializable* serialize( SERIAL::Serializer* serializer) const;
-
-    SERIAL::Serializable* deserialize( SERIAL::Deserializer* deserializer);
-
-    void dump() const  { dump( /*transaction*/ nullptr); }
-
-    // methods of DB::Element_base
-
-    size_t get_size() const;
-
-    DB::Journal_type get_journal_flags() const;
-
-    Uint bundle( DB::Tag* results, Uint size) const;
-
-    // methods of SCENE::Scene_element_base
-
-    void get_scene_element_references( DB::Tag_set* result) const;
 
     /// Check if the given signature exists in the module.
     ///
@@ -299,7 +268,7 @@ public:
     DB::Tag get_definition( bool is_material, mi::Size index) const;
 
     /// Returns the identifier of this module.
-    Mdl_ident get_ident() const;
+    Mdl_ident get_ident() const { return m_ident; }
 
     /// Indicates whether the module supports reloading (or editing).
     ///
@@ -319,9 +288,27 @@ public:
     /// \see #get_resource_count(), #get_resource()
     const Resource_tag_tuple_ext* get_resource_tag_tuple( mi::Size index) const;
 
+    /// Returns \c true if all imports of the module are valid.
+    ///
+    /// A module can become invalid if an (directly or indirectly) imported module has been
+    /// reloaded. It might be possible to validate the module by reloading all import chains, or
+    /// simpler by reloading this module recursively.
+    ///
+    /// \param modules_checked   Used to avoid repeated computations.
+    bool is_valid(
+        DB::Transaction* transaction,
+        DB::Tag_set& modules_checked,
+        Execution_context* context) const;
+
+    /// Improved version of SERIAL::Serializable::dump().
+    ///
+    /// \param transaction   The DB transaction (for name lookups and tag versions). Can be
+    ///                      \c nullptr.
+    void dump( DB::Transaction* transaction) const;
+
     /// Factory (public, takes an mi::mdl::IModule and creates the DB element if needed).
     ///
-    /// Used by Mdl_module_builder.
+    /// Used by Mdl_module_builder and #reload_module_internal().
     ///
     /// Looks up the DB element for \p module. If it exists, the method stores its tag in
     /// \p module_tag and returns 1. Otherwise, the method creates the DB element, and stores it in
@@ -417,6 +404,26 @@ private:
     /// \param[inout] context    Execution context used to pass options to and store messages from
     ///                          the compiler.
     void init_module( DB::Transaction* transaction, Execution_context* context);
+
+    // methods of SERIAL::Serializable
+
+    const SERIAL::Serializable* serialize( SERIAL::Serializer* serializer) const;
+
+    SERIAL::Serializable* deserialize( SERIAL::Deserializer* deserializer);
+
+    void dump() const  { dump( /*transaction*/ nullptr); }
+
+    // methods of DB::Element_base
+
+    size_t get_size() const;
+
+    DB::Journal_type get_journal_flags() const;
+
+    Uint bundle( DB::Tag* results, Uint size) const;
+
+    // methods of SCENE::Scene_element_base
+
+    void get_scene_element_references( DB::Tag_set* result) const;
 
     /// The main MDL interface.
     mi::base::Handle<mi::mdl::IMDL> m_mdl;

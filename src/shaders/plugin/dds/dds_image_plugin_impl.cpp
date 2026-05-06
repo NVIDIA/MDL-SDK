@@ -148,7 +148,13 @@ mi::neuraylib::IImage_file* Image_plugin_impl::open_for_reading(
     if( !reader->supports_absolute_access())
         return nullptr;
 
-    return new Image_file_reader_impl( m_image_api.get(), reader);
+    auto* result = new Image_file_reader_impl( m_image_api.get(), reader);
+    if( !result->is_valid()) {
+        delete result;
+        return nullptr;
+    }
+
+    return result;
 }
 
 /// Factory to create an instance of Image_plugin_impl.

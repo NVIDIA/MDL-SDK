@@ -69,6 +69,8 @@ enum mdl_spec {
     mdl_spec_1_7,  ///< Force 1.7 version
     mdl_spec_1_8,  ///< Force 1.8 version
     mdl_spec_1_9,  ///< Force 1.9 version
+    mdl_spec_1_10, ///< Force 1.10 version
+    mdl_spec_1_11, ///< Force 1.11 version
     mdl_spec_auto  ///< Auto detect the needed version between 1.3, 1.6, 1.7, 1.8 and 1.9
 };
 

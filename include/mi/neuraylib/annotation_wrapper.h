@@ -195,9 +195,11 @@ inline mi::Size Annotation_wrapper::get_annotation_index(
     if (!anno_name || !m_anno_block)
         return static_cast<mi::Size>(-1);
 
-    for (mi::Size i = offset, n = get_annotation_count(); i < n; ++i)
-        if (strcmp(anno_name, get_annotation_name(i)) == 0) //-V575 PVS
+    for (mi::Size i = offset, n = get_annotation_count(); i < n; ++i) {
+        const char* s = get_annotation_name(i);
+        if (s && strcmp(anno_name, s) == 0)
             return i;
+    }
 
     return static_cast<mi::Size>(-1);
 }

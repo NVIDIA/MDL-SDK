@@ -31,7 +31,7 @@
 
 #include <mi/base/handle.h>
 
-#include "mdl/compiler//compilercore/compilercore_cc_conf.h"
+#include "mdl/compiler/compilercore/compilercore_cc_conf.h"
 #include "generator_dag_walker.h"
 
 namespace mi {
@@ -69,7 +69,7 @@ protected:
 
     /// Print the name of a dependence graph node.
     ///
-    /// \param type   the node's type: 't for temporary, 'a' for argument
+    /// \param type   the node's type: 't' for temporary, 'a' for argument
     /// \param index  the node's index
     void node_name(
         char   type,
@@ -162,6 +162,14 @@ protected:
     ///
     /// \param node  the node
     virtual char const *get_node_color(DAG_node const *node)
+    {
+        return NULL;
+    }
+
+    /// Get a prefix for the label for the given node or NULL for no prefix.
+    ///
+    /// \param node  the node
+    virtual char const *get_node_label_prefix(DAG_node const *node)
     {
         return NULL;
     }

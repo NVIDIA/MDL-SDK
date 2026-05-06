@@ -36,10 +36,14 @@
 #include <mi/mdl/mdl_types.h>
 
 namespace mi {
+namespace base { class IAllocator; }
+
 namespace mdl {
 
 class ISymbol;
 class IValue_factory;
+
+typedef mi::base::IAllocator IAllocator;
 
 /// The base interface of a value.
 ///
@@ -62,7 +66,9 @@ public:
         VK_VECTOR,              ///< A vector value.
         VK_MATRIX,              ///< A matrix value.
         VK_ARRAY,               ///< An array value.
-        VK_RGB_COLOR,           ///< A color value.
+        VK_RGB_COLOR,           ///< An RGB color value.
+        VK_SPECTRUM,            ///< A spectrum color value.
+        VK_SPECTRAL_SAMPLE,     ///< A spectral sample value.
         VK_STRUCT,              ///< A struct value.
         VK_INVALID_REF,         ///< An invalid reference value.
         VK_TEXTURE,             ///< A texture value.
@@ -502,6 +508,38 @@ public:
     virtual IValue_float const *get_value(int index) const = 0;
 };
 
+/// A value of type color represented as spectral values.
+class IValue_spectrum : public IValue_compound
+{
+public:
+    /// The kind of this subclass.
+    static Kind const s_kind = VK_SPECTRUM;
+
+    /// Get the type of this value.
+    virtual IType_spectrum const *get_type() const = 0;
+
+    /// Get the value at index.
+    ///
+    /// \param index  the index
+    virtual IValue_float const *get_value(int index) const = 0;
+};
+
+/// A value of type spectral sample.
+class IValue_spectral_sample : public IValue_compound
+{
+    public:
+    /// The kind of this subclass.
+    static Kind const s_kind = VK_SPECTRAL_SAMPLE;
+
+    /// Get the type of this value.
+    virtual IType_spectral_sample const *get_type() const = 0;
+
+    /// Get the value at index.
+    ///
+    /// \param index  the index
+    virtual IValue_float const *get_value(int index) const = 0;
+};
+
 /// A value of type struct.
 class IValue_struct : public IValue_compound
 {
@@ -841,6 +879,26 @@ public:
         IValue_array const *wavelengths,
         IValue_array const *amplitudes) = 0;
 
+    /// Create a new zero spectral sample value of type spectral sample.
+    virtual IValue_spectral_sample const *create_spectral_sample_zero() = 0;
+
+    /// Create a new one spectral sample value of type spectral sample.
+    virtual IValue_spectral_sample const *create_spectral_sample_one() = 0;
+
+    /// Create a new color value of a given type.
+    ///
+    /// \param color_type   The color type (must be IType_color or IType_spectrum)
+    /// \param amplitudes   The values for the amplitudes in the wavelengths
+    ///                     specified by the color type.
+    /// \param size         The length of the amplitudes array.
+    ///
+    /// \return IValue_bad if the passed type is not a color type or the array is not of type
+    ///                    array of floats.
+    virtual IValue const *create_color(
+        IType const                *color_type,
+        IValue_float const * const amplitudes[],
+        size_t                     size) = 0;
+
     /// Create a new value of type struct.
     ///
     /// \param type    The type of the struct.
@@ -933,6 +991,9 @@ public:
     ///
     /// \return a copy of the value owned by this factory
     virtual IValue const *import(IValue const *value) = 0;
+
+    /// Get the allocator of the value factory.
+    virtual IAllocator *get_allocator() = 0;
 };
 
 }  // mdl

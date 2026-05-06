@@ -176,6 +176,9 @@ public:
     /// If true, derivatives should be calculated.
     bool get_calc_derivatives() const { return m_calc_derivatives; }
 
+    /// If true, enable code generation for spectral rendering.
+    bool get_enable_spectral() const { return m_enable_spectral; }
+
     // Target is as structured language language.
     bool target_is_structured_language() const {
         return
@@ -219,6 +222,9 @@ private:
 
     /// If true, derivatives should be calculated.
     bool m_calc_derivatives;
+
+    /// If true, enable code generation for spectral rendering.
+    bool m_enable_spectral;
 
     /// If true, use the builtin resource handler when running native code
     bool m_use_builtin_resource_handler;

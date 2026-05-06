@@ -1,114 +1,124 @@
 Count of all scopes: 1
-ID 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0, lowest open transaction ID = 0
+Index 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0, lowest open transaction ID = 0
 
 Count of all transactions: 1
-ID 0: scope ID = 0, pin count = 5, state = OPEN, next sequence number = 3, visibility ID = 4294967295
+Index 0: scope ID = 0, pin count = 2, state = OPEN, next sequence number = 3, visibility ID = 4294967295
 
 Count of infos by distinct names: 0
+
 Count of infos by distinct tags: 3
 Index 0: tag = 1, count = 1, pin count = 1, removed = 0
-    Index 0: scope ID = 0, transaction ID = 0 (set), version = 0, pin count = 0, tag = 1, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 1, temporary = 0, element = (cleared), name = (null), references = { }
+    Index 1/0: scope ID = 0, creator transaction ID = 0, version = 0, creator transaction state = OPEN, visibility ID = (current transaction only), pin count = 0, tag = 1, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 1, temporary = 0, element = (cleared), name = (null), references = { }
 Index 1: tag = 2, count = 1, pin count = 1, removed = 0
-    Index 0: scope ID = 0, transaction ID = 0 (set), version = 1, pin count = 0, tag = 2, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 1, temporary = 0, element = (cleared), name = (null), references = { }
+    Index 2/0: scope ID = 0, creator transaction ID = 0, version = 1, creator transaction state = OPEN, visibility ID = (current transaction only), pin count = 0, tag = 2, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 1, temporary = 0, element = (cleared), name = (null), references = { }
 Index 2: tag = 3, count = 1, pin count = 1, removed = 0
-    Index 0: scope ID = 0, transaction ID = 0 (set), version = 2, pin count = 0, tag = 3, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 0, temporary = 0, element = (cleared), name = (null), references = { }
+    Index 3/0: scope ID = 0, creator transaction ID = 0, version = 2, creator transaction state = OPEN, visibility ID = (current transaction only), pin count = 0, tag = 3, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 0, temporary = 0, element = (cleared), name = (null), references = { }
 
 Count of all infos: 3
 Count of infos by class IDs:
-     3 0x4d79706a "Mypj"
+    3   0x4d79706a "Mypj"
+
 
 Count of all scopes: 1
-ID 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0, lowest open transaction ID = 0
+Index 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0, lowest open transaction ID = 0
 
 Count of all transactions: 1
-ID 0: scope ID = 0, pin count = 8, state = OPEN, next sequence number = 5, visibility ID = 4294967295
+Index 0: scope ID = 0, pin count = 3, state = OPEN, next sequence number = 5, visibility ID = 4294967295
 
 Count of infos by distinct names: 0
+
 Count of infos by distinct tags: 4
 Index 0: tag = 1, count = 1, pin count = 1, removed = 0
-    Index 0: scope ID = 0, transaction ID = 0 (set), version = 0, pin count = 1, tag = 1, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 1, temporary = 0, element = (set), name = (null), references = { }
+    Index 1/0: scope ID = 0, creator transaction ID = 0, version = 0, creator transaction state = OPEN, visibility ID = (current transaction only), pin count = 1, tag = 1, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 1, temporary = 0, element = (set), name = (null), references = { }
 Index 1: tag = 2, count = 1, pin count = 1, removed = 0
-    Index 0: scope ID = 0, transaction ID = 0 (set), version = 1, pin count = 0, tag = 2, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 1, temporary = 0, element = (cleared), name = (null), references = { }
+    Index 2/0: scope ID = 0, creator transaction ID = 0, version = 1, creator transaction state = OPEN, visibility ID = (current transaction only), pin count = 0, tag = 2, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 1, temporary = 0, element = (cleared), name = (null), references = { }
 Index 2: tag = 3, count = 1, pin count = 1, removed = 0
-    Index 0: scope ID = 0, transaction ID = 0 (set), version = 2, pin count = 0, tag = 3, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 0, temporary = 0, element = (cleared), name = (null), references = { }
-Index 3: tag = 4, count = 2, pin count = 1, removed = 1
-    Index 0: scope ID = 0, transaction ID = 0 (set), version = 3, pin count = 0, tag = 4, privacy level = 0, removal = 0, job = (set), shared = 0, parent = 0, temporary = 0, element = (set), name = (null), references = { }
-    Index 1: scope ID = 0, transaction ID = 0 (set), version = 4, pin count = 0, tag = 4, privacy level = 0, removal = 1, name = (null), references = { }
+    Index 3/0: scope ID = 0, creator transaction ID = 0, version = 2, creator transaction state = OPEN, visibility ID = (current transaction only), pin count = 0, tag = 3, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 0, temporary = 0, element = (cleared), name = (null), references = { }
+Index 3: tag = 4, count = 2, pin count = 1, removed = 0
+    Index 4/0: scope ID = 0, creator transaction ID = 0, version = 3, creator transaction state = OPEN, visibility ID = (current transaction only), pin count = 0, tag = 4, privacy level = 0, removal = 0, job = (set), shared = 0, parent = 0, temporary = 0, element = (set), name = (null), references = { }
+    Index 4/1: scope ID = 0, creator transaction ID = 0, version = 4, creator transaction state = OPEN, visibility ID = (current transaction only), pin count = 0, tag = 4, privacy level = 0, removal = 1, name = (null), references = { }
 
 Count of all infos: 6
 Count of infos by class IDs:
-     2 0x4d79656c "Myel"
-     1 0x4d796a6f "Myjo"
-     3 0x4d79706a "Mypj"
+    2   0x4d79656c "Myel"
+    1   0x4d796a6f "Myjo"
+    3   0x4d79706a "Mypj"
+
 
 Count of all scopes: 1
-ID 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0, lowest open transaction ID = 0
+Index 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0, lowest open transaction ID = 0
 
 Count of all transactions: 1
-ID 0: scope ID = 0, pin count = 8, state = OPEN, next sequence number = 5, visibility ID = 4294967295
+Index 0: scope ID = 0, pin count = 3, state = OPEN, next sequence number = 5, visibility ID = 4294967295
 
 Count of infos by distinct names: 0
+
 Count of infos by distinct tags: 4
 Index 0: tag = 1, count = 1, pin count = 1, removed = 0
-    Index 0: scope ID = 0, transaction ID = 0 (set), version = 0, pin count = 0, tag = 1, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 1, temporary = 0, element = (set), name = (null), references = { }
+    Index 1/0: scope ID = 0, creator transaction ID = 0, version = 0, creator transaction state = OPEN, visibility ID = (current transaction only), pin count = 0, tag = 1, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 1, temporary = 0, element = (set), name = (null), references = { }
 Index 1: tag = 2, count = 1, pin count = 1, removed = 0
-    Index 0: scope ID = 0, transaction ID = 0 (set), version = 1, pin count = 1, tag = 2, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 1, temporary = 0, element = (set), name = (null), references = { }
+    Index 2/0: scope ID = 0, creator transaction ID = 0, version = 1, creator transaction state = OPEN, visibility ID = (current transaction only), pin count = 1, tag = 2, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 1, temporary = 0, element = (set), name = (null), references = { }
 Index 2: tag = 3, count = 1, pin count = 1, removed = 0
-    Index 0: scope ID = 0, transaction ID = 0 (set), version = 2, pin count = 0, tag = 3, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 0, temporary = 0, element = (cleared), name = (null), references = { }
-Index 3: tag = 4, count = 2, pin count = 1, removed = 1
-    Index 0: scope ID = 0, transaction ID = 0 (set), version = 3, pin count = 0, tag = 4, privacy level = 0, removal = 0, job = (set), shared = 0, parent = 0, temporary = 0, element = (set), name = (null), references = { }
-    Index 1: scope ID = 0, transaction ID = 0 (set), version = 4, pin count = 0, tag = 4, privacy level = 0, removal = 1, name = (null), references = { }
+    Index 3/0: scope ID = 0, creator transaction ID = 0, version = 2, creator transaction state = OPEN, visibility ID = (current transaction only), pin count = 0, tag = 3, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 0, temporary = 0, element = (cleared), name = (null), references = { }
+Index 3: tag = 4, count = 2, pin count = 1, removed = 0
+    Index 4/0: scope ID = 0, creator transaction ID = 0, version = 3, creator transaction state = OPEN, visibility ID = (current transaction only), pin count = 0, tag = 4, privacy level = 0, removal = 0, job = (set), shared = 0, parent = 0, temporary = 0, element = (set), name = (null), references = { }
+    Index 4/1: scope ID = 0, creator transaction ID = 0, version = 4, creator transaction state = OPEN, visibility ID = (current transaction only), pin count = 0, tag = 4, privacy level = 0, removal = 1, name = (null), references = { }
 
 Count of all infos: 7
 Count of infos by class IDs:
-     3 0x4d79656c "Myel"
-     1 0x4d796a6f "Myjo"
-     3 0x4d79706a "Mypj"
+    3   0x4d79656c "Myel"
+    1   0x4d796a6f "Myjo"
+    3   0x4d79706a "Mypj"
+
 
 Count of all scopes: 1
-ID 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0, lowest open transaction ID = 0
+Index 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0, lowest open transaction ID = 0
 
 Count of all transactions: 1
-ID 0: scope ID = 0, pin count = 10, state = OPEN, next sequence number = 7, visibility ID = 4294967295
+Index 0: scope ID = 0, pin count = 3, state = OPEN, next sequence number = 7, visibility ID = 4294967295
 
 Count of infos by distinct names: 0
+
 Count of infos by distinct tags: 5
 Index 0: tag = 1, count = 1, pin count = 1, removed = 0
-    Index 0: scope ID = 0, transaction ID = 0 (set), version = 0, pin count = 0, tag = 1, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 1, temporary = 0, element = (set), name = (null), references = { }
+    Index 1/0: scope ID = 0, creator transaction ID = 0, version = 0, creator transaction state = OPEN, visibility ID = (current transaction only), pin count = 0, tag = 1, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 1, temporary = 0, element = (set), name = (null), references = { }
 Index 1: tag = 2, count = 1, pin count = 1, removed = 0
-    Index 0: scope ID = 0, transaction ID = 0 (set), version = 1, pin count = 0, tag = 2, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 1, temporary = 0, element = (set), name = (null), references = { }
+    Index 2/0: scope ID = 0, creator transaction ID = 0, version = 1, creator transaction state = OPEN, visibility ID = (current transaction only), pin count = 0, tag = 2, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 1, temporary = 0, element = (set), name = (null), references = { }
 Index 2: tag = 3, count = 1, pin count = 1, removed = 0
-    Index 0: scope ID = 0, transaction ID = 0 (set), version = 2, pin count = 0, tag = 3, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 0, temporary = 0, element = (cleared), name = (null), references = { }
-Index 3: tag = 4, count = 2, pin count = 1, removed = 1
-    Index 0: scope ID = 0, transaction ID = 0 (set), version = 3, pin count = 0, tag = 4, privacy level = 0, removal = 0, job = (set), shared = 0, parent = 0, temporary = 0, element = (set), name = (null), references = { }
-    Index 1: scope ID = 0, transaction ID = 0 (set), version = 4, pin count = 0, tag = 4, privacy level = 0, removal = 1, name = (null), references = { }
-Index 4: tag = 5, count = 2, pin count = 1, removed = 1
-    Index 0: scope ID = 0, transaction ID = 0 (set), version = 5, pin count = 0, tag = 5, privacy level = 0, removal = 0, job = (set), shared = 0, parent = 0, temporary = 0, element = (set), name = (null), references = { }
-    Index 1: scope ID = 0, transaction ID = 0 (set), version = 6, pin count = 0, tag = 5, privacy level = 0, removal = 1, name = (null), references = { }
+    Index 3/0: scope ID = 0, creator transaction ID = 0, version = 2, creator transaction state = OPEN, visibility ID = (current transaction only), pin count = 0, tag = 3, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 0, temporary = 0, element = (cleared), name = (null), references = { }
+Index 3: tag = 4, count = 2, pin count = 1, removed = 0
+    Index 4/0: scope ID = 0, creator transaction ID = 0, version = 3, creator transaction state = OPEN, visibility ID = (current transaction only), pin count = 0, tag = 4, privacy level = 0, removal = 0, job = (set), shared = 0, parent = 0, temporary = 0, element = (set), name = (null), references = { }
+    Index 4/1: scope ID = 0, creator transaction ID = 0, version = 4, creator transaction state = OPEN, visibility ID = (current transaction only), pin count = 0, tag = 4, privacy level = 0, removal = 1, name = (null), references = { }
+Index 4: tag = 5, count = 2, pin count = 1, removed = 0
+    Index 5/0: scope ID = 0, creator transaction ID = 0, version = 5, creator transaction state = OPEN, visibility ID = (current transaction only), pin count = 0, tag = 5, privacy level = 0, removal = 0, job = (set), shared = 0, parent = 0, temporary = 0, element = (set), name = (null), references = { }
+    Index 5/1: scope ID = 0, creator transaction ID = 0, version = 6, creator transaction state = OPEN, visibility ID = (current transaction only), pin count = 0, tag = 5, privacy level = 0, removal = 1, name = (null), references = { }
 
 Count of all infos: 9
 Count of infos by class IDs:
-     4 0x4d79656c "Myel"
-     2 0x4d796a6f "Myjo"
-     3 0x4d79706a "Mypj"
+    4   0x4d79656c "Myel"
+    2   0x4d796a6f "Myjo"
+    3   0x4d79706a "Mypj"
+
 
 Count of all scopes: 1
-ID 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0, lowest open transaction ID = 1
+Index 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0, lowest open transaction ID = 1
 
 Count of all transactions: 1
-ID 0: scope ID = 0, pin count = 1, state = COMMITTED, next sequence number = 7, visibility ID = 1
+Index 0: scope ID = 0, pin count = 1, state = COMMITTED, next sequence number = 7, visibility ID = 1
 
 Count of infos by distinct names: 0
+
 Count of infos by distinct tags: 3
 Index 0: tag = 1, count = 1, pin count = 1, removed = 0
-    Index 0: scope ID = 0, transaction ID = 0 (cleared), version = 0, pin count = 0, tag = 1, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 1, temporary = 0, element = (set), name = (null), references = { }
+    Index 1/0: scope ID = 0, creator transaction ID = 0, version = 0, creator transaction state = COMMITTED, visibility ID = (globally visible), pin count = 0, tag = 1, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 1, temporary = 0, element = (set), name = (null), references = { }
 Index 1: tag = 2, count = 1, pin count = 1, removed = 0
-    Index 0: scope ID = 0, transaction ID = 0 (cleared), version = 1, pin count = 0, tag = 2, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 1, temporary = 0, element = (set), name = (null), references = { }
+    Index 2/0: scope ID = 0, creator transaction ID = 0, version = 1, creator transaction state = COMMITTED, visibility ID = (globally visible), pin count = 0, tag = 2, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 1, temporary = 0, element = (set), name = (null), references = { }
 Index 2: tag = 3, count = 1, pin count = 1, removed = 0
-    Index 0: scope ID = 0, transaction ID = 0 (cleared), version = 2, pin count = 0, tag = 3, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 0, temporary = 0, element = (cleared), name = (null), references = { }
+    Index 3/0: scope ID = 0, creator transaction ID = 0, version = 2, creator transaction state = COMMITTED, visibility ID = (globally visible), pin count = 0, tag = 3, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 0, temporary = 0, element = (cleared), name = (null), references = { }
 
 Count of all infos: 5
 Count of infos by class IDs:
-     2 0x4d79656c "Myel"
-     3 0x4d79706a "Mypj"
+    2   0x4d79656c "Myel"
+    3   0x4d79706a "Mypj"
+
 

@@ -37,9 +37,8 @@ create_unit_test(
     DEPENDS
         ${LINKER_START_GROUP}
         ${LINKER_DEPENDENCIES_IO}
-        ${LINKER_DEPENDENCIES_MDL_JIT}
+        ${LINKER_DEPENDENCIES_MDL_NO_JIT}
         ${LINKER_DEPENDENCIES_BASE}
         ${LINKER_END_GROUP}
-        llvm
         boost
     )

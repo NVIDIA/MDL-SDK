@@ -1771,4 +1771,55 @@ Derived_float scene_data_lookup_deriv_float(
     return res;
 }
 
+// ------------------------------------------------------------------------------------------------
+// Spectral rendering runtime functions
+// Called by MDL-generated HLSL code when libbsdf_enable_spectral is active.
+// ------------------------------------------------------------------------------------------------
+
+#if defined(MDL_SPECTRAL_RENDERING)
+
+// Piecewise-linear IOR spectrum: point samples at 435 nm (blue), 546 nm (green), 700 nm (red).
+Spectral_sample mdl_rgb_to_spectral_ior(inout Shading_state_material state, float3 rgb)
+{
+    Spectral_sample s;
+    [unroll] for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+    {
+        float lambda = state.spectral_wavelengths.values[i];
+        if (lambda > 546.0f) {
+            float t = min((lambda - 546.0f) * (1.0f / (700.0f - 546.0f)), 1.0f);
+            s.values[i] = t * rgb.r + (1.0f - t) * rgb.g;
+        } else {
+            float t = max((lambda - 435.0f) * (1.0f / (546.0f - 435.0f)), 0.0f);
+            s.values[i] = t * rgb.g + (1.0f - t) * rgb.b;
+        }
+    }
+    return s;
+}
+
+// RGB-to-spectral conversion.
+Spectral_sample mdl_rgb_to_spectral_reflectance(inout Shading_state_material state, float3 rgb)
+{
+    return rgb_to_spectral(rgb, state.spectral_wavelengths, false);
+}
+
+// RGB-to-spectral conversion weighted by the D65 illuminant.
+Spectral_sample mdl_rgb_to_spectral_luminance(inout Shading_state_material state, float3 rgb)
+{
+    return rgb_to_spectral(rgb, state.spectral_wavelengths, true);
+}
+
+// Volume attenuation coefficients use the same reflectance mapping as non-emission.
+Spectral_sample mdl_rgb_to_spectral_volume_coefficient(inout Shading_state_material state, float3 rgb)
+{
+    return mdl_rgb_to_spectral_reflectance(state, rgb);
+}
+
+// Return the active wavelengths stored in the shading state.
+Spectral_sample mdl_get_wavelengths(inout Shading_state_material state)
+{
+    return state.spectral_wavelengths;
+}
+
+#endif // MDL_SPECTRAL_RENDERING
+
 #endif // MDL_RENDERER_RUNTIME_HLSLI

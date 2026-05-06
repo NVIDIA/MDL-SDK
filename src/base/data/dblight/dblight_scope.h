@@ -99,32 +99,32 @@ public:
 
     // methods of DB::Scope
 
-    void pin() override { ++m_pin_count; }
+    void pin() final { ++m_pin_count; }
 
-    void unpin() override { if( --m_pin_count == 0) delete this; }
+    void unpin() final { if( --m_pin_count == 0) delete this; }
 
-    DB::Scope_id get_id() const override { return m_id; }
+    DB::Scope_id get_id() const final { return m_id; }
 
-    const std::string& get_name() const override { return m_name; }
+    const std::string& get_name() const final { return m_name; }
 
-    DB::Scope* get_parent() const override { return m_parent; }
+    DB::Scope* get_parent() const final { return m_parent; }
 
-    DB::Privacy_level get_level() const override { return m_level; }
+    DB::Privacy_level get_level() const final { return m_level; }
 
-    DB::Database* get_database() const override;
+    DB::Database* get_database() const final;
 
     /// The \p is_temporary parameter is meaningless in this implementation.
     DB::Scope* create_child(
-        DB::Privacy_level level, bool /*is_temporary*/, const std::string& name) override;
+        DB::Privacy_level level, bool /*is_temporary*/, const std::string& name) final;
 
-    DB::Transaction* start_transaction() override;
+    DB::Transaction* start_transaction() final;
 
     std::unique_ptr<DB::Journal_query_result> get_journal(
         DB::Transaction_id last_transaction_id,
         mi::Uint32 last_transaction_change_version,
         DB::Transaction_id current_transaction_id,
         DB::Journal_type journal_type,
-        bool lookup_parents) override;
+        bool lookup_parents) final;
 
     // internal methods
 
@@ -183,7 +183,7 @@ public:
     /// Returns the possibly pruned scope journal (for dumping).
     const Scope_journal& get_journal() const { return m_journal; }
 
-    /// Returns the last pruned visibility ID of the journal (for dumping).
+    /// Returns the last pruned visibility of the journal (for dumping).
     DB::Transaction_id get_journal_last_pruned_visibility() const
     { return m_journal_last_pruned_visibility; }
 
@@ -214,6 +214,9 @@ public:
     /// Used by #Scope_manager::update_lowest_open_transaction_ids().
     void update_lowest_open_transaction_id( DB::Transaction_id next_id);
 
+    /// Returns the infos of this scope (for dumping).
+    const auto& get_infos() const { return m_infos; }
+
 private:
     /// The database instance this scope belongs to.
     Database_impl* const m_database;
@@ -243,7 +246,7 @@ private:
 
     /// Possibly pruned journal of updates for this journal.
     Scope_journal m_journal;
-    /// The visibility ID of the last pruned journal entry.
+    /// The visibility of the last pruned journal entry.
     DB::Transaction_id m_journal_last_pruned_visibility;
 
     using Open_transactions_hook = bi::member_hook<
@@ -342,11 +345,14 @@ public:
 
     /// Updates the lowest open transaction IDs for all scopes.
     ///
-    /// Precomputation step for the garbage collection.
+    /// Pre-computation step for the garbage collection.
     void update_lowest_open_transaction_ids();
 
     /// Dumps the state of the scope manager to the stream.
     void dump( std::ostream& s, bool verbose, bool mask_pointer_values);
+
+    /// Dumps the state of the scope manager to the stream (as HTML).
+    void dump_html( std::ostream& s, const Html_context& context);
 
 private:
     /// Instance of the database this manager belongs to.
@@ -373,6 +379,9 @@ private:
     /// ID of the next scope to be created.
     DB::Scope_id m_next_scope_id = 0;
 };
+
+/// Intrusive pointer for Scope_impl.
+using Scope_impl_ptr = boost::intrusive_ptr<Scope_impl>;
 
 } // namespace DBLIGHT
 

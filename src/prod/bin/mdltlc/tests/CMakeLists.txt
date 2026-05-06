@@ -37,3 +37,21 @@ create_unit_test(
     DEPENDS
         prod-bin-mdltlclib
     )
+
+create_unit_test(
+    NAME
+        test_parser
+    SOURCES
+        ../test_parser.cpp
+    DEPENDS
+        prod-bin-mdltlclib
+    )
+
+create_unit_test(
+    NAME
+        test_real_world
+    SOURCES
+        ../test_real_world.cpp
+    DEPENDS
+        prod-bin-mdltlclib
+    )

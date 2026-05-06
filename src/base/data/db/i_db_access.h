@@ -60,7 +60,7 @@ class Transaction;
 /// Implementation of non-inline methods is in base/data/dblight/dblight_ačcess.cpp.
 class Access_base
 {
-private:
+protected:
     /// Helper type for the conversion to bool via this intermediate type (such that the bool is
     /// not implicitly converted to another type).
     using unknown_bool_type = bool (Access_base::*)() const;
@@ -73,12 +73,12 @@ public:
 
     /// Copy constructor.
     ///
-    /// Ignores the \c m_is_edit flag on \p other, i.e., copies an Edit as if it as an Access.
+    /// Ignores the \c m_is_edit flag on \p other, i.e., copies an Edit as if it was an Access.
     Access_base( const Access_base& other);
 
     /// Assignment operator.
     ///
-    /// Ignores the \c m_is_edit flag on \p other, i.e., assigns an Edit as if it as an Access.
+    /// Ignores the \c m_is_edit flag on \p other, i.e., assigns an Edit as if it was an Access.
     /// Asserts if \c m_is_edit on \c *this is set.
     Access_base& operator=( const Access_base& other);
 
@@ -112,6 +112,10 @@ public:
     /// Returns the referenced tag version.
     Tag_version get_tag_version() const;
 
+    /// Returns the class ID.
+    SERIAL::Class_id get_class_id() const
+    { return m_element ? m_element->get_class_id() : SERIAL::class_id_unknown; }
+
     /// Returns the referenced DB element (or DB job result). Can be \c nullptr. RCS:NEU
     const Element_base* get_base_ptr() const { return m_element; }
 
@@ -127,7 +131,7 @@ public:
     Journal_type get_journal_flags() const { return m_journal_type; }
 
     //@}
-    /// \name
+    /// \name Modifications
     //@{
 
     /// Sets an access to a given tag, possibly within a new transaction.
@@ -140,7 +144,8 @@ public:
     /// \param tag           The new tag.
     /// \param transaction   The new transaction. Pass \c nullptr to keep the current transaction.
     ///                      RCS:NEU
-    /// \param id            The expected class ID of the new tag. Used for assertions.
+    /// \param id            The expected class ID of the new tag. Used to construct a dummy element
+    ///                      in case of unexpected errors, e.g., closing transactions.
     /// \return              The referenced database element. RCS:NEU
     Element_base* set_access(
         Tag tag, Transaction* transaction, SERIAL::Class_id id);
@@ -165,7 +170,8 @@ public:
     /// \param tag           The new tag.
     /// \param transaction   The new transaction. Pass \c nullptr to keep the current transaction.
     ///                      RCS:NEU
-    /// \param id            The expected class ID of the new tag. Used for assertions.
+    /// \param id            The expected class ID of the new tag. Used to construct a dummy element
+    ///                      in case of unexpected errors, e.g., attempts to edit job results.
     /// \param journal_type  The initial journal flags of this edit.
     /// \return              The referenced database element. RCS:NEU
     Element_base* set_edit(
@@ -236,9 +242,10 @@ private:
 
 /// Smart pointer for accesses to database elements.
 ///
-/// \note This class only uses assertions to detect mismatches between the template parameters and
-///       the type of the database element. Input validation must be done upfront by other means,
-///       e.g., DB::Transaction::get_class_id().
+/// \note This class uses assertions in get_ptr() and operator->() to detect mismatches between the
+///       the template parameters and the type of the database element. Input validation must be
+///       done upfront by other means, e.g., DB::Access_base::get_class_id(),
+///       DB::Access::is_valid(), or DB::Transaction::get_class_id() (extra cost).
 ///
 /// Example:
 ///
@@ -263,39 +270,37 @@ public:
     ///
     /// \param tag           The tag.
     /// \param transaction   The transaction. RCS:NEU
-    Access( Tag tag, Transaction* transaction)
-    {
-        set_access( tag, transaction, T::id);
-        MI_ASSERT( !T::id || !get_base_ptr() || get_base_ptr()->is_type_of( T::id));
-    }
+    Access( Tag tag, Transaction* transaction) { set_access( tag, transaction, T::id); }
 
     /// Constructs an access to a given name.
     ///
     /// \param name          The name.
     /// \param transaction   The transaction. RCS:NEU
-    Access( const char* name, Transaction* transaction)
-    {
-        set_access( name, transaction, T::id);
-        MI_ASSERT( !T::id || !get_base_ptr() || get_base_ptr()->is_type_of( T::id));
-    }
+    Access( const char* name, Transaction* transaction) { set_access( name, transaction, T::id); }
 
     /// Copy constructor.
-    Access( const Access_base& other)
-      : Access_base( other)
-    {
-        MI_ASSERT( !T::id || !get_base_ptr() || get_base_ptr()->is_type_of( T::id));
-    }
+    Access( const Access_base& other) : Access_base( other) { }
 
     /// Assignment operator.
     Access<T>& operator=( const Access_base& other)
     {
         Access_base::operator=( other);
-        MI_ASSERT( !T::id || !get_base_ptr() || get_base_ptr()->is_type_of( T::id));
         return *this;
     }
 
     /// Destructor.
     ~Access() = default;
+
+    /// Indicates whether the access is valid (dummy elements are not valid).
+    ///
+    /// Note that this check includes a check for #Access_base::is_valid() to classify dummy
+    /// elements as invalid (in contrast to the assertions in #get_base_ptr()).
+    bool is_valid() const
+    { return Access_base::is_valid() && get_base_ptr() && get_base_ptr()->is_type_of( T::id); }
+
+    /// Conversion to bool, returns \c true for valid accessess.
+    operator Access_base::unknown_bool_type() const
+    { return is_valid() ? &Access_base::is_valid : nullptr; }
 
     /// Sets an access to a given tag, possibly within a new transaction.
     ///
@@ -310,10 +315,9 @@ public:
     void set( Tag tag = Tag(), Transaction* transaction = nullptr)
     {
         set_access( tag, transaction, T::id);
-        MI_ASSERT( !T::id || !get_base_ptr() || get_base_ptr()->is_type_of( T::id));
     }
 
-    /// Sets an access to a given nam, possibly within a new transaction.
+    /// Sets an access to a given name, possibly within a new transaction.
     ///
     /// Note that this method does not allow to restore the state after construction. A
     /// \c nullptr value for \p name is valid, but a \c nullptr value for \p transaction
@@ -326,35 +330,35 @@ public:
     void set( const char* name, Transaction* transaction = nullptr)
     {
         set_access( name, transaction, T::id);
-        MI_ASSERT( !T::id || !get_base_ptr() || get_base_ptr()->is_type_of( T::id));
     }
 
     /// Resets the access to the default-constructed state with exception of the transaction.
     void reset() { cleanup(); }
 
-    /// Member access operator (const).
-    ///
-    /// \return   The referenced DB element. Might not be valid beyond the lifetime of this
-    ///           smart pointer. RCS:NEU
-    const T* operator->() const
-    {
-        const T* ptr = static_cast<const T*>( get_base_ptr());
-        MI_ASSERT( ptr);
-        return ptr;
-    }
-
     /// Returns the referenced DB element (const).
     ///
     /// \return   The referenced DB element. Might not be valid beyond the lifetime of this
     ///           smart pointer. RCS:NEU
-    const T* get_ptr() const { return static_cast<const T*>( get_base_ptr()); }
+    const T* get_ptr() const
+    {
+        const Element_base* ptr = get_base_ptr();
+        MI_ASSERT( !T::id || !ptr || ptr->is_type_of( T::id));
+        return static_cast<const T*>( ptr);
+    }
+
+    /// Member access operator (const).
+    ///
+    /// \return   The referenced DB element. Might not be valid beyond the lifetime of this
+    ///           smart pointer. RCS:NEU
+    const T* operator->() const { return get_ptr(); }
 };
 
 /// Smart pointer for edits of database elements.
 ///
-/// \note This class only uses assertions to detect mismatches between the template parameters and
-///       the type of the database element. Input validation must be done upfront by other means,
-///       e.g., DB::Transaction::get_class_id().
+/// \note This class uses assertions in get_ptr() and operator->() to detect mismatches between the
+///       template parameters and the type of the database element. Input validation must be done
+///       upfront by other means, e.g., DB::Access_base::get_class_id(), DB::Edit::is_valid(), or
+///       DB::Transaction::get_class_id() (extra cost).
 ///
 /// \note It is not possible to edit database elements representing job results.
 ///
@@ -387,7 +391,6 @@ public:
     Edit()
     {
         this->set_edit( Tag(), nullptr, T::id, JOURNAL_ALL);
-        MI_ASSERT( !T::id || !get_base_ptr() || get_base_ptr()->is_type_of( T::id));
     }
 
     /// Constructs an edit to a given tag.
@@ -398,7 +401,6 @@ public:
     Edit( Tag tag, Transaction* transaction, Journal_type journal_type = JOURNAL_ALL)
     {
         this->set_edit( tag, transaction, T::id, journal_type);
-        MI_ASSERT( !T::id || !get_base_ptr() || get_base_ptr()->is_type_of( T::id));
     }
 
     /// Constructs an edit to a given name.
@@ -409,7 +411,6 @@ public:
     Edit( const char* name, Transaction* transaction, Journal_type journal_type = JOURNAL_ALL)
     {
         this->set_edit( name, transaction, T::id, journal_type);
-        MI_ASSERT( !T::id || !get_base_ptr() || get_base_ptr()->is_type_of( T::id));
     }
 
     /// Constructs an edit from an access.
@@ -422,8 +423,18 @@ public:
     Edit( const Access<T>& other, Journal_type journal_type = JOURNAL_ALL)
     {
         this->set_edit( other.get_tag(), other.get_transaction(), T::id, journal_type);
-        MI_ASSERT( !T::id || !get_base_ptr() || get_base_ptr()->is_type_of( T::id));
     }
+
+    /// Indicates whether the edit is valid (dummy elements are not valid).
+    ///
+    /// Note that this check includes a check for #Access_base::is_valid() to classify dummy
+    /// elements as invalid (in contrast to the assertions in #get_base_ptr()).
+    bool is_valid() const
+    { return Access_base::is_valid() && get_base_ptr() && get_base_ptr()->is_type_of( T::id); }
+
+    /// Conversion to bool, returns \c true for valid edits.
+    operator Access_base::unknown_bool_type() const
+    { return is_valid() ? &Access_base::is_valid : nullptr; }
 
     /// Sets an edit to a given tag, possibly within a new transaction.
     ///
@@ -443,7 +454,6 @@ public:
     {
         MI_ASSERT( this->is_edit());
         this->set_edit( tag, transaction, T::id, journal_type);
-        MI_ASSERT( !T::id || !get_base_ptr() || get_base_ptr()->is_type_of( T::id));
     }
 
     /// Sets an edit to a given name, possibly within a new transaction.
@@ -464,31 +474,6 @@ public:
     {
         MI_ASSERT( this->is_edit());
         this->set_edit( name, transaction, T::id, journal_type);
-        MI_ASSERT( !T::id || !get_base_ptr() || get_base_ptr()->is_type_of( T::id));
-    }
-
-    /// Member access operator (mutable).
-    ///
-    /// \return   The referenced DB element. Might not be valid beyond the lifetime of this
-    ///           smart pointer. RCS:NEU
-    T* operator->()
-    {
-        MI_ASSERT( this->is_edit());
-        T* ptr = static_cast<T*>( get_base_ptr());
-        MI_ASSERT( ptr);
-        return ptr;
-    }
-
-    /// Member access operator (const).
-    ///
-    /// \return   The referenced DB element. Might not be valid beyond the lifetime of this
-    ///           smart pointer. RCS:NEU
-    const T* operator->() const
-    {
-        MI_ASSERT( this->is_edit());
-        const T* ptr = static_cast<const T*>( get_base_ptr());
-        MI_ASSERT( ptr);
-        return ptr;
     }
 
     /// Returns the referenced DB element (mutable).
@@ -497,8 +482,9 @@ public:
     ///           smart pointer. RCS:NEU
     T* get_ptr()
     {
-        MI_ASSERT( this->is_edit());
-        return static_cast<T*>( get_base_ptr());
+        Element_base* ptr = get_base_ptr();
+        MI_ASSERT( !T::id || !ptr || ptr->is_type_of( T::id));
+        return static_cast<T*>( ptr);
     }
 
     /// Returns the referenced DB element (const).
@@ -507,9 +493,22 @@ public:
     ///           smart pointer. RCS:NEU
     const T* get_ptr() const
     {
-        MI_ASSERT( this->is_edit());
-        return static_cast<const T*>( get_base_ptr());
+        const Element_base* ptr = get_base_ptr();
+        MI_ASSERT( !T::id || !ptr || ptr->is_type_of( T::id));
+        return static_cast<const T*>( ptr);
     }
+
+    /// Member access operator (mutable).
+    ///
+    /// \return   The referenced DB element. Might not be valid beyond the lifetime of this
+    ///           smart pointer. RCS:NEU
+    T* operator->() { return get_ptr(); }
+
+    /// Member access operator (const).
+    ///
+    /// \return   The referenced DB element. Might not be valid beyond the lifetime of this
+    ///           smart pointer. RCS:NEU
+    const T* operator->() const { return get_ptr(); }
 
 private:
     /// Delete copy constructor to avoid accidental use.

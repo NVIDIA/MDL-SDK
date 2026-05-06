@@ -80,16 +80,6 @@ inline void Attribute::set_global(
 
 
 //
-// return the list of attachments
-//
-
-inline const CONT::Array<Attachment> &Attribute::get_attachments() const
-{
-    return m_attachments;
-}
-
-
-//
 // access values. get_values returns a pointer to the beginning of the data
 // block, and the caller must figure out the layout from the type tree. The
 // others are simple convenience functions that provide read-only access to
@@ -670,7 +660,6 @@ inline void Attribute::swap(
     // should the Type swap be a fast swap, as well ? so far: just copy it
     swap(m_type,        other.m_type);
     swap(m_values,      other.m_values);
-    swap(m_attachments, other.m_attachments);
     swap(m_global,      other.m_global);
 }
 

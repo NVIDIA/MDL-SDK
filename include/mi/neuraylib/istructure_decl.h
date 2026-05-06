@@ -45,12 +45,10 @@ namespace mi {
 /// their names and types. In contrast to element of a map structure fields are ordered and do
 /// not need to be of the same type.
 ///
-/// \ifnot MDL_SDK_API
 /// Structure declarations can be used to create new structure types. In this case, they are
 /// populated through a sequence of #add_member() calls. Finally, such a declaration is registered
 /// via #mi::neuraylib::IExtension_api::register_structure_decl(). The name used for registration
 /// can later be used as a type name to create instances of the type described by the declaration.
-/// \endif
 ///
 /// \see #mi::IStructure, #mi::IMap
 class IStructure_decl :

@@ -49,6 +49,7 @@
 #include "generator_dag_generated_dag.h"
 #include "generator_dag_walker.h"
 #include "generator_dag_tools.h"
+#include "generator_dag_derivatives.h"
 #include "generator_dag_code_printer.h"
 #include "generator_dag_dep_graph.h"
 #include "generator_dag_serializer.h"
@@ -69,7 +70,37 @@ typedef Store<bool> Flag_store;
 
 namespace {
 
-/// Translate function properties.
+
+/// RAII scope for temporarily setting ignore_referenced_strings on an Instance_analyzer.
+class Scoped_ignore_referenced_strings {
+    typedef Generated_code_dag::Material_instance::Instance_analyzer Analyzer;
+public:
+    /// Constructor.
+    ///
+    /// \param a       the Instance_analyzer
+    /// \param value   the value to set
+    Scoped_ignore_referenced_strings(Analyzer &analyzer, bool value)
+    : m_analyzer(analyzer)
+    , m_saved(analyzer.get_ignore_referenced_strings())
+    {
+        analyzer.set_ignore_referenced_strings(value);
+    }
+
+    /// Destructor.
+    ~Scoped_ignore_referenced_strings() {
+        m_analyzer.set_ignore_referenced_strings(m_saved);
+    }
+
+private:
+    Analyzer &m_analyzer;
+    bool     m_saved;
+};
+
+/// Translate function properties from a definition to a function property flags.
+///
+/// \param f_def  the definition
+///
+/// \return the function properties flags
 unsigned char get_function_properties(IDefinition const *f_def)
 {
     unsigned char func_properties = 0;
@@ -673,7 +704,7 @@ private:
 
                 if (m_inline_params[idx] != NULL) {
                     IValue const *v = m_param_values[idx];
-                    res = m_factory.create_constant(v);
+                    res = m_factory.create_constant(v, p->get_dbg_info());
                 } else {
                     // let the parameter as is, so we can modify it in renumber!
                 }
@@ -1209,6 +1240,7 @@ static IExpression const *get_single_expr_body(
 // Compile functions.
 void Generated_code_dag::compile_function(
     Module const          *module,
+    DAG_builder           &dag_builder,
     Dependence_node const *f_node)
 {
     IType const *ret_type = f_node->get_return_type();
@@ -1237,8 +1269,6 @@ void Generated_code_dag::compile_function(
             }
         }
     }
-
-    DAG_builder dag_builder(get_allocator(), m_node_factory, m_mangler);
 
     Function_info func(
         get_allocator(),
@@ -1415,6 +1445,7 @@ void Generated_code_dag::compile_function(
 // Compile an annotation (declaration).
 void Generated_code_dag::compile_annotation(
     Module const          *module,
+    DAG_builder           &dag_builder,
     Dependence_node const *f_node)
 {
     Annotation_info anno(
@@ -1423,8 +1454,6 @@ void Generated_code_dag::compile_annotation(
         f_node->get_dag_name(),
         f_node->get_dag_simple_name(),
         f_node->get_dag_alias_name());
-
-    DAG_builder dag_builder(get_allocator(), m_node_factory, m_mangler);
 
     Type_factory &tf = m_dag_unit.get_type_factory();
 
@@ -2274,7 +2303,7 @@ DAG_node const *Generated_code_dag::build_material_dag(
     VLA<DAG_call::Call_argument> arguments(get_allocator(), argument_count);
 
     // the material constructor is built in
-    DAG_DbgInfo dbg_info;  // FIXME: builtin
+    DAG_DbgInfo dbg_info = DAG_DbgInfo::builtin;
 
     for (int i = 0; i < argument_count; ++i) {
         IType const   *parameter_type;
@@ -2501,7 +2530,8 @@ void Generated_code_dag::compile_constant(
 
     v = m_dag_unit.import(v);
 
-    DAG_constant const *c = m_node_factory.create_constant(v);
+    DAG_DbgInfo dbg_info = dag_builder.get_dbg_info(def->get_position());
+    DAG_constant const *c = m_node_factory.create_constant(v, dbg_info);
 
     Constant_info con(alloc, c, sym->get_name());
 
@@ -2590,12 +2620,12 @@ void Generated_code_dag::compile_entity(
     IDefinition::Kind kind = def != NULL ? def->get_kind() : IDefinition::DK_ERROR;
 
     if (kind == IDefinition::DK_ANNOTATION) {
-        compile_annotation(owner, node);
+        compile_annotation(owner, dag_builder, node);
     } else if (kind == IDefinition::DK_FUNCTION && is_material_category_type(ret_type)) {
         // functions returning materials ARE materials
         compile_material(dag_builder, node);
     } else {
-        compile_function(owner, node);
+        compile_function(owner, dag_builder, node);
     }
 }
 
@@ -3481,7 +3511,7 @@ Generated_code_dag::Material_instance::Material_instance(
 , m_builder(alloc)
 , m_mdl(mi::base::make_handle_dup(impl_cast<MDL>(mdl)))
 , m_dag_unit(impl_cast<MDL>(mdl), enable_debug_info)
-, m_node_factory(mdl, m_dag_unit, internal_space)
+, m_node_factory(impl_cast<MDL>(mdl), m_dag_unit, internal_space)
 , m_messages(alloc, /*owner_fname=*/"")
 , m_material_index(material_index)
 , m_constructor(NULL)
@@ -3524,14 +3554,15 @@ IValue_factory *Generated_code_dag::Material_instance::get_value_factory()
 
 // Create a constant.
 DAG_constant const *Generated_code_dag::Material_instance::create_constant(
-    IValue const *value)
+    IValue const *value,
+    DAG_DbgInfo  dbg_info)
 {
     // Constants created here are used as arguments for material instances.
     // Do NOT do CSE here, because we don't want to combine equal constants into the same
     // argument IF they were created with different create_constant() calls.
     // Note: if would be slightly better to switch CSE only off in class compilation mode...
     bool old = m_node_factory.enable_cse(false);
-    DAG_constant const *res = m_node_factory.create_constant(value);
+    DAG_constant const *res = m_node_factory.create_constant(value, dbg_info);
     m_node_factory.enable_cse(old);
     return res;
 }
@@ -3543,7 +3574,7 @@ DAG_constant const *Generated_code_dag::Material_instance::create_temp_constant(
     // Temporary constants are used by the visitor to visit a value.
     // Always do CSE here, or the constants are accumulated.
     bool old = m_node_factory.enable_cse(true);
-    DAG_constant const *res = m_node_factory.create_constant(value);
+    DAG_constant const *res = m_node_factory.create_constant(value, DAG_DbgInfo::generated);
     m_node_factory.enable_cse(old);
     return res;
 }
@@ -4014,9 +4045,8 @@ public:
     ///
     /// \param alloc  an allocator
     Instance_cloner(
-        IAllocator *alloc, Generated_code_dag::Material_instance const *instance)
+        IAllocator *alloc)
     : m_alloc(alloc)
-    , m_instance(instance)
     , m_marker_map(0, Visited_node_map::hasher(), Visited_node_map::key_equal(), alloc)
     , m_node_factory(NULL)
     , m_type_factory(NULL)
@@ -4051,9 +4081,6 @@ private:
     /// The allocator.
     IAllocator *m_alloc;
 
-    /// The material instance we are working on.
-    Generated_code_dag::Material_instance const *m_instance;
-
     typedef ptr_hash_map<DAG_node const, DAG_node const *>::Type Visited_node_map;
 
     /// The marker map for walking DAGs.
@@ -4087,7 +4114,8 @@ restart:
         {
             DAG_constant const *c     = cast<DAG_constant>(node);
             IValue const       *value = c->get_value();
-            node = m_node_factory->create_constant(m_value_factory->import(value));
+            node = m_node_factory->create_constant(
+                m_value_factory->import(value), copy_dbg_info(c->get_dbg_info()));
         }
         break;
     case DAG_node::EK_PARAMETER:
@@ -4225,7 +4253,7 @@ Generated_code_dag::Material_instance *Generated_code_dag::Material_instance::cl
     Clone_flags flags,
     bool        unsafe_math_opt) const
 {
-    Instance_cloner cloner(alloc, this);
+    Instance_cloner cloner(alloc);
 
     return cloner.clone(this, flags, unsafe_math_opt);
 }
@@ -4313,7 +4341,7 @@ void Generated_code_dag::Material_instance::serialize(
     // serialize the node factory m_node_factory by serializing all reachable DAGs
     serialize_dags(dag_serializer);
 
-    m_dag_unit.serialize_attributes(dag_serializer);
+    m_dag_unit.serialize_name_map(dag_serializer);
 
     dag_serializer.write_encoded(m_constructor);
     dag_serializer.serialize(m_temporaries);
@@ -4335,7 +4363,7 @@ void Generated_code_dag::Material_instance::serialize(
     dag_serializer.write_unsigned(m_properties);
 
     dag_serializer.serialize(m_referenced_scene_data);
-    
+
     // serialize the resource table
     size_t n_entries = m_resource_tag_map.size();
     dag_serializer.write_size_t(n_entries);
@@ -4391,7 +4419,7 @@ Generated_code_dag::Material_instance const *Generated_code_dag::Material_instan
     // Deserialize the node factory m_node_factory by deserializing all reachable DAGs
     instance->deserialize_dags(dag_deserializer);
 
-    instance->m_dag_unit.deserialize_attributes(dag_deserializer);
+    instance->m_dag_unit.deserialize_name_map(dag_deserializer);
 
     instance->m_constructor = cast<DAG_call>(dag_deserializer.read_encoded<DAG_node const *>());
     dag_deserializer.deserialize(instance->m_temporaries);
@@ -4833,7 +4861,7 @@ void Generated_code_dag::Material_instance::build_temporaries()
 
 namespace {
     // Assuming p points to the start of a component or at the end of the path, return the
-    // start of the component in 'start' and a pointer to the character after the last of 
+    // start of the component in 'start' and a pointer to the character after the last of
     // the component. Return the number of characters in the component.
     void get_component(char const *p, char const *&start, char const *&end) {
         start = p;
@@ -4861,7 +4889,7 @@ namespace {
         }
 
         switch (value->get_kind()) {
-            // All these are atomic, or their elements don't have names, so we cannot go on 
+            // All these are atomic, or their elements don't have names, so we cannot go on
             // with a non-empty path. This is an error, so we return NULL.
         case IValue::VK_BAD:
         case IValue::VK_BOOL:
@@ -4909,6 +4937,8 @@ namespace {
 
         case IValue::VK_VECTOR:
         case IValue::VK_RGB_COLOR:
+        case IValue::VK_SPECTRUM:
+        case IValue::VK_SPECTRAL_SAMPLE:
         case IValue::VK_MATRIX:
         case IValue::VK_ARRAY:
         {
@@ -4951,15 +4981,15 @@ namespace {
     /// Calculate the hash for the given DAG constant.
     /// Return true if hashing was successful and false for an invalid path.
     void lookup_constant(
-        char const *path, 
+        char const *path,
         DAG_constant const *cnst,
-        IValue const *&value_result) 
+        IValue const *&value_result)
     {
         value_result = lookup_value(path, cnst->get_value());
     }
 
     void lookup_expr(
-        char const *path, 
+        char const *path,
         DAG_node const *node,
         DAG_node const *&node_result,
         IValue const *&value_result);
@@ -4967,10 +4997,10 @@ namespace {
     /// Calculate the hash for the given DAG call expression.
     /// Return true if hashing was successful and false for an invalid path.
     void lookup_call(
-        char const *path, 
+        char const *path,
         DAG_call const *call,
         DAG_node const *&node_result,
-        IValue const *&value_result) 
+        IValue const *&value_result)
     {
         char const *start = nullptr;
         char const *end = nullptr;
@@ -5000,7 +5030,7 @@ namespace {
     /// The hash is calculated by updating the given Dag_hasher.
     /// Return true if hashing was successful and false for an invalid path.
     void lookup_expr(
-        char const *path, 
+        char const *path,
         DAG_node const *node,
         DAG_node const *&node_result,
         IValue const *&value_result)
@@ -5052,7 +5082,7 @@ namespace {
         }
 
         switch (value->get_kind()) {
-        // All these are atomic, or their elements don't have names, so we cannot go on 
+        // All these are atomic, or their elements don't have names, so we cannot go on
         // with a non-empty path. This is an error, so we return false.
         case IValue::VK_BAD:
         case IValue::VK_BOOL:
@@ -5100,6 +5130,8 @@ namespace {
 
         case IValue::VK_VECTOR:
         case IValue::VK_RGB_COLOR:
+        case IValue::VK_SPECTRUM:
+        case IValue::VK_SPECTRAL_SAMPLE:
         case IValue::VK_MATRIX:
         case IValue::VK_ARRAY:
         {
@@ -5172,7 +5204,7 @@ namespace {
         }
         return false;
     }
-    
+
     /// Calculate the hash for the node determined by the path, starting from the given node.
     /// When the path is the empty string, the hash for the node itself is calculated.
     /// The hash is calculated by updating the given Dag_hasher.
@@ -5216,8 +5248,8 @@ namespace {
 /// Return the node determined by the path, starting from the root expression of the material
 /// instance.
 void Generated_code_dag::Material_instance::lookup_sub_expression(
-    char const *path, 
-    DAG_node const *&node_result, 
+    char const *path,
+    DAG_node const *&node_result,
     IValue const *&value_result) const
 {
     MDL_ASSERT(path && "non-null path required");
@@ -5229,8 +5261,69 @@ void Generated_code_dag::Material_instance::lookup_sub_expression(
     lookup_expr(path, get_constructor(), node_result, value_result);
 }
 
+// Determine the spectral conversion intrinsic to apply to the sub-expression at the given path.
+IDefinition::Semantics Generated_code_dag::Material_instance::get_spectral_conversion(
+    char const *path) const
+{
+    MDL_ASSERT(path && "non-null path required");
 
-/// Calculate the hash for the node determined by the path, starting from the root 
+    // Lookup the call containing the sub-expression at the given path.
+    char const *last_dot   = strrchr(path, '.');
+    char const *param_name = last_dot ? last_dot + 1 : path;
+
+    DAG_node const *node_result  = nullptr;
+    IValue const   *value_result = nullptr;
+    if (last_dot != nullptr) {
+        std::string parent_path(path, last_dot);
+        lookup_sub_expression(parent_path.c_str(), node_result, value_result);
+
+        MDL_ASSERT((node_result != nullptr || value_result != nullptr) &&
+            "this function should only be called for paths which have already been validated");
+
+        // If we didn't already get a value, check whether we got a constant whose value we can use.
+        if (value_result == nullptr) {
+            if (DAG_constant const *c = as<DAG_constant>(node_result)) {
+                value_result = c->get_value();
+                node_result = nullptr;
+            }
+        }
+    } else {
+        // The containing call is the material constructor itself.
+        node_result = skip_temporaries(get_constructor());
+    }
+
+    if (node_result != nullptr) {
+        // The containing node is a DAG node (lookup_sub_expression already skips temporaries).
+        if (node_result->get_kind() != DAG_node::EK_CALL)
+            return IDefinition::DS_UNKNOWN;
+
+        DAG_call const *call = cast<DAG_call>(node_result);
+        DAG_node const *arg  = call->get_argument(param_name);
+        if (arg == nullptr ||
+                arg->get_type()->skip_type_alias()->get_kind() != IType::TK_COLOR) {
+            return IDefinition::DS_UNKNOWN;
+        }
+
+        return get_spectral_conversion_type(call, param_name, arg->get_type());
+    }
+
+    if (value_result != nullptr) {
+        // The containing node is a constant struct value. BSDF/EDF/VDF calls can never be
+        // constant, so we only need to handle the struct type cases.
+        IType_struct const *struct_type =
+            as<IType_struct>(value_result->get_type()->skip_type_alias());
+        if (struct_type == nullptr) {
+            return IDefinition::DS_UNKNOWN;
+        }
+
+        return get_spectral_conversion_type(struct_type, param_name);
+    }
+
+    return IDefinition::DS_UNKNOWN;
+}
+
+
+/// Calculate the hash for the node determined by the path, starting from the root
 /// expression of the material instance.
 DAG_hash Generated_code_dag::Material_instance::get_sub_expression_hash(char const *path) const
 {
@@ -5260,10 +5353,10 @@ DAG_hash Generated_code_dag::Material_instance::get_sub_expression_hash(char con
         "geometry.displacement",
         "geometry.cutout_opacity",
         "geometry.normal",
-        "hair" 
+        "hair"
     };
     constexpr size_t SLOT_COUNT = sizeof(slot_names) / sizeof(slot_names[0]);
-    
+
     for (size_t i = 0; i < SLOT_COUNT; ++i) {
         if (strcmp(path, slot_names[i]) == 0) {
             return m_slot_hashes[i];
@@ -5283,7 +5376,7 @@ DAG_hash Generated_code_dag::Material_instance::get_sub_expression_hash(char con
     if (!success) {
         return DAG_hash();
     }
-    
+
     DAG_hash result;
     md5_hasher.final(result.data());
     return result;
@@ -5699,13 +5792,7 @@ Generated_code_dag::Material_instance::Instantiate_helper::Instantiate_helper(
 , m_default_param_values(get_allocator())
 , m_param_names(get_allocator())
 , m_curr_param_name(get_allocator())
-, m_cache(
-    0, Dep_analysis_cache::hasher(), Dep_analysis_cache::key_equal(), get_allocator())
-, m_properties(0)
-, m_referenced_scene_data(dag_builder.get_allocator())
-, m_referenced_strings(dag_builder.get_allocator())
-, m_ignore_referenced_strings(false)
-, m_scene_name_is_non_const(false)
+, m_analyzer(m_resolver, dag_builder.get_allocator())
 , m_instantiate_args(flags & CLASS_COMPILATION)
 , m_fold_params(get_allocator())
 {
@@ -5736,6 +5823,7 @@ Generated_code_dag::Material_instance::Instantiate_helper::~Instantiate_helper()
     m_node_factory.set_call_evaluator(m_old_evaluator);
 }
 
+// Skip temporaries.
 DAG_node const *Generated_code_dag::Material_instance::Instantiate_helper::skip_temporaries(
     DAG_node const *expr)
 {
@@ -5745,17 +5833,22 @@ DAG_node const *Generated_code_dag::Material_instance::Instantiate_helper::skip_
     return expr;
 }
 
+// Get a DAG node from an expression by absolute path.
 DAG_node const *Generated_code_dag::Material_instance::Instantiate_helper::get_value(
-    IValue const *value, Array_ref<char const *> const &path)
+    DAG_constant const *cnst, Array_ref<char const *> const &path)
 {
+    IValue const *value   = cnst->get_value();
+    DAG_DbgInfo  dbg_info = cnst->get_dbg_info();
+
     for (size_t i = 0, n = path.size(); i < n; ++i) {
         IValue_struct const *s_value = cast<IValue_struct>(value);
         value = s_value->get_value(path[i]);
     }
 
-    return m_node_factory.create_constant(value);
+    return m_node_factory.create_constant(value, dbg_info);
 }
 
+// Get a DAG node from an expression by absolute path.
 DAG_node const *Generated_code_dag::Material_instance::Instantiate_helper::get_value(
     DAG_node const *expr, Array_ref<char const *> const &path)
 {
@@ -5768,8 +5861,7 @@ DAG_node const *Generated_code_dag::Material_instance::Instantiate_helper::get_v
         }
 
         if (DAG_constant const *c = as<DAG_constant>(expr)) {
-            IValue const *v = c->get_value();
-            return get_value(v, path.slice(i));
+            return get_value(c, path.slice(i));
         }
 
         if (DAG_call const *call = as<DAG_call>(expr)) {
@@ -6095,14 +6187,14 @@ bool Generated_code_dag::Material_instance::Instantiate_helper::is_layer_qualifi
 }
 
 // Process string constants.
-void Generated_code_dag::Material_instance::Instantiate_helper::process_string_constants(
+void Generated_code_dag::Material_instance::Instance_analyzer::process_string_constants(
     IValue const *v)
 {
     if (m_ignore_referenced_strings)
         return;
 
     if (IValue_string const *sval = as<IValue_string>(v)) {
-        m_referenced_strings.insert(string(sval->get_value(), get_allocator()));
+        add_referenced_string(string(sval->get_value(), m_allocator));
         return;
     }
 
@@ -6112,6 +6204,36 @@ void Generated_code_dag::Material_instance::Instantiate_helper::process_string_c
             process_string_constants(s);
         }
     }
+}
+
+// Post-visit a Constant.
+void Generated_code_dag::Material_instance::Instance_analyzer::visit(DAG_constant *cnst)
+{
+    // nothing to do
+}
+
+// Post-visit a Temporary.
+void Generated_code_dag::Material_instance::Instance_analyzer::visit(DAG_temporary *tmp)
+{
+    // nothing to do
+}
+
+// Post-visit a call.
+void Generated_code_dag::Material_instance::Instance_analyzer::visit(DAG_call *call)
+{
+    analyze_call(call);
+}
+
+// Post-visit a Parameter.
+void Generated_code_dag::Material_instance::Instance_analyzer::visit(DAG_parameter *param)
+{
+    // nothing to do
+}
+
+// Post-visit a temporary initializer.
+void Generated_code_dag::Material_instance::Instance_analyzer::visit(int index, DAG_node *init)
+{
+    // nothing to do
 }
 
 // Copy the debug info.
@@ -6148,19 +6270,17 @@ Generated_code_dag::Material_instance::Instantiate_helper::compile(
     INLINE_scope inlining(m_node_factory, enable_inline);
 
     if (m_node_factory.is_dbg_info_enabled()) {
-        // copy the file table from the code DAG to the instance (represented by its DAG_unit
-        // in the node factory)
-        DAG_unit const &code_unit = m_code_dag.get_dag_unit();
-        DAG_unit       &inst_unit = m_node_factory.get_dag_unit();
-
-        MDL_ASSERT(inst_unit.get_file_name_count() == 0 && "instance file name table not empty");
-        inst_unit.copy_fname_table(code_unit);
+        // Copy the filename table from the DAG_unit of the compiled DAG to the instance here.
+        // this might add to many entries, but allows to copy the DAG_DbgInfo unmodified during
+        // instantiation.
+        m_dag_builder.get_file_id_table(m_code_dag.get_dag_unit());
     }
 
     // unfortunately we don't have the module of our material here, so retrieve it from the
     // name resolver
     mi::base::Handle<Module const> mod(impl_cast<Module>(
         m_resolver.get_owner_module(m_code_dag.get_material_name(m_material_index))));
+
     Module_scope scope(m_dag_builder, mod.get());
 
     handle_cutout_opacity();
@@ -6206,7 +6326,8 @@ Generated_code_dag::Material_instance::Instantiate_helper::compile(
     {
         // the constructor is not the material elemental constructor: we are in target
         // material model mode
-        m_properties |= Generated_code_dag::Material_instance::IP_TARGET_MATERIAL_MODEL;
+        m_analyzer.add_property(
+            Generated_code_dag::Material_instance::IP_TARGET_MATERIAL_MODEL, true);
     }
 
     return constr;
@@ -6537,6 +6658,8 @@ private:
     }
 
     /// Analyze a call to df::spot_edf().
+    ///
+    /// \param call  the df::spot_edf() call to process
     void analyze_spot_edf(IExpression_call const *call)
     {
         bool global_distribution = true;
@@ -6590,7 +6713,7 @@ private:
 
     /// Analyze a call to df::measured_edf().
     ///
-    /// \param call  the call to process
+    /// \param call  the df::measured_edf() call to process
     void analyze_measured_edf(IExpression_call const *call)
     {
         bool global_distribution = true;
@@ -6670,8 +6793,33 @@ private:
 
 }  // anonymous
 
+// Instance_analyzer constructor.
+Generated_code_dag::Material_instance::Instance_analyzer::Instance_analyzer(
+    ICall_name_resolver &resolver,
+    IAllocator         *allocator)
+: m_resolver(resolver)
+, m_allocator(allocator)
+, m_cache(0, Dep_analysis_cache::hasher(), Dep_analysis_cache::key_equal(), allocator)
+, m_properties(0)
+, m_referenced_scene_data(allocator)
+, m_referenced_strings(allocator)
+, m_ignore_referenced_strings(false)
+, m_scene_name_is_non_const(false)
+{
+}
+
+// Analyze an material instance for dependencies.
+void Generated_code_dag::Material_instance::Instance_analyzer::analyze_instance(
+    IMaterial_instance const *instance)
+{
+    Generated_code_dag::Material_instance const *inst =
+        impl_cast<Generated_code_dag::Material_instance>(instance);
+    DAG_ir_walker walker(m_allocator);
+    walker.walk_instance(const_cast<Generated_code_dag::Material_instance *>(inst), this);
+}
+
 // Analyze a created call for dependencies.
-void Generated_code_dag::Material_instance::Instantiate_helper::analyze_call(
+void Generated_code_dag::Material_instance::Instance_analyzer::analyze_call(
     DAG_call const *call)
 {
     switch (call->get_semantic()) {
@@ -6718,7 +6866,7 @@ void Generated_code_dag::Material_instance::Instantiate_helper::analyze_call(
 
             if (DAG_constant const *c = as<DAG_constant>(call->get_argument(0))) {
                 if (IValue_string const *name_str = as<IValue_string>(c->get_value())) {
-                    m_referenced_scene_data.insert(string(name_str->get_value(), get_allocator()));
+                    m_referenced_scene_data.insert(string(name_str->get_value(), m_allocator));
                     has_const_value = true;
                 }
             }
@@ -6754,7 +6902,7 @@ void Generated_code_dag::Material_instance::Instantiate_helper::analyze_call(
 }
 
 // Analyze a function AST for dependencies.
-void Generated_code_dag::Material_instance::Instantiate_helper::analyze_function_ast(
+void Generated_code_dag::Material_instance::Instance_analyzer::analyze_function_ast(
     Module const *owner, IDefinition const *def)
 {
     Dep_analysis_cache::const_iterator it = m_cache.find(def);
@@ -6780,7 +6928,7 @@ void Generated_code_dag::Material_instance::Instantiate_helper::analyze_function
         }
 
         if (IDeclaration_function const *func = as<IDeclaration_function>(decl)) {
-            Ast_dependence_analysis analysis(get_allocator(), owner, m_cache);
+            Ast_dependence_analysis analysis(m_allocator, owner, m_cache);
 
             analysis.visit(func);
 
@@ -6931,7 +7079,7 @@ Generated_code_dag::Material_instance::Instantiate_helper::insert_elemental_cons
                         IValue const *v = m_value_factory.create_zero(f_type);
 
                         MDL_ASSERT(!is<IValue_bad>(v) && "cannot create zero value for type");
-                        f_node = m_node_factory.create_constant(v);
+                        f_node = m_node_factory.create_constant(v, dbg_info);
                     }
                 }
             }
@@ -6997,7 +7145,7 @@ Generated_code_dag::Material_instance::Instantiate_helper::instantiate_dag(
                 // collect referenced strings
                 process_string_constants(v);
             }
-            res = m_node_factory.create_constant(v);
+            res = m_node_factory.create_constant(v, c->get_dbg_info());
         }
         break;
     case DAG_node::EK_TEMPORARY:
@@ -7091,7 +7239,7 @@ Generated_code_dag::Material_instance::Instantiate_helper::instantiate_dag(
                         DAG_node const *arg;
                         char const *param_name = call->get_parameter_name(i);
                         if (is_elemental && i == n_args - 1 && strcmp(param_name, "handle") == 0) {
-                            Flag_store ignore_ref_strings(m_ignore_referenced_strings, true);
+                            Scoped_ignore_referenced_strings ignore_scope(m_analyzer, true);
                             arg = instantiate_dag(call->get_argument(i));
                         } else {
                             arg = instantiate_dag(call->get_argument(i));
@@ -7229,6 +7377,8 @@ restart:
     case IType::TK_VECTOR:
     case IType::TK_MATRIX:
     case IType::TK_COLOR:
+    case IType::TK_SPECTRAL_SAMPLE:
+    case IType::TK_SPECTRUM:
     case IType::TK_TEXTURE:
     case IType::TK_BSDF_MEASUREMENT:
         return false;
@@ -7320,16 +7470,16 @@ Generated_code_dag::Material_instance::Instantiate_helper::instantiate_dag_argum
 
             if ((m_flags & NO_STRING_PARAMS) != 0 && contains_string_type(t)) {
                 // do not create parameters containing string values
-                res = m_node_factory.create_constant(v);
+                res = m_node_factory.create_constant(v, copy_dbg_info(cnst->get_dbg_info()));
             } else if ((m_flags & NO_BOOL_PARAMS) != 0 && is<IType_bool>(t)) {
                 // do not create plain bool parameters
-                res = m_node_factory.create_constant(v);
+                res = m_node_factory.create_constant(v, copy_dbg_info(cnst->get_dbg_info()));
             } else if ((m_flags & NO_ENUM_PARAMS) != 0 && is<IType_enum>(t)) {
                 // do not create plain enum parameters
-                res = m_node_factory.create_constant(v);
+                res = m_node_factory.create_constant(v, copy_dbg_info(cnst->get_dbg_info()));
             } else if (is<IType_struct>(t) && t->is_declarative()) {
                 // do not create parameters of declarative type
-                res = m_node_factory.create_constant(v);
+                res = m_node_factory.create_constant(v, copy_dbg_info(cnst->get_dbg_info()));
             } else {
                 // we reach a leave: create new argument(s) for it
                 if ((m_flags & NO_RESOURCE_SHARING) == 0 && resource != NULL) {
@@ -7347,12 +7497,13 @@ Generated_code_dag::Material_instance::Instantiate_helper::instantiate_dag_argum
                     }
                 } else if (m_fold_params.count(m_curr_param_name) > 0) {
                     // do not create parameter if explicitly disabled by name
-                    res = m_node_factory.create_constant(v);
+                    res = m_node_factory.create_constant(v, copy_dbg_info(cnst->get_dbg_info()));
                 } else {
                     // not a resource or sharing disabled, folding not explicitly requested by
                     // name: just create a new parameter
                     // Note: we create a parameter from a constant here, so no debug info
-                    res = m_node_factory.create_parameter(t, m_params++, DAG_DbgInfo());
+                    res = m_node_factory.create_parameter(
+                        t, m_params++, copy_dbg_info(cnst->get_dbg_info()));
                     m_default_param_values.push_back(v);
                     m_param_names.push_back(m_curr_param_name);
                 }
@@ -7851,6 +8002,18 @@ IResource_tagger *Generated_code_dag::get_resource_tagger() const
     return &m_resource_tagger;
 }
 
+// Get the DAG unit of this code DAG.
+DAG_unit &Generated_code_dag::get_dag_unit()
+{
+    return m_dag_unit;
+}
+
+// Get the DAG unit of this code DAG.
+DAG_unit const &Generated_code_dag::get_dag_unit() const
+{
+    return m_dag_unit;
+}
+
 // Find the tag for a given resource.
 int Generated_code_dag::find_resource_tag(
     IValue_resource const *res) const
@@ -7918,7 +8081,7 @@ void Generated_code_dag::serialize(
     // serialize the node factory m_node_factory by serializing all reachable DAGs
     serialize_dags(dag_serializer);
 
-    m_dag_unit.serialize_attributes(dag_serializer);
+    m_dag_unit.serialize_name_map(dag_serializer);
 
     dag_serializer.serialize(m_module_annotations);
 
@@ -8477,7 +8640,7 @@ Generated_code_dag const *Generated_code_dag::deserialize(
     // deserialize the node factory m_node_factory by deserializing all reachable DAGs
     code->deserialize_dags(dag_deserializer);
 
-    code->m_dag_unit.deserialize_attributes(dag_deserializer);
+    code->m_dag_unit.deserialize_name_map(dag_deserializer);
 
     dag_deserializer.deserialize(code->m_module_annotations);
 

@@ -33,7 +33,7 @@
 
 #include <mi/base/interface_declare.h>
 #include <mi/neuraylib/type_traits.h>
-#include <mi/neuraylib/version.h> // for MI_NEURAYLIB_DEPRECATED_ENUM_VALUE
+#include <mi/neuraylib/version.h> // for MI_NEURAYLIB_DEPRECATED_ITRANSACTION_COPY_DEFAULT_PRIVACY_LEVEL_ZERO
 
 namespace mi {
 
@@ -56,12 +56,24 @@ class IScope;
 /// Transactions are associated with a scope of the database and can be created with
 /// #mi::neuraylib::IScope::create_transaction().
 ///
-/// Transactions are not thread-safe. If you use a particular transaction from multiple threads,
-/// then you have to serialize all transaction uses. This does not only apply to methods of
-/// #mi::neuraylib::ITransaction, but all methods that implicitly use the transaction. For example,
-/// such a use can happen by methods of DB elements returned from #access() or #edit() calls, or by
-/// objects returned from factories taking the transaction as an argument, like
-/// #mi::neuraylib::IMdl_factory::create_module_builder().
+/// \par Thread safety
+///
+/// \ifnot DICE_API
+/// Transactions are thread-safe. Const methods on database elements are thread-safe (as long as
+/// they are not used concurrently with non-const methods). Non-const methods on database elements
+/// are \em not guaranteed to be thread-safe.
+///
+/// This means that a transaction can safely be used concurrently from multiple threads. The same
+/// holds for database elements obtained from #access(). Database elements obtained from #edit()
+/// are rarely shared between multiple threads, but if this is intended, then you have to
+/// serialize all uses. These rules do not only apply to the database element itself, but extend
+/// to all interface pointers obtained from it.
+/// \endif
+///
+/// \if IRAY_API
+/// The thread-safety guarantee for const methods above does not hold for geometry elements and all
+/// associated interfaces like connectivities and attribute vectors.
+/// \endif
 ///
 /// \par Concurrent accesses to database elements within a transaction
 ///
@@ -222,7 +234,7 @@ public:
     ///
     /// This templated member function is a wrapper of the non-template variant for the user's
     /// convenience. It eliminates the need to call
-    /// #mi::base::IInterface::get_interface(const Uuid&)
+    /// #mi::base::IInterface::get_interface(const mi::base::Uuid&)
     /// on the returned pointer, since the return type already is a pointer to the type \p T
     /// specified as template parameter.
     ///
@@ -252,7 +264,7 @@ public:
     {
         base::IInterface* ptr_iinterface = create( type_name, argc, argv);
         if( !ptr_iinterface)
-            return 0;
+            return nullptr;
         T* ptr_T = static_cast<T*>( ptr_iinterface->get_interface( typename T::IID()));
         ptr_iinterface->release();
         return ptr_T;
@@ -286,7 +298,7 @@ public:
     ///
     /// This templated member function is a wrapper of the non-template variant for the user's
     /// convenience. It eliminates the need to call
-    /// #mi::base::IInterface::get_interface(const Uuid&)
+    /// #mi::base::IInterface::get_interface(const mi::base::Uuid&)
     /// on the returned pointer, since the return type already is a pointer to the type \p T
     /// specified as template parameter.
     ///
@@ -306,11 +318,12 @@ public:
     /// Stores the element \p db_element in the database under the name \p name and with the privacy
     /// level \p privacy.
     ///
-    /// After a successful store operation the passed interface pointer must no longer be used,
-    /// except for releasing it. This is due to the fact that after a #store() the database
-    /// retains ownership of the stored data. You can obtain the stored version from the database
-    /// using the #access() or #edit() methods.
+    /// When this method is called the passed interface pointer must no longer be used, except for
+    /// releasing it. This is due to the fact that after a #store() the database retains ownership
+    /// of the stored data. You can obtain the stored version from the database using the #access()
+    /// or #edit() methods.
     ///
+    /// \if IRAY_API
     /// \note <b>Overwriting vs editing of existing DB elements</b> \n
     ///       While it is possible to overwrite existing DB elements, for performance reasons it is
     ///       often better to edit the already existing DB element instead. Editing a DB element
@@ -318,6 +331,7 @@ public:
     ///       update their data structures more efficiently. When overwriting an existing DB element
     ///       such information is not available and pessimistic assumptions have to be made which
     ///       may result in lower performance.
+    /// \endif
     ///
     /// \param db_element The #mi::base::IInterface to store.
     /// \param name       The name under which to store \p db_element. If there exists already a DB
@@ -371,7 +385,7 @@ public:
     ///
     /// This templated member function is a wrapper of the non-template variant for the user's
     /// convenience. It eliminates the need to call
-    /// #mi::base::IInterface::get_interface(const Uuid&)
+    /// #mi::base::IInterface::get_interface(const mi::base::Uuid&)
     /// on the returned pointer, since the return type already is a const pointer to the type \p T
     /// specified as template parameter.
     ///
@@ -414,7 +428,7 @@ public:
     ///
     /// This templated member function is a wrapper of the non-template variant for the user's
     /// convenience. It eliminates the need to call
-    /// #mi::base::IInterface::get_interface(const Uuid&)
+    /// #mi::base::IInterface::get_interface(const mi::base::Uuid&)
     /// on the returned pointer, since the return type already is a pointer to the type \p T
     /// specified as template parameter.
     ///
@@ -543,9 +557,6 @@ public:
     ///       should not be put into external storage and re-used for different or later
     ///       \neurayAdjectiveName instances.
     ///
-    /// \note The return value of this method is only valid until the next call of this method
-    ///       (or one of its overloads) on this instance.
-    ///
     /// \see has_changed_since_time_stamp(), #get_time_stamp(const char*)const
     virtual const char* get_time_stamp() const = 0;
 
@@ -558,9 +569,6 @@ public:
     /// \note The time stamp is only meaningful for the current \neurayAdjectiveName instance. It
     ///       should not be put into external storage and re-used for different or later
     ///       \neurayAdjectiveName instances.
-    ///
-    /// \note The return value of this method is only valid until the next call of this method
-    ///       (or one of its overloads) on this instance.
     ///
     /// \see has_changed_since_time_stamp(), #get_time_stamp()
     virtual const char* get_time_stamp( const char* element) const = 0;

@@ -30,12 +30,28 @@
 
 #include <base/system/version/i_version.h>
 
+#include <cstring>
+
 #include "getopt.h"
 #include "mdltlc.h"
 
 #include "mdltlc_compiler.h"
 
 #define MDLTLC_VERSION "0.1"
+
+namespace {
+
+bool was_help_option(int optind, char *argv[])
+{
+    if (optind <= 0) {
+        return false;
+    }
+
+    char const *arg = argv[optind - 1];
+    return std::strcmp(arg, "-?") == 0 || std::strcmp(arg, "--help") == 0;
+}
+
+}
 
 Mdltlc::Mdltlc(char const *program_name)
     : m_program(program_name)
@@ -116,8 +132,16 @@ int Mdltlc::run(int argc, char *argv[])
     while ((c = mi::getopt::getopt_long(argc, argv, "?v:g", long_options, &longidx)) != -1) {
         switch (c) {
         case '?':
+            if (!was_help_option(mi::getopt::optind, argv)) {
+                usage();
+                return EXIT_FAILURE;
+            }
             usage();
             return EXIT_SUCCESS;
+
+        case ':':
+            opt_error = true;
+            break;
 
         case 'v':
         {

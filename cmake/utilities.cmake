@@ -74,6 +74,14 @@ function(TARGET_BUILD_SETUP)
             )
     endif()
 
+    # pass CMake variable MDL_DF_SPECTRAL_SAMPLES_OVERRIDE if not empty
+    if (NOT (MDL_DF_SPECTRAL_SAMPLES_OVERRIDE STREQUAL ""))
+        target_compile_definitions(${TARGET_BUILD_SETUP_TARGET}
+            PRIVATE
+                "MDL_DF_SPECTRAL_SAMPLES=${MDL_DF_SPECTRAL_SAMPLES_OVERRIDE}"
+            )
+    endif()
+
 
     target_compile_options(${TARGET_BUILD_SETUP_TARGET}
         PRIVATE
@@ -113,12 +121,19 @@ function(TARGET_BUILD_SETUP)
                 "/wd4267"         # suppress warning C4267 'argument': conversion from 'size_t' to
                                   # 'int', possible loss of data
                 "/permissive-"    # show more errors
+                "$<$<AND:$<CONFIG:Release>,$<BOOL:${MDL_BUILD_SEPARATE_DEBUG_INFO}>>:/Zi>"
             )
 
         set_target_properties(${TARGET_BUILD_SETUP_TARGET} PROPERTIES
             LINK_FLAGS
                 "/ignore:4099"    # suppress warning LNK4099: PDB '' was not found with '...' or at '';
             )                     # linking object as if no debug info
+
+        if(MDL_BUILD_SEPARATE_DEBUG_INFO)
+            set_target_properties(${TARGET_BUILD_SETUP_TARGET} PROPERTIES
+                LINK_FLAGS_RELEASE "/DEBUG /OPT:REF /OPT:ICF"
+                )
+        endif()
 
         # set static or dynamic runtime
         # cmake 3.15 has an option for that. MSVC_RUNTIME_LIBRARY
@@ -200,8 +215,27 @@ function(TARGET_BUILD_SETUP)
 
         set_target_properties(${TARGET_BUILD_SETUP_TARGET} PROPERTIES
             LINK_FLAGS "-Wl,-z,relro,-z,now")
-        set_target_properties(${TARGET_BUILD_SETUP_TARGET} PROPERTIES
-            LINK_FLAGS_RELEASE "-Wl,--strip-all")
+
+        if(MDL_BUILD_SEPARATE_DEBUG_INFO)
+            target_compile_options(${TARGET_BUILD_SETUP_TARGET}
+                PRIVATE "$<$<CONFIG:Release>:-g>")
+            if(NOT (_TARGET_TYPE STREQUAL "STATIC_LIBRARY"))
+                add_custom_command(TARGET ${TARGET_BUILD_SETUP_TARGET} POST_BUILD
+                    COMMAND ${CMAKE_OBJCOPY} --only-keep-debug
+                        "$<TARGET_FILE:${TARGET_BUILD_SETUP_TARGET}>"
+                        "$<TARGET_FILE:${TARGET_BUILD_SETUP_TARGET}>.debug"
+                    COMMAND ${CMAKE_OBJCOPY} --strip-all
+                        "$<TARGET_FILE:${TARGET_BUILD_SETUP_TARGET}>"
+                    COMMAND ${CMAKE_OBJCOPY} --add-gnu-debuglink="$<TARGET_FILE:${TARGET_BUILD_SETUP_TARGET}>.debug"
+                        "$<TARGET_FILE:${TARGET_BUILD_SETUP_TARGET}>"
+                    COMMENT "Extracting debug symbols for $<TARGET_FILE_NAME:${TARGET_BUILD_SETUP_TARGET}>"
+                    CONFIGURATIONS Release
+                    )
+            endif()
+        else()
+            set_target_properties(${TARGET_BUILD_SETUP_TARGET} PROPERTIES
+                LINK_FLAGS_RELEASE "-Wl,--strip-all")
+        endif()
 
     endif()
 
@@ -222,23 +256,39 @@ function(TARGET_BUILD_SETUP)
                 "-m64"
                 "-stdlib=libc++"
                 "$<$<CONFIG:Debug>:-gdwarf-2>"
+                "$<$<AND:$<CONFIG:Release>,$<BOOL:${MDL_BUILD_SEPARATE_DEBUG_INFO}>>:-g>"
                 "-fvisibility-inlines-hidden"
                 "-fdiagnostics-fixit-info"
                 "-fdiagnostics-parseable-fixits"
-                "-Wno-unused-parameter"
+                # -Wall would be good, but still causes some warnings
+                "-Werror=format-security"
+                "-Wformat"
+                "-Wmissing-field-initializers"
+                "-Wvla"
+                "-Wwrite-strings"
+                "-Wno-covered-switch-default"
                 "-Wno-inconsistent-missing-override"
-                "-Wno-unnamed-type-template-args"
                 "-Wno-invalid-offsetof"
                 "-Wno-long-long"
-                "-Wwrite-strings"
-                "-Wmissing-field-initializers"
-                "-Wno-covered-switch-default"
                 "-Wno-non-virtual-dtor"
+                "-Wno-unnamed-type-template-args"
                 "-Wno-unusable-partial-specialization"
+                "-Wno-unused-parameter"
             )
 
-        set_target_properties(${TARGET_BUILD_SETUP_TARGET} PROPERTIES
-            LINK_FLAGS_RELEASE "-Wl,-x")
+        if(MDL_BUILD_SEPARATE_DEBUG_INFO)
+            if(NOT (_TARGET_TYPE STREQUAL "STATIC_LIBRARY"))
+                add_custom_command(TARGET ${TARGET_BUILD_SETUP_TARGET} POST_BUILD
+                    COMMAND dsymutil "$<TARGET_FILE:${TARGET_BUILD_SETUP_TARGET}>"
+                    COMMAND strip -S "$<TARGET_FILE:${TARGET_BUILD_SETUP_TARGET}>"
+                    COMMENT "Extracting debug symbols for $<TARGET_FILE_NAME:${TARGET_BUILD_SETUP_TARGET}>"
+                    CONFIGURATIONS Release
+                    )
+            endif()
+        else()
+            set_target_properties(${TARGET_BUILD_SETUP_TARGET} PROPERTIES
+                LINK_FLAGS_RELEASE "-Wl,-x")
+        endif()
 
     endif()
 endfunction()
@@ -839,6 +889,8 @@ function(CREATE_FROM_BASE_PRESET)
             PRIVATE
                 ${MDL_SRC_FOLDER}/base/system/version # for the version.h
             )
+        # the .rc file likely uses the generated version.h file
+        add_dependencies(${CREATE_FROM_BASE_PRESET_TARGET} base-system-version)
         # TODO: _NAME => short name?
         set_source_files_properties(${CREATE_FROM_BASE_PRESET_EMBED_RC}
             PROPERTIES COMPILE_DEFINITIONS
@@ -1359,6 +1411,30 @@ function(ADD_TARGET_INSTALL)
             TARGETS ${ADD_TARGET_INSTALL_TARGET}
             DESTINATION ${ADD_TARGET_INSTALL_DESTINATION}
         )
+        if(MDL_BUILD_SEPARATE_DEBUG_INFO)
+            get_target_property(_TYPE ${ADD_TARGET_INSTALL_TARGET} TYPE)
+            if(NOT _TYPE STREQUAL "STATIC_LIBRARY")
+                if(LINUX)
+                    install(
+                        FILES "$<TARGET_FILE:${ADD_TARGET_INSTALL_TARGET}>.debug"
+                        DESTINATION ${ADD_TARGET_INSTALL_DESTINATION}
+                        CONFIGURATIONS Release
+                    )
+                elseif(MACOSX)
+                    install(
+                        DIRECTORY "$<TARGET_FILE:${ADD_TARGET_INSTALL_TARGET}>.dSYM"
+                        DESTINATION ${ADD_TARGET_INSTALL_DESTINATION}
+                        CONFIGURATIONS Release
+                    )
+                elseif(WINDOWS)
+                    install(
+                        FILES "$<TARGET_PDB_FILE:${ADD_TARGET_INSTALL_TARGET}>"
+                        DESTINATION ${ADD_TARGET_INSTALL_DESTINATION}
+                        CONFIGURATIONS Release
+                    )
+                endif()
+            endif()
+        endif()
     else()
         # Module libraries require an explicit destination since there is no default. Use the same
         # destination as for shared libraries.
@@ -1377,6 +1453,32 @@ function(ADD_TARGET_INSTALL)
             EXPORT mdl-targets
             ${_DESTINATION}
         )
+        if(MDL_BUILD_SEPARATE_DEBUG_INFO AND NOT _TYPE STREQUAL "STATIC_LIBRARY")
+            if(_TYPE STREQUAL "EXECUTABLE")
+                set(_DEBUG_INFO_DESTINATION "${CMAKE_INSTALL_BINDIR}")
+            else()
+                set(_DEBUG_INFO_DESTINATION "${CMAKE_INSTALL_LIBDIR}")
+            endif()
+            if(LINUX)
+                install(
+                    FILES "$<TARGET_FILE:${ADD_TARGET_INSTALL_TARGET}>.debug"
+                    DESTINATION ${_DEBUG_INFO_DESTINATION}
+                    CONFIGURATIONS Release
+                )
+            elseif(MACOSX)
+                install(
+                    DIRECTORY "$<TARGET_FILE:${ADD_TARGET_INSTALL_TARGET}>.dSYM"
+                    DESTINATION ${_DEBUG_INFO_DESTINATION}
+                    CONFIGURATIONS Release
+                )
+            elseif(WINDOWS)
+                install(
+                    FILES "$<TARGET_PDB_FILE:${ADD_TARGET_INSTALL_TARGET}>"
+                    DESTINATION "${CMAKE_INSTALL_BINDIR}"
+                    CONFIGURATIONS Release
+                )
+            endif()
+        endif()
     endif()
 endfunction()
 
@@ -1636,7 +1738,7 @@ function(CREATE_UNIT_TEST)
     # Add the CTest test for this target.
     add_test(
         NAME ${CREATE_UNIT_TEST_TARGET}
-        COMMAND ${CREATE_UNIT_TEST_NAME}
+        COMMAND ${CREATE_UNIT_TEST_TARGET}
     )
 
     # Common label for all unit tests.

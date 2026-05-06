@@ -26,11 +26,11 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
+// This file is included in "common.hlsl" after all user defined types are declared
+// to make the resources and samplers globally available.
+
 #if !defined(RENDERER_TYPES_HLSLI)
 #define RENDERER_TYPES_HLSLI
-// This file is included at the end of "common.hlsl" to make it globally avaiable after
-// all user defined types are declared.
-
 
 //-------------------------------------------------------------------------------------------------
 // Global Resource Tables

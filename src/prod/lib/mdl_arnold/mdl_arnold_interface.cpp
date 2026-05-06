@@ -121,8 +121,6 @@ namespace
 class Internal_logger : public mi::base::Interface_implement<mi::base::ILogger>
 {
 public:
-    Internal_logger(Mdl_sdk_interface* mdl_sdk) : m_mdl_sdk(mdl_sdk) {}
-
     void message(mi::base::Message_severity level,
         const char* mc,
         const mi::base::Message_details&,
@@ -132,9 +130,6 @@ public:
         if (level <= mi::base::MESSAGE_SEVERITY_WARNING)
             print_mdl_message(level, mc, message);
     }
-
-private:
-    Mdl_sdk_interface* m_mdl_sdk; // unused
 };
 
 namespace
@@ -295,7 +290,7 @@ Mdl_sdk_interface::Mdl_sdk_interface()
     set_search_paths();
 
     // init logger
-    auto logger = mi::base::make_handle(new Internal_logger(this));
+    auto logger = mi::base::make_handle(new Internal_logger);
     mi::base::Handle<mi::neuraylib::ILogging_configuration> logging_conf(
         m_mdl_sdk->get_api_component<mi::neuraylib::ILogging_configuration>());
     logging_conf->set_receiving_logger(logger.get());

@@ -42,7 +42,14 @@ enum scatter_mode {
     scatter_reflect_transmit
 };
 
-}
+enum backscatter_modifier {
+    backscatter_none,            // No backscatter
+    backscatter_reflect,         // Reflective backscatter
+    backscatter_transmit,        // Transmissive backscatter
+    backscatter_reflect_transmit // Both reflective and transmissive backscatter
+};
+
+} // df
 
 namespace state {
 
@@ -52,7 +59,7 @@ enum coordinate_space {
     coordinate_world
 };
 
-}
+} // state
 
 namespace tex {
 
@@ -69,7 +76,7 @@ enum wrap_mode {
     wrap_clip
 };
 
-}
+} // tex
 
 } // namespace mdl
 } // namespace mi

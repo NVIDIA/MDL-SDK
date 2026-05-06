@@ -30,6 +30,7 @@
 
 #include "dblight_database.h"
 
+#include "dblight_admin_server.h"
 #include "dblight_info.h"
 #include "dblight_fragmented_job.h"
 #include "dblight_scope.h"
@@ -64,8 +65,8 @@ Database_impl::Database_impl(
   : m_info_manager( new Info_manager( this)),
     m_scope_manager( new Scope_manager( this)),
     m_transaction_manager( new Transaction_manager( this, initial_transaction_id)),
-    m_next_tag( initial_tag),
-    m_journal_enabled( enable_journal)
+    m_journal_enabled( enable_journal),
+    m_next_tag( initial_tag)
 {
     if( thread_pool) {
         m_thread_pool = thread_pool;
@@ -105,6 +106,10 @@ Database_impl::Database_impl(
     if( m_check_privacy_levels)
         LOG::mod_log->info( M_DB, LOG::Mod_log::C_DATABASE,
             "Testing of privacy levels of references during store and after edits enabled.");
+#else
+    if( !m_check_privacy_levels)
+        LOG::mod_log->info( M_DB, LOG::Mod_log::C_DATABASE,
+            "Testing of privacy levels of references during store and after edits disabled.");
 #endif
 
     CONFIG::update_value( registry, "check_reference_cycles_store", m_check_reference_cycles_store);
@@ -131,10 +136,26 @@ Database_impl::Database_impl(
     LOG::mod_log->info( M_DB, LOG::Mod_log::C_DATABASE,
         "Using THREAD::Shared_lock exclusively with THREAD::Block for main database lock.");
 #endif
+
+#ifdef DBLIGHT_ENABLE_ADMIN_SERVER
+    mi::Uint16 default_port = 12345;
+    mi::Uint16 port = default_port;
+    CONFIG::update_value( registry, "dblight_admin_server_port", port);
+    if( port != default_port) {
+        LOG::mod_log->info( M_DB, LOG::Mod_log::C_DATABASE,
+            "Admin server port is %hu", port);
+    }
+
+    m_admin_server = std::make_unique<Admin_server>( this, port);
+#endif // DBLIGHT_ENABLE_ADMIN_SERVER
 }
 
 Database_impl::~Database_impl()
 {
+#ifdef DBLIGHT_ENABLE_ADMIN_SERVER
+    m_admin_server->stop();
+#endif // DBLIGHT_ENABLE_ADMIN_SERVER
+
     // Dumping the database content here might provide some insights into assertions during
     // destruction.
     // dump( std::cerr, /*verbose*/ true, /*mask_pointer_values*/ true);
@@ -179,7 +200,8 @@ bool Database_impl::remove_scope( DB::Scope_id id)
 void Database_impl::garbage_collection( int priority)
 {
     THREAD::Block block( &m_lock);
-    m_info_manager->garbage_collection( /*update_lowest_open_transaction_ids*/ true);
+    m_info_manager->garbage_collection(
+        /*force*/ true, /*update_lowest_open_transaction_ids*/ true);
 }
 
 void Database_impl::lock( mi::Uint32 lock_id)
@@ -260,6 +282,8 @@ bool Database_impl::unlock( mi::Uint32 lock_id)
 
 void Database_impl::check_is_locked( mi::Uint32 lock_id)
 {
+    THREAD::Block block( &m_lock);
+
     auto it = m_db_locks.find( lock_id);
 
     if( it == m_db_locks.end()) {
@@ -349,9 +373,12 @@ void Database_impl::unregister_scope_listener( DB::IScope_listener* listener)
 
 mi::Sint32 Database_impl::execute_fragmented( DB::Fragmented_job* job, size_t count)
 {
-    if( !job || count == 0)
+    if( !job)
         return -1;
-    if( job->get_scheduling_mode() != DB::Fragmented_job::LOCAL)
+    DB::Fragmented_job::Scheduling_mode mode = job->get_scheduling_mode();
+    if( count == 0 && mode != DB::Fragmented_job::ONCE_PER_HOST)
+        return -1;
+    if( mode != DB::Fragmented_job::LOCAL)
         return -2;
     if( job->get_priority() < 0)
         return -3;
@@ -365,9 +392,12 @@ mi::Sint32 Database_impl::execute_fragmented( DB::Fragmented_job* job, size_t co
 mi::Sint32 Database_impl::execute_fragmented_async(
     DB::Fragmented_job* job, size_t count, DB::IExecution_listener* listener)
 {
-    if( !job || count == 0)
+    if( !job)
         return -1;
-    if( job->get_scheduling_mode() != DB::Fragmented_job::LOCAL)
+    DB::Fragmented_job::Scheduling_mode mode = job->get_scheduling_mode();
+    if( count == 0 && mode != DB::Fragmented_job::ONCE_PER_HOST)
+        return -1;
+    if( mode != DB::Fragmented_job::LOCAL)
         return -2;
     if( job->get_priority() < 0)
         return -3;
@@ -438,6 +468,37 @@ void Database_impl::dump( std::ostream& s, bool verbose, bool mask_pointer_value
     m_scope_manager->dump( s, verbose, mask_pointer_values);
     m_transaction_manager->dump( s, verbose, mask_pointer_values);
     m_info_manager->dump( s, verbose, mask_pointer_values);
+}
+
+void Database_impl::dump_html( std::ostream& s, const Html_context& context)
+{
+    m_lock.check_is_owned_shared_or_exclusive();
+
+    s << "<table border cellspacing=0 cellpadding=5>\n";
+    s << "<tr>\n";
+    s << "<th>Setting</th>\n";
+    s << "<th>Value</th>\n";
+    s << "</tr>\n";
+
+    dump_html_string_setting(
+        s, "Lock implementation", context.m_html_encoder( m_lock.get_lock_impl_str()));
+    dump_html_bool_settings( s, "Independent thread pool", m_independent_thread_pool);
+    dump_html_bool_settings(
+        s, "Independent deserialization manager", m_independent_deserialization_manager);
+    dump_html_bool_settings( s, "Check serialization store", m_check_serialization_store);
+    dump_html_bool_settings( s, "Check serialization edit", m_check_serialization_edit);
+    dump_html_bool_settings( s, "Check privacy levels", m_check_privacy_levels);
+    dump_html_bool_settings( s, "Check reference cycles store", m_check_reference_cycles_store);
+    dump_html_bool_settings( s, "Check reference cycles edit", m_check_reference_cycles_edit);
+    dump_html_bool_settings( s, "Unsafe name_to_tag()", m_unsafe_name_to_tag);
+    dump_html_size_t_setting( s, "Max journal size", m_journal_max_size);
+    dump_html_size_t_setting( s, "# Status listeners", m_status_listeners.size());
+    dump_html_size_t_setting( s, "# Scope listeners", m_scope_listeners.size());
+    dump_html_size_t_setting( s, "# Transaction listeners", m_transaction_listeners.size());
+    dump_html_size_t_setting( s, "Next tag", m_next_tag);
+    dump_html_size_t_setting( s, "# DB locks", m_db_locks.size());
+
+    s << "</table>\n";
 }
 
 DB::Database* factory(

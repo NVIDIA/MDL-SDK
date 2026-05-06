@@ -26,9 +26,9 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
- // examples/mdl_core/code_gen/example_code_gen.cpp
- //
- // Loads an MDL material and processes it up to code generation and beyond
+// examples/mdl_core/code_gen/example_code_gen.cpp
+//
+// Loads an MDL material and processes it up to code generation and beyond
 
 #include <iostream>
 #include <string>
@@ -66,6 +66,7 @@ public:
     bool m_disable_pdf = false;
     bool m_enable_aux = false;
     bool m_enable_bsdf_flags = false;
+    bool m_enable_spectral = false;
     bool m_glsl_place_uniforms_into_ssbo = false;
     bool m_enable_ro_segment = false;
     std::string m_max_const_data = "1024";
@@ -288,6 +289,8 @@ void code_generation(mi::mdl::IMDL* mdl_compiler, Options& options)
             backend_options |= BACKEND_OPTIONS_ADAPT_MICROFACET_ROUGHNESS;
         if (options.m_enable_ro_segment)
             backend_options |= BACKEND_OPTIONS_ENABLE_RO_SEGMENT;
+        if (options.m_enable_spectral)
+            backend_options |= BACKEND_OPTIONS_ENABLE_SPECTRAL;
 
         std::unordered_map<std::string, std::string> additional_backend_options;
         if (options.m_enable_bsdf_flags)
@@ -326,13 +329,13 @@ void code_generation(mi::mdl::IMDL* mdl_compiler, Options& options)
         if (!options.m_distilling_target.empty())
             mc.load_distilling_support();
 
-        // Select some default expressions to generate code for
+        // Select the known material slots except "volume.scattering" and "hair" to
+        // generate code for.
         // The functions to select depend on the renderer
         // To get started, generating 'surface.scattering' would be enough
         if (options.m_descs.empty())
         {
             auto& descs = options.m_descs;
-            descs.push_back(TD("ior", "ior"));
             descs.push_back(TD("thin_walled", "thin_walled"));
             descs.push_back(TD("surface.scattering", "surface_scattering"));
             descs.push_back(TD("surface.emission.emission", "surface_emission_emission"));
@@ -342,11 +345,13 @@ void code_generation(mi::mdl::IMDL* mdl_compiler, Options& options)
             descs.push_back(TD("backface.emission.emission", "backface_emission_emission"));
             descs.push_back(TD("backface.emission.intensity", "backface_emission_intensity"));
             descs.push_back(TD("backface.emission.mode", "backface_emission_mode"));
+            descs.push_back(TD("ior", "ior"));
             descs.push_back(TD("volume.absorption_coefficient", "volume_absorption_coefficient"));
             descs.push_back(TD("volume.scattering_coefficient", "volume_scattering_coefficient"));
-            descs.push_back(TD("geometry.normal", "geometry_normal"));
-            descs.push_back(TD("geometry.cutout_opacity", "geometry_cutout_opacity"));
+            descs.push_back(TD("volume.emission_intensity", "volume_emission_intensity"));
             descs.push_back(TD("geometry.displacement", "geometry_displacement"));
+            descs.push_back(TD("geometry.cutout_opacity", "geometry_cutout_opacity"));
+            descs.push_back(TD("geometry.normal", "geometry_normal"));
         }
 
         // Use single init
@@ -370,7 +375,7 @@ void code_generation(mi::mdl::IMDL* mdl_compiler, Options& options)
         }
 
         // Load the given module and create a material instance
-        mi::base::Handle<mi::mdl::IMaterial_instance> mat_instance(
+        Material_instance mat_instance(
             mc.create_and_init_material_instance(options.m_qualified_material_name.c_str(),
             options.m_use_class_compilation, flags));
 
@@ -380,19 +385,19 @@ void code_generation(mi::mdl::IMDL* mdl_compiler, Options& options)
             Distiller_helper dist;
             mi::mdl::Distiller_options distiller_options;
 
-            const mi::mdl::IMaterial_instance* dist_mat_instance =
-                dist.distill(
+            mi::base::Handle<mi::mdl::IMaterial_instance> dist_instance(
+                const_cast<mi::mdl::IMaterial_instance*>(dist.distill(
                     mdl_compiler,
                     mc.get_module_manager(),
                     nullptr,
-                    mat_instance.get(),
+                    mat_instance.get_material_instance().get(),
                     options.m_distilling_target.c_str(),
                     &distiller_options,
-                    nullptr);
+                    nullptr)));
 
-            if (dist_mat_instance)
+            if (dist_instance)
             {
-                mat_instance = const_cast<mi::mdl::IMaterial_instance*>(dist_mat_instance);
+                mat_instance.set_material_instance(dist_instance);
             }
             else
             {
@@ -406,9 +411,7 @@ void code_generation(mi::mdl::IMDL* mdl_compiler, Options& options)
         if (!mc.add_material(
             mat_instance,
             &options.m_descs[0],
-            options.m_descs.size(),
-            options.m_use_class_compilation,
-            flags))
+            options.m_descs.size()))
         {
             // If failed, print any compiler messages, when available
             mc.print_messages();
@@ -523,6 +526,7 @@ options:
   --disable_pdf                 Disable generation of separate PDF function.
   --enable_aux                  Enable generation of auxiliary function.
   --enable_bsdf_flags           Enable "flags" field in BSDF data structures in generated code.
+  --spectral                    Enable spectral mode in generated code.
   --glsl_place_uniforms_into_ssbo    Enable placing constants into a shader storage buffer object.
   --enable_ro_segment           Enable storing bigger constants in a read-only data segment
   --max_const_data <size>       Set the maximum size of constants in bytes in the generated code
@@ -572,6 +576,8 @@ bool Options::parse(int argc, char* argv[])
                 m_enable_aux = true;
             else if (arg == "--enable_bsdf_flags")
                 m_enable_bsdf_flags = true;
+            else if (arg == "--spectral")
+                m_enable_spectral = true;
             else if (arg == "--glsl_place_uniforms_into_ssbo")
                 m_glsl_place_uniforms_into_ssbo = true;
             else if (arg == "--enable_ro_segment")

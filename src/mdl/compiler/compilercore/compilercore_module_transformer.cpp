@@ -78,30 +78,34 @@ static Definition const *get_type_definition(
     return type_def;
 }
 
-// Compute the promotions rules when a call (represented by a definition) will be
-// promoted from one MDL version to a target version.
-unsigned Module_inliner::get_promotion_rules(
-    IMDL::MDL_version dst_version,
-    IMDL::MDL_version src_version,
-    IDefinition const *def)
+// Compute the parameter transforms needed when a call (represented by a definition)
+// will be promoted from one MDL version to a target version.
+Promotion_semantic Module_inliner::get_promotion_rules(
+    IMDL::MDL_version   dst_version,
+    IMDL::MDL_version   src_version,
+    IDefinition const   *def,
+    Param_transform_vec &xforms)
 {
     IDefinition::Semantics sema = def != NULL ? def->get_semantics() : IDefinition::DS_UNKNOWN;
+    Promotion_semantic semantic = PS_NONE;
 
-    unsigned rules = 0;
     if (src_version < dst_version) {
         // the symbol was removed BEFORE the module version, we need promotion
         // which might change the name
         if (src_version == IMDL::MDL_VERSION_1_0) {
             switch (sema) {
             case Definition::DS_INTRINSIC_DF_SPOT_EDF:
-                rules |= Module::PR_SPOT_EDF_ADD_SPREAD_PARAM;
+                // insert float spread = math::PI
+                xforms.push_back(Param_transform(1, PA_INS_SPREAD));
                 break;
             case Definition::DS_INTRINSIC_DF_MEASURED_EDF:
                 if (dst_version >= IMDL::MDL_VERSION_1_1) {
-                    rules |= Module::PC_MEASURED_EDF_ADD_MULTIPLIER;
+                    // insert float multiplier = 1.0
+                    xforms.push_back(Param_transform(1, PA_INS_MULTIPLIER));
                 }
                 if (dst_version >= IMDL::MDL_VERSION_1_2) {
-                    rules |= Module::PR_MEASURED_EDF_ADD_TANGENT_U;
+                    // insert float3 tangent_u = state::texture_tangent_u(0)
+                    xforms.push_back(Param_transform(4, PA_INS_TANGENT_U));
                 }
                 break;
             case Definition::DS_ELEM_CONSTRUCTOR:
@@ -110,7 +114,8 @@ unsigned Module_inliner::get_promotion_rules(
                     IType const          *ret_tp = f_tp->get_return_type();
 
                     if (is_material_emission_type(ret_tp)) {
-                        rules |= Module::PR_ADD_INTENSITY_RADIANT_EXTNCE;
+                        // insert intensity_mode mode = intensity_radiant_exitance
+                        xforms.push_back(Param_transform(2, PA_INS_INTENSITY_MODE));
                     }
                 }
                 break;
@@ -120,7 +125,8 @@ unsigned Module_inliner::get_promotion_rules(
         } else if (src_version == IMDL::MDL_VERSION_1_1) {
             switch (sema) {
             case Definition::DS_INTRINSIC_DF_MEASURED_EDF:
-                rules |= Module::PR_MEASURED_EDF_ADD_TANGENT_U;
+                // insert float3 tangent_u = state::texture_tangent_u(0)
+                xforms.push_back(Param_transform(4, PA_INS_TANGENT_U));
                 break;
             default:
                 break;
@@ -129,7 +135,8 @@ unsigned Module_inliner::get_promotion_rules(
         if (dst_version >= IMDL::MDL_VERSION_1_3 && src_version < IMDL::MDL_VERSION_1_3) {
             switch (sema) {
             case Definition::DS_INTRINSIC_STATE_ROUNDED_CORNER_NORMAL:
-                rules |= Module::PR_ROUNDED_CORNER_ADD_ROUNDNESS;
+                // insert float roundness = 1.0
+                xforms.push_back(Param_transform(2, PS_INS_ROUNDNESS));
                 break;
             default:
                 break;
@@ -138,7 +145,10 @@ unsigned Module_inliner::get_promotion_rules(
         if (dst_version >= IMDL::MDL_VERSION_1_4 && src_version < IMDL::MDL_VERSION_1_4) {
             switch (sema) {
             case Definition::DS_INTRINSIC_DF_FRESNEL_LAYER:
-                rules |= Module::PR_FRESNEL_LAYER_TO_COLOR | Module::PR_CNG_TO_COLOR_FRESNEL_LAYER;
+                // wrap argument a by color(a)
+                xforms.push_back(Param_transform(1, PA_WRP_COLOR_CONSTR));
+                // call color_fresnel_layer() instead of fresnel_layer()
+                semantic = PS_UPD_TO_COLOR_FRESNEL_LAYER;
                 break;
             case Definition::DS_INTRINSIC_TEX_WIDTH:
             case Definition::DS_INTRINSIC_TEX_HEIGHT:
@@ -150,8 +160,8 @@ unsigned Module_inliner::get_promotion_rules(
                     func_type->get_parameter(0, p_type, dummy);
 
                     if (is_tex_2d(p_type)) {
-                        // add uv_tile parameter for tex_2d variants
-                        rules |= Module::PR_WIDTH_HEIGHT_ADD_UV_TILE;
+                        // insert int2 uv_tile = int2(0,0)
+                        xforms.push_back(Param_transform(1, PA_INS_UV_TILE));
                     }
                 }
                 break;
@@ -168,7 +178,8 @@ unsigned Module_inliner::get_promotion_rules(
                     func_type->get_parameter(0, p_type, dummy);
 
                     if (is_tex_2d(p_type)) {
-                        rules |= Module::PR_TEXEL_ADD_UV_TILE;
+                        // insert int2 uv_tile = int2(0,0)
+                        xforms.push_back(Param_transform(2, PA_INS_UV_TILE));
                     }
                 }
                 break;
@@ -181,7 +192,8 @@ unsigned Module_inliner::get_promotion_rules(
                 IType_function const *func_type = cast<IType_function>(def->get_type());
                 IType const          *t         = func_type->get_return_type();
                 if (is_material_type(t)) {
-                    rules |= Module::PR_MATERIAL_ADD_HAIR;
+                    // insert hair_bsdf hair = hair_bsdf()
+                    xforms.push_back(Param_transform(6, PA_INS_HAIR));
                 }
             }
         }
@@ -194,8 +206,8 @@ unsigned Module_inliner::get_promotion_rules(
                 sema == IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_VCAVITIES_BSDF ||
                 sema == IDefinition::DS_INTRINSIC_DF_WARD_GEISLER_MORODER_BSDF)
             {
-                // insert multiscatter_tint default parameter
-                rules |= Module::PR_INSERT_COLOR_0_AFTER_3;
+                // insert color multiscatter_tint = color(0.0)
+                xforms.push_back(Param_transform(3, PA_INS_MULTISCATTER_TINT));
             }
         }
         if (dst_version >= IMDL::MDL_VERSION_1_7 && src_version < IMDL::MDL_VERSION_1_7) {
@@ -205,7 +217,8 @@ unsigned Module_inliner::get_promotion_rules(
                     IType_function const *func_type = cast<IType_function>(def->get_type());
                     IType const          *t         = func_type->get_return_type();
                     if (is_material_volume_type(t)) {
-                        rules |= Module::PR_MATERIAL_VOLUME_ADD_EMISSION_INTENSITY;
+                        // insert color emission_intensity = color(0.0)
+                        xforms.push_back(Param_transform(3, PA_INS_EMISSION_INTENSITY));
                     }
                 }
                 break;
@@ -218,14 +231,14 @@ unsigned Module_inliner::get_promotion_rules(
                     func_type->get_parameter(0, p_type, dummy);
 
                     if (is_tex_2d(p_type) || is_tex_3d(p_type)) {
-                        // add a selector default param
-                        rules |= Module::PR_INSERT_EMPTY_STRING_AFTER_2;
+                        // insert string selector = ""
+                        xforms.push_back(Param_transform(2, PA_INS_SELECTOR));
                     }
                 }
                 break;
             case IDefinition::DS_INTRINSIC_DF_SHEEN_BSDF:
-                // add multiscatter default parameter
-                rules |= Module::PR_INSERT_DIFF_REFL_BSDF_AFTER_3;
+                // insert bsdf multiscatter = diffuse_reflection_bsdf()
+                xforms.push_back(Param_transform(3, PA_INS_MULTISCATTER));
                 break;
             case Definition::DS_INTRINSIC_TEX_WIDTH:
             case Definition::DS_INTRINSIC_TEX_HEIGHT:
@@ -238,11 +251,11 @@ unsigned Module_inliner::get_promotion_rules(
                     func_type->get_parameter(0, p_type, dummy);
 
                     if (is_tex_2d(p_type)) {
-                        // insert a frame default parameter
-                        rules |= Module::PR_INSERT_FLOAT_0_AFTER_2;
+                        // insert float frame = 0.0
+                        xforms.push_back(Param_transform(2, PA_INS_FRAME));
                     } else if (is_tex_3d(p_type)) {
-                        // insert a frame default parameter
-                        rules |= Module::PR_INSERT_FLOAT_0_AFTER_1;
+                        // insert float frame = 0.0
+                        xforms.push_back(Param_transform(1, PA_INS_FRAME));
                     }
                 }
                 break;
@@ -259,11 +272,11 @@ unsigned Module_inliner::get_promotion_rules(
                     func_type->get_parameter(0, p_type, dummy);
 
                     if (is_tex_2d(p_type)) {
-                        // insert a frame default parameter
-                        rules |= Module::PR_INSERT_FLOAT_0_AFTER_6;
+                        // insert float frame = 0.0
+                        xforms.push_back(Param_transform(6, PA_INS_FRAME));
                     } else if (is_tex_3d(p_type)) {
-                        // insert a frame default parameter
-                        rules |= Module::PR_INSERT_FLOAT_0_AFTER_8;
+                        // insert float frame = 0.0
+                        xforms.push_back(Param_transform(8, PA_INS_FRAME));
                     }
                 }
                 break;
@@ -280,11 +293,11 @@ unsigned Module_inliner::get_promotion_rules(
                     func_type->get_parameter(0, p_type, dummy);
 
                     if (is_tex_2d(p_type)) {
-                        // insert a frame default parameter
-                        rules |= Module::PR_INSERT_FLOAT_0_AFTER_3;
+                        // insert float frame = 0.0
+                        xforms.push_back(Param_transform(3, PA_INS_FRAME));
                     } else if (is_tex_3d(p_type)) {
-                        // insert a frame default parameter
-                        rules |= Module::PR_INSERT_FLOAT_0_AFTER_2;
+                        // insert float frame = 0.0
+                        xforms.push_back(Param_transform(2, PA_INS_FRAME));
                     }
                 }
                 break;
@@ -295,8 +308,12 @@ unsigned Module_inliner::get_promotion_rules(
         if (dst_version >= IMDL::MDL_VERSION_1_8 && src_version < IMDL::MDL_VERSION_1_8) {
             switch (sema) {
             case Definition::DS_IN_GROUP_ANNOTATION:
-                // add collapsed default parameter
-                rules |= Module::PR_ADD_FALSE_AS_LAST;
+                {
+                    IType_function const *func_type = cast<IType_function>(def->get_type());
+                    size_t n_params = func_type->get_parameter_count();
+                    // insert bool collapsed = false
+                    xforms.push_back(Param_transform(n_params, PA_INS_COLLAPSED));
+                }
                 break;
             default:
                 break;
@@ -305,34 +322,89 @@ unsigned Module_inliner::get_promotion_rules(
         if (dst_version >= IMDL::MDL_VERSION_1_10 && src_version < IMDL::MDL_VERSION_1_10) {
             switch (sema) {
             case Definition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF:
-                // insert multiscatter_tint default parameter
-                rules |= Module::PR_INSERT_COLOR_0_AFTER_2;
+                // insert color multiscatter_tint = color(0.0)
+                xforms.push_back(Param_transform(2, PA_INS_MULTISCATTER_TINT));
                 break;
             case Definition::DS_INTRINSIC_DF_DIRECTIONAL_FACTOR:
                 {
                     IType_function const *func_type = cast<IType_function>(def->get_type());
                     if (is<IType_bsdf>(func_type->get_return_type())) {
-                        // insert f82_factor default parameter
-                        rules = Module::PR_INSERT_COLOR_1_AFTER_2;
+                        // insert color f82_factor = color(1.0)
+                        xforms.push_back(Param_transform(2, PA_INS_F82_FACTOR));
                     }
                 }
                 break;
             case Definition::DS_INTRINSIC_DF_COLOR_CUSTOM_CURVE_LAYER:
-                // insert f82_factor default parameter
-                rules = Module::PR_INSERT_COLOR_1_AFTER_2;
+                // insert color f82_factor = color(1.0)
+                xforms.push_back(Param_transform(2, PA_INS_F82_FACTOR));
                 break;
             default:
                 break;
             }
-            if (rules & Module::PR_INSERT_DIFF_REFL_BSDF_AFTER_3) {
-                // for MDL 1.10+ we have to insert the 1.10 variant
-                rules =
-                    (rules & ~Module::PR_INSERT_DIFF_REFL_BSDF_AFTER_3) |
-                    Module::PR_INSERT_DIFF_REFL_BSDF_10_AFTER_3;
+        }
+        if (dst_version >= IMDL::MDL_VERSION_1_11 && src_version < IMDL::MDL_VERSION_1_11) {
+            switch (sema) {
+            case Definition::DS_INTRINSIC_DF_SPECULAR_BSDF:
+                // insert backscatter_modifier backscatter = ..._NONE
+                xforms.push_back(Param_transform(2, PA_INS_BACKSCATTER));
+                break;
+            case Definition::DS_INTRINSIC_DF_FRESNEL_FACTOR:
+                // insert backscatter_modifier backscatter = ..._NONE
+                xforms.push_back(Param_transform(3, PA_INS_BACKSCATTER));
+                break;
+            case Definition::DS_INTRINSIC_DF_DIRECTIONAL_FACTOR:
+                {
+                    IType_function const *func_type = cast<IType_function>(def->get_type());
+                    if (is<IType_bsdf>(func_type->get_return_type())) {
+                        // insert backscatter_modifier backscatter = ..._NONE
+                        xforms.push_back(Param_transform(5, PA_INS_BACKSCATTER));
+                    }
+                }
+                break;
+            case Definition::DS_INTRINSIC_DF_MEASURED_CURVE_FACTOR:
+            case Definition::DS_INTRINSIC_DF_MEASURED_FACTOR:
+                // insert backscatter_modifier backscatter = ..._NONE
+                xforms.push_back(Param_transform(2, PA_INS_BACKSCATTER));
+                break;
+            case Definition::DS_INTRINSIC_DF_FRESNEL_LAYER:
+            case Definition::DS_INTRINSIC_DF_COLOR_FRESNEL_LAYER:
+            case Definition::DS_INTRINSIC_DF_MEASURED_CURVE_LAYER:
+            case Definition::DS_INTRINSIC_DF_COLOR_MEASURED_CURVE_LAYER:
+                // insert backscatter_modifier backscatter = ..._NONE
+                xforms.push_back(Param_transform(5, PA_INS_BACKSCATTER));
+                break;
+            case Definition::DS_INTRINSIC_DF_CUSTOM_CURVE_LAYER:
+                // insert backscatter_modifier backscatter = ..._NONE
+                xforms.push_back(Param_transform(7, PA_INS_BACKSCATTER));
+                break;
+            case Definition::DS_INTRINSIC_DF_COLOR_CUSTOM_CURVE_LAYER:
+                // insert backscatter_modifier backscatter = ..._NONE
+                xforms.push_back(Param_transform(8, PA_INS_BACKSCATTER));
+                break;
+            case Definition::DS_INTRINSIC_DF_SIMPLE_GLOSSY_BSDF:
+            case Definition::DS_INTRINSIC_DF_MICROFACET_BECKMANN_SMITH_BSDF:
+            case Definition::DS_INTRINSIC_DF_MICROFACET_GGX_SMITH_BSDF:
+            case Definition::DS_INTRINSIC_DF_MICROFACET_BECKMANN_VCAVITIES_BSDF:
+            case Definition::DS_INTRINSIC_DF_MICROFACET_GGX_VCAVITIES_BSDF:
+                // insert backscatter_modifier backscatter = ..._NONE
+                xforms.push_back(Param_transform(6, PA_INS_BACKSCATTER));
+                break;
+            default:
+                break;
             }
         }
     }
-    return rules;
+
+#ifdef ENABLE_ASSERT
+    // Note: Param_transforms must be sorted by ascending index as this property is assumed
+    // in all transformations. Hence, the following assertion must hold.
+    for (size_t i = 1, n = xforms.size(); i < n; ++i) {
+        MDL_ASSERT(xforms[i - 1].get_index() < xforms[i].get_index() &&
+            "xforms must be sorted by ascending index");
+    }
+#endif
+
+    return semantic;
 }
 
 // Promote a call from a MDL version to the target MDL version.
@@ -341,10 +413,12 @@ IExpression_reference const *Module_inliner::promote_call_reference(
     IMDL::MDL_version           src_version,
     IExpression_reference const *ref,
     IClone_modifier             *modifier,
-    unsigned                    &rules)
+    Param_transform_vec         &xforms,
+    Promotion_semantic          &semantic)
 {
     IType_name const *tn = ref->get_name();
-    rules = Module::PR_NO_CHANGE;
+    xforms.clear();
+    semantic = PS_NONE;
     if (tn->is_array() || ref->is_array_constructor()) {
         return ref;
     }
@@ -356,9 +430,9 @@ IExpression_reference const *Module_inliner::promote_call_reference(
 
     IMDL::MDL_version dst_version = dst_mod.get_mdl_version();
 
-    rules = get_promotion_rules(dst_version, src_version, def);
+    semantic = get_promotion_rules(dst_version, src_version, def, xforms);
 
-    if (rules == Module::PR_NO_CHANGE) {
+    if (xforms.empty() && semantic == PS_NONE) {
         return ref;
     }
 
@@ -368,7 +442,7 @@ IExpression_reference const *Module_inliner::promote_call_reference(
     ISymbol const         *sym         = sn->get_symbol();
     char const            *name        = sym->get_name();
 
-    if (rules & Module::PR_CNG_TO_COLOR_FRESNEL_LAYER) {
+    if (semantic == PS_UPD_TO_COLOR_FRESNEL_LAYER) {
         name = "color_fresnel_layer";
     }
 
@@ -869,27 +943,36 @@ IExpression *Module_inliner::clone_expr_reference(IExpression_reference const *r
 IExpression *Module_inliner::clone_expr_call(IExpression_call const *c_expr)
 {
     // check if the call needs promotion
-    unsigned int rules = Module::PR_NO_CHANGE;
+    Param_transform_vec xforms(m_target_module->get_allocator());
+    Promotion_semantic semantic = PS_NONE;
     if (IExpression_reference const *ref = as<IExpression_reference>(c_expr->get_reference())) {
         IMDL::MDL_version src_version = m_module->get_mdl_version();
 
-        ref = promote_call_reference(*m_target_module, src_version, ref, this, rules);
+        ref = promote_call_reference(
+            *m_target_module, src_version, ref, this, xforms, semantic);
 
         IExpression const *new_ref;
-        if (rules != Module::PR_NO_CHANGE) {
+        if (!xforms.empty() || semantic != PS_NONE) {
             // was modified
             new_ref = ref;
 
-            if (rules & Module::PR_FRESNEL_LAYER_TO_COLOR) {
+            if (semantic == PS_UPD_TO_COLOR_FRESNEL_LAYER) {
                 register_import("::df", "color_fresnel_layer");
             }
-            if (rules & Module::PR_MEASURED_EDF_ADD_TANGENT_U) {
-                register_import("::state", "texture_tangent_u");
-            }
-            if (rules & (
-                Module::PR_INSERT_DIFF_REFL_BSDF_AFTER_3 |
-                Module::PR_INSERT_DIFF_REFL_BSDF_10_AFTER_3)) {
-                register_import("::df", "diffuse_reflection_bsdf");
+            for (size_t k = 0, n = xforms.size(); k < n; ++k) {
+                switch (xforms[k].get_action()) {
+                case PA_INS_TANGENT_U:
+                    register_import("::state", "texture_tangent_u");
+                    break;
+                case PA_INS_MULTISCATTER:
+                    register_import("::df", "diffuse_reflection_bsdf");
+                    break;
+                case mi::mdl::PA_INS_BACKSCATTER:
+                    register_import("::df", "backscatter_modifier");
+                    break;
+                default:
+                    break;
+                }
             }
         } else {
             // no changes, just clone it
@@ -897,10 +980,14 @@ IExpression *Module_inliner::clone_expr_call(IExpression_call const *c_expr)
         }
         IExpression_call *call = m_ef.create_call(new_ref);
 
-        for (int i = 0, j = 0, n = c_expr->get_argument_count(); i < n; ++i, ++j) {
-            IArgument const *arg = m_target_module->clone_arg(c_expr->get_argument(i), this);
-            call->add_argument(arg);
-            j = m_target_module->promote_call_arguments(call, arg, j, rules, /*creator=*/NULL);
+        if (!xforms.empty()) {
+            apply_param_transforms(*m_target_module, c_expr, call, this, xforms);
+        } else {
+            // no parameter transforms necessary, just clone the arguments
+            for (int i = 0, n = c_expr->get_argument_count(); i < n; ++i) {
+                IArgument const *arg = m_target_module->clone_arg(c_expr->get_argument(i), this);
+                call->add_argument(arg);
+            }
         }
         return call;
     }

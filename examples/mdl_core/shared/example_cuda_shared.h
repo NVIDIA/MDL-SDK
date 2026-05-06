@@ -31,9 +31,10 @@
 #ifndef EXAMPLE_CUDA_SHARED_H
 #define EXAMPLE_CUDA_SHARED_H
 
-#include <initializer_list>
+#define _USE_MATH_DEFINES
+#include <cmath>
+
 #include <iostream>
-#include <map>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -56,13 +57,14 @@
 // objects and the size of the texture.
 struct Texture
 {
-    Texture(cudaTextureObject_t  filtered_object,
-            cudaTextureObject_t  unfiltered_object,
-            uint3                size)
-        : filtered_object(filtered_object)
-        , unfiltered_object(unfiltered_object)
-        , size(size)
-        , inv_size(make_float3(1.0f / size.x, 1.0f / size.y, 1.0f / size.z))
+    Texture(
+        cudaTextureObject_t  filtered_object,
+        cudaTextureObject_t  unfiltered_object,
+        uint3                size)
+    : filtered_object(filtered_object)
+    , unfiltered_object(unfiltered_object)
+    , size(size)
+    , inv_size(make_float3(1.0f / size.x, 1.0f / size.y, 1.0f / size.z))
     {}
 
     cudaTextureObject_t  filtered_object;    // uses filter mode cudaFilterModeLinear

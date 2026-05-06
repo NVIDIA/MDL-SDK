@@ -67,7 +67,12 @@ DAG_node const* Simple_rule::matcher(
     const mi::mdl::Distiller_options *options,
     Rule_result_code &result_code) const
 {
-    auto match_rule1 = [&] (DAG_node const *node, IDistiller_plugin_api::Match_properties &node_props) -> const DAG_node * { return node; };
+    auto match_rule1 = [&] (DAG_node const *node, IDistiller_plugin_api::Match_properties &node_props) -> const DAG_node * {
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0 ,{ mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::No_match, ""});
+        }
+        return node;
+        };
 
 // 003_simple.mdltl:8
 //RUID 28195
@@ -75,13 +80,25 @@ DAG_node const* Simple_rule::matcher(
 
         // match for bsdf()
         if (node_props0.sema != IDefinition::DS_INVALID_REF_CONSTRUCTOR || node_props0.type_kind != IType::TK_BSDF) {
+            if (event_handler != nullptr) {
+                fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_mismatch,
+                "bsdf()"});
+            }
             return match_rule1(node0, node_props0);
+        }
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "bsdf()"});
         }
         DAG_DbgInfo root_dbg_info = node0->get_dbg_info();
         (void) root_dbg_info;
 
-        if (event_handler != nullptr)
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Rule_match,
+            ""});
+
             fire_match_event(*event_handler, 0);
+        }
         return e.create_call("::df::diffuse_reflection_bsdf(color,float,color,string)",
             IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF, Args_wrapper<4>::mk_args(
                 e, m_node_types, diffuse_reflection_bsdf, e.create_color_constant(0,0,0),
@@ -132,6 +149,16 @@ void Simple_rule::fire_debug_print(
     Rule_info const &ri = g_rule_info[idx];
     event_handler.debug_print(plugin_api, "Simple_rule", ri.ruid, ri.rname, ri.fname,
         ri.fline, var_name, value);
+}
+
+void Simple_rule::fire_detailed_trace_event(
+    mi::mdl::IRule_matcher_event &event_handler,
+    std::size_t id,
+    mi::mdl::IRule_matcher_event::Detailed_trace_event trace_event)
+{
+    Rule_info const &ri = g_rule_info[id];
+    event_handler.detailed_trace_event("Simple_rule", ri.ruid, ri.rname, ri.fname,
+        ri.fline, trace_event);
 }
 
 

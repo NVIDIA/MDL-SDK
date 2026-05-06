@@ -207,7 +207,7 @@ mi::base::IInterface* Factory::create(
     mi::Uint32 argc,
     const mi::base::IInterface* argv[]) const
 {
-    if( !type_name)
+    if( !type_name || !type_name[0])
         return nullptr;
 
     std::string type_name_string( type_name);
@@ -1333,6 +1333,9 @@ mi::IData_simple* Factory::clone( const mi::IData_simple* source, mi::Uint32 opt
 
     // handle other subtypes of IData_simple
     auto* target = create<mi::IData_simple>( /*transaction*/ nullptr, source->get_type_name());
+    if( !target)
+        return nullptr;
+
     [[maybe_unused]] mi::Uint32 result = assign_from_to( source, target, options);
     MI_ASSERT( result == 0);
     return target;
@@ -1813,8 +1816,8 @@ mi::Sint32 Factory::compare( const mi::IPointer* lhs, const mi::IPointer* rhs)
 
     // if at least one of the pointers is \c nullptr compare the interface pointers
     if( !lhs_interface || !rhs_interface) {
-        if( !lhs_interface ||  rhs_interface) return -1;
-        if(  lhs_interface || !rhs_interface) return +1;
+        if( !lhs_interface &&  rhs_interface) return -1;
+        if(  lhs_interface && !rhs_interface) return +1;
         return 0;
     }
 
@@ -1841,8 +1844,8 @@ mi::Sint32 Factory::compare( const mi::IConst_pointer* lhs, const mi::IConst_poi
 
     // if at least one of the pointers is \c nullptr compare the interface pointers
     if( !lhs_interface || !rhs_interface) {
-        if( !lhs_interface ||  rhs_interface) return -1;
-        if(  lhs_interface || !rhs_interface) return +1;
+        if( !lhs_interface &&  rhs_interface) return -1;
+        if(  lhs_interface && !rhs_interface) return +1;
         return 0;
     }
 
@@ -2025,7 +2028,7 @@ void Factory::dump(
         case mi::IColor::IID::hash32: {
             mi::base::Handle color( data->get_interface<mi::IColor>());
             mi::math::Color c = color->get_value();
-            s << '(' << c.r << ", " << c.g << ", " << c.b << ')';
+            s << '(' << c.r << ", " << c.g << ", " << c.b << ", " << c.a << ')';
             return;
         }
 

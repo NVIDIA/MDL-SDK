@@ -38,8 +38,6 @@
 #include <mutex>
 #include <set>
 #include <string>
-#include <thread>
-#include <unordered_map>
 #include <vector>
 
 #include <mi/base/ilogger.h>
@@ -595,7 +593,6 @@ private:
 #define MDL_CTX_OPTION_METERS_PER_SCENE_UNIT               "meters_per_scene_unit"
 #define MDL_CTX_OPTION_WAVELENGTH_MIN                      "wavelength_min"
 #define MDL_CTX_OPTION_WAVELENGTH_MAX                      "wavelength_max"
-#define MDL_CTX_OPTION_INCLUDE_GEO_NORMAL                  "include_geometry_normal"
 #define MDL_CTX_OPTION_BUNDLE_RESOURCES                    "bundle_resources"
 #define MDL_CTX_OPTION_EXPORT_RESOURCES_WITH_MODULE_PREFIX "export_resources_with_module_prefix"
 #define MDL_CTX_OPTION_HANDLE_FILENAME_CONFLICTS           "handle_filename_conflicts"
@@ -1027,6 +1024,9 @@ public:
     /// Imports a type from a different value factory into this DAG builder.
     const mi::mdl::IType* import( const mi::mdl::IType* value);
 
+    /// Imports a debug info from a different DAG_unit into this DAG builder.
+    mi::mdl::DAG_DbgInfo import(mi::mdl::DAG_DbgInfo dbg);
+
     /// Disable optimizations on DAG_node construction and return the old value.
     bool enable_opt( bool flag) { return m_dag_builder->enable_opt( flag); }
 
@@ -1150,40 +1150,37 @@ class Mdl_call_resolver : public mi::mdl::ICall_name_resolver
 public:
     /// Constructor.
     ///
-    /// \param transaction  the transaction to use for name lookup
-    Mdl_call_resolver(DB::Transaction* transaction) : m_transaction( transaction) { }
+    /// \param transaction         The DB transaction to use.
+    Mdl_call_resolver( DB::Transaction* transaction) : m_transaction( transaction) { }
 
     virtual ~Mdl_call_resolver();
 
-    /// Find the owner module of a given entity name.
-    /// If the entity name does not contain a colon, you should return the builtins module,
-    /// which you can identify by IModule::is_builtins().
+    /// Finds the owning module of a function definition.
     ///
-    /// \param entity_name    the entity name (note: this cannot be a module name)
-    ///
-    /// \returns the owning module of this entity if found, \c nullptr otherwise
-    const mi::mdl::IModule* get_owner_module(const char* name) const override;
+    /// \param name   The core name of a function definition.
+    /// \return       The owning module (retained), or \c nullptr in case of failures.
+    const mi::mdl::IModule* get_owner_module( const char* name) const override;
 
-    /// Find the owner code DAG of a given entity name.
-    /// If the entity name does not contain a colon, you should return the builtins DAG,
-    /// which you can identify by calling its owner module's IModule::is_builtins().
+    /// Find the owner code DAG of a function definition.
     ///
-    /// \param entity_name    the entity name (note: this cannot be a module name)
-    ///
-    /// \returns the owning module of this entity if found, \c nullptr otherwise
-    const mi::mdl::IGenerated_code_dag* get_owner_dag(const char* entity_name) const override;
+    /// \param entity_name    The core entity name (\em not a module name).
+    /// \return               The owning module of this entity (retained), or \c nullptr in case of
+    ///                       failure.
+    const mi::mdl::IGenerated_code_dag* get_owner_dag( const char* entity_name) const override;
 
 private:
-    DB::Tag get_module_tag(const char* entity_name) const;
+    DB::Tag get_module_tag( const char* entity_name) const;
 
     DB::Transaction* m_transaction;
 
+    // Used to retain modules returned by #get_owner_module().
     using Module_set = std::set<const mi::mdl::IModule*>;
     mutable Module_set m_resolved_modules;
 };
 
-/// Extended version of Mdl_call_resolver: looks first in a passed Module (which might not
-/// be in the data base yet).
+/// Extended version of Mdl_call_resolver.
+///
+/// Looks first in a passed module (which might not be in the database yet).
 class Mdl_call_resolver_ext : public Mdl_call_resolver
 {
     using Base = Mdl_call_resolver;
@@ -1191,7 +1188,8 @@ class Mdl_call_resolver_ext : public Mdl_call_resolver
 public:
     /// Constructor.
     ///
-    /// \param transaction  the transaction to use for name lookup
+    /// \param transaction         The DB transaction to use.
+    /// \param module  the transaction to use for name lookup
     Mdl_call_resolver_ext(
         DB::Transaction* transaction,
         const mi::mdl::IModule* module);
@@ -1199,8 +1197,8 @@ public:
     /// Finds the owning module of a function definition.
     ///
     /// \param name   The core name of a function definition.
-    /// \return       The owning module, or \c nullptr in case of failures.
-    const mi::mdl::IModule* get_owner_module(const char* name) const override;
+    /// \return       The owning module (retained), or \c nullptr in case of failures.
+    const mi::mdl::IModule* get_owner_module( const char* name) const override;
 
 private:
     const mi::mdl::IModule* m_module;

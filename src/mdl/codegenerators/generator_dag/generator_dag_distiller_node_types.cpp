@@ -327,6 +327,7 @@ Node_types::Node_types() {
           "mi::mdl::IDefinition::DS_INTRINSIC_DF_SPECULAR_BSDF", 0,
           Node_param( "color", "tint", "color(1.0)"),
           Node_param( "::df::scatter_mode", "mode", "::df::scatter_reflect"),
+          Node_param( "::df::backscatter_modifier", "backscatter", "::df::backscatter_none"),
           Node_param( "string", "handle", ""));
     push( simple_glossy_bsdf, "simple_glossy_bsdf", "::df::simple_glossy_bsdf",
           mi::mdl::IDefinition::DS_INTRINSIC_DF_SIMPLE_GLOSSY_BSDF,
@@ -337,6 +338,7 @@ Node_types::Node_types() {
           Node_param(  "color", "multiscatter_tint", "color(0.0)"),
           Node_param( "float3", "tangent_u", "::state::texture_tangent_u(0)"),
           Node_param( "::df::scatter_mode", "mode", "::df::scatter_reflect"),
+          Node_param( "::df::backscatter_modifier", "backscatter", "::df::backscatter_none"),
           Node_param( "string", "handle", ""));
     push( backscattering_glossy_reflection_bsdf, "backscattering_glossy_reflection_bsdf",
           "::df::backscattering_glossy_reflection_bsdf",
@@ -384,6 +386,7 @@ Node_types::Node_types() {
           Node_param(  "color", "multiscatter_tint", "color(0.0)"),
           Node_param( "float3", "tangent_u", "::state::texture_tangent_u(0)"),
           Node_param( "::df::scatter_mode", "mode", "::df::scatter_reflect"),
+          Node_param( "::df::backscatter_modifier", "backscatter", "::df::backscatter_none"),
           Node_param( "string", "handle", ""));
     push( microfacet_ggx_smith_bsdf, "microfacet_ggx_smith_bsdf", "::df::microfacet_ggx_smith_bsdf",
           mi::mdl::IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_SMITH_BSDF,
@@ -394,6 +397,7 @@ Node_types::Node_types() {
           Node_param(  "color", "multiscatter_tint", "color(0.0)"),
           Node_param( "float3", "tangent_u", "::state::texture_tangent_u(0)"),
           Node_param( "::df::scatter_mode", "mode", "::df::scatter_reflect"),
+          Node_param( "::df::backscatter_modifier", "backscatter", "::df::backscatter_none"),
           Node_param( "string", "handle", ""));
     push( microfacet_beckmann_vcavities_bsdf, "microfacet_beckmann_vcavities_bsdf",
           "::df::microfacet_beckmann_vcavities_bsdf",
@@ -405,6 +409,7 @@ Node_types::Node_types() {
           Node_param(  "color", "multiscatter_tint", "color(0.0)"),
           Node_param( "float3", "tangent_u", "::state::texture_tangent_u(0)"),
           Node_param( "::df::scatter_mode", "mode", "::df::scatter_reflect"),
+          Node_param( "::df::backscatter_modifier", "backscatter", "::df::backscatter_none"),
           Node_param( "string", "handle", ""));
     push( microfacet_ggx_vcavities_bsdf, "microfacet_ggx_vcavities_bsdf",
           "::df::microfacet_ggx_vcavities_bsdf",
@@ -416,6 +421,7 @@ Node_types::Node_types() {
           Node_param(  "color", "multiscatter_tint", "color(0.0)"),
           Node_param( "float3", "tangent_u", "::state::texture_tangent_u(0)"),
           Node_param( "::df::scatter_mode", "mode", "::df::scatter_reflect"),
+          Node_param( "::df::backscatter_modifier", "backscatter", "::df::backscatter_none"),
           Node_param( "string", "handle", ""));
     push( ward_geisler_moroder_bsdf, "ward_geisler_moroder_bsdf",
           "::df::ward_geisler_moroder_bsdf",
@@ -452,23 +458,27 @@ Node_types::Node_types() {
           Node_param(  "color", "grazing_tint", "color(1.0)"),
           Node_param(  "color", "f82_factor", "color(1.0)"),
           Node_param(  "float", "exponent", "5.0"),
-          Node_param(  "bsdf", "base", "bsdf()"));
+          Node_param(  "bsdf", "base", "bsdf()"),
+          Node_param( "::df::backscatter_modifier", "backscatter", "::df::backscatter_none"));
     push( measured_curve_factor, "measured_curve_factor", "::df::measured_curve_factor",
           mi::mdl::IDefinition::DS_INTRINSIC_DF_MEASURED_CURVE_FACTOR,
           "mi::mdl::IDefinition::DS_INTRINSIC_DF_MEASURED_CURVE_FACTOR", 1,
           Node_param(  "color[<N>]", "curve_values", ""),
-          Node_param(  "bsdf", "base", "bsdf()"));
+          Node_param(  "bsdf", "base", "bsdf()"),
+          Node_param( "::df::backscatter_modifier", "backscatter", "::df::backscatter_none"));
     push( measured_factor, "measured_factor", "::df::measured_factor",
           mi::mdl::IDefinition::DS_INTRINSIC_DF_MEASURED_FACTOR,
           "mi::mdl::IDefinition::DS_INTRINSIC_DF_MEASURED_FACTOR", 1,
           Node_param(  "texture_2d", "values", ""),
-          Node_param(  "bsdf", "base", "bsdf()"));
+          Node_param(  "bsdf", "base", "bsdf()"),
+          Node_param( "::df::backscatter_modifier", "backscatter", "::df::backscatter_none"));
     push( fresnel_factor, "fresnel_factor", "::df::fresnel_factor",
           mi::mdl::IDefinition::DS_INTRINSIC_DF_FRESNEL_FACTOR,
           "mi::mdl::IDefinition::DS_INTRINSIC_DF_FRESNEL_FACTOR", 2,
           Node_param(  "color", "ior", ""),
           Node_param(  "color", "extinction_coefficient", ""),
-          Node_param(  "bsdf", "base", "bsdf()"));
+          Node_param(  "bsdf", "base", "bsdf()"),
+          Node_param( "::df::backscatter_modifier", "backscatter", "::df::backscatter_none"));
     push( coat_absorption_factor, "coat_absorption_factor", "::df::coat_absorption_factor",
           mi::mdl::IDefinition::DS_INTRINSIC_DF_COAT_ABSORPTION_FACTOR,
           "mi::mdl::IDefinition::DS_INTRINSIC_DF_COAT_ABSORPTION_FACTOR", 3,
@@ -692,7 +702,8 @@ Node_types::Node_types() {
           Node_param(  "float", "weight", "1.0"),
           Node_param(   "bsdf", "layer", "bsdf()"),
           Node_param(   "bsdf", "base", "bsdf()"),
-          Node_param( "float3", "normal", "::state::normal()"));
+          Node_param( "float3", "normal", "::state::normal()"),
+          Node_param( "::df::backscatter_modifier", "backscatter", "::df::backscatter_none"));
     push( color_fresnel_layer, "color_fresnel_layer",  "::df::color_fresnel_layer",
           mi::mdl::IDefinition::DS_INTRINSIC_DF_COLOR_FRESNEL_LAYER,
           "mi::mdl::IDefinition::DS_INTRINSIC_DF_COLOR_FRESNEL_LAYER", 1,
@@ -700,7 +711,8 @@ Node_types::Node_types() {
           Node_param(  "color", "weight", "color(1.0)"),
           Node_param(   "bsdf", "layer", "bsdf()"),
           Node_param(   "bsdf", "base", "bsdf()"),
-          Node_param( "float3", "normal", "::state::normal()"));
+          Node_param( "float3", "normal", "::state::normal()"),
+          Node_param( "::df::backscatter_modifier", "backscatter", "::df::backscatter_none"));
     push( custom_curve_layer, "custom_curve_layer", "::df::custom_curve_layer",
           mi::mdl::IDefinition::DS_INTRINSIC_DF_CUSTOM_CURVE_LAYER,
           "mi::mdl::IDefinition::DS_INTRINSIC_DF_CUSTOM_CURVE_LAYER", 1,
@@ -710,7 +722,8 @@ Node_types::Node_types() {
           Node_param(  "float", "weight", "1.0"),
           Node_param(  "bsdf", "layer", "bsdf()"),
           Node_param(  "bsdf", "base", "bsdf()"),
-          Node_param( "float3", "normal", "::state::normal()"));
+          Node_param( "float3", "normal", "::state::normal()"),
+          Node_param( "::df::backscatter_modifier", "backscatter", "::df::backscatter_none"));
     push( color_custom_curve_layer, "color_custom_curve_layer",
             "::df::color_custom_curve_layer",
           mi::mdl::IDefinition::DS_INTRINSIC_DF_COLOR_CUSTOM_CURVE_LAYER,
@@ -722,7 +735,8 @@ Node_types::Node_types() {
           Node_param(  "color", "weight", "color(1.0)"),
           Node_param(  "bsdf", "layer", "bsdf()"),
           Node_param(  "bsdf", "base", "bsdf()"),
-          Node_param( "float3", "normal", "::state::normal()"));
+          Node_param( "float3", "normal", "::state::normal()"),
+          Node_param( "::df::backscatter_modifier", "backscatter", "::df::backscatter_none"));
     push( bsdf_measured_curve_layer, "measured_curve_layer", "::df::measured_curve_layer",
           mi::mdl::IDefinition::DS_INTRINSIC_DF_MEASURED_CURVE_LAYER,
           "mi::mdl::IDefinition::DS_INTRINSIC_DF_MEASURED_CURVE_LAYER", 1,
@@ -730,7 +744,8 @@ Node_types::Node_types() {
           Node_param(  "float", "weight", "1.0"),
           Node_param(  "bsdf", "layer", "bsdf()"),
           Node_param(  "bsdf", "base", "bsdf()"),
-          Node_param( "float3", "normal", "::state::normal()"));
+          Node_param( "float3", "normal", "::state::normal()"),
+          Node_param( "::df::backscatter_modifier", "backscatter", "::df::backscatter_none"));
     push( color_measured_curve_layer, "color_measured_curve_layer",
             "::df::color_measured_curve_layer",
         mi::mdl::IDefinition::DS_INTRINSIC_DF_COLOR_MEASURED_CURVE_LAYER,
@@ -739,7 +754,8 @@ Node_types::Node_types() {
         Node_param(  "color", "weight", "color(1.0)"),
         Node_param(  "bsdf", "layer", "bsdf()"),
         Node_param(  "bsdf", "base", "bsdf()"),
-        Node_param( "float3", "normal", "::state::normal()"));
+        Node_param( "float3", "normal", "::state::normal()"),
+        Node_param( "::df::backscatter_modifier", "backscatter", "::df::backscatter_none"));
 
     push( edf, "edf", "edf", mi::mdl::IDefinition::DS_ELEM_CONSTRUCTOR,
           "mi::mdl::DS_DIST_DEFAULT_EDF", 0);
@@ -1249,7 +1265,7 @@ Node_types::Node_types() {
           Node_param( "float3", "normal", "::state::normal()"));
 
     push(bsdf_marker, "bsdf_marker", "bsdf_marker",
-        mi::mdl::IDefinition::DS_UNKNOWN,
+        mi::mdl::IDefinition::DS_INTRINSIC_DIST_BSDF_MARKER,
         "mi::mdl::DS_DIST_BSDF_MARKER", 1,
         Node_param("int", "tag", "0"),
         Node_param("color", "wrapped_color", "color(0.0)"),

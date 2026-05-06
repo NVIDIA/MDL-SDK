@@ -66,7 +66,7 @@ mi::base::IInterface* Attribute_container_impl::create_api_class(
 
 mi::IData* Attribute_container_impl::create_attribute( const char* name, const char* type_name)
 {
-    ATTR::Attribute_set* attribute_set = get_attribute_set();
+    ATTR::Attribute_set* attribute_set = this->get_db_element()->get_attributes();
     return Attribute_set_impl_helper::create_attribute(
         attribute_set, this, name, type_name, /*skip_type_check*/ true);
 }
@@ -74,18 +74,6 @@ mi::IData* Attribute_container_impl::create_attribute( const char* name, const c
 mi::neuraylib::Element_type Attribute_container_impl::get_element_type() const
 {
     return mi::neuraylib::ELEMENT_TYPE_ATTRIBUTE_CONTAINER;
-}
-
-void Attribute_container_impl::set_attribute_set(
-    ATTR::Attribute_set* attribute_set, const mi::base::IInterface* owner)
-{
-    Parent_type::set_attribute_set( attribute_set, owner);
-}
-
-void Attribute_container_impl::set_attribute_set(
-    const ATTR::Attribute_set* attribute_set, const mi::base::IInterface* owner) const
-{
-    Parent_type::set_attribute_set( attribute_set, owner);
 }
 
 size_t Attribute_container::get_size() const

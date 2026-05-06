@@ -38,7 +38,6 @@
 #include <base/system/test/i_test_auto_driver.h>
 #include <base/system/test/i_test_auto_case.h>
 
-#include <sstream>
 #include <vector>
 
 #include <mi/base/handle.h>
@@ -767,7 +766,7 @@ MI_TEST_AUTO_FUNCTION( test_types_compound )
     }
 
 
-    neuray = nullptr;
+    neuray.reset();
     MI_CHECK( unload());
 }
 

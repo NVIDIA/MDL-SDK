@@ -234,6 +234,6 @@ Serializable* Test_type_4::deserialize(Deserializer* deserializer)
 {
     deserializer->read(&m_iteration);
     if (m_iteration > 1)
-        deserializer->deserialize();
+        delete deserializer->deserialize();
     return this;
 }

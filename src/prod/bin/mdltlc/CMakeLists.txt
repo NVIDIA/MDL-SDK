@@ -52,7 +52,9 @@ set(_GENERATOR_FILES
 
 # collect sources
 set(PROJECT_LIB_HEADERS
+    "getopt.h"
     "mdltlc_analysis.h"
+    "mdltlc_ast_compare.h"
     "mdltlc_codegen.h"
     "mdltlc_compilation_unit.h"
     "mdltlc_compiler.h"
@@ -63,6 +65,8 @@ set(PROJECT_LIB_HEADERS
     "mdltlc.h"
     "mdltlc_locations.h"
     "mdltlc_message.h"
+    "mdltlc_parser_coco.h"
+    "mdltlc_parser_rd.h"
     "mdltlc_pprint.h"
     "mdltlc_rules.h"
     "mdltlc_symbols.h"
@@ -71,7 +75,9 @@ set(PROJECT_LIB_HEADERS
     )
 
 set(PROJECT_LIB_SOURCES
+    "getopt.cpp"
     "mdltlc_analysis.cpp"
+    "mdltlc_ast_compare.cpp"
     "mdltlc_codegen.cpp"
     "mdltlc_compilation_unit.cpp"
     "mdltlc_compiler.cpp"
@@ -82,6 +88,8 @@ set(PROJECT_LIB_SOURCES
     "mdltlc_exprs.cpp"
     "mdltlc_expr_walker.cpp"
     "mdltlc_message.cpp"
+    "mdltlc_parser_coco.cpp"
+    "mdltlc_parser_rd.cpp"
     "mdltlc_pprint.cpp"
     "mdltlc_rules.cpp"
     "mdltlc_symbols.cpp"
@@ -92,14 +100,8 @@ set(PROJECT_LIB_SOURCES
     ${PROJECT_LIB_HEADERS}
     )
 
-set(PROJECT_BIN_HEADERS
-    "getopt.h"
-    )
-
 set(PROJECT_BIN_SOURCES
-    "getopt.cpp"
     "main.cpp"
-    ${PROJECT_BIN_HEADERS}
     )
 
 # mark files as generated to disable the check for existence during configure

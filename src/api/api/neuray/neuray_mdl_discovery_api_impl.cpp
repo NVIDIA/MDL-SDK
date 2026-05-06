@@ -856,7 +856,7 @@ bool Mdl_discovery_api_impl::discover_filesystem_recursive(
                 continue;
             }
             else {
-                entry = entry.substr(0, pos_e);
+                entry.erase(pos_e);
                 if (!is_valid_node_name(entry.c_str())) {
                     continue;
                 }
@@ -1376,7 +1376,7 @@ bool Mdl_discovery_api_impl::discover_archive(
         std::string extension;
         if (dot != std::string::npos) {
             extension = (fqp.substr(fqp.find_last_of('.'), fqp.size()));
-            fqp = fqp.substr(0, fqp.find_last_of('.'));
+            fqp.erase(fqp.find_last_of('.'));
         }
 
         discover_archive_recursive(

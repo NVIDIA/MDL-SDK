@@ -387,10 +387,12 @@ public:
 
     /// Create a constant.
     /// \param  value       The value of the constant.
+    /// \param dbg_info     The debug info for this constant if any.
     ///
     /// \returns            The created constant.
     virtual DAG_constant const *create_constant(
-        IValue const *value) = 0;
+        IValue const *value,
+        DAG_DbgInfo  dbg_info) = 0;
 
     /// Create a call.
     /// \param  name            The absolute name of the called function.
@@ -714,10 +716,10 @@ public:
 ///    #mi::mdl::ILambda_function::set_parameter_mapping().
 ///  - Create a list of #mi::mdl::IDistribution_function::Requested_function elements referring
 ///    to the expressions, which shall be generated, and specifying the names / base-names of the
-///    functions. These will be registered as main functions.
+///    functions. These will be registered as requested nodes.
 ///  - Call #mi::mdl::IDistribution_function::initialize().
-///  - Enumerate the resources used by all main functions and all expression lambda functions
-///    of the distribution function object and map them in the root lambda function.
+///  - Enumerate the resources used by all requested nodes of the distribution function object and
+///    map them in the root lambda function.
 ///  - Then, after all body resources are processed, enumerate the resources from the material
 ///    arguments and also map them in the root lambda function.
 ///  - Compile the distribution function object or add it to a link unit.
@@ -728,18 +730,6 @@ class IDistribution_function : public
     mi::base::IInterface>
 {
 public:
-    /// The possible kinds of special lambda functions.
-    enum Special_kind {
-        SK_INVALID = -1,                 ///< Invalid special kind.
-        SK_MATERIAL_IOR = 0,             ///< Lambda function for material.ior.
-        SK_MATERIAL_THIN_WALLED,         ///< Lambda function for material.thin_walled.
-        SK_MATERIAL_VOLUME_ABSORPTION,   ///< Lambda function for
-                                         ///< material.volume.absorption_coefficient.
-        SK_MATERIAL_GEOMETRY_NORMAL,     ///< Lambda function for material.geometry.normal.
-
-        SK_NUM_KINDS                     ///< The number of special lambda function kinds.
-    };
-
     /// The possible kinds of error codes.
     enum Error_code {
         EC_NONE,                            ///< No error.
@@ -773,98 +763,40 @@ public:
     /// Any additionally required expressions from the material will also be handled.
     /// Any material parameters must already be registered in the root lambda at this point.
     ///
-    /// \param mat_instance               the material instance
-    /// \param requested_functions        the expressions for which functions will be generated
-    /// \param num_functions              the number of requested functions
-    /// \param include_geometry_normal    if true, the geometry normal will be handled
-    /// \param calc_derivative_infos      if true, derivative information will be calculated
-    /// \param allow_double_expr_lambdas  if true, expression lambdas may be created for double
-    ///                                   values
-    /// \param name_resolver              the call name resolver
+    /// \param mat_instance                the material instance
+    /// \param requested_functions         the expressions for which functions will be generated
+    /// \param num_req_functions           the number of requested functions
+    /// \param calc_derivative_infos       if true, derivative information will be calculated
+    /// \param enable_spectral_conversions if true, color parameters will be wrapped with spectral conversions
+    /// \param name_resolver               the call name resolver
     ///
     /// \returns EC_NONE, if initialization was successful, an error code otherwise.
     virtual Error_code initialize(
         IMaterial_instance const  *mat_instance,
         Requested_function        *requested_functions,
-        size_t                     num_functions,
-        bool                       include_geometry_normal,
+        size_t                     num_req_functions,
         bool                       calc_derivative_infos,
-        bool                       allow_double_expr_lambdas,
+        bool                       enable_spectral_conversions,
         ICall_name_resolver const *name_resolver) = 0;
 
     /// Get the root lambda function used to build nodes and manage parameters and resources.
+    /// The body will be set to the constructor from the used material instance in
+    /// @ref initialize(). If derivatives are enabled, the body will have been rebuilt with
+    /// derivative types.
     virtual ILambda_function *get_root_lambda() const = 0;
 
-    /// Get the main lambda function for the given index, representing a requested function.
-    ///
-    /// \param index  the index of the main lambda function
-    ///
-    /// \returns  the requested main lambda function or NULL, if the index is invalid
-    virtual ILambda_function *get_main_function(size_t index) const = 0;
+    /// Get the number of explicitly requested nodes. These are always the first nodes in the
+    /// list of requested nodes.
+    virtual size_t get_explicit_requested_node_count() const = 0;
 
-    /// Get the number of main lambda functions.
-    virtual size_t get_main_function_count() const = 0;
+    /// Get the number of explicitly and implicitly requested nodes.
+    /// The implicitly requested nodes always follow the explicitly requested nodes.
+    virtual size_t get_total_requested_node_count() const = 0;
 
-    /// Add the given expression lambda function to the distribution function.
-    /// The index as a decimal string can be used as name in DAG call nodes with the semantics
-    /// DS_INTRINSIC_DAG_CALL_LAMBDA to reference these lambda functions.
+    /// Get the DAG node for a requested node.
     ///
-    /// \param lambda  the lambda function responsible for calculating an expression
-    ///
-    /// \returns  the index of the expression lambda function
-    virtual size_t add_expr_lambda_function(ILambda_function *lambda) = 0;
-
-    /// Get the expression lambda function for the given index.
-    ///
-    /// \param index  the index of the expression lambda
-    ///
-    /// \returns  the requested expression lambda function or NULL, if the index is invalid
-    virtual ILambda_function *get_expr_lambda(size_t index) const = 0;
-
-    /// Get the number of expression lambda functions.
-    virtual size_t get_expr_lambda_count() const = 0;
-
-    /// Set a special lambda function for getting certain material properties.
-    ///
-    /// \param kind    the kind of special lambda function to set
-    /// \param lambda  the lambda function to associate with this kind
-    virtual void set_special_lambda_function(
-        Special_kind kind,
-        ILambda_function *lambda) = 0;
-
-    /// Get the expression lambda index for the given special lambda function kind.
-    ///
-    /// \param kind    the kind of special lambda function to get
-    ///
-    /// \returns  the requested expression lambda index or ~0, if the index is invalid or
-    ///           the special lambda function has not been set
-    virtual size_t get_special_lambda_function_index(Special_kind kind) const = 0;
-
-    /// Returns the number of distribution function handles referenced by this
-    /// distribution function.
-    virtual size_t get_df_handle_count() const = 0;
-
-    /// Returns a distribution function handle referenced by this distribution function.
-    ///
-    /// \param index  the index of the handle to return
-    ///
-    /// \return the name of the handle, or \c NULL, if the \p index was out of range.
-    virtual const char* get_df_handle(size_t index) const = 0;
-
-    /// Returns the number of distribution function handles referenced by a given main function.
-    ///
-    /// \param main_func_index  the index of the main function
-    ///
-    /// \returns  the requested count or ~0, if the index is invalid
-    virtual size_t get_main_func_df_handle_count(size_t main_func_index) const = 0;
-
-    /// Returns a distribution function handle referenced by a given main function.
-    ///
-    /// \param main_func_index  the index of the main function
-    /// \param index            the index of the handle to return
-    ///
-    /// \return the name of the handle, or \c NULL, if the \p index was out of range.
-    virtual const char* get_main_func_df_handle(size_t main_func_index, size_t index) const = 0;
+    /// \param index  the index of the requested node
+    virtual DAG_node const *get_requested_dag_node(size_t index) const = 0;
 
     /// Set a tag, version pair for a resource value that might be reachable from this
     /// function.
@@ -896,8 +828,8 @@ public:
     /// \param module_cache         the module cache if any
     /// \param name_resolver        the call name resolver
     /// \param kind                 the kind of the lambda function
-    /// \param arg_block_index      this variable will receive the index of the target argument
-    ///                             block used for this lambda function or ~0 if none is used
+    /// \param arg_block_index      variable receiving the index of the target argument block
+    ///                             used for this lambda function or ~0 if none is used
     /// \param function_index       the index of the callable function in the created target code.
     ///                             This parameter is optional, provide NULL if not required.
     ///
@@ -912,23 +844,28 @@ public:
 
     /// Add a distribution function to this link unit.
     ///
-    /// Currently only BSDFs are supported.
-    /// For a BSDF, it results in four functions, with their names built from the name of the
-    /// main DF function of \p dist_func suffixed with \c "_init", \c "_sample", \c "_evaluate"
+    /// The distribution function can contain BSDFs, hair BSDFs, EDFs and/or non-DF expressions.
+    /// The first added function is always an init function.
+    /// For BSDFs it results in three functions, with their names built from the name of the
+    /// requested nodes of \p dist_func suffixed with \c "_sample", \c "_evaluate"
     /// and \c "_pdf", respectively.
-    /// All resources used by the main DF function of \p dist_func and the expression lambda
-    /// functions of \p dist_func must have been registered in the main DF function via
-    /// the map_*_resource functions of #mi::mdl::ILambda_function. It is also recommended
-    /// to already map the resources of the default arguments of the used material instance.
+    ///
+    /// All resources used by the requested nodes of \p dist_func must have already been registered
+    /// in the root lambda of \p dist_func via the map_*_resource functions of
+    /// #mi::mdl::ILambda_function. It is also recommended to already map the resources of the
+    /// default arguments of the used material instance.
     ///
     /// \param dist_func                  the distribution function to compile
     /// \param module_cache               the module cache if any
     /// \param name_resolver              the call name resolver
     /// \param arg_block_index            variable receiving the index of the target argument block
     ///                                   used for this distribution function or ~0 if none is used
-    /// \param main_function_indices      array receiving the (first) indices of the main functions.
+    /// \param req_function_indices       array receiving the (first) indices of the requested
+    ///                                   functions from the distribution function.
+    ///                                   The first index is the one of the init function.
     ///                                   This parameter is optional, provide NULL if not required.
-    /// \param num_main_function_indices  the size of \p main_function_indices in number of entries
+    /// \param num_req_function_indices   the size of \p req_function_indices in number of entries,
+    ///                                   must be number of requested function plus one for init
     ///
     /// \return true on success
     virtual bool add(
@@ -936,8 +873,8 @@ public:
         IModule_cache                 *module_cache,
         ICall_name_resolver const     *name_resolver,
         size_t                        *arg_block_index,
-        size_t                        *main_function_indices,
-        size_t                         num_main_function_indices) = 0;
+        size_t                        *req_function_indices,
+        size_t                         num_req_function_indices) = 0;
 
     /// Get the number of functions in this link unit.
     virtual size_t get_function_count() const = 0;
@@ -1120,6 +1057,9 @@ class ICode_generator_jit : public
     /// The name of the option to steer linking of libdevice.
     #define MDL_JIT_OPTION_LINK_LIBDEVICE "jit_link_libdevice"
 
+    /// The name of the option to enable spectral rendering in the libbsdf.
+    #define MDL_JIT_OPTION_ENABLE_LIBBSDF_SPECTRAL "jit_libbsdf_spectral"
+
     /// The name of the option to steer linking version of libbsdf to be linked.
     #define MDL_JIT_OPTION_LINK_LIBBSDF_DF_HANDLE_SLOT_MODE "jit_link_libbsdf_df_handle_slot_mode"
 
@@ -1153,6 +1093,9 @@ class ICode_generator_jit : public
     /// The name of the option that sets the function replacement list.
     #define MDL_JIT_OPTION_REMAP_FUNCTIONS "jit_remap_functions"
 
+    /// The name of the option that specifies an include path for API type definitions.
+    #define MDL_JIT_OPTION_GLSL_INCLUDE_FOR_API_TYPES "jit_glsl_include_for_api_types"
+
     /// The name of the option to generate auxiliary methods on distribution functions.
     #define MDL_JIT_OPTION_ENABLE_AUXILIARY "jit_enable_auxiliary"
 
@@ -1165,6 +1108,10 @@ class ICode_generator_jit : public
 
     /// The name of the option to enable/disable the builtin texture runtime of the native backend.
     #define MDL_JIT_USE_BUILTIN_RESOURCE_HANDLER_CPU "jit_use_builtin_resource_handler_cpu"
+
+    /// The name of the option to enable/disable generation of a loop in the init function to reduce 
+    /// code size and compilation time.
+    #define MDL_JIT_OPTION_ENABLE_INIT_LOOP_GENERATION "jit_enable_init_loop_generation"
 
     /// The name of the option that steers access to state::normal().
     #define MDL_JIT_OPTION_SL_STATE_NORMAL_MODE "jit_sl_state_normal_mode"
@@ -1513,14 +1460,16 @@ public:
     /// #mi::mdl::Bsdf_sample_function, #mi::mdl::Bsdf_evaluate_function and
     /// #mi::mdl::Bsdf_pdf_function.
     ///
-    /// Currently only BSDFs are supported.
-    /// For a BSDF, it results in four functions, with their names built from the name of the
-    /// main DF function of \p dist_func suffixed with \c "_init", \c "_sample", \c "_evaluate"
+    /// The distribution function can contain BSDFs, hair BSDFs, EDFs and/or non-DF expressions.
+    /// The first added function is always an init function.
+    /// For BSDFs it results in three functions, with their names built from the name of the
+    /// requested nodes of \p dist_func suffixed with \c "_sample", \c "_evaluate"
     /// and \c "_pdf", respectively.
-    /// All resources used by the main DF function of \p dist_func and the expression lambda
-    /// functions of \p dist_func must have been registered in the main DF function via
-    /// the map_*_resource functions of #mi::mdl::ILambda_function. It is also recommended
-    /// to already map the resources of the default arguments of the used material instance.
+    ///
+    /// All resources used by the requested nodes of \p dist_func must have already been registered
+    /// in the root lambda of \p dist_func via the map_*_resource functions of
+    /// #mi::mdl::ILambda_function. It is also recommended to already map the resources of the
+    /// default arguments of the used material instance.
     ///
     /// \param dist_func            the distribution function to compile
     /// \param module_cache         the module cache if any
@@ -1544,14 +1493,16 @@ public:
     /// #mi::mdl::Bsdf_sample_function, #mi::mdl::Bsdf_evaluate_function and
     /// #mi::mdl::Bsdf_pdf_function.
     ///
-    /// Currently only BSDFs are supported.
-    /// For a BSDF, it results in four functions, with their names built from the name of the
-    /// main DF function of \p dist_func suffixed with \c "_init", \c "_sample", \c "_evaluate"
+    /// The distribution function can contain BSDFs, hair BSDFs, EDFs and/or non-DF expressions.
+    /// The first added function is always an init function.
+    /// For BSDFs it results in three functions, with their names built from the name of the
+    /// requested nodes of \p dist_func suffixed with \c "_sample", \c "_evaluate"
     /// and \c "_pdf", respectively.
-    /// All resources used by the main DF function of \p dist_func and the expression lambda
-    /// functions of \p dist_func must have been registered in the main DF function via
-    /// the map_*_resource functions of #mi::mdl::ILambda_function. It is also recommended
-    /// to already map the resources of the default arguments of the used material instance.
+    ///
+    /// All resources used by the requested nodes of \p dist_func must have already been registered
+    /// in the root lambda of \p dist_func via the map_*_resource functions of
+    /// #mi::mdl::ILambda_function. It is also recommended to already map the resources of the
+    /// default arguments of the used material instance.
     ///
     /// \param dist_func            the distribution function to compile
     /// \param module_cache         the module cache if any
@@ -1694,23 +1645,24 @@ These options are specific to the MDL DAG code generator:
 
 These options are specific to the MDL JIT code generator:
 
-- \ref mdl_option_jit_disable_exceptions         "jit_disable_exceptions"
-- \ref mdl_option_jit_enable_ro_segment          "jit_enable_ro_segment"
-- \ref mdl_option_jit_max_const_data             "jit_max_const_data"
-- \ref mdl_option_jit_fast_math                  "jit_fast_math"
-- \ref mdl_option_jit_include_uniform_state      "jit_include_uniform_state"
-- \ref mdl_option_jit_inline_aggressively        "jit_inline_aggressively"
-- \ref mdl_option_jit_eval_dag_ternary_strictly  "jit_eval_dag_ternary_strictly"
-- \ref mdl_option_jit_link_libdevice             "jit_link_libdevice"
-- \ref mdl_option_jit_llvm_state_module          "jit_llvm_state_module"
-- \ref mdl_option_jit_llvm_renderer_module       "jit_llvm_renderer_module"
-- \ref mdl_option_jit_map_strings_to_ids         "jit_map_strings_to_ids"
-- \ref mdl_option_jit_libbsdf_flags_in_bsdf_data "jit_libbsdf_flags_in_bsdf_data"
-- \ref mdl_option_jit_opt_level                  "jit_opt_level"
-- \ref mdl_option_jit_tex_lookup_call_mode       "jit_tex_lookup_call_mode"
-- \ref mdl_option_jit_lambda_return_mode         "jit_lambda_return_mode"
-- \ref mdl_option_jit_tex_runtime_with_derivs    "jit_tex_runtime_with_derivs"
-- \ref mdl_option_jit_use_bitangent              "jit_use_bitangent"*/
+- \ref mdl_option_jit_disable_exceptions          "jit_disable_exceptions"
+- \ref mdl_option_jit_enable_ro_segment           "jit_enable_ro_segment"
+- \ref mdl_option_jit_max_const_data              "jit_max_const_data"
+- \ref mdl_option_jit_fast_math                   "jit_fast_math"
+- \ref mdl_option_jit_include_uniform_state       "jit_include_uniform_state"
+- \ref mdl_option_jit_inline_aggressively         "jit_inline_aggressively"
+- \ref mdl_option_jit_eval_dag_ternary_strictly   "jit_eval_dag_ternary_strictly"
+- \ref mdl_option_jit_link_libdevice              "jit_link_libdevice"
+- \ref mdl_option_jit_llvm_state_module           "jit_llvm_state_module"
+- \ref mdl_option_jit_llvm_renderer_module        "jit_llvm_renderer_module"
+- \ref mdl_option_jit_map_strings_to_ids          "jit_map_strings_to_ids"
+- \ref mdl_option_jit_libbsdf_flags_in_bsdf_data  "jit_libbsdf_flags_in_bsdf_data"
+- \ref mdl_option_jit_opt_level                   "jit_opt_level"
+- \ref mdl_option_jit_tex_lookup_call_mode        "jit_tex_lookup_call_mode"
+- \ref mdl_option_jit_lambda_return_mode          "jit_lambda_return_mode"
+- \ref mdl_option_jit_tex_runtime_with_derivs     "jit_tex_runtime_with_derivs"
+- \ref mdl_option_jit_use_bitangent               "jit_use_bitangent"
+- \ref mdl_option_jit_enable_init_loop_generation "jit_enable_init_loop_generation"*/
 /*!
 - \ref mdl_option_jit_use_builtin_res_h          "jit_use_builtin_resource_handler_cpu"
 - \ref mdl_option_jit_use_renderer_adapt_rough   "jit_use_renderer_adapt_microfacet_roughness"
@@ -1853,6 +1805,12 @@ These options are specific to the MDL JIT code generator:
 \anchor mdl_option_jit_use_bitangent
 - <b>jit_use_bitangent</b>: If set to \c "true", bitangents will be expected in the renderer
   provided state instead of tangent_u and tangent_v vectors.
+  Default: \c "false"
+
+\anchor mdl_option_jit_enable_init_loop_generation
+- <b>jit_enable_init_loop_generation</b>: If set to \c "true", the init function will be optimized
+  so that multiple calls to large functions are combined into a single call, reducing code size
+  and compile times.
   Default: \c "false"
 */
 /*!

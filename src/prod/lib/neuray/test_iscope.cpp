@@ -45,8 +45,57 @@
 #include <mi/neuraylib/iscope.h>
 #include <mi/neuraylib/itransaction.h>
 
+#include <mi/neuraylib/iattribute_container.h>
+#include <mi/neuraylib/iref.h>
+
 
 #include "test_shared.h"
+
+
+void create_elements( mi::neuraylib::IScope* scope, std::string prefix)
+{
+    mi::base::Handle<mi::neuraylib::ITransaction> transaction(
+        scope->create_transaction());
+
+    mi::base::Handle<mi::neuraylib::IScope> s( transaction->get_scope());
+    MI_CHECK_EQUAL_CSTR( s->get_id(), scope->get_id());
+
+    std::string name;
+
+    mi::base::Handle<mi::neuraylib::IAttribute_container> attribute_container(
+        transaction->create<mi::neuraylib::IAttribute_container>( "Attribute_container"));
+    mi::base::Handle<mi::IRef> ref(
+        attribute_container->create_attribute<mi::IRef>( "ref", "Ref"));
+    MI_CHECK( ref);
+    name = prefix + "attribute_container";
+    transaction->store( attribute_container.get(), name.c_str());
+
+    MI_CHECK_EQUAL( 0, transaction->commit());
+}
+
+void test_references( mi::neuraylib::IScope* scope)
+{
+    mi::base::Handle<mi::neuraylib::ITransaction> transaction(
+        scope->create_transaction());
+    {
+
+    // test elements in the DB (in the global scope)
+
+
+    mi::base::Handle<mi::neuraylib::IAttribute_container> attribute_container(
+        transaction->edit<mi::neuraylib::IAttribute_container>( "global_attribute_container"));
+    mi::base::Handle<mi::IRef> ref( attribute_container->edit_attribute<mi::IRef>( "ref"));
+    MI_CHECK_EQUAL( -4, ref->set_reference( "child_attribute_container"));
+
+    mi::base::Handle<const mi::neuraylib::IAttribute_container> child_attribute_container(
+        transaction->access<mi::neuraylib::IAttribute_container>( "child_attribute_container"));
+    MI_CHECK( child_attribute_container);
+    MI_CHECK_EQUAL( -4, ref->set_reference( child_attribute_container.get()));
+
+    }
+
+    MI_CHECK_EQUAL( 0, transaction->commit());
+}
 
 
 void run_tests( mi::neuraylib::INeuray* neuray)
@@ -124,6 +173,21 @@ void run_tests( mi::neuraylib::INeuray* neuray)
         MI_CHECK( named_scope->get_privacy_level() == 1);
         named_scope = database->get_named_scope( "test_scope");
 
+        // test reference to more private scopes (must NOT work)
+
+        create_elements( global_scope.get(), "global_");
+        create_elements( child_scope.get(),  "child_" );
+        test_references( child_scope.get());
+
+        // test ITransaction::get_privacy_level()
+        mi::base::Handle<mi::neuraylib::ITransaction> transaction(
+            child_scope->create_transaction());
+        MI_CHECK_EQUAL( 0, transaction->get_privacy_level( "global_attribute_container"));
+        MI_CHECK_EQUAL( 1, transaction->get_privacy_level( "child_attribute_container"));
+        MI_CHECK_EQUAL( -2, transaction->get_privacy_level( 0));
+        MI_CHECK_EQUAL( -4, transaction->get_privacy_level( "non_existing"));
+        transaction->commit();
+        MI_CHECK_EQUAL( -3, transaction->get_privacy_level( "global_attribute_container"));
     }
 
     MI_CHECK_EQUAL( 0,  neuray->shutdown());
@@ -137,7 +201,7 @@ MI_TEST_AUTO_FUNCTION( test_iscope )
     run_tests( neuray.get());
     run_tests( neuray.get());
 
-    neuray = nullptr;
+    neuray.reset();
     MI_CHECK( unload());
 }
 

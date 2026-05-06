@@ -45,6 +45,7 @@
 
 
 
+#include <base/data/attr/attr.h>
 #include <base/data/dblight/dblight_database.h>
 
 // for the factory methods
@@ -113,8 +114,10 @@ void Class_registration::register_classes_part2( Class_factory* factory, DB::Dat
 
     // register DB classes
     auto* db_impl = static_cast<DBLIGHT::Database_impl*>( db);
-    SERIAL::Deserialization_manager* manager = db_impl->get_deserialization_manager();
-    manager->register_class( Attribute_container::id, Attribute_container::factory);
+    SERIAL::Deserialization_manager* dm = db_impl->get_deserialization_manager();
+    dm->register_class( Attribute_container::id, Attribute_container::factory);
+    SYSTEM::Access_module<ATTR::Attr_module> attr_module( false);
+    attr_module->register_for_serialization( dm);
 
 
 #undef REG

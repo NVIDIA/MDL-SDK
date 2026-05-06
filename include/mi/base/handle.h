@@ -51,12 +51,12 @@ struct Dup_interface_helper {};
 
 /// Type for a symbolic constant to trigger a special constructor in the %Handle class.
 ///
-/// \see #mi::base::Handle::Handle(Interface* ptr,Dup_interface)
+/// \see #mi::base::Handle::Handle(Interface* ptr,mi::base::Dup_interface)
 using Dup_interface = const Dup_interface_helper *;
 
 /// Symbolic constant to trigger a special constructor in the %Handle class.
 ///
-/// \see #mi::base::Handle::Handle(Interface* ptr,Dup_interface)
+/// \see #mi::base::Handle::Handle(Interface* ptr,mi::base::Dup_interface)
 static const Dup_interface DUP_INTERFACE = nullptr;
 
 /// %Handle class template for interfaces, automatizing the lifetime control via reference counting.
@@ -309,16 +309,16 @@ public:
     /// Returns \c true if the interface is valid.
     bool is_valid_interface() const { return m_iptr != nullptr; }
 
-    /// Access to the interface. Returns 0 for an invalid interface.
+    /// Access to the interface. Returns \c nullptr for an invalid interface.
     Interface* get() const { return  m_iptr; }
 
-    /// Extracts the interface and releases the handle. Returns 0 for an invalid interface.
+    /// Extracts the interface and releases the handle. Returns \c nullptr for an invalid interface.
     ///
     /// Note that the caller takes responsibility for managing the lifetime of the interface.
     Interface* extract()
     {
         Interface* ptr = m_iptr;
-        m_iptr = 0;
+        m_iptr = nullptr;
         return ptr;
     }
 

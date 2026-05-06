@@ -111,15 +111,16 @@ mi::Sint32 Lightprofile_impl::reset_reader(
 const char* Lightprofile_impl::get_filename() const
 {
     const LIGHTPROFILE::Lightprofile* lp = get_db_element();
+    std::string result;
     if( lp->is_file_based())
-        m_cached_filename = lp->get_filename();
+        result = lp->get_filename();
     else if( lp->is_container_based())
-        m_cached_filename = lp->get_container_filename() + ":" + lp->get_container_membername();
+        result = lp->get_container_filename() + ":" + lp->get_container_membername();
     else
         return nullptr;
 
-    ASSERT( M_NEURAY_API, m_cached_filename.size() > 1);
-    return m_cached_filename.c_str();
+    ASSERT( M_NEURAY_API, result.size() > 1);
+    return !result.empty() ? m_string_cache.add( result) : nullptr;
 }
 
 const char* Lightprofile_impl::get_original_filename() const

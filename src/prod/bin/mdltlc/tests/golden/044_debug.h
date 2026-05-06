@@ -69,13 +69,18 @@ class Debug : public mi::mdl::IRule_matcher {
     static void fire_postcondition_event(
         mi::mdl::IRule_matcher_event &event_handler);
     
-
     static void fire_debug_print(
         mi::mdl::IDistiller_plugin_api &plugin_api,
         mi::mdl::IRule_matcher_event &event_handler,
         std::size_t idx,
         char const *var_name,
         mi::mdl::DAG_node const *value);
+    
+    static void fire_detailed_trace_event(
+        mi::mdl::IRule_matcher_event &event_handler,
+        std::size_t id,
+        mi::mdl::IRule_matcher_event::Detailed_trace_event trace_event);
+
     private:
     struct Rule_info {
         unsigned ruid;

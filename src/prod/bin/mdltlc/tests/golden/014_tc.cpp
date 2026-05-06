@@ -67,7 +67,12 @@ DAG_node const* Simple_rule::matcher(
     const mi::mdl::Distiller_options *options,
     Rule_result_code &result_code) const
 {
-    auto match_rule1 = [&] (DAG_node const *node, IDistiller_plugin_api::Match_properties &node_props) -> const DAG_node * { return node; };
+    auto match_rule1 = [&] (DAG_node const *node, IDistiller_plugin_api::Match_properties &node_props) -> const DAG_node * {
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0 ,{ mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::No_match, ""});
+        }
+        return node;
+        };
 
 // 014_tc.mdltl:6
 //RUID 478273
@@ -75,18 +80,46 @@ DAG_node const* Simple_rule::matcher(
 
         // match for microfacet_ggx_vcavities_bsdf(ru, rv, tint, _, t, mode)
         if (node_props0.sema != IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_VCAVITIES_BSDF) {
+            if (event_handler != nullptr) {
+                fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_mismatch,
+                "microfacet_ggx_vcavities_bsdf(ru, rv, tint, _, t, mode)"});
+            }
             return match_rule1(node0, node_props0);
         }
         DAG_node const *node2 = e.get_compound_argument(node0, 0);
         DAG_node const *v_ru = node2; (void)v_ru;
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "ru"});
+        }
         DAG_node const *node4 = e.get_compound_argument(node0, 1);
         DAG_node const *v_rv = node4; (void)v_rv;
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "rv"});
+        }
         DAG_node const *node6 = e.get_compound_argument(node0, 2);
         DAG_node const *v_tint = node6; (void)v_tint;
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "tint"});
+        }
         DAG_node const *node8 = e.get_compound_argument(node0, 4);
         DAG_node const *v_t = node8; (void)v_t;
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "t"});
+        }
         DAG_node const *node10 = e.get_compound_argument(node0, 5);
         DAG_node const *v_mode = node10; (void)v_mode;
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "mode"});
+        }
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "microfacet_ggx_vcavities_bsdf(ru, rv, tint, _, t, mode)"});
+        }
         DAG_DbgInfo root_dbg_info = node0->get_dbg_info();
         (void) root_dbg_info;
         if (!e.eval_if(e.create_binary(
@@ -95,23 +128,27 @@ DAG_node const* Simple_rule::matcher(
                 e.create_scatter_enum_constant(2)))) {
             return match_rule1(node0, node_props0);
         }
-        if (event_handler != nullptr)
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Rule_match,
+            ""});
+
             fire_match_event(*event_handler, 0);
-        return e.create_call("::df::custom_curve_layer(float,float,float,float,bsdf,bsdf,float3)",
-            IDefinition::DS_INTRINSIC_DF_CUSTOM_CURVE_LAYER, Args_wrapper<7>::mk_args(
+        }
+        return e.create_call("::df::custom_curve_layer(float,float,float,float,bsdf,bsdf,float3,::df::backscatter_modifier)",
+            IDefinition::DS_INTRINSIC_DF_CUSTOM_CURVE_LAYER, Args_wrapper<8>::mk_args(
                 e, m_node_types, custom_curve_layer, e.create_function_call("::nvidia::distilling_support::refl_from_ior",
                     Nodes_wrapper<1>(e.create_global_float_ior()).data(), 1, root_dbg_info),
                 e.create_float_constant(1.0f), e.create_float_constant(5.0f), e.create_float_constant(1.0f),
-                e.create_call("::df::microfacet_ggx_vcavities_bsdf(float,float,color,color,float3,::df::scatter_mode,string)",
-                    IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_VCAVITIES_BSDF, Args_wrapper<7>::mk_args(
+                e.create_call("::df::microfacet_ggx_vcavities_bsdf(float,float,color,color,float3,::df::scatter_mode,::df::backscatter_modifier,string)",
+                    IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_VCAVITIES_BSDF, Args_wrapper<8>::mk_args(
                         e, m_node_types, microfacet_ggx_vcavities_bsdf, v_ru, v_rv,
                         v_tint, e.create_color_constant(0,0,0), v_t, e.create_scatter_enum_constant(0)).args,
-                    7, e.get_type_factory()->create_bsdf(), root_dbg_info), e.create_call("::df::simple_glossy_bsdf(float,float,color,color,float3,::df::scatter_mode,string)",
-                    IDefinition::DS_INTRINSIC_DF_SIMPLE_GLOSSY_BSDF, Args_wrapper<7>::mk_args(
+                    8, e.get_type_factory()->create_bsdf(), root_dbg_info), e.create_call("::df::simple_glossy_bsdf(float,float,color,color,float3,::df::scatter_mode,::df::backscatter_modifier,string)",
+                    IDefinition::DS_INTRINSIC_DF_SIMPLE_GLOSSY_BSDF, Args_wrapper<8>::mk_args(
                         e, m_node_types, simple_glossy_bsdf, v_ru, v_rv, v_tint,
                         e.create_color_constant(0,0,0), v_t, e.create_scatter_enum_constant(1)).args,
-                    7, e.get_type_factory()->create_bsdf(), root_dbg_info)).args,
-            7, e.get_type_factory()->create_bsdf(), root_dbg_info);
+                    8, e.get_type_factory()->create_bsdf(), root_dbg_info)).args,
+            8, e.get_type_factory()->create_bsdf(), root_dbg_info);
     };
     (void)match_rule0;
 
@@ -158,6 +195,16 @@ void Simple_rule::fire_debug_print(
     Rule_info const &ri = g_rule_info[idx];
     event_handler.debug_print(plugin_api, "Simple_rule", ri.ruid, ri.rname, ri.fname,
         ri.fline, var_name, value);
+}
+
+void Simple_rule::fire_detailed_trace_event(
+    mi::mdl::IRule_matcher_event &event_handler,
+    std::size_t id,
+    mi::mdl::IRule_matcher_event::Detailed_trace_event trace_event)
+{
+    Rule_info const &ri = g_rule_info[id];
+    event_handler.detailed_trace_event("Simple_rule", ri.ruid, ri.rname, ri.fname,
+        ri.fline, trace_event);
 }
 
 

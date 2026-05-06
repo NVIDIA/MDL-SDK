@@ -125,6 +125,8 @@ namespace mi { namespace examples { namespace mdl_d3d12
         {
         }
 
+        virtual ~DxcBlobFromMemory() = default;
+
         LPVOID STDMETHODCALLTYPE GetBufferPointer(void) final { return m_buffer.data(); }
         SIZE_T STDMETHODCALLTYPE GetBufferSize(void) final { return m_buffer.size(); }
 
@@ -361,7 +363,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
             Kind get_kind() const { return m_kind; }
 
             explicit Shader_handle()
-                : m_shader_binding_table(nullptr), m_kind(Kind::invalid), m_shader_id(nullptr) {}
+                : m_shader_binding_table(nullptr), m_shader_id(nullptr), m_kind(Kind::invalid) {}
 
             virtual ~Shader_handle() = default;
         private:

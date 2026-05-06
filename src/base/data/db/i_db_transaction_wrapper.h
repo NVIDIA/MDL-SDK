@@ -143,10 +143,9 @@ public:
         SCHED::Job_base* job,
         const char* name = nullptr,
         Privacy_level privacy_level = 0,
-        Journal_type journal_type = JOURNAL_NONE,
         Privacy_level store_level = 255)
     {
-        m_transaction->store( tag, job, name, privacy_level, journal_type, store_level);
+        m_transaction->store( tag, job, name, privacy_level, store_level);
     }
 
     Tag store_for_reference_counting(
@@ -164,11 +163,10 @@ public:
         SCHED::Job_base* job,
         const char* name = nullptr,
         Privacy_level privacy_level = 0,
-        Journal_type journal_type = JOURNAL_NONE,
         Privacy_level store_level = 255)
     {
         m_transaction->store_for_reference_counting(
-            tag, job, name, privacy_level, journal_type, store_level);
+            tag, job, name, privacy_level, store_level);
     }
 
     void localize( Tag tag, Privacy_level privacy_level, Journal_type journal_type = JOURNAL_NONE)
@@ -186,11 +184,6 @@ public:
     Tag name_to_tag( const char* name, Name_to_tag_context context)
     {
         return m_transaction->name_to_tag( name, context);
-    }
-
-    Tag name_to_tag_unsafe( const char* name)
-    {
-        return m_transaction->name_to_tag_unsafe( name);
     }
 
     bool get_tag_is_job( Tag tag) { return m_transaction->get_tag_is_job( tag); }

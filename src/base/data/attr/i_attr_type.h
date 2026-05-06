@@ -43,12 +43,6 @@
 #include <utility>
 #include <vector>
 
-#ifndef DEBUG_NON_INLINE
-#define MI_INLINE inline
-#else
-#define MI_INLINE
-#endif
-
 namespace MI {
 namespace ATTR {
 
@@ -120,13 +114,13 @@ class Type : public SERIAL::Serializable
     /// \param other the other \c Type
     /// \return true if the two types incl. subtypes are exactly equivalent, false else. Note that
     /// the names are not compared, though.
-    MI_INLINE bool operator==(
+    inline bool operator==(
         const Type& other) const;
     /// Compare of inequality.
     /// \param other the other \c Type
     /// \return true if the two types incl. subtypes are exactly equivalent, false else. Note that
     /// the names are not compared, though.
-    MI_INLINE bool operator!=(
+    inline bool operator!=(
         const Type &other) const;
 
     /// @name Type's data retrieval
@@ -134,34 +128,31 @@ class Type : public SERIAL::Serializable
     //@{
     /// Retrieve the name of the \c Type.
     /// \return the name, could be 0
-    MI_INLINE const char* get_name() const;
+    inline const char* get_name() const;
     /// Retrieve the actual type of the \c Type.
     /// \return the corresponding \c Type_code
-    MI_INLINE Type_code get_typecode() const;
-    /// Retrieve whether the \c Type is const or not.
-    /// \return true, when \c Type is const, false else
-    MI_INLINE bool get_const() const;
+    inline Type_code get_typecode() const;
     /// Retrieve the current array size.
     /// \return array size, 0 means dynamic array
-    MI_INLINE Uint get_arraysize() const;
+    inline Uint get_arraysize() const;
     /// Retrieve the next \c Type in the type hierarchy.
     /// \return const pointer to next \c Type, could be 0
-    MI_INLINE const Type* get_next() const;
+    inline const Type* get_next() const;
     /// Retrieve the child \c Type in the type hierarchy.
     /// \return const pointer to child \c Type, could be 0
-    MI_INLINE const Type* get_child() const;
+    inline const Type* get_child() const;
     /// Retrieve the next \c Type in the type hierarchy.
     /// \return pointer to next \c Type, could be 0
-    MI_INLINE Type* get_next();
+    inline Type* get_next();
     /// Retrieve the child \c Type in the type hierarchy.
     /// \return const pointer to child \c Type, could be 0
-    MI_INLINE Type* get_child();
+    inline Type* get_child();
     /// Retrieve the pointer to the enum collection.
     /// \return pointer to enum collection
-    MI_INLINE std::vector<std::pair<int, std::string> >** set_enum();
+    inline std::vector<std::pair<int, std::string> >** set_enum();
     /// Retrieve the pointer to the enum collection.
     /// \return pointer to enum collection, might be 0
-    MI_INLINE std::vector<std::pair<int, std::string> >* get_enum() const;
+    inline std::vector<std::pair<int, std::string> >* get_enum() const;
     //@}
 
     /// @name Type's data setters
@@ -176,12 +167,8 @@ class Type : public SERIAL::Serializable
         const char* name);
     /// Set the new type.
     /// \param typecode the new type
-    MI_INLINE void set_typecode(
+    inline void set_typecode(
         Type_code typecode);
-    /// Set the new constness state.
-    /// \param isconst state of constness. \c true means no changed, can be baked into shader
-    MI_INLINE void set_const(
-        bool isconst=true);
     /// Set the new array size. Note that this works only on array \c Types and will
     /// be ignored otherwise. Dynamic arrays are currently not supported using this member.
     /// \param count number of elements
@@ -211,28 +198,28 @@ class Type : public SERIAL::Serializable
     //@{
     /// Retrieve alignment of this \c Type without considering its child and next \c Types.
     /// \return alignment excluding child and next types
-    MI_INLINE size_t align_one() const;
+    inline size_t align_one() const;
     /// Retrieve alignment for this \c Type considering its child and next \c Types.
     /// \return alignment including child and next types
-    MI_INLINE size_t align_all() const;
+    inline size_t align_all() const;
     /// Retrieve size of the \c Type object.
     /// \return byte size including static array
-    MI_INLINE size_t sizeof_one() const;
+    inline size_t sizeof_one() const;
     /// Retrieve the overall size.
     /// \return size of object including child and next types
-    MI_INLINE size_t sizeof_all() const;
+    inline size_t sizeof_all() const;
 
     /// Retrieve the size of one element in the array.
     /// \return size of one element in the array
-    MI_INLINE size_t sizeof_elem() const;
+    inline size_t sizeof_elem() const;
     /// Retrieve the number of components. E.g. a \c Type of TYPE_COLOR is made up of 4 scalar
     /// components. Note that in the case of arrays the value of the contained type is returned.
     /// \return number of components
-    MI_INLINE Uint component_count() const;
+    inline Uint component_count() const;
     /// Retrieve its component's type. E.g. a \c Type of TYPE_COLOR is made up of 4 scalar
     /// components. Note that in the case of arrays the value of the contained type is returned.
     /// \return the component's type
-    MI_INLINE Type_code component_type() const; 
+    inline Type_code component_type() const;
     /// Retrieve a human-readable name for the \c Type.
     /// \return the \c Type's name, e.g. "vector3"
     virtual const char* type_name() const;
@@ -275,30 +262,7 @@ class Type : public SERIAL::Serializable
     /// Looking up a type by given a complete name., return the Type of the subtree, and an offset
     /// into a value structure where that Type stores its data. The name must
     /// be a complete path, such as a[2].b if a is a struct array containing b.
-    /// Dynamic arrays are not handled because their value is int+ptr. Slow.
-    ///
-    /// Note that for array elements the returned type is not correct. The method returns
-    /// a type tree where the top-level element has the array size of the array itself (and
-    /// not 1 as one would expect for a non-nested array). This is due to the fact that the
-    /// method returns a pointer to a subtree of the type tree of the attribute itself.
-    ///
-    /// \param[in]  name the name to look up
-    /// \param[out] offs the offset into the value struct
-    /// \param[in]  begin add this to the returned offset \p offs
-    /// \return the named \c Type of the subtree
-    const Type* lookup(
-        const char* name,
-        Uint* offs = 0,
-        Uint begin = 0) const;
-
-    /// Looking up a type by given a complete name., return the Type of the subtree, and an offset
-    /// into a value structure where that Type stores its data. The name must
-    /// be a complete path, such as a[2].b if a is a struct array containing b.
     /// Slow.
-    ///
-    /// In contrast to method above, this one also supports dynamic arrays. To make that work
-    /// it does not return an offset, but the real address (and for all other types it needs the
-    /// base address, since it cannot figure that out).
     ///
     /// For dynamic arrays the method returns the address of the Dynamic_array struct, not the
     /// address of the data this struct points to (otherwise you are not able to find out the
@@ -345,10 +309,10 @@ class Type : public SERIAL::Serializable
     /// Return the approximate size in bytes of the element including all its
     /// substructures. This is used to make decisions about garbage collection.
     /// \return approximate size in bytes of the element
-    MI_INLINE size_t get_size() const;
+    inline size_t get_size() const;
     /// Unique class ID so that the receiving host knows which class to create.
     /// \return unique class ID
-    MI_INLINE SERIAL::Class_id get_class_id() const;
+    inline SERIAL::Class_id get_class_id() const;
     /// Serialize the object to the given serializer including all sub elements.
     /// \param serializer the \c Serializer to use
     /// \return a pointer behind itself (e.g. this + 1) to handle arrays
@@ -421,17 +385,15 @@ class Type : public SERIAL::Serializable
     /// The table of all supported types with their type infos.
     static const Typeinfo m_typeinfo[];
 
-    std::string m_name;                         ///< field name, must be defined
+    std::string m_name;                                 ///< field name, must be defined
     Uint8 m_typecode;                                   ///< primitive Type_code: bool, int, ...
-    bool m_const;                                       ///< immutable value, can hardwire in shd
-    bool m_spare;                                       ///< not used
     Uint m_arraysize;                                   ///< number of elements, 0=dynamic
     Type* m_next;                                       ///< if part of struct, next member
     union {
-    Type* m_child;                                      ///< if TYPE_STRUCT, list of members
-    std::vector<std::pair<int, std::string> >* m_enum;
+        Type* m_child;                                  ///< if TYPE_STRUCT, list of members
+        std::vector<std::pair<int, std::string> >* m_enum;
     };
-    std::string m_type_name;                          ///< the unique name of the type
+    std::string m_type_name;                            ///< the unique name of the type
 
     /// Implementation of the deep copy.
     /// \param other the other \c Type
@@ -460,15 +422,9 @@ bool contains_expected_type(
     Type_code expected);
 
 
-#undef MI_INLINE
-
 }
 }
 
-#ifndef DEBUG_NON_INLINE
-#define MI_INLINE inline
 #include "attr_inline_type.h"
-#undef MI_INLINE
-#endif
 
 #endif

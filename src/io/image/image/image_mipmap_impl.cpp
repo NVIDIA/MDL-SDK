@@ -161,7 +161,8 @@ Mipmap_impl::Mipmap_impl(
 
     *errors = 0;
 
-    for( mi::Uint32 i = 0; i < m_nr_of_provided_levels; ++i)
+    for( mi::Uint32 i = 0; i < m_nr_of_provided_levels; ++i) {
+        mi::Sint32 errors_iteration = 0;
         m_levels[i] = new Canvas_impl(
             File_based(),
             filename,
@@ -169,7 +170,10 @@ Mipmap_impl::Mipmap_impl(
             i,
             image_file.get(),
             plugin_supports_selectors,
-            errors);
+            &errors_iteration);
+        if( *errors == 0)
+            *errors = errors_iteration;
+    }
 
     m_is_cubemap = false;
     mi::base::Handle<ICanvas> canvas_internal( m_levels[0]->get_interface<ICanvas>());
@@ -250,7 +254,8 @@ Mipmap_impl::Mipmap_impl(
 
     *errors = 0;
 
-    for( mi::Uint32 i = 0; i < m_nr_of_provided_levels; ++i)
+    for( mi::Uint32 i = 0; i < m_nr_of_provided_levels; ++i) {
+        mi::Sint32 errors_iteration = 0;
         m_levels[i] = new Canvas_impl(
             Container_based(),
             reader,
@@ -260,7 +265,10 @@ Mipmap_impl::Mipmap_impl(
             i,
             image_file.get(),
             plugin_supports_selectors,
-            errors);
+            &errors_iteration);
+        if( *errors == 0)
+            *errors = errors_iteration;
+    }
 
     m_is_cubemap = false;
     mi::base::Handle<ICanvas> canvas_internal( m_levels[0]->get_interface<ICanvas>());
@@ -339,7 +347,8 @@ Mipmap_impl::Mipmap_impl(
 
     *errors = 0;
 
-    for( mi::Uint32 i = 0; i < m_nr_of_provided_levels; ++i)
+    for( mi::Uint32 i = 0; i < m_nr_of_provided_levels; ++i) {
+        mi::Sint32 errors_iteration = 0;
         m_levels[i] = new Canvas_impl(
             Memory_based(),
             reader,
@@ -349,7 +358,10 @@ Mipmap_impl::Mipmap_impl(
             i,
             image_file.get(),
             plugin_supports_selectors,
-            errors);
+            &errors_iteration);
+        if( *errors == 0)
+            *errors = errors_iteration;
+    }
 
     m_is_cubemap = false;
     mi::base::Handle<ICanvas> canvas_internal( m_levels[0]->get_interface<ICanvas>());
@@ -389,14 +401,14 @@ mi::Uint32 Mipmap_impl::get_nlevels() const
 
 const mi::neuraylib::ICanvas* Mipmap_impl::get_level( mi::Uint32 level) const
 {
-    // level 0 is guaranteed to exist, no locking needed
+    if( level >= m_nr_of_levels)
+        return nullptr;
+
+    // Level 0 is guaranteed to exist, no locking needed.
     if( level == 0) {
         m_levels[0]->retain();
         return m_levels[0].get();
     }
-
-    if( level >= m_nr_of_levels)
-        return nullptr;
 
     SYSTEM::Access_module<Image_module> image_module(false);
     mi::base::Lock::Block block( &m_lock);
@@ -420,6 +432,9 @@ mi::neuraylib::ICanvas* Mipmap_impl::get_level( mi::Uint32 level) //-V659 PVS
 {
     if( level >= m_nr_of_levels)
         return nullptr;
+
+    // Level 0 is guaranteed to exist, but we might need to destroy higher levels, therefore
+    // no shortcut without locking as in the const case.
 
     SYSTEM::Access_module<Image_module> image_module(false);
     mi::base::Lock::Block block( &m_lock);

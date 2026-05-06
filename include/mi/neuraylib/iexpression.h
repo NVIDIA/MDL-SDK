@@ -61,8 +61,9 @@ enum Mdl_version : Uint32 {
     MDL_VERSION_1_8,                       ///< MDL version 1.8
     MDL_VERSION_1_9,                       ///< MDL version 1.9
     MDL_VERSION_1_10,                      ///< MDL version 1.10
+    MDL_VERSION_1_11,                      ///< MDL version 1.11
     MDL_VERSION_EXP,                       ///< MDL experimental features.
-    MDL_VERSION_LATEST = MDL_VERSION_1_10, ///< Latest MDL version
+    MDL_VERSION_LATEST = MDL_VERSION_1_11, ///< Latest MDL version
     MDL_VERSION_INVALID = 0xffffffffU      ///< Invalid MDL version
     MI_NEURAYLIB_DEPRECATED_ENUM_VALUE(MDL_VERSION_FORCE_32_BIT, 0xffffffffU)
 };
@@ -342,7 +343,7 @@ public:
     /// Returns the number of elements.
     virtual Size get_size() const = 0;
 
-    /// Returns the index for the given name, or -1 if there is no such expression.
+    /// Returns the index for the given name, or ~0U if there is no such expression.
     virtual Size get_index( const char* name) const = 0;
 
     /// Returns the name for the given index, or \c nullptr if there is no such expression.
@@ -631,7 +632,7 @@ public:
     /// Returns the number of elements.
     virtual Size get_size() const = 0;
 
-    /// Returns the index for the given name, or -1 if there is no such block.
+    /// Returns the index for the given name, or ~0U if there is no such block.
     virtual Size get_index( const char* name) const = 0;
 
     /// Returns the name for the given index, or \c nullptr if there is no such block.
@@ -823,7 +824,7 @@ public:
         DEFAULT_OPTIONS      = 0,
         /// This option indicates that call expressions should be compared for equality, not for
         /// identity. That is, the comparison is not done via
-        /// #mi::neuraylib::IExpression::get_value(), but by traversing into the referenced
+        /// #mi::neuraylib::IExpression_call::get_call(), but by traversing into the referenced
         /// function call, i.e., comparing the function definition reference and the arguments.
         /// This option is useful if you want to decide whether an argument is \em semantically
         /// equal to the corresponding default parameter.
@@ -1004,19 +1005,6 @@ public:
         bool force_cast,
         bool direct_call,
         Sint32* errors = nullptr) const = 0;
-
-#ifdef MI_NEURAYLIB_DEPRECATED_15_0
-    inline IExpression* create_cast(
-        IExpression* src_expr,
-        const IType* target_type,
-        const char* cast_db_name,
-        bool force_cast,
-        Sint32* errors = 0) const
-    {
-        return create_cast(
-            src_expr, target_type, cast_db_name, force_cast, false, errors);
-    }
-#endif // MI_NEURAYLIB_DEPRECATED_15_0
 
     /// Returns an expression which casts the source expression to a target type.
     ///

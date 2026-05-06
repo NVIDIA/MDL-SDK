@@ -41,10 +41,7 @@
 #include "compilercore_mdl.h"
 #include "compilercore_messages.h"
 #include "compilercore_errors.h"
-#include "compilercore_wchar_support.h"
 #include "compilercore_allocator.h"
-#include "compilercore_streams.h"
-#include "compilercore_printers.h"
 #include "compilercore_tools.h"
 #include "compilercore_file_utils.h"
 #include "compilercore_manifest.h"
@@ -302,7 +299,7 @@ File_resource_reader::~File_resource_reader()
 namespace {
 
 /// Implementation of the IInput_stream interface using FILE I/O.
-class Simple_file_input_stream : public Allocator_interface_implement<IInput_stream>
+class Simple_file_input_stream MDL_FINAL : public Allocator_interface_implement<IInput_stream>
 {
     typedef Allocator_interface_implement<IInput_stream> Base;
 public:
@@ -351,7 +348,7 @@ private:
 };
 
 /// Implementation of the IArchive_input_stream interface using archive I/O.
-class Archive_input_stream : public Allocator_interface_implement<IArchive_input_stream>
+class Archive_input_stream MDL_FINAL : public Allocator_interface_implement<IArchive_input_stream>
 {
     typedef Allocator_interface_implement<IArchive_input_stream> Base;
 public:
@@ -417,7 +414,7 @@ private:
 
 
 /// Implementation of the IMdle_input_stream interface using mdle I/O.
-class Mdle_input_stream : public Allocator_interface_implement<IMdle_input_stream>
+class Mdle_input_stream MDL_FINAL : public Allocator_interface_implement<IMdle_input_stream>
 {
     typedef Allocator_interface_implement<IMdle_input_stream> Base;
 public:

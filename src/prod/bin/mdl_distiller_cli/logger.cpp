@@ -31,10 +31,6 @@
 #include "logger.h"
 #include "options.h"
 
-static const char* const severity_name[] = {
-    "fatal", "error", "warn", "stat", "vstat", "progr", "info", "debug", "vdebg", "assrt" };
-
-
 const char* Logger::get_log_level( mi::base::Message_severity level) {
     switch( level) {
         case mi::base::MESSAGE_SEVERITY_FATAL:
@@ -54,7 +50,7 @@ const char* Logger::get_log_level( mi::base::Message_severity level) {
     }
 }
 
-void Logger::message( 
+void Logger::message(
     mi::base::Message_severity level,
     const char* module_category,
     const mi::base::Message_details&,
@@ -67,7 +63,7 @@ void Logger::message(
     if (m_test_suite) {
         if (m_path.length() > 0) {
             if (0 == strncmp("Rule <", message_text, 6)) {
-                // In test suite mode we trace rule matches in rule_matches.txt                
+                // In test suite mode we trace rule matches in rule_matches.txt
                 std::ofstream rule_file((m_path + SLASH + RUID_FILE).c_str(),
                                         std::ios::out | std::ios::app);
                 rule_file << "//RUID ";
@@ -77,7 +73,7 @@ void Logger::message(
                 rule_file.close();
             } else {
                 // In test suite mode we trace any logs in mdl_distiller.txt
-                std::ofstream log_file((m_path + SLASH + LOG_FILE).c_str(), 
+                std::ofstream log_file((m_path + SLASH + LOG_FILE).c_str(),
                                        std::ios::out | std::ios::app);
                 log_file << "\nTESTSUITE " << message;
                 log_file.close();
@@ -92,7 +88,8 @@ void Logger::message(
     bool trace_message = false;
     if ( (0 == strncmp("Rule <", message_text, 6))
          || (0 == strncmp("Check rule set '", message_text, 16))
-         || (m_debug_print && 0 == strncmp(">>> ", message_text, 4)))
+         || (m_debug_print && 0 == strncmp(">>> ", message_text, 4))
+         || (0 == strncmp("trace:", message_text, 6)))
         trace_message = true;
 
     if ( trace_message || (int(level) < m_level)) {

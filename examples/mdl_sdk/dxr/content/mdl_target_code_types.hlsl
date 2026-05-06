@@ -33,12 +33,80 @@
 // - MDL_NUM_TEXTURE_RESULTS
 // - USE_DERIVS
 // - MDL_DF_HANDLE_SLOT_MODE (-1, 1, 2, 4, or 8)
+// - MDL_SPECTRAL_RENDERING  (defined when spectral mode is enabled)
 #if !defined(MDL_DF_HANDLE_SLOT_MODE)
     #define MDL_DF_HANDLE_SLOT_MODE -1
 #endif
 
 #if defined(MDL_NUM_TEXTURE_RESULTS) && (MDL_NUM_TEXTURE_RESULTS > 0)
     #define USE_TEXTURE_RESULTS
+#endif
+
+// Number of spectral samples used in spectral rendering mode.
+// MDL_DF_SPECTRAL_SAMPLES must be propagated by the host (see example_dxr.cpp and
+// mdl_material_target.cpp) so that it matches the C++ value from
+// <mi/neuraylib/target_code_types.h>, which can be configured via the CMake option
+// MDL_DF_SPECTRAL_SAMPLES_OVERRIDE. Fail loudly if this propagation is missing.
+#if defined(MDL_SPECTRAL_RENDERING) && !defined(MDL_DF_SPECTRAL_SAMPLES)
+    #error "MDL_SPECTRAL_RENDERING is defined but MDL_DF_SPECTRAL_SAMPLES was not propagated by the host."
+#endif
+
+#if defined(MDL_SPECTRAL_RENDERING)
+/// Per-wavelength value used in spectral rendering.
+struct Spectral_sample {
+    float values[MDL_DF_SPECTRAL_SAMPLES];
+};
+
+/// Color fields in BSDF/EDF data structs are per-wavelength in spectral mode.
+#define Color_sample Spectral_sample
+/// PDF fields in BSDF/EDF data structs are per-wavelength in spectral mode.
+#define Pdf_sample   Spectral_sample
+
+Color_sample addcc(Color_sample a, Color_sample b)
+{
+    Color_sample result;
+    [unroll] for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        result.values[i] = a.values[i] + b.values[i];
+    return result;
+}
+
+Color_sample mulcc(Color_sample a, Color_sample b)
+{
+    Color_sample result;
+    [unroll] for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        result.values[i] = a.values[i] * b.values[i];
+    return result;
+}
+
+Color_sample mulcf(Color_sample a, float b)
+{
+    Color_sample result;
+    [unroll] for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        result.values[i] = a.values[i] * b;
+    return result;
+}
+
+#else
+
+/// Color fields in BSDF/EDF data structs are RGB in non-spectral mode.
+#define Color_sample float3
+/// PDF fields in BSDF/EDF data structs are scalar in non-spectral mode.
+#define Pdf_sample   float
+
+Color_sample addcc(Color_sample a, Color_sample b)
+{
+    return a + b;
+}
+
+Color_sample mulcc(Color_sample a, Color_sample b)
+{
+    return a * b;
+}
+
+Color_sample mulcf(Color_sample a, float b)
+{
+    return a * b;
+}
 #endif
 
 
@@ -159,6 +227,11 @@ struct Shading_state_material
     /// the scene data access. The fields of this structure are not altered by generated code.
     RENDERER_STATE_TYPE renderer_state;
 #endif
+
+#if defined(MDL_SPECTRAL_RENDERING)
+    /// The currently active wavelengths in nm for spectral rendering.
+    Spectral_sample spectral_wavelengths;
+#endif
 };
 
 #if defined(WITH_ENUM_SUPPORT)  // HLSL 2017 and above support enums
@@ -273,123 +346,123 @@ enum Mbsdf_part
 
 /// Input and output structure for BSDF sampling data.
 struct Bsdf_sample_data {
-    float3 ior1;                    ///< mutual input: IOR current medium
-    float3 ior2;                    ///< mutual input: IOR other side
-    float3 k1;                      ///< mutual input: outgoing direction
+    Color_sample    ior1;               ///< mutual input: IOR current medium
+    Color_sample    ior2;               ///< mutual input: IOR other side
+    float3          k1;                 ///< mutual input: outgoing direction
 
-    float3 k2;                      ///< output: incoming direction
-    float4 xi;                      ///< input: pseudo-random sample numbers in range [0, 1)
-    float pdf;                      ///< output: pdf (non-projected hemisphere)
-    float3 bsdf_over_pdf;           ///< output: bsdf * dot(normal, k2) / pdf
-    Bsdf_event_type event_type;     ///< output: the type of event for the generated sample
-    int handle;                     ///< output: handle of the sampled elemental BSDF (lobe)
+    float3          k2;                 ///< output: incoming direction
+    float4          xi;                 ///< input: pseudo-random sample numbers in range [0, 1)
+    Pdf_sample      pdf;                ///< output: pdf (non-projected hemisphere)
+    Color_sample    bsdf_over_pdf;      ///< output: bsdf * dot(normal, k2) / pdf
+    Bsdf_event_type event_type;         ///< output: the type of event for the generated sample
+    int             handle;             ///< output: handle of the sampled elemental BSDF (lobe)
 
-    Df_flags flags;                 ///< input: flags controlling calculation of result
-                                    ///<     (optional depending on backend options)
+    Df_flags        flags;              ///< input: flags controlling calculation of result
+                                        ///<     (optional depending on backend options)
 };
 
 /// Input and output structure for BSDF evaluation data.
 struct Bsdf_evaluate_data {
-    float3 ior1;                    ///< mutual input: IOR current medium
-    float3 ior2;                    ///< mutual input: IOR other side
-    float3 k1;                      ///< mutual input: outgoing direction
+    Color_sample    ior1;               ///< mutual input: IOR current medium
+    Color_sample    ior2;               ///< mutual input: IOR other side
+    float3          k1;                 ///< mutual input: outgoing direction
 
-    float3 k2;                      ///< input: incoming direction
+    float3          k2;                 ///< input: incoming direction
     #if (MDL_DF_HANDLE_SLOT_MODE != -1)
-        int handle_offset;          ///< output: handle offset to allow the evaluation of more then
-                                    ///  DF_HANDLE_SLOTS handles, calling 'evaluate' multiple times
+        int         handle_offset;      ///< input: handle offset to allow the evaluation of more
+                                        ///  than DF_HANDLE_SLOTS handles, calling 'evaluate' multiple times
     #endif
     #if (MDL_DF_HANDLE_SLOT_MODE == -1)
-        float3 bsdf_diffuse;        ///< output: (diffuse part of the) bsdf * dot(normal, k2)
-        float3 bsdf_glossy;         ///< output: (glossy part of the) bsdf * dot(normal, k2)
+        Color_sample bsdf_diffuse;      ///< output: (diffuse part of the) bsdf * dot(normal, k2)
+        Color_sample bsdf_glossy;       ///< output: (glossy part of the) bsdf * dot(normal, k2)
     #else
-        float3 bsdf_diffuse[MDL_DF_HANDLE_SLOT_MODE]; ///< output: (diffuse) bsdf * dot(normal, k2)
-        float3 bsdf_glossy[MDL_DF_HANDLE_SLOT_MODE];  ///< output: (glossy) bsdf * dot(normal, k2)
+        Color_sample bsdf_diffuse[MDL_DF_HANDLE_SLOT_MODE]; ///< output: (diffuse) bsdf * dot(normal, k2)
+        Color_sample bsdf_glossy[MDL_DF_HANDLE_SLOT_MODE];  ///< output: (glossy) bsdf * dot(normal, k2)
     #endif
-    float pdf;                      ///< output: pdf (non-projected hemisphere)
+    Pdf_sample      pdf;                ///< output: pdf (non-projected hemisphere)
 
-    Df_flags flags;                 ///< input: flags controlling calculation of result
-                                    ///<     (optional depending on backend options)
+    Df_flags        flags;              ///< input: flags controlling calculation of result
+                                        ///<     (optional depending on backend options)
 };
 
 /// Input and output structure for BSDF PDF calculation data.
 struct Bsdf_pdf_data {
-    float3 ior1;                    ///< mutual input: IOR current medium
-    float3 ior2;                    ///< mutual input: IOR other side
-    float3 k1;                      ///< mutual input: outgoing direction
+    Color_sample    ior1;               ///< mutual input: IOR current medium
+    Color_sample    ior2;               ///< mutual input: IOR other side
+    float3          k1;                 ///< mutual input: outgoing direction
 
-    float3 k2;                      ///< input: incoming direction
-    float pdf;                      ///< output: pdf (non-projected hemisphere)
+    float3          k2;                 ///< input: incoming direction
+    Pdf_sample      pdf;                ///< output: pdf (non-projected hemisphere)
 
-    Df_flags flags;                 ///< input: flags controlling calculation of result
-                                    ///<     (optional depending on backend options)
+    Df_flags        flags;              ///< input: flags controlling calculation of result
+                                        ///<     (optional depending on backend options)
 };
 
 /// Input and output structure for BSDF auxiliary calculation data.
 struct Bsdf_auxiliary_data {
-    float3 ior1;                    ///< mutual input: IOR current medium
-    float3 ior2;                    ///< mutual input: IOR other side
-    float3 k1;                      ///< mutual input: outgoing direction
+    Color_sample    ior1;               ///< mutual input: IOR current medium
+    Color_sample    ior2;               ///< mutual input: IOR other side
+    float3          k1;                 ///< mutual input: outgoing direction
 
     #if (MDL_DF_HANDLE_SLOT_MODE != -1)
-        int handle_offset;          ///< output: handle offset to allow the evaluation of more then
-                                    ///  DF_HANDLE_SLOTS handles, calling 'auxiliary' multiple times
+        int         handle_offset;      ///< input: handle offset to allow the evaluation of more
+                                        ///  than DF_HANDLE_SLOTS handles, calling 'auxiliary' multiple times
     #endif
     #if (MDL_DF_HANDLE_SLOT_MODE == -1)
-        float3 albedo_diffuse;      ///< output: (diffuse part of the) albedo
-        float3 albedo_glossy;       ///< output: (glossy part of the) albedo
-        float3 normal;              ///< output: normal
+        Color_sample albedo_diffuse;    ///< output: (diffuse part of the) albedo
+        Color_sample albedo_glossy;     ///< output: (glossy part of the) albedo
+        float3       normal;            ///< output: normal
     #else
-        float3 albedo_diffuse[MDL_DF_HANDLE_SLOT_MODE]; ///< output: (diffuse part of the) albedo
-        float3 albedo_glossy[MDL_DF_HANDLE_SLOT_MODE];  ///< output: (glossy part of the) albedo
-        float3 normal[MDL_DF_HANDLE_SLOT_MODE];         ///< output: normal
+        Color_sample albedo_diffuse[MDL_DF_HANDLE_SLOT_MODE]; ///< output: (diffuse) albedo
+        Color_sample albedo_glossy[MDL_DF_HANDLE_SLOT_MODE];  ///< output: (glossy) albedo
+        float3       normal[MDL_DF_HANDLE_SLOT_MODE];         ///< output: normal
     #endif
 
     #if (MDL_DF_HANDLE_SLOT_MODE == -1)
-        float3 roughness;                          ///< output: glossy rougness_u,
-                                                   ///< glossy roughness_v, bsdf_weight
+        float3       roughness;         ///< output: glossy roughness_u,
+                                        ///<     glossy roughness_v, bsdf_weight
     #else
-        float3 roughness[MDL_DF_HANDLE_SLOT_MODE]; ///< output: glossy rougness_u,
-                                                   ///< glossy roughness_v, bsdf_weight
+        float3       roughness[MDL_DF_HANDLE_SLOT_MODE]; ///< output: glossy roughness_u,
+                                                         ///<     glossy roughness_v, bsdf_weight
     #endif
 
-    Df_flags flags;                 ///< input: flags controlling calculation of result
-                                    ///<     (optional depending on backend options)
+    Df_flags        flags;              ///< input: flags controlling calculation of result
+                                        ///<     (optional depending on backend options)
 };
 
 /// Input and output structure for EDF sampling data.
 struct Edf_sample_data
 {
-    float4 xi;                      ///< input: pseudo-random sample numbers in range [0, 1)
-    float3 k1;                      ///< output: outgoing direction
-    float pdf;                      ///< output: pdf (non-projected hemisphere)
-    float3 edf_over_pdf;            ///< output: edf * dot(normal,k1) / pdf
-    Edf_event_type event_type;      ///< output: the type of event for the generated sample
-    int handle;                     ///< output: handle of the sampled elemental EDF (lobe)
+    float4          xi;                 ///< input: pseudo-random sample numbers in range [0, 1)
+    float3          k1;                 ///< output: outgoing direction
+    Pdf_sample      pdf;                ///< output: pdf (non-projected hemisphere)
+    Color_sample    edf_over_pdf;       ///< output: edf * dot(normal,k1) / pdf
+    Edf_event_type  event_type;         ///< output: the type of event for the generated sample
+    int             handle;             ///< output: handle of the sampled elemental EDF (lobe)
 };
 
 /// Input and output structure for EDF evaluation data.
 struct Edf_evaluate_data
 {
-    float3 k1;                      ///< input: outgoing direction
+    float3          k1;                 ///< input: outgoing direction
     #if (MDL_DF_HANDLE_SLOT_MODE != -1)
-        int handle_offset;          ///< output: handle offset to allow the evaluation of more then
-                                    ///  DF_HANDLE_SLOTS handles, calling 'evaluate' multiple times
+        int         handle_offset;      ///< input: handle offset to allow the evaluation of more
+                                        ///  than DF_HANDLE_SLOTS handles, calling 'evaluate' multiple times
     #endif
-    float cos;                      ///< output: dot(normal, k1)
+    float           cos;                ///< output: dot(normal, k1)
     #if (MDL_DF_HANDLE_SLOT_MODE == -1)
-        float3 edf;                 ///< output: edf
+        Color_sample edf;               ///< output: edf
     #else
-        float3 edf[MDL_DF_HANDLE_SLOT_MODE]; ///< output: edf
+        Color_sample edf[MDL_DF_HANDLE_SLOT_MODE]; ///< output: edf
     #endif
-    float pdf;                      ///< output: pdf (non-projected hemisphere)
+    Pdf_sample      pdf;                ///< output: pdf (non-projected hemisphere)
 };
 
 /// Input and output structure for EDF PDF calculation data.
 struct Edf_pdf_data
 {
-    float3 k1;                      ///< input: outgoing direction
-    float pdf;                      ///< output: pdf (non-projected hemisphere)
+    float3     k1;                      ///< input: outgoing direction
+    Pdf_sample pdf;                     ///< output: pdf (non-projected hemisphere)
 };
 
 /// Input and output structure for EDF PDF calculation data.

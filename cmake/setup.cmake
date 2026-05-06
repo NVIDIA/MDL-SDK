@@ -170,6 +170,14 @@ mark_as_advanced(MDL_INCLUDE_FOLDER)
 mark_as_advanced(MDL_SRC_FOLDER)
 mark_as_advanced(MDL_EXAMPLES_FOLDER)
 
+option(MDL_MSVC_DYNAMIC_RUNTIME "Links binaries on Windows with the MSVC dynamic runtime (/MD or /MDd) instead of the static one (/MT or /MTd)." OFF)
+
+if(EXISTS ${MDL_SRC_FOLDER}/api)
+    set(MDL_DF_SPECTRAL_SAMPLES_OVERRIDE "" CACHE STRING "Allows to override the default number of elements in a spectral sample.")
+else()
+    set(MDL_DF_SPECTRAL_SAMPLES_OVERRIDE "" CACHE INTERNAL "" FORCE)
+endif()
+
 # print system/build information for error reporting
 if(MDL_LOG_PLATFORM_INFOS)
     message(STATUS "[INFO] MDL_BASE_FOLDER:                          ${MDL_BASE_FOLDER}")
@@ -180,6 +188,8 @@ if(MDL_LOG_PLATFORM_INFOS)
     message(STATUS "[INFO] MDL_LOG_DEPENDENCIES:                     ${MDL_LOG_DEPENDENCIES}")
     message(STATUS "[INFO] MDL_LOG_FILE_DEPENDENCIES:                ${MDL_LOG_FILE_DEPENDENCIES}")
     message(STATUS "[INFO] MDL_TREAT_RUNTIME_DEPS_AS_BUILD_DEPS:     ${MDL_TREAT_RUNTIME_DEPS_AS_BUILD_DEPS}")
+    message(STATUS "[INFO] MDL_BUILD_WITHOUT_CUDA_DRIVER:            ${MDL_BUILD_WITHOUT_CUDA_DRIVER}")
+    message(STATUS "[INFO] MDL_BUILD_SEPARATE_DEBUG_INFO:            ${MDL_BUILD_SEPARATE_DEBUG_INFO}")
     message(STATUS "[INFO] MDL_ADDITIONAL_COMPILER_OPTIONS:          ${MDL_ADDITIONAL_COMPILER_OPTIONS}")
 
     message(STATUS "[INFO] CMAKE_VERSION:                            ${CMAKE_VERSION}")
@@ -204,6 +214,7 @@ if(MDL_LOG_PLATFORM_INFOS)
     if(MSVC)
         message(STATUS "[INFO] MSVC_VERSION:                             ${MSVC_VERSION}")
         message(STATUS "[INFO] MSVC_IDE:                                 ${MSVC_IDE}")
+        message(STATUS "[INFO] MDL_MSVC_DYNAMIC_RUNTIME:                 ${MDL_MSVC_DYNAMIC_RUNTIME}")
     endif()
     message(STATUS "[INFO] CMAKE_CXX_FLAGS:                          ${CMAKE_CXX_FLAGS}")
     message(STATUS "[INFO] CMAKE_CXX_FLAGS_DEBUG:                    ${CMAKE_CXX_FLAGS_DEBUG}")
@@ -241,8 +252,6 @@ if(MDL_LOG_PLATFORM_INFOS)
     message(STATUS "[INFO] GRAPHVIZ_DIR:                             ${GRAPHVIZ_DIR}")
 endif()
 
-option(MDL_MSVC_DYNAMIC_RUNTIME "Links binaries on Windows with the MSVC dynamic runtime (/MD or /MDd) instead of the static one (/MT or /MTd)." OFF)
-
 # check for dependencies
 # pre-declare all options that are used
 # in order to show them in CMake-Gui, even the script stops because of an error.
@@ -260,20 +269,12 @@ option(MDL_ENABLE_PYTHON_UNIT_TEST_COVERAGE "Generates a coverage report when ru
 
 if(EXISTS ${MDL_SRC_FOLDER}/api)
     option(MDL_BUILD_DOCUMENTATION "Enable the build of the API reference documentation." ON)
-else()
-    set(MDL_BUILD_DOCUMENTATION OFF CACHE INTERNAL "Enable the build of the API reference documentation." FORCE)
 endif()
 
 if(EXISTS ${MDL_SRC_FOLDER}/api)
     option(MDL_ENABLE_UNIT_TESTS "Generates unit tests." ON)
 else()
     set(MDL_ENABLE_UNIT_TESTS OFF CACHE INTERNAL "Generates unit tests." FORCE)
-endif()
-
-if(MDL_LOG_PLATFORM_INFOS)
-    if(MSVC)
-        message(STATUS "[INFO] MDL_MSVC_DYNAMIC_RUNTIME:                 ${MDL_MSVC_DYNAMIC_RUNTIME}")
-    endif()
 endif()
 
 # list of tests that can be defined only after all other targets are setup (clear that list here)
@@ -399,4 +400,5 @@ if(MDL_LOG_PLATFORM_INFOS)
     message(STATUS "[INFO] MDL_ENABLE_PYTHON_BINDINGS:               ${MDL_ENABLE_PYTHON_BINDINGS}")
     message(STATUS "[INFO] MDL_ENABLE_UNIT_TESTS:                    ${MDL_ENABLE_UNIT_TESTS}")
     message(STATUS "[INFO] MDL_BUILD_DOCUMENTATION:                  ${MDL_BUILD_DOCUMENTATION}")
+    message(STATUS "[INFO] MDL_DF_SPECTRAL_SAMPLES_OVERRIDE:         ${MDL_DF_SPECTRAL_SAMPLES_OVERRIDE}")
 endif()

@@ -46,7 +46,6 @@
 #include "generator_jit_context.h"
 #include "generator_jit_llvm.h"
 #include "generator_jit_type_map.h"
-#include "generator_jit_res_manager.h"
 
 namespace mi {
 namespace mdl {
@@ -275,11 +274,33 @@ Function_context::Function_context(
  , m_full_debug_info(code_gen.generate_full_debug_info())
  , m_break_stack(BB_stack::container_type(alloc))
  , m_continue_stack(BB_stack::container_type(alloc))
- , m_di_function(func->getSubprogram())
+ , m_di_function(nullptr)
  , m_dilb_stack(DILB_stack::container_type(alloc))
  , m_accesible_parameters(alloc)
 , m_prev_ctx(NULL)
 {
+    if (llvm::DISubprogram *subprogram = func->getSubprogram()) {
+        m_di_file     = subprogram->getFile();
+        m_di_function = subprogram;
+    } else if (m_di_builder != nullptr) {
+        // just create a dummy function with a dummy subprogram
+        m_di_function = m_di_builder->createFunction(
+            /*Scope=*/m_di_file,
+            /*Name=*/func->getName(),
+            /*LinkageName=*/func->getName(),
+            /*File=*/m_di_file,
+            /*LineNo=*/1,
+            /*Ty=*/m_type_mapper.get_debug_info_type(
+                m_di_builder, m_di_file, func->getFunctionType()),
+            /*ScopeLine=*/1,
+            llvm::DINode::FlagPrototyped,
+            llvm::DISubprogram::toSPFlags(
+                /*IsLocalToUnit=*/true,
+                /*IsDefinition=*/true,
+                /*IsOptimized=*/code_gen.is_optimized())
+        );
+    }
+
     // set fast-math flags
     llvm::FastMathFlags FMF;
     if (code_gen.is_fast_math_enabled()) {
@@ -313,10 +334,15 @@ Function_context::Function_context(
 
     if (m_di_function != nullptr) {
         m_ir_builder.SetCurrentDebugLocation(llvm::DILocation::get(
-            m_di_function->getContext(), m_di_function->getLine(), 0, m_di_function));
+            m_di_function->getContext(), m_di_function->getScopeLine(), 0, m_di_function));
+
+        push_block_scope(*m_di_function);
     } else {
         // debug info is not possible without a function with a DISubprogram
         m_full_debug_info = false;
+
+        // we need a scope for the function body, so use the global dummy position
+        push_block_scope(&one_pos);
     }
 
     // must be the last call
@@ -1045,23 +1071,39 @@ llvm::Value *Function_context::get_constant(mi::mdl::IValue const *v)
     case mi::mdl::IValue::VK_STRING:
         return get_constant(cast<mi::mdl::IValue_string>(v));
 
+    case mi::mdl::IValue::VK_SPECTRAL_SAMPLE:
+        {
+            mi::mdl::IValue_spectral_sample const *spectral_sample_v =
+                cast<mi::mdl::IValue_spectral_sample>(v);
+            if (spectral_sample_v->is_zero()) {
+                return get_constant_spectral_sample_zero();
+            } else {
+                return get_constant_spectral_sample_one();
+            }
+        }
+        break;
+
     case mi::mdl::IValue::VK_VECTOR:
     case mi::mdl::IValue::VK_RGB_COLOR:
+    case mi::mdl::IValue::VK_SPECTRUM:
     case mi::mdl::IValue::VK_MATRIX:
-        // these three are all encoded similar
+        // these are all encoded similar
         {
-            llvm::Constant *elems[16];
-
             mi::mdl::IValue_compound const *arr_v = cast<mi::mdl::IValue_compound>(v);
-            size_t n_elemns = arr_v->get_component_count();
+            size_t n_comps = arr_v->get_component_count();
+            size_t v_size = 1;
+
+            if (kind == mi::mdl::IValue::VK_MATRIX) {
+                mi::mdl::IType_matrix const *m_type = cast<mi::mdl::IType_matrix>(v->get_type());
+                mi::mdl::IType_vector const *v_type = m_type->get_element_type();
+                v_size = v_type->get_size();
+            }
+
+            llvm::SmallVector<llvm::Constant *, 16> elems(n_comps * v_size);
 
             if (kind == mi::mdl::IValue::VK_MATRIX) {
                 // flat matrix values
-                mi::mdl::IType_matrix const *m_type = cast<mi::mdl::IType_matrix>(v->get_type());
-                mi::mdl::IType_vector const *v_type = m_type->get_element_type();
-                size_t                      v_size  = v_type->get_size();
-
-                for (size_t i = 0; i < n_elemns; ++i) {
+                for (size_t i = 0; i < n_comps; ++i) {
                     mi::mdl::IValue_compound const *vec_v =
                         cast<mi::mdl::IValue_compound>(arr_v->get_value(i));
 
@@ -1071,9 +1113,8 @@ llvm::Value *Function_context::get_constant(mi::mdl::IValue const *v)
                         elems[i * v_size + j] = llvm::cast<llvm::Constant>(elem_v);
                     }
                 }
-                n_elemns *= v_size;
             } else {
-                for (size_t i = 0; i < n_elemns; ++i) {
+                for (size_t i = 0; i < n_comps; ++i) {
                     llvm::Value *elem_v = get_constant(arr_v->get_value(i));
 
                     elems[i] = llvm::cast<llvm::Constant>(elem_v);
@@ -1085,7 +1126,7 @@ llvm::Value *Function_context::get_constant(mi::mdl::IValue const *v)
 
             if (tp->isVectorTy()) {
                 // encode into a vector
-                return llvm::ConstantVector::get(llvm::ArrayRef<llvm::Constant *>(elems, n_elemns));
+                return llvm::ConstantVector::get(elems);
             } else {
                 llvm::ArrayType *a_tp = llvm::cast<llvm::ArrayType>(tp);
                 llvm::Type      *e_tp = a_tp->getArrayElementType();
@@ -1107,8 +1148,7 @@ llvm::Value *Function_context::get_constant(mi::mdl::IValue const *v)
                         a_tp, llvm::ArrayRef<llvm::Constant *>(vectors, n_cols));
                 } else {
                     // encode a matrix/vector into an array of scalars (scalar mode)
-                    return llvm::ConstantArray::get(
-                        a_tp, llvm::ArrayRef<llvm::Constant *>(elems, n_elemns));
+                    return llvm::ConstantArray::get(a_tp, elems);
                 }
             }
         }
@@ -1234,6 +1274,34 @@ llvm::Constant *Function_context::get_constant(
     }
 
     return llvm::ConstantVector::get(cnst);
+}
+
+// Get a spectral sample zero constant.
+llvm::Constant *Function_context::get_constant_spectral_sample_zero()
+{
+    return llvm::ConstantAggregateZero::get(m_type_mapper.get_spectral_sample_type());
+}
+
+// Get a spectral sample one constant.
+llvm::Constant *Function_context::get_constant_spectral_sample_one()
+{
+    llvm::StructType *spectral_sample_type = m_type_mapper.get_spectral_sample_type();
+    llvm::Constant *one = get_constant(1.0f);
+    if (m_type_mapper.is_spectral_enabled()) {
+        // real spectral sample: { [n x float] }
+        llvm::SmallVector<llvm::Constant *> elems(MDL_DF_SPECTRAL_SAMPLES, one);
+        llvm::Constant *one_array = llvm::ConstantArray::get(
+            llvm::cast<llvm::ArrayType>(spectral_sample_type->getStructElementType(0)),
+            elems);
+        llvm::Constant *one_spectral_sample = llvm::ConstantStruct::get(
+            llvm::cast<llvm::StructType>(spectral_sample_type), { one_array });
+        return one_spectral_sample;
+    } else {
+        // rgb color: { float, float, float }
+        llvm::SmallVector<llvm::Constant *> elems(
+            spectral_sample_type->getStructNumElements(), one);
+        return llvm::ConstantStruct::get(spectral_sample_type, elems);
+    }
 }
 
 // Get the file name of a module.
@@ -1370,33 +1438,44 @@ llvm::Value *Function_context::create_mul(
     llvm::Value *lhs,
     llvm::Value *rhs)
 {
-    if (llvm::ArrayType *a_tp = llvm::dyn_cast<llvm::ArrayType>(res_type)) {
-        llvm::Value *res = llvm::ConstantAggregateZero::get(a_tp);
-        llvm::Type *e_tp = a_tp->getElementType();
+    // spectral sample multiplication
+    if (is_spectral_sample_type(res_type)) {
+        MDL_ASSERT(is_spectral_sample_type(lhs->getType()) &&
+            is_spectral_sample_type(rhs->getType()) &&
+            "lhs and rhs must be spectral samples");
+        llvm::Value *lhs_values = get_spectral_sample_values(lhs);
+        llvm::Value *rhs_values = get_spectral_sample_values(rhs);
+        llvm::Value *res_values = create_mul(
+            lhs_values->getType(), lhs_values, rhs_values);
+        return m_ir_builder.CreateInsertValue(llvm::UndefValue::get(res_type), res_values, { 0 });
+    }
 
-        bool l_is_array = lhs->getType() == a_tp;
-        bool r_is_array = rhs->getType() == a_tp;
+    // array/struct (e.g. float3) multiplication
+    if (llvm::isa<llvm::ArrayType>(res_type) || llvm::isa<llvm::StructType>(res_type)) {
+        llvm::Value *res = llvm::UndefValue::get(res_type);
+        llvm::Type *e_tp = get_element_type(res_type);
 
-        unsigned idxes[1];
-        for (unsigned i = 0, n = unsigned(a_tp->getNumElements()); i < n; ++i) {
-            idxes[0] = i;
+        bool l_is_compound = lhs->getType() == res_type;
+        bool r_is_compound = rhs->getType() == res_type;
 
+        for (unsigned i = 0, n = unsigned(get_num_elements(res_type)); i < n; ++i) {
             llvm::Value *l = lhs;
-            if (l_is_array) {
-                l = m_ir_builder.CreateExtractValue(lhs, idxes);
+            if (l_is_compound) {
+                l = create_extract(lhs, i);
             }
 
             llvm::Value *r = rhs;
-            if (r_is_array) {
-                r = m_ir_builder.CreateExtractValue(rhs, idxes);
+            if (r_is_compound) {
+                r = create_extract(rhs, i);
             }
 
             llvm::Value *elem = create_mul(e_tp, l, r);
 
-            res = m_ir_builder.CreateInsertValue(res, elem, idxes);
+            res = create_insert(res, elem, i);
         }
         return res;
     } else {
+        // vector multiplication? -> create a splat for scalar arguments
         if (llvm::VectorType *v_tp = llvm::dyn_cast<llvm::VectorType>(res_type)) {
             if (lhs->getType() != v_tp) {
                 lhs = create_vector_splat(v_tp, lhs);
@@ -1405,6 +1484,8 @@ llvm::Value *Function_context::create_mul(
                 rhs = create_vector_splat(v_tp, rhs);
             }
         }
+
+        // scalar or vector multiplication
         llvm::Value *res = res_type->isIntOrIntVectorTy() ?
             m_ir_builder.CreateMul(lhs, rhs) : m_ir_builder.CreateFMul(lhs, rhs);
         return res;
@@ -1844,19 +1925,39 @@ llvm::Value *Function_context::create_splat(llvm::Type *res_type, llvm::Value *v
 // Get the number of elements for a vector or an array.
 unsigned Function_context::get_num_elements(llvm::Value *val)
 {
-    if (llvm::FixedVectorType *v_tp = llvm::dyn_cast<llvm::FixedVectorType>(val->getType()))
-        return unsigned(v_tp->getNumElements());
-    else
-        return unsigned(llvm::cast<llvm::ArrayType>(val->getType())->getNumElements());
+    return get_num_elements(val->getType());
 }
+
+// Get the number of elements for a vector or an array.
+unsigned Function_context::get_num_elements(llvm::Type *type)
+{
+    if (llvm::FixedVectorType *v_tp = llvm::dyn_cast<llvm::FixedVectorType>(type)) {
+        return unsigned(v_tp->getNumElements());
+    } else if (llvm::ArrayType *a_tp = llvm::dyn_cast<llvm::ArrayType>(type)) {
+        return unsigned(a_tp->getNumElements());
+    } else if (llvm::StructType *s_tp = llvm::dyn_cast<llvm::StructType>(type)) {
+        return unsigned(s_tp->getNumElements());
+    } else {
+        MDL_ASSERT(!"Invalid type for get_num_elements()");
+        return 0;
+    }
+}
+
+
 
 // Get the element type for a fixed vector or an array.
 llvm::Type *Function_context::get_element_type(llvm::Type *type)
 {
-    if (llvm::FixedVectorType *v_tp = llvm::dyn_cast<llvm::FixedVectorType>(type))
+    if (llvm::FixedVectorType *v_tp = llvm::dyn_cast<llvm::FixedVectorType>(type)) {
         return v_tp->getElementType();
-    else
-        return llvm::cast<llvm::ArrayType>(type)->getElementType();
+    } else if (llvm::ArrayType *a_tp = llvm::dyn_cast<llvm::ArrayType>(type)) {
+        return a_tp->getElementType();
+    } else if (llvm::StructType *s_tp = llvm::dyn_cast<llvm::StructType>(type)) {
+        return s_tp->getElementType(0);
+    } else {
+        MDL_ASSERT(!"Invalid type for get_element_type()");
+        return NULL;
+    }
 }
 
 // Creates a ExtractValue or ExtractElement instruction.
@@ -2134,6 +2235,20 @@ void Function_context::push_block_scope(mi::mdl::Position const *pos)
     }
 }
 
+// Creates a new block scope for a function and push it.
+void Function_context::push_block_scope(llvm::DISubprogram &di_func)
+{
+    if (m_di_builder != NULL) {
+        unsigned scope_line = di_func.getScopeLine();
+        llvm::DILexicalBlock *lexicalBlock = m_di_builder->createLexicalBlock(
+            &di_func,
+            di_func.getFile(),
+            scope_line,
+            /*column=*/1);
+        m_dilb_stack.push(lexicalBlock);
+    }
+}
+
 // Pop a variable scope, running destructors if necessary.
 void Function_context::pop_block_scope()
 {
@@ -2391,6 +2506,18 @@ void Function_context::set_deferred_size(llvm::Value *arr_desc_ptr, llvm::Value 
     llvm::Value *idx      = get_constant(Type_mapper::ARRAY_DESC_SIZE);
     llvm::Value *size_adr = create_simple_gep_in_bounds(arr_desc_ptr, idx);
     m_ir_builder.CreateStore(size, size_adr);
+}
+
+// Returns true, if the given LLVM type is a spectral sample type.
+bool Function_context::is_spectral_sample_type(llvm::Type *type)
+{
+    return m_type_mapper.is_spectral_enabled() && type == m_type_mapper.get_spectral_sample_type();
+}
+
+// Get the values of a spectral sample.
+llvm::Value *Function_context::get_spectral_sample_values(llvm::Value *sample)
+{
+    return m_ir_builder.CreateExtractValue(sample, { 0 });
 }
 
 // Returns true, if the given LLVM type is a derivative type.
@@ -3147,10 +3274,48 @@ llvm::FunctionCallee Function_context::get_tex_lookup_func(
         float const theta_phi[2])
 
 #define ARGS_adapt_normal\
-    ARGS3( \
+    ARGS4( \
         float result[3], \
         Core_tex_handler const *self, \
+        Shading_state_material *state, \
         float const normal[3])
+
+#define ARGS_adapt_normal_deriv\
+    ARGS4( \
+        float result[3], \
+        Core_tex_handler const *self, \
+        Shading_state_material_deriv *state, \
+        float const normal[3])
+
+#define ARGS_rgb_to_spectral_x \
+    ARGS4( \
+        tct_spectral_sample *result, \
+        Core_tex_handler const *self, \
+        Shading_state_material *state \
+        float const rgb[3], \
+    )
+
+#define ARGS_rgb_to_spectral_x_deriv \
+    ARGS4( \
+        tct_spectral_sample *result, \
+        Core_tex_handler const *self, \
+        Shading_state_material_deriv *state \
+        float const rgb[3], \
+    )
+
+#define ARGS_get_wavelengths \
+    ARGS3( \
+        tct_spectral_sample *result \
+        Core_tex_handler const *self, \
+        Shading_state_material *state, \
+    )
+
+#define ARGS_get_wavelengths_deriv \
+    ARGS3( \
+        tct_spectral_sample *result \
+        Core_tex_handler const *self, \
+        Shading_state_material_deriv *state, \
+    )
 
 #define ARGS_sdata_isvalid \
     ARGS3( \
@@ -3337,6 +3502,11 @@ llvm::FunctionCallee Function_context::get_tex_lookup_func(
         { "df_bsdf_measurement_pdf",            OCP(ARGS_mbsdf_pdf) },
         { "df_bsdf_measurement_albedos",        OCP(ARGS_mbsdf_albedos) },
         { "adapt_normal",                       OCP(ARGS_adapt_normal) },
+        { "rgb_to_spectral_ior",                OCP(ARGS_rgb_to_spectral_x) },
+        { "rgb_to_spectral_reflectance",        OCP(ARGS_rgb_to_spectral_x) },
+        { "rgb_to_spectral_luminance",          OCP(ARGS_rgb_to_spectral_x) },
+        { "rgb_to_spectral_volume_coefficient", OCP(ARGS_rgb_to_spectral_x) },
+        { "get_wavelengths",                    OCP(ARGS_get_wavelengths) },
         { "scene_data_isvalid",                 OCP(ARGS_sdata_isvalid) },
         { "scene_data_lookup_float",            OCP(ARGS_sdata_lookup_float) },
         { "scene_data_lookup_float2",           OCP(ARGS_sdata_lookup_float2) },
@@ -3375,7 +3545,12 @@ llvm::FunctionCallee Function_context::get_tex_lookup_func(
         { "df_bsdf_measurement_sample",         OCP(ARGS_mbsdf_sample) },
         { "df_bsdf_measurement_pdf",            OCP(ARGS_mbsdf_pdf) },
         { "df_bsdf_measurement_albedos",        OCP(ARGS_mbsdf_albedos) },
-        { "adapt_normal",                       OCP(ARGS_adapt_normal) },
+        { "adapt_normal_deriv",                 OCP(ARGS_adapt_normal_deriv) },
+        { "rgb_to_spectral_ior_deriv",          OCP(ARGS_rgb_to_spectral_x_deriv) },
+        { "rgb_to_spectral_reflectance_deriv",  OCP(ARGS_rgb_to_spectral_x_deriv) },
+        { "rgb_to_spectral_luminance_deriv",    OCP(ARGS_rgb_to_spectral_x_deriv) },
+        { "rgb_to_spectral_volume_coefficient_deriv", OCP(ARGS_rgb_to_spectral_x_deriv) },
+        { "get_wavelengths_deriv",              OCP(ARGS_get_wavelengths_deriv) },
         { "scene_data_isvalid",                 OCP(ARGS_sdata_isvalid) },
         { "scene_data_lookup_float",            OCP(ARGS_sdata_lookup_float) },
         { "scene_data_lookup_float2",           OCP(ARGS_sdata_lookup_float2) },

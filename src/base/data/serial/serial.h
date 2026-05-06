@@ -43,7 +43,7 @@ namespace SERIAL {
 
 /// The Serializer_impl will abstract from the concrete serialization target and will free the
 /// Serializable classes from having to write out class id etc.
-class Serializer_impl : public Serializer, public MI::MEM::Allocatable
+class Serializer_impl : public Serializer
 {
 public:
     Serializer_impl() : m_id_counter(1), m_helper() { }
@@ -84,10 +84,9 @@ public:
     void write(const Sint64* values, Size count) override { do_write(values, count); }
     void write(const float* values, Size count) override { do_write(values, count); }
     void write(const double* values, Size count) override { do_write(values, count); }
+
     void write(const DB::Tag& value) override;
     void write(const char* value) override;
-    void write(const CONT::Bitvector& value) override;
-    void write(const CONT::Dictionary& value) override;
 
     void write_size_t(size_t value) override;
 
@@ -134,7 +133,7 @@ class Deserialization_manager;
 ///
 /// In case of deserialization error (end marker not found, etc) it will call the
 /// error handler. The default error handler logs a fatal error.
-class Deserializer_impl : public Deserializer, public MI::MEM::Allocatable
+class Deserializer_impl : public Deserializer
 {
 public:
     Deserializer_impl(Deserialization_manager* deserialization_manager);
@@ -178,8 +177,6 @@ public:
 
     void read(DB::Tag* value_pointer) override;
     void read(char** value_pointer) override;
-    void read(CONT::Bitvector* value_type) override;
-    void read(CONT::Dictionary* value_pointer) override;
 
     void read_size_t(size_t* value) override;
 
@@ -225,7 +222,7 @@ private:
 // The deserialization manager is needed to provide an instance of a class identified by the class
 // id found in the deserialization stream. This class will then provide the deserialization
 // function.
-class Deserialization_manager : public MI::MEM::Allocatable
+class Deserialization_manager
 {
 public:
     // Create an instance of a class implementing the interface.
@@ -269,3 +266,4 @@ public:
 } // namespace MI
 
 #endif // BASE_DATA_SERIAL_SERIAL_H
+

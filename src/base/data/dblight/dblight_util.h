@@ -31,8 +31,11 @@
 
 #include <chrono>
 #include <iosfwd>
+#include <functional>
+#include <string>
 
 #include <boost/core/noncopyable.hpp>
+#include <boost/intrusive_ptr.hpp>
 
 #include <mi/base/types.h>
 
@@ -44,27 +47,129 @@
 /// The statistics are dumped when the database is destroyed.
 // #define DBLIGHT_ENABLE_STATISTICS
 
-/// Enable this macro to acquire the shared lock always exclusively.
-// #define DBLIGHT_NO_BLOCK_SHARED
-
-/// Enable this macro to replace the shared lock by a standard (exclusive) lock.
-// #define DBLIGHT_NO_SHARED_LOCK
-
-#if defined( DBLIGHT_NO_BLOCK_SHARED) || defined( DBLIGHT_NO_SHARED_LOCK)
-#define Block_shared Block
-#define check_is_owned_shared_or_exclusive check_is_owned
-#endif
-
-#if defined( DBLIGHT_NO_SHARED_LOCK)
-#define Shared_lock Lock
-#endif
+/// Enable this macro to run the admin server.
+// #define DBLIGHT_ENABLE_ADMIN_SERVER
 
 namespace MI {
 
 namespace DBLIGHT {
 
+
+/// Creates a boost::intrusive_ptr \em without increasing the reference count.
+///
+/// Use the regular constructor to create intrusive pointers with increased reference count
+/// (\p add_ref defaults to \c true).
+template <class T>
+boost::intrusive_ptr<T> make_ptr_no_add_ref( T* ptr)
+{ return boost::intrusive_ptr<T>( ptr, /*add_ref*/ false); }
+
+
+/// A flexible has the same interface as a shared lock, but can be can be configured at runtime to
+/// use different lock implementation/strategies.
+class Flexible_lock
+{
+public:
+    /// The different lock implementations/strategies.
+    enum Lock_implementation {
+        /// Use a shared lock.
+        SHARED_LOCK,
+        /// Use a shared lock, but map all shared requests to exclusive requests.
+        SHARED_LOCK_BUT_USED_EXCLUSIVELY,
+        /// Use an exclusive lock.
+        EXCLUSIVE_LOCK
+    };
+
+    /// Constructor.
+    Flexible_lock( Lock_implementation impl = Flexible_lock::SHARED_LOCK);
+
+    Flexible_lock( const Flexible_lock&) = delete;
+    Flexible_lock& operator=( const Flexible_lock&) = delete;
+
+    /// Returns a string representation of the lock implementation being used.
+    std::string get_lock_impl_str() const;
+
+    /// %Locks the lock in shared mode.
+    void lock_shared();
+
+    /// Tries to lock the lock in shared mode.
+    bool try_lock_shared();
+
+    /// Unlocks the lock in shared mode.
+    void unlock_shared();
+
+    /// Some sanity check.
+    ///
+    /// - This method does nothing if assertions are disabled.
+    /// - Otherwise, the method checks that the lock is held in shared mode by \em some thread, not
+    ///   necessarily by this thread.
+    void check_is_owned_shared();
+
+    /// %Locks the lock in exclusive mode.
+    void lock();
+
+    /// Tries to lock the lock in exclusive mode.
+    bool try_lock();
+
+    /// Unlocks the lock in exclusive mode.
+    void unlock();
+
+    /// Some sanity check.
+    ///
+    /// - This method does nothing if assertions are disabled.
+    /// - Otherwise, the method checks that the lock is held in exclusive mode by \em some thread,
+    ///   not necessarily by this thread.
+    void check_is_owned();
+
+    /// Some sanity check.
+    ///
+    /// - This method does nothing if assertions are disabled.
+    /// - Otherwise, the method checks that the lock is held in shared \em or exclusive mode by
+    ///   \em some thread, not necessarily by this thread.
+    void check_is_owned_shared_or_exclusive();
+
+private:
+    /// The configured lock implementation/strategy.
+    Lock_implementation m_lock_implementation;
+
+    /// The exclusive lock (used if #m_lock_implementation == #EXCLUSIVE_LOCK).
+    THREAD::Lock m_lock;
+
+    /// The shared lock (used if #m_lock_implementation != #EXCLUSIVE_LOCK).
+    THREAD::Shared_lock m_shared_lock;
+};
+
+/// Callbacks and static information needed by methods generating the HTML pages.
+struct Html_context
+{
+    /// Function that encodes a string for HTML.
+    std::function<std::string(const std::string&)> m_html_encoder;
+    /// Function that encodes a string for URLs (percent encoding).
+    std::function<std::string(const std::string&)> m_url_encoder;
+    /// URL prefix for links to a specific tag.
+    std::string m_tag_url_prefix;
+    /// URL prefix for links to a specific name.
+    std::string m_name_url_prefix;
+};
+
+
+/// Returns \c "yes" if \p value is \c true, and \c "no" otherwise.
+const char* to_yes_no( bool value);
+
+/// Dumps \p name \and \p value as two columns of an HTML table to \p s.
+void dump_html_bool_settings( std::ostream& s, const char* name, bool value);
+
+/// Dumps \p name \and \p value as two columns of an HTML table to \p s.
+void dump_html_size_t_setting( std::ostream& s, const char* name, size_t value);
+
+/// Dumps \p name \and \p value as two columns of an HTML table to \p s.
+void dump_html_double_setting( std::ostream& s, const char* name, double value, const char* suffix);
+
+/// Dumps \p name \and \p value as two columns of an HTML table to \p s.
+void dump_html_string_setting( std::ostream& s, const char* name, const std::string& value);
+
 /// Dumps the global accumulated statistics and the given tag to the stream.
 void dump_statistics( std::ostream& s, mi::Uint32 next_tag);
+
 
 struct Statistics_data
 {

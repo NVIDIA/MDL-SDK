@@ -504,9 +504,7 @@ bool Debug_Output_stream::unput(char c)
 // Constructor.
 Debug_Output_stream::Debug_Output_stream(IAllocator *alloc)
 : Base(alloc)
-#ifdef _WIN32
-, m_file(NULL)
-#else
+#ifndef _WIN32
 , m_file(stderr)
 #endif
 {

@@ -273,7 +273,7 @@ Manifest_impl::Manifest_impl( const mi::mdl::IArchive_manifest* manifest)
     // mdl
     key = manifest->get_key( mi::mdl::IArchive_manifest::PK_MDL);
     mi::mdl::IMDL::MDL_version mdl = manifest->get_mdl_version();
-    value = convert_mdl_version( mdl);
+    value = MDL::stringify_mdl_version( mdl);
     m_fields.emplace_back( key, value);
     m_index_count[key] = std::make_pair( m_fields.size()-1, 1);
 
@@ -461,27 +461,6 @@ void Manifest_impl::convert_exports(
     }
 
     m_index_count[key] = std::make_pair( first_index, m_fields.size()-first_index);
-}
-
-const char* Manifest_impl::convert_mdl_version( mi::mdl::IMDL::MDL_version version)
-{
-    switch( version) {
-        case mi::mdl::IMDL::MDL_VERSION_1_0:  return "1.0";
-        case mi::mdl::IMDL::MDL_VERSION_1_1:  return "1.1";
-        case mi::mdl::IMDL::MDL_VERSION_1_2:  return "1.2";
-        case mi::mdl::IMDL::MDL_VERSION_1_3:  return "1.3";
-        case mi::mdl::IMDL::MDL_VERSION_1_4:  return "1.4";
-        case mi::mdl::IMDL::MDL_VERSION_1_5:  return "1.5";
-        case mi::mdl::IMDL::MDL_VERSION_1_6:  return "1.6";
-        case mi::mdl::IMDL::MDL_VERSION_1_7:  return "1.7";
-        case mi::mdl::IMDL::MDL_VERSION_1_8:  return "1.8";
-        case mi::mdl::IMDL::MDL_VERSION_1_9:  return "1.9";
-        case mi::mdl::IMDL::MDL_VERSION_1_10: return "1.10";
-        case mi::mdl::IMDL::MDL_VERSION_EXP:  return "99.99";
-    }
-
-    ASSERT( M_NEURAY_API, false);
-    return "unknown";
 }
 
 std::string Manifest_impl::convert_sema_version( const mi::mdl::ISemantic_version* version)

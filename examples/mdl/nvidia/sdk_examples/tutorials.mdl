@@ -50,7 +50,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
-mdl 1.6;
+mdl 1.11;
 
 import ::anno::*;
 import ::base::*;
@@ -58,6 +58,7 @@ import ::df::*;
 import ::math::*;
 import ::state::*;
 import ::tex::*;
+import ::std::*;
 
 // A simple struct.
 export struct example_struct {
@@ -700,4 +701,50 @@ export material example_volume(
         scattering_coefficient: scattering_coeff
     ),
     ior: color(1.0)
+);
+
+// retroreflective material example
+export material example_retroreflective(
+    uniform color twill_color = color(0.3, 0.9, 0.1),
+    float twill_roughness = 0.6  [[anno::hard_range(0.0f, 1.0f)]],
+    uniform int stripes = 30 [[anno::hard_range(10, 100)]],
+    float stripe_roughness = 0.085  [[anno::hard_range(0.01f, 1.0f)]]
+)
+= let
+{
+    bool is_stripe = int(state::texture_coordinate(0).x * (stripes / 4) * 4) % 4 == 0;
+
+    base::texture_return base_color_map = base::file_texture(
+        texture: texture_2d("./resources/twill_base.png", ::tex::gamma_srgb)
+    );
+
+    base::texture_return roughness_map = base::file_texture(
+        texture: texture_2d("./resources/twill_roughness.png", ::tex::gamma_linear)
+    );
+
+    float base_roughness = math::average(roughness_map.tint)*twill_roughness;
+
+    uniform texture_2d normal_tex = texture_2d("./resources/twill_normal.png", ::tex::gamma_linear);
+    float3 bump = is_stripe ? std::normal() : ::base::tangent_space_normal_texture(texture: normal_tex);
+}
+in material
+(
+    surface: material_surface(
+        scattering: df::weighted_layer(
+            weight: is_stripe ? 1.0f : 0.0f,
+            layer: df::microfacet_ggx_vcavities_bsdf(
+                tint: color(0.5),
+                mode: df::scatter_reflect,
+                backscatter: df::backscatter_reflect,
+                roughness_u: stripe_roughness
+            ),
+            base: df::microfacet_ggx_vcavities_bsdf(
+                tint: base_color_map.tint*twill_color,
+                mode: df::scatter_reflect,
+                roughness_u: base_roughness,
+            ),
+            normal: bump
+
+        )
+    )
 );

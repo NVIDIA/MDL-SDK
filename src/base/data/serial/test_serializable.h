@@ -181,7 +181,7 @@ public:
 
     /// destructor
     virtual ~Test_type_3()
-    {}
+    { delete m_ptr; }
 
     /// get class name for test
     static std::string get_classname() {

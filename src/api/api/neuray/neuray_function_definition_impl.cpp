@@ -220,8 +220,8 @@ const mi::neuraylib::IAnnotation_list* Function_definition_impl::get_parameter_a
 
 const char* Function_definition_impl::get_thumbnail() const
 {
-    m_cached_thumbnail = get_db_element()->get_thumbnail();
-    return !m_cached_thumbnail.empty() ? m_cached_thumbnail.c_str() : nullptr;
+    std::string result = get_db_element()->get_thumbnail();
+    return !result.empty() ? m_string_cache.add( result) : nullptr;
 }
 
 bool Function_definition_impl::is_valid( mi::neuraylib::IMdl_execution_context* context) const
@@ -276,8 +276,7 @@ mi::neuraylib::IFunction_call* Function_definition_impl::create_function_call(
 
 const char* Function_definition_impl::get_mangled_name() const
 {
-    m_cached_mangled_name = get_db_element()->get_mangled_name( get_db_transaction());
-    return m_cached_mangled_name.c_str();
+    return m_string_cache.add( get_db_element()->get_mangled_name( get_db_transaction()));
 }
 
 } // namespace NEURAY

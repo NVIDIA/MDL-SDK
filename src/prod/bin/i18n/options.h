@@ -81,7 +81,7 @@ namespace i18n
             , m_is_command(false)
             , m_parameter_helper_string("arg")
         {}
-        ~Option();
+        virtual ~Option();
         Option(const Option & other); // Copy ctor
         Option & operator=(const Option&); // Assignment operator
         bool is_valid() const { return m_id != -1; }

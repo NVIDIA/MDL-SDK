@@ -104,6 +104,9 @@ public:
     /// Return a reference to the message list.
     Message_list const &get_messages() const;
 
+    /// Create a new compilation unit for the given file name.
+    mi::base::Handle<Compilation_unit> create_unit(const char *fname);
+
 private:
     /// Constructor.
     ///
@@ -148,9 +151,6 @@ private:
 
     /// Load the builtin definitions from all supported builtin MDL modules.
     void load_builtins();
-
-    /// Create a new compilation unit for the given file name.
-    mi::base::Handle<Compilation_unit> create_unit(const char *fname);
 
     /// Print all messages that have been generated during compilation
     /// to stderr.

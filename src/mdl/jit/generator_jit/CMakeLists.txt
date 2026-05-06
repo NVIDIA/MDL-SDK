@@ -44,6 +44,9 @@ foreach(HS ${DF_HANDLE_SLOT_MODES})
     list(APPEND _GENERATED_SOURCES
         ${_GENERATED_DIR}/libbsdf_bitcode_${HS}.h
         ${_GENERATED_DIR}/libbsdf_bitcode_${HS}_debug.h
+        # spectral variants
+        ${_GENERATED_DIR}/libbsdf_bitcode_spectral_${HS}.h
+        ${_GENERATED_DIR}/libbsdf_bitcode_spectral_${HS}_debug.h
     )
 endforeach()
 
@@ -75,7 +78,6 @@ set(PROJECT_HEADERS
     "generator_jit_llvm_passes.h"
     "generator_jit_libbsdf_data.h"
     "generator_jit_opt_pass_gate.h"
-    "generator_jit_res_manager.h"
     "generator_jit_sl_depgraph.h"
     "generator_jit_sl_function.h"
     "generator_jit_sl_passes.h"
@@ -153,6 +155,14 @@ if(NOT MSVC)
     target_compile_definitions(${PROJECT_NAME} 
         PRIVATE 
             "$<$<COMPILE_LANGUAGE:CXX>:NO_RTTI>"
+        )
+endif()
+
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    # Suppress warning from LLVM code
+    target_compile_options(${PROJECT_NAME}
+        PRIVATE
+            "-Wno-mismatched-new-delete"
         )
 endif()
 
@@ -235,6 +245,27 @@ foreach(HS ${DF_HANDLE_SLOT_MODES})
         DEPENDS
             ${CMAKE_CURRENT_SOURCE_DIR}/gen_libbsdf.py
             ${CMAKE_CURRENT_BINARY_DIR}/../libbsdf/generated/libbsdf_${HS}_debug.bc
+        VERBATIM
+        )
+    
+    # TODO: MDL-1718: Currently the spectral variants are the same as the none spectral, since use the same source file
+    # spectral variants
+    add_custom_command(
+        OUTPUT ${_GENERATED_DIR}/libbsdf_bitcode_spectral_${HS}.h
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${_GENERATED_DIR}
+        COMMAND ${python_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/gen_libbsdf.py ${CMAKE_CURRENT_BINARY_DIR}/../libbsdf/generated/libbsdf_spectral_${HS}.bc ${_GENERATED_DIR}
+        DEPENDS
+            ${CMAKE_CURRENT_SOURCE_DIR}/gen_libbsdf.py
+            ${CMAKE_CURRENT_BINARY_DIR}/../libbsdf/generated/libbsdf_spectral_${HS}.bc
+        VERBATIM
+        )
+    add_custom_command(
+        OUTPUT ${_GENERATED_DIR}/libbsdf_bitcode_spectral_${HS}_debug.h
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${_GENERATED_DIR}
+        COMMAND ${python_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/gen_libbsdf.py ${CMAKE_CURRENT_BINARY_DIR}/../libbsdf/generated/libbsdf_spectral_${HS}_debug.bc ${_GENERATED_DIR}
+        DEPENDS
+            ${CMAKE_CURRENT_SOURCE_DIR}/gen_libbsdf.py
+            ${CMAKE_CURRENT_BINARY_DIR}/../libbsdf/generated/libbsdf_spectral_${HS}_debug.bc
         VERBATIM
         )
 endforeach()

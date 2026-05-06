@@ -32,28 +32,9 @@
 #include "pch.h"
 #include "i_attr_type.h"
 #include "attr.h"
-#ifdef DEBUG_NON_INLINE
- #define MI_INLINE
-  #include "attr_inline_type.h"
-#endif
 
 #include <base/data/serial/i_serializer.h>
-#include <base/lib/cont/i_cont_array.h>
-#include <base/lib/cont/i_cont_rle_array.h>
 
-#undef EXPERIMENTAL_ARRAYS_OF_ARRAYS_MODE
-
-namespace
-{
-using namespace MI;
-
-/// Dump attribute to info messages. This is for debugging only.
-/// \param types all types to dump
-void rec_print_type(CONT::Array<const ATTR::Type *> *types);
-
-// This is for convenience in the following table only.
-typedef CONT::Rle_array<Uint>* RLE_PTR;
-}
 
 namespace MI {
 namespace ATTR {
@@ -88,22 +69,12 @@ const Type::Typeinfo Type::m_typeinfo[] = {
         { "dvector4",           4,      TYPE_DSCALAR,      sizeof(Dscalar)      },
         { "matrix",             16,     TYPE_SCALAR,       sizeof(Scalar)       },
         { "dmatrix",            16,     TYPE_DSCALAR,      sizeof(Dscalar)      },
-        // TYPE_GMATRIX = TYPE_DMATRIX
-        { "quaternion",         4,      TYPE_SCALAR,       sizeof(Scalar)       },
         { "string",             1,      TYPE_STRING,       sizeof(char *)       },
         { "tag",                1,      TYPE_TAG,          sizeof(DB::Tag)      },
         { "color",              4,      TYPE_SCALAR,       sizeof(Scalar)       },
-        { "rgb",                3,      TYPE_INT8,         sizeof(Uint8)        },
-        { "rgba",               4,      TYPE_INT8,         sizeof(Uint8)        },
-        { "rgbe",               4,      TYPE_INT8,         sizeof(Uint8)        },
-        { "rgbea",              5,      TYPE_INT8,         sizeof(Uint8)        },
-        { "rgb_16",             3,      TYPE_INT16,        sizeof(Uint16)       },
-        { "rgba_16",            4,      TYPE_INT16,        sizeof(Uint16)       },
         { "rgb_fp",             3,      TYPE_SCALAR,       sizeof(Scalar)       },
-        // TYPE_RGBA_FP = TYPE_COLOR
         { "struct",             0,      TYPE_UNDEF,        0                    },
         { "array",              0,      TYPE_UNDEF,        0                    },
-        { "rle_uint_ptr",       1,      TYPE_RLE_UINT_PTR, sizeof(RLE_PTR)      },
         { "vector2i",           2,      TYPE_INT32,        sizeof(Sint32)       },
         { "vector3i",           3,      TYPE_INT32,        sizeof(Sint32)       },
         { "vector4i",           4,      TYPE_INT32,        sizeof(Sint32)       },
@@ -118,28 +89,8 @@ const Type::Typeinfo Type::m_typeinfo[] = {
         { "matrix3x4",          12,     TYPE_SCALAR,       sizeof(Scalar)       },
         { "matrix4x2",          8,      TYPE_SCALAR,       sizeof(Scalar)       },
         { "matrix2x4",          8,      TYPE_SCALAR,       sizeof(Scalar)       },
-        // MetaSL-specific attribute types
-        { "texture1d",          1,      TYPE_TAG,          sizeof(DB::Tag)      },
-        { "texture2d",          1,      TYPE_TAG,          sizeof(DB::Tag)      },
-        { "texture3d",          1,      TYPE_TAG,          sizeof(DB::Tag)      },
-        { "texture_cube",       1,      TYPE_TAG,          sizeof(DB::Tag)      },
-        { "brdf",               1,      TYPE_TAG,          sizeof(DB::Tag)      },
-        { "light",              1,      TYPE_TAG,          sizeof(DB::Tag)      },
-        { "light_profile",      1,      TYPE_TAG,          sizeof(DB::Tag)      },
-        { "shader",             1,      TYPE_TAG,          sizeof(DB::Tag)      },
-        { "particle_map",       1,      TYPE_TAG,          sizeof(DB::Tag)      },
         { "spectrum",           3,      TYPE_SCALAR,       sizeof(Scalar)       },
-        // MDL-specific attribute types
-        { "id",                 1,      TYPE_INT32,        sizeof(Uint32)       },
-        { "parameter",          1,      TYPE_INT32,        sizeof(Uint32)       },
-        { "temporary",          1,      TYPE_INT32,        sizeof(Uint32)       },
-        { "attachable",         0,      TYPE_ATTACHABLE,   0                    },
-        // it is actually one TYPE_TAG and one TYPE_STRING!!!
-        { "call",               2,      TYPE_STRING,       sizeof(char *)       },
-        { "texture",            1,      TYPE_TAG,          sizeof(DB::Tag)      },
-        { "bsdf_measurement",   1,      TYPE_TAG,          sizeof(DB::Tag)      },
         { "enum",               1,      TYPE_INT32,        sizeof(Sint32)       },
-        // general attribute types
         { "dmatrix2x2",         4,      TYPE_DSCALAR,      sizeof(Dscalar)      },
         { "dmatrix2x3",         6,      TYPE_DSCALAR,      sizeof(Dscalar)      },
         { "dmatrix3x2",         6,      TYPE_DSCALAR,      sizeof(Dscalar)      },
@@ -162,14 +113,11 @@ Type::Type(
 {
     mi_static_assert(TYPE_NUM == (sizeof(m_typeinfo) / sizeof(Typeinfo)));
     mi_static_assert(sizeof(Type::m_typeinfo) == TYPE_NUM * sizeof(Type::Typeinfo));
-    ASSERT(M_ATTR, type != TYPE_ID);
 
     type = to_valid_range(type);
     if (name)
         m_name = name;
     m_typecode  = type;
-    m_const     = false;
-    m_spare     = false;
     m_arraysize = m_typecode != TYPE_ARRAY? arraysize : 0;
     // enable this check to find out where arrays are created the old way w/o using TYPE_ARRAY
     //ASSERT(M_ATTR, arraysize <= 1 || m_typecode == TYPE_ARRAY);
@@ -198,7 +146,6 @@ Type::Type(
 
 Type::~Type()
 {
-    ASSERT(M_ATTR, m_typecode != TYPE_ID);
     delete m_next;
     if (m_typecode != TYPE_ENUM)
         delete m_child;
@@ -214,16 +161,12 @@ void Type::set_child(
 {
     ASSERT(M_ATTR,
         get_typecode() == TYPE_STRUCT ||
-        get_typecode() == TYPE_ARRAY ||
-        get_typecode() == TYPE_ATTACHABLE ||
-        get_typecode() == TYPE_CALL);
-#ifndef EXPERIMENTAL_ARRAYS_OF_ARRAYS_MODE
+        get_typecode() == TYPE_ARRAY);
     if (get_typecode() == TYPE_ARRAY && child.get_typecode() == TYPE_ARRAY) {
         mod_log->info(M_ATTR, LOG::Mod_log::C_DATABASE,
             "Nested arrays are currently not supported");
         return;
     }
-#endif
     delete m_child;
     m_child = new Type(child);
 
@@ -255,106 +198,6 @@ void Type::set_child(
 
 
 //--------------------------------------------------------------------------------------------------
-
-// Given a complete name, return the Type of the subtree, and an offset into a value structure
-// where that Type stores its data. The name must be a complete path, such as a[2].b if a is a
-// struct array containing b.
-// If the name that is found is an array but no [n] is given, return the address of the array
-// (which is identical to [0]) and the array type. If an index [n] is given, return the array's
-// element type.
-// If the name that is found is a struct but no .sub is given, return the address of the struct.
-// This allows partial lookups.
-// For example, if the type tree is {a,b[3]{c,d}}, b is the same as b[0].c.
-// Dynamic arrays are not handled here because the value is a pointer.
-const Type *Type::lookup(
-    const char  *name,                                  // name to look up
-    Uint        *ret_offs,                              // return offset in value struct
-    Uint        offs) const                             // add this to returned offset
-{
-    ASSERT(M_ATTR, name);
-
-    Uint        align;                                  // for ensuring alignment
-    Uint        member = null_index;                    // if array, array member; else 0
-    const char  *end   = 0;                             // end of word in name, at one of [.\0
-    const char  *dot   = 0;                             // if there is a '.', dot points to it
-
-    // cast from size_t to Uint is safe here
-    align = Uint(align_all()) - 1;
-    offs = (offs + align) & ~align;
-    dot = strchr(name, '.');                            // split into name[member].sub
-                                                        //           end--^  dot--^
-    // contains name a bracket, ie an index? Then set member accordingly.
-    if (const char* bracket = strchr(name, '[')) {
-        // is bracket *before* any dot? Ie, is first part of the name an indexed array access?
-        if (!dot || bracket < dot) {
-            end = bracket;
-            member = atoi(bracket+1);
-        }
-    }
-    if (!end)
-        end = dot ? dot : name + strlen(name);
-
-
-    // where are we now?
-    // - end points to end of current member or at current member's bracket '['
-    // - dot points to first '.' or 0
-    // - member contains current member's array index or null_index
-
-
-    // if this type matches, ie if name == m_name, then resolve lookup by
-    // either setting offset directly or continue descending into substruct
-    if (get_name() && !strncmp(name, get_name(), end-name) && !(get_name()[end-name])) {
-        // handle TYPE_ARRAY by forwarding to its child except when no member was given
-        if (get_typecode() == TYPE_ARRAY) {
-            if (member == null_index) {
-                if (ret_offs)
-                    *ret_offs = offs;
-                return this;
-            }
-            else {
-                return get_child()->lookup(name, ret_offs, offs);
-            }
-        }
-        if (member != null_index) {             // name has "[member]"
-            if (!m_arraysize)                   // dynamic array: can't offset
-                return 0;
-            if (member >= get_arraysize())      // static array & out of bounds
-                return 0;
-                                                // static array: step to member
-            // cast from size_t to Uint is safe here
-            offs += member * Uint(sizeof_elem());
-        }
-
-
-        if (dot) {                              // look up .substruct
-            if (!get_child())                   // have no substruct: fail.
-                return 0;
-            else                                // else recurse into substruct
-                return get_child()->lookup(dot+1, ret_offs, offs);
-        } else {                                // full match: return this type
-            if (ret_offs)                       // (even if we have substructs)
-                *ret_offs = offs;
-            return this;
-        }
-    }
-    // else continue with the next type
-    if (get_next()) {
-        if (get_typecode() != TYPE_STRUCT &&
-            get_typecode() != TYPE_ARRAY &&
-            get_typecode() != TYPE_ATTACHABLE &&
-            get_typecode() != TYPE_CALL)
-            // cast from size_t to Uint is safe here
-            offs += Uint(
-                m_arraysize ? sizeof_one() : sizeof(Uint) + sizeof(void *));
-        else
-            // cast from size_t to Uint is safe here
-            offs += Uint(sizeof_all());
-
-        offs = (offs + align) & ~align;
-        return get_next()->lookup(name, ret_offs, offs);
-    }
-    return 0;                                   // end of type chain: fail.
-}
 
 // Given a complete name, return the Type of the subtree, and an offset into a value structure
 // where that Type stores its data. The name must be a complete path, such as a[2].b if a is a
@@ -437,8 +280,6 @@ const Type* Type::lookup(
             if (!get_child())                   // have no substruct: fail.
                 return 0;
             else {                              // else recurse into substruct
-                if (get_typecode() == TYPE_CALL)
-                    offs += 2*Type::sizeof_one(TYPE_STRING);
                 return get_child()->lookup(dot+1, base_address, ret_address, offs);
             }
         } else {                                // full match: return this type
@@ -450,9 +291,7 @@ const Type* Type::lookup(
     // else continue with the next type
     if (get_next()) {
         if (get_typecode() != TYPE_STRUCT
-            && get_typecode() != TYPE_ARRAY
-            && get_typecode() != TYPE_ATTACHABLE
-            && get_typecode() != TYPE_CALL)
+            && get_typecode() != TYPE_ARRAY)
             // cast from size_t to Uint is safe here
             offs += Uint(
                 m_arraysize ? sizeof_one() : sizeof(Uint) + sizeof(void *));
@@ -465,7 +304,7 @@ const Type* Type::lookup(
     }
     return 0;                                   // end of type chain: fail.
 }
-                        
+
 
 //
 // serialize the object to the given serializer including all sub elements.
@@ -492,8 +331,6 @@ const SERIAL::Serializable *Type::do_serialize(
     mi_static_assert(TYPE_NUM < 256);                   // type and flags
     SERIAL::write(serializer,m_name);
     serializer->write(m_typecode);
-    serializer->write(m_const);
-    serializer->write(m_spare);
     serializer->write(m_arraysize);
     serializer->write(!!m_next);            // write a flag indicating whether there is a m_next
     if (m_next)
@@ -532,8 +369,6 @@ SERIAL::Serializable *Type::deserialize(
 {
     SERIAL::read(deser,&m_name);
     deser->read(&m_typecode);
-    deser->read(&m_const);
-    deser->read(&m_spare);
     deser->read(&m_arraysize);
     bool has_next=false;
     deser->read(&has_next);
@@ -598,9 +433,7 @@ Type &Type::operator=(
 
 void Type::dump() const
 {
-    CONT::Array<const Type *> types(1, this);
-    rec_print_type(&types);
-    ASSERT(M_ATTR, types.empty());
+    ASSERT(M_ATTR, false);
 }
 
 
@@ -610,8 +443,6 @@ void Type::dump() const
 std::string Type::print() const
 {
     std::string result;
-    if (m_const)
-        result += "const ";
     result += type_name(Type_code(m_typecode));
     if (m_arraysize != 1) {
         result += '[';
@@ -624,25 +455,6 @@ std::string Type::print() const
         result += m_type_name;
     }
     if (m_typecode == TYPE_STRUCT) {
-        result += " {";
-        for(Type *c = m_child; c; c = c->m_next) {
-            result += ' ';
-            result += c->print();
-            result += ' ';
-            if(const char *field_name = c->get_name())
-                result += field_name;
-            else
-                result += "<none>";
-            result += ';';
-        }
-        result += " }";
-    }
-    else if (m_typecode == TYPE_ATTACHABLE) {
-        result += '<';
-        result += m_child->m_next->print();
-        result += '>';
-    }
-    else if (m_typecode == TYPE_CALL) {
         result += " {";
         for(Type *c = m_child; c; c = c->m_next) {
             result += ' ';
@@ -684,8 +496,6 @@ void Type::do_the_deep_copy(
     // deep copy
     m_name      = other.m_name;
     m_typecode  = other.m_typecode;
-    m_const     = other.m_const;
-    m_spare     = other.m_spare;
     m_arraysize = other.m_arraysize;
     m_next      = other.m_next  ? new Type(*other.m_next)  : 0;
     if (other.m_typecode != TYPE_ENUM)
@@ -725,23 +535,6 @@ bool contains_expected_type(
     if (type_code == expected)
         return true;
 
-    // some types are represented by a tag,
-    // allow a match for those as well.
-    if (expected == TYPE_TAG &&
-        (type_code == TYPE_TEXTURE ||
-         type_code == TYPE_TEXTURE1D ||
-         type_code == TYPE_TEXTURE2D ||
-         type_code == TYPE_TEXTURE3D ||
-         type_code == TYPE_TEXTURE_CUBE ||
-         type_code == TYPE_BRDF ||
-         type_code == TYPE_LIGHT ||
-         type_code == TYPE_LIGHTPROFILE ||
-         type_code == TYPE_SHADER ||
-         type_code == TYPE_PARTICLE_MAP ||
-         type_code == TYPE_BSDF_MEASUREMENT))
-    {
-        return true;
-    }
     // some are represented by int
     if (expected == TYPE_INT32 &&
         (type_code == TYPE_ENUM))
@@ -780,40 +573,3 @@ bool compare_enum_collections(
 }
 
 
-namespace
-{
-using namespace MI::ATTR;
-using namespace MI::LOG;
-
-//
-// dump attribute to info messages, for debugging only. The actual printing
-// code is a separate function to allow recursion.
-//
-
-void rec_print_type(
-    CONT::Array<const Type *>   *types)
-{
-    const Type *current = (*types)[types->size()-1];
-
-    while (current) {
-        // current Type
-        mod_log->debug(M_ATTR, Mod_log::C_IO, "%*s%s %s (%s)",
-            static_cast<int>(3 * (types->size()-1)), " ",
-            Type::type_name(current->get_typecode()), current->get_name(),
-            current->get_arraysize()==0 && current->get_typecode()!=TYPE_ARRAY ? "dynamic array" :
-            current->get_arraysize()==1 && current->get_typecode()!=TYPE_ARRAY ? "single value"
-                                          : "static array");
-
-        // dive recursively into children
-        const Type *child = current->get_child();
-        if (child) {
-            types->append(child);
-            rec_print_type(types);
-        }
-        current = current->get_next();
-    }
-    // remove last element
-    types->remove(types->size()-1);
-}
-
-}       // namespace

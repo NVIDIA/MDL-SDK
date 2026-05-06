@@ -90,7 +90,7 @@ mi::Sint32 Texture_impl::set_image( const char* name)
 
     DB::Transaction* db_transaction = get_db_transaction();
     DB::Tag tag = db_transaction->name_to_tag( name);
-    if( !tag.is_valid())
+    if( !tag)
         return -2;
 
     if( !can_reference_tag( tag))
@@ -117,7 +117,7 @@ mi::Sint32 Texture_impl::set_volume( const char* name)
 
     DB::Transaction* db_transaction = get_db_transaction();
     const DB::Tag tag = db_transaction->name_to_tag( name);
-    if( !tag.is_valid())
+    if( !tag)
         return -2;
 
     if( !can_reference_tag( tag))
@@ -155,8 +155,8 @@ Float32 Texture_impl::get_effective_gamma( mi::Size frame_id, mi::Size uvtile_id
 const char* Texture_impl::get_selector() const
 {
     DB::Transaction* db_transaction = get_db_transaction();
-    m_cached_selector = get_db_element()->get_selector( db_transaction);
-    return !m_cached_selector.empty() ? m_cached_selector.c_str() : nullptr;
+    std::string result = get_db_element()->get_selector( db_transaction);
+    return !result.empty() ? m_string_cache.add( result) : nullptr;
 }
 
 void Texture_impl::set_compression( mi::neuraylib::Texture_compression compression)

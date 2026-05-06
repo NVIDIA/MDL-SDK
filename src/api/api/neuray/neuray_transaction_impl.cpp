@@ -82,6 +82,7 @@ Transaction_impl::Transaction_impl(
 
     DB::Transaction_id id = m_db_transaction->get_id();
     m_id_as_uint = id();
+    m_id_as_string = std::to_string( m_id_as_uint);
 
 #ifdef VERBOSE_TX
     LOG::mod_log->info( SYSTEM::M_NEURAY_API, LOG::Mod_log::C_DATABASE,
@@ -280,12 +281,8 @@ mi::Sint32 Transaction_impl::copy( const char* source, const char* target, mi::U
     } else {
         // If source and target names are different, lookup target tag.
         // Prevent overwriting an existing DB element with one of a different type
-#ifndef MI_API_API_NEURAY_USE_NAME_TO_TAG_UNSAFE
         DB::Tag target_tag
             = m_db_transaction->name_to_tag( target, DB::Transaction::STORE_CONTEXT);
-#else // MI_API_API_NEURAY_USE_NAME_TO_TAG_UNSAFE
-        DB::Tag target_tag = m_db_transaction->name_to_tag_unsafe( target);
-#endif // MI_API_API_NEURAY_USE_NAME_TO_TAG_UNSAFE
         if( target_tag) {
             SERIAL::Class_id target_class_id = m_db_transaction->get_class_id( target_tag);
             if(    (target_class_id == MDL::ID_MDL_MODULE)
@@ -303,12 +300,8 @@ mi::Sint32 Transaction_impl::copy( const char* source, const char* target, mi::U
         // Create a copy of the DB element.
         DB::Element_base* element = access->copy();
         // And store it.
-#ifndef MI_API_API_NEURAY_USE_NAME_TO_TAG_UNSAFE
         if( !target_tag)
             target_tag = m_db_transaction->reserve_tag();
-#else // MI_API_API_NEURAY_USE_NAME_TO_TAG_UNSAFE
-        target_tag = get_tag_for_store( target_tag);
-#endif // MI_API_API_NEURAY_USE_NAME_TO_TAG_UNSAFE
 #ifdef VERBOSE_TX
         LOG::mod_log->info( SYSTEM::M_NEURAY_API, LOG::Mod_log::C_DATABASE,
             "TX %u copying \"%s\" to \"%s\" ...", m_id_as_uint, source, target);
@@ -378,10 +371,9 @@ const char* Transaction_impl::get_time_stamp() const
     const mi::Uint32 next_sequence_number = m_db_transaction->get_next_sequence_number();
     const mi::Sint32 current_sequence_number = static_cast<mi::Sint32>( next_sequence_number) - 1;
 
-    m_timestamp = std::to_string( transaction_id());
-    m_timestamp += "::";
-    m_timestamp += std::to_string( current_sequence_number);
-    return m_timestamp.c_str();
+    std::string timestamp
+        = std::to_string( transaction_id()) + "::" + std::to_string( current_sequence_number);
+    return m_string_cache.add( timestamp);
 }
 
 const char* Transaction_impl::get_time_stamp( const char* element) const
@@ -414,8 +406,6 @@ bool Transaction_impl::has_changed_since_time_stamp(
 
 const char* Transaction_impl::get_id() const
 {
-    if( m_id_as_string.empty())
-        m_id_as_string = std::to_string( m_id_as_uint);
     return m_id_as_string.c_str();
 }
 
@@ -502,7 +492,7 @@ mi::Sint32 Transaction_impl::get_privacy_level( const char* name) const
         return -3;
 
     DB::Tag tag = m_db_transaction->name_to_tag( name);
-    if( !tag.is_valid())
+    if( !tag)
         return -4;
 
     return m_db_transaction->get_tag_privacy_level( tag);
@@ -547,19 +537,18 @@ const mi::base::IInterface* Transaction_impl::access( DB::Tag tag)
 
 const char* Transaction_impl::get_time_stamp( DB::Tag tag) const
 {
-    ASSERT( M_NEURAY_API, tag.is_valid());
+    ASSERT( M_NEURAY_API, tag);
 
     const DB::Tag_version tag_version = m_db_transaction->get_tag_version( tag);
 
-    m_timestamp = std::to_string( tag_version.m_transaction_id());
-    m_timestamp += "::";
-    m_timestamp += std::to_string( tag_version.m_version);
-    return m_timestamp.c_str();
+    std::string timestamp = std::to_string( tag_version.m_transaction_id())
+        + "::" + std::to_string( tag_version.m_version);
+    return m_string_cache.add( timestamp);
 }
 
 bool Transaction_impl::has_changed_since_time_stamp( DB::Tag tag, const char* time_stamp) const
 {
-    ASSERT( M_NEURAY_API, tag.is_valid());
+    ASSERT( M_NEURAY_API, tag);
     ASSERT( M_NEURAY_API, time_stamp);
 
     DB::Tag_version tag_version = m_db_transaction->get_tag_version( tag);
@@ -589,22 +578,6 @@ const Class_factory* Transaction_impl::get_class_factory() const
 {
     return m_class_factory;
 }
-
-#ifdef MI_API_API_NEURAY_USE_NAME_TO_TAG_UNSAFE
-DB::Tag Transaction_impl::get_tag_for_store( const char* name)
-{
-    return get_tag_for_store( m_db_transaction->name_to_tag_unsafe( name));
-}
-
-DB::Tag Transaction_impl::get_tag_for_store( DB::Tag tag)
-{
-    if( tag && (   !m_db_transaction->get_tag_is_removed( tag)
-                 || m_db_transaction->get_tag_reference_count( tag) > 0))
-        return tag;
-
-    return m_db_transaction->reserve_tag();
-}
-#endif // MI_API_API_NEURAY_USE_NAME_TO_TAG_UNSAFE
 
 void Transaction_impl::add_element( const Db_element_impl_base* db_element)
 {

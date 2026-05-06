@@ -77,7 +77,7 @@ void create_textured_material(Material_compiler &mc, bool use_class_compilation)
         "::base::file_texture(texture_2d,color,color,::base::mono_mode,"
         "::base::texture_coordinate_info,float2,float2,::tex::wrap_mode,::tex::wrap_mode,bool,"
         "float,int2,::tex::wrap_mode,float)",
-        { Call_argument(mat_instance->create_constant(tex), "texture") });
+        { Call_argument(mat_instance->create_constant(tex, mi::mdl::DAG_DbgInfo()), "texture") });
     check_success(file_texture_call);
 
     // Build the ".tint" accessor call. The parameter name of struct accessors is always "s"

@@ -1328,24 +1328,6 @@ IMdl_container_callback* Image_module_impl::get_mdl_container_callback() const
     return m_mdl_container_callback.get();
 }
 
-mi::IMap* Image_module_impl::convert_legacy_options(
-    mi::Uint32 quality, bool force_default_gamma) const
-{
-    mi::base::Handle option_jpg_quality( m_factory->create<mi::IUint32>());
-    option_jpg_quality->set_value( quality);
-    mi::base::Handle option_exr_data_type( m_factory->create<mi::IString>());
-    option_exr_data_type->set_c_str( quality <= 50 ? "Float16" : "Float32");
-    mi::base::Handle option_force_default_gamma( m_factory->create<mi::IBoolean>());
-    option_force_default_gamma->set_value( force_default_gamma);
-
-    mi::base::Handle export_options( m_factory->create<mi::IMap>( nullptr, "Map<Interface>"));
-    export_options->insert( "jpg:quality", option_jpg_quality.get());
-    export_options->insert( "exr:data_type", option_exr_data_type.get());
-    export_options->insert( "force_default_gamma", option_force_default_gamma.get());
-
-    return export_options.extract();
-}
-
 void Image_module_impl::dump() const
 {
     mi::Size i = 0;
@@ -1674,11 +1656,11 @@ mi::neuraylib::ICanvas* Image_module_impl::create_miplevel(
         const mi::Uint32 y_end = height;
 
         // Lookup tile for this miplevel
-        mi::base::Handle<mi::neuraylib::ITile> tile(canvas->get_tile());
+        mi::base::Handle<mi::neuraylib::ITile> tile(canvas->get_tile(tile_z));
 
         // Lookup involved tiles from the previous miplevel (note that these tiles are not
         // necessarily distinct).
-        mi::base::Handle<const mi::neuraylib::ITile> prev_tile( prev_canvas->get_tile());
+        mi::base::Handle<const mi::neuraylib::ITile> prev_tile(prev_canvas->get_tile(tile_z));
         ASSERT(M_IMAGE, prev_tile);
 
         // Loop over the pixels of this tile and compute the value for each pixel

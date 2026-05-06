@@ -97,7 +97,7 @@ bool Image_plugin_impl::init( mi::neuraylib::IPlugin_api* plugin_api)
         success = option_to_flag(
             debugging_configuration.get(),
             "linear_gamma_for_single_uint16_channel",
-            g_ignore_gamma_metadata_on_import);
+            g_linear_gamma_for_single_uint16_channel);
         if( !success)
             log( mi::base::MESSAGE_SEVERITY_WARNING,
                 "Failed to parse the debug option \"linear_gamma_for_single_uint16_channel\"");
@@ -174,7 +174,7 @@ bool Image_plugin_impl::init( mi::neuraylib::IPlugin_api* plugin_api)
     assert( result);
     (void) result;
 
-#ifndef NDEBUG
+#ifdef NDEBUG
     // Disable printing of uncaught errors in release builds.
     OIIO::attribute( "oiio:print_uncaught_errors", 0);
     OIIO::attribute( "imagebuf:print_uncaught_errors", 0);

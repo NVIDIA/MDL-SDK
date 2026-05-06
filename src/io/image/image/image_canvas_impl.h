@@ -280,7 +280,7 @@ public:
 
     void set_gamma( mi::Float32 gamma);
 
-    // methods of  mi::neuraylib::ICanvas
+    // methods of mi::neuraylib::ICanvas
 
     const mi::neuraylib::ITile* get_tile( mi::Uint32 layer = 0) const;
 
@@ -294,12 +294,11 @@ public:
 
     bool release_tiles() const;
 
-    /// Reallocates a memory-based canvas if necessary, otherwise just changes fields as appropriate.
-    ///
-    void reset(
-        mi::Uint32 width,
-        mi::Uint32 height,
-        Pixel_type pixel_type);
+    // internal mthods
+
+    /// Reallocates memory of a memory-based canvas if necessary, otherwise just changes fields as
+    /// appropriate.
+    void reset( mi::Uint32 width, mi::Uint32 height, Pixel_type pixel_type);
 
 private:
     /// See constructors #Canvas_impl(File_based,...),

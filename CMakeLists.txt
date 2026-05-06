@@ -26,7 +26,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #*****************************************************************************
 
-cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.14 FATAL_ERROR)
 
 # policies
 if(POLICY CMP0025)
@@ -82,6 +82,7 @@ option(MDL_LOG_DEPENDENCIES "Prints the list of dependencies during the generati
 option(MDL_LOG_FILE_DEPENDENCIES "Prints the list of files that is copied after a successful build." OFF)
 option(MDL_TREAT_RUNTIME_DEPS_AS_BUILD_DEPS "Treat runtime dependencies as build dependencies." ON)
 option(MDL_BUILD_WITHOUT_CUDA_DRIVER "Build without requiring a CUDA driver." OFF)
+option(MDL_BUILD_SEPARATE_DEBUG_INFO "Generate separate debug info files for Release builds." OFF)
 set(MDL_ADDITIONAL_COMPILER_DEFINES "MDL_SOURCE_RELEASE" CACHE STRING "Additional compile defines that are passed to each of the projects")
 set(MDL_ADDITIONAL_COMPILER_OPTIONS "" CACHE STRING "Additional compile options that are passed to each of the projects")
 

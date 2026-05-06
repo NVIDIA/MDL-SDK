@@ -30,6 +30,7 @@
 
 #include <mi/mdl/mdl_types.h>
 #include <mi/mdl/mdl_iowned.h>
+#include <mi/mdl/mdl_spectral_support.h>
 #include <mi/base/iallocator.h>
 
 #include <atomic>
@@ -728,6 +729,70 @@ public:
     }
 };
 
+/// Implementation of the spectral sample type.
+class Type_spectral_sample : public Type_base<IType_spectral_sample>
+{
+    typedef Type_base<IType_spectral_sample> Base;
+public:
+
+    /// Get the compound type at index i.
+    IType const *get_compound_type(int index) const MDL_FINAL {
+        if (0 <= index && index < m_num_samples) {
+            return &the_float_type;
+        }
+        return NULL;
+    }
+
+    /// Get the number of compound elements.
+    int get_compound_size() const MDL_FINAL { return int(m_num_samples); }
+
+    /// Get the type of the spectral sample elements.
+    IType_atomic const *get_element_type() const MDL_FINAL { return &the_float_type; }
+
+    /// Constructor.
+    explicit Type_spectral_sample(size_t num_samples)
+    : Base()
+    , m_num_samples(num_samples)
+    {
+    }
+
+private:
+    /// The number of samples of the spectral sample type.
+    const size_t m_num_samples;
+};
+
+/// Implementation of the spectrum type.
+class Type_spectrum : public Type_base<IType_spectrum>
+{
+    typedef Type_base<IType_spectrum> Base;
+public:
+
+    /// Get the compound type at index i.
+    IType const *get_compound_type(int index) const MDL_FINAL {
+        if (0 <= index && index < m_num_samples) {
+            return &the_float_type;
+        }
+        return NULL;
+    }
+
+    /// Get the number of compound elements.
+    int get_compound_size() const MDL_FINAL { return int(m_num_samples); }
+
+    /// Get the type of the spectrum elements.
+    IType_atomic const *get_element_type() const MDL_FINAL { return &the_float_type; }
+
+    /// Constructor.
+    explicit Type_spectrum(size_t num_elements)
+        : Base()
+        , m_num_samples(num_elements)
+    {
+    }
+
+private:
+    /// The number of samples of the spectrum type.
+    const size_t m_num_samples;
+};
+
 /// Implementation of the function type.
 class Type_function : public Type_base<IType_function>
 {
@@ -1139,6 +1204,7 @@ namespace {
 
 static std::atomic<size_t> g_id = 0;
 
+// Constructs a new type non-root factory.
 Type_factory::Type_factory(
     Memory_arena  &arena,
     Type_factory  *root_factory,
@@ -1146,8 +1212,11 @@ Type_factory::Type_factory(
 : Base()
 , m_builder(arena)
 , m_id(++g_id)
+, m_compiler(NULL)
 , m_root_factory(root_factory)
 , m_symtab(&symtab)
+, m_root_lock()
+, m_spectrum_type(NULL)
 , m_type_cache(0, Type_cache::hasher(), Type_cache::key_equal(), &arena)
 , m_array_size_cache(0, Array_size_cache::hasher(), Array_size_cache::key_equal(), &arena)
 , m_imported_types_cache(0, Type_import_map::hasher(), Type_import_map::key_equal(), &arena)
@@ -1159,22 +1228,37 @@ Type_factory::Type_factory(
     memset(m_predefined_categories, 0, sizeof(m_predefined_categories));
 }
 
+// Constructs a new type root factory.
 Type_factory::Type_factory(
     Memory_arena  &arena,
     bool          mat_ior_is_varying,
-    Symbol_table  &symtab)
+    Symbol_table  &symtab,
+    MDL const     &compiler)
 : Base()
 , m_builder(arena)
 , m_id(++g_id)
+, m_compiler(&compiler)
 , m_root_factory(NULL)
 , m_symtab(&symtab)
+, m_root_lock()
+, m_spectrum_type(NULL)
 , m_type_cache(0, Type_cache::hasher(), Type_cache::key_equal(), &arena)
 , m_array_size_cache(0, Array_size_cache::hasher(), Array_size_cache::key_equal(), &arena)
 , m_imported_types_cache(0, Type_import_map::hasher(), Type_import_map::key_equal(), &arena)
-, m_imported_category_cache(0, Category_import_map::hasher(), Category_import_map::key_equal(), &arena)
+, m_imported_category_cache(
+    0, Category_import_map::hasher(), Category_import_map::key_equal(), &arena)
 {
     // we are creating the compiler owned TF, insert the predefined types here
     enter_predefined_types(*this, !mat_ior_is_varying);
+}
+
+// Destructor.
+Type_factory::~Type_factory()
+{
+    if (m_spectrum_type != NULL) {
+        Allocator_builder(get_allocator()).free(m_spectrum_type);
+        m_spectrum_type = NULL;
+    }
 }
 
 /// Get the predefined struct id for a given predefined symbol.
@@ -1696,6 +1780,31 @@ IType_color const *Type_factory::create_color()
     return &the_color_type;
 }
 
+/// Create a new type spectral sample instance.
+IType_spectral_sample const *Type_factory::create_spectral_sample()
+{
+    return &the_spectral_sample_type;
+}
+
+/// Create a new type spectrum instance.
+IType_spectrum const *Type_factory::create_spectrum()
+{
+    if (m_root_factory != NULL) {
+        return m_root_factory->create_spectrum();
+    }
+
+    if (m_spectrum_type == NULL) {
+        mi::base::Lock::Block block(&m_root_lock);
+        if (m_spectrum_type == NULL) {
+            int wavelength_base_max = m_compiler->get_compiler_int_option(
+                /*ctx=*/ NULL, MDL::option_state_wavelength_base_max, 4);
+            m_spectrum_type = Allocator_builder(get_allocator()).create<Type_spectrum>(
+                size_t(wavelength_base_max));
+        }
+    }
+    return m_spectrum_type;
+}
+
 // Create a new type pointer instance.
 IType const *Type_factory::create_pointer(
     IType const *element_type,
@@ -2026,6 +2135,10 @@ IType const *Type_factory::import(IType const *type)
         }
     case IType::TK_COLOR:
         return create_color();
+    case IType::TK_SPECTRAL_SAMPLE:
+        return create_spectral_sample();
+    case IType::TK_SPECTRUM:
+        return create_spectrum();
     case IType::TK_FUNCTION:
         {
             IType_function const *f_type = cast<IType_function>(type);
@@ -2321,6 +2434,10 @@ IType const *Type_factory::get_equal(IType const *type) const
         }
     case IType::TK_COLOR:
         return safe->create_color();
+    case IType::TK_SPECTRAL_SAMPLE:
+        return safe->create_spectral_sample();
+    case IType::TK_SPECTRUM:
+        return safe->create_spectrum();
     case IType::TK_FUNCTION:
         // not supported
         return NULL;

@@ -26,8 +26,8 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
- /// \file
- /// \brief command line options
+/// \file
+/// \brief command line options
 
 #ifndef MDL_SDK_EXAMPLES_MDL_BROWSER_COMMAND_LINE_OPTIONS_H 
 #define MDL_SDK_EXAMPLES_MDL_BROWSER_COMMAND_LINE_OPTIONS_H

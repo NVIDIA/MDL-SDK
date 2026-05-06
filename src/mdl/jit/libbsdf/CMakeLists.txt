@@ -37,6 +37,9 @@ project(${PROJECT_NAME})
 
 # Files to generate
 set(_GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
+# TODOs
+# - make hsm1, hsm2, ... optional
+# - make debug optional here
 set(DF_HANDLE_SLOT_MODES "hsmp" "hsmn" "hsm1" "hsm2" "hsm4" "hsm8")
 foreach(HS ${DF_HANDLE_SLOT_MODES})
     # .d is a dependency file
@@ -48,6 +51,13 @@ foreach(HS ${DF_HANDLE_SLOT_MODES})
         ${_GENERATED_DIR}/libbsdf_${HS}_debug.bc
         ${_GENERATED_DIR}/libbsdf_${HS}_debug.d
         ${_GENERATED_DIR}/libbsdf_${HS}_debug.ll
+        # spectral variants
+        ${_GENERATED_DIR}/libbsdf_spectral_${HS}.bc
+        ${_GENERATED_DIR}/libbsdf_spectral_${HS}.d
+        ${_GENERATED_DIR}/libbsdf_spectral_${HS}.ll
+        ${_GENERATED_DIR}/libbsdf_spectral_${HS}_debug.bc
+        ${_GENERATED_DIR}/libbsdf_spectral_${HS}_debug.d
+        ${_GENERATED_DIR}/libbsdf_spectral_${HS}_debug.ll
     )
 endforeach()
 
@@ -78,7 +88,7 @@ set_source_files_properties(${_GENERATED_SOURCES} PROPERTIES GENERATED TRUE)
 # create target from template
 create_from_base_preset(
     TARGET ${PROJECT_NAME}
-    SOURCES 
+    SOURCES
         ${PROJECT_SOURCES}
         ${_GENERATED_SOURCES}
         ${DUMMY_CPP}
@@ -96,7 +106,7 @@ target_add_tool_dependency(TARGET ${PROJECT_NAME} TOOL clang)
 
 foreach(HS ${DF_HANDLE_SLOT_MODES})
     string(TOUPPER ${HS} HS_UPPER)
-    set(CLANG_FLAGS_EX ${CLANG_FLAGS} "-D MDL_DF_HANDLE_SLOT_MODE=BSDF_${HS_UPPER}")
+    set(CLANG_FLAGS_RGB ${CLANG_FLAGS} "-DMDL_DF_HANDLE_SLOT_MODE=BSDF_${HS_UPPER}")
 
     add_custom_command(
         OUTPUT
@@ -105,13 +115,13 @@ foreach(HS ${DF_HANDLE_SLOT_MODES})
             ${_GENERATED_DIR}/libbsdf_${HS}.ll
         COMMAND ${CMAKE_COMMAND} -E echo "Compile libbsdf_${HS} bytecode using clang ..."
         COMMAND ${CMAKE_COMMAND} -E make_directory ${_GENERATED_DIR}
-        COMMAND ${clang_PATH} 
-            -emit-llvm -c -O3 -ffast-math -fno-vectorize -Wuninitialized -Wconditional-uninitialized -target nvptx64-nvidia-cuda-gnu ${CLANG_FLAGS_EX} ${CMAKE_CURRENT_SOURCE_DIR}/libbsdf.cpp
+        COMMAND ${clang_PATH}
+            -emit-llvm -c -O3 -ffast-math -fno-vectorize -Wuninitialized -Wconditional-uninitialized -target nvptx64-nvidia-cuda-gnu ${CLANG_FLAGS_RGB} ${CMAKE_CURRENT_SOURCE_DIR}/libbsdf.cpp
             -o ${_GENERATED_DIR}/libbsdf_${HS}.bc -MD -MT ${_GENERATED_DIR}/libbsdf_${HS}.bc -MP -MF ${_GENERATED_DIR}/libbsdf_${HS}.d.tmp
         COMMAND ${CMAKE_COMMAND} -E copy ${_GENERATED_DIR}/libbsdf_${HS}.d.tmp ${_GENERATED_DIR}/libbsdf_${HS}.d
         COMMAND ${CMAKE_COMMAND} -E remove ${_GENERATED_DIR}/libbsdf_${HS}.d.tmp
-        COMMAND ${clang_PATH} 
-            -emit-llvm -S -O3 -ffast-math -fno-vectorize -Wuninitialized -Wconditional-uninitialized -target nvptx64-nvidia-cuda-gnu ${CLANG_FLAGS_EX} ${CMAKE_CURRENT_SOURCE_DIR}/libbsdf.cpp
+        COMMAND ${clang_PATH}
+            -emit-llvm -S -O3 -ffast-math -fno-vectorize -Wuninitialized -Wconditional-uninitialized -target nvptx64-nvidia-cuda-gnu ${CLANG_FLAGS_RGB} ${CMAKE_CURRENT_SOURCE_DIR}/libbsdf.cpp
             -o ${_GENERATED_DIR}/libbsdf_${HS}.ll
         DEPENDS
             ${PROJECT_SOURCES}
@@ -127,13 +137,60 @@ foreach(HS ${DF_HANDLE_SLOT_MODES})
         COMMAND ${CMAKE_COMMAND} -E echo "Compile libbsdf_${HS}_debug bytecode using clang ..."
         COMMAND ${CMAKE_COMMAND} -E make_directory ${_GENERATED_DIR}
         COMMAND ${clang_PATH}
-            -emit-llvm -c -g -O3 -ffast-math -fno-vectorize -Wuninitialized -Wconditional-uninitialized -target nvptx64-nvidia-cuda-gnu ${CLANG_FLAGS_EX} ${CMAKE_CURRENT_SOURCE_DIR}/libbsdf.cpp
+            -emit-llvm -c -g -O3 -ffast-math -fno-vectorize -Wuninitialized -Wconditional-uninitialized -target nvptx64-nvidia-cuda-gnu ${CLANG_FLAGS_RGB} ${CMAKE_CURRENT_SOURCE_DIR}/libbsdf.cpp
             -o ${_GENERATED_DIR}/libbsdf_${HS}_debug.bc -MD -MT ${_GENERATED_DIR}/libbsdf_${HS}_debug.bc -MP -MF ${_GENERATED_DIR}/libbsdf_${HS}_debug.d.tmp
         COMMAND ${CMAKE_COMMAND} -E copy ${_GENERATED_DIR}/libbsdf_${HS}_debug.d.tmp ${_GENERATED_DIR}/libbsdf_${HS}_debug.d
         COMMAND ${CMAKE_COMMAND} -E remove ${_GENERATED_DIR}/libbsdf_${HS}_debug.d.tmp
         COMMAND ${clang_PATH}
-            -emit-llvm -S -g -O3 -ffast-math -fno-vectorize -Wuninitialized -Wconditional-uninitialized -target nvptx64-nvidia-cuda-gnu ${CLANG_FLAGS_EX} ${CMAKE_CURRENT_SOURCE_DIR}/libbsdf.cpp
+            -emit-llvm -S -g -O3 -ffast-math -fno-vectorize -Wuninitialized -Wconditional-uninitialized -target nvptx64-nvidia-cuda-gnu ${CLANG_FLAGS_RGB} ${CMAKE_CURRENT_SOURCE_DIR}/libbsdf.cpp
             -o ${_GENERATED_DIR}/libbsdf_${HS}_debug.ll
+        DEPENDS
+            ${PROJECT_SOURCES}
+        VERBATIM
+    )
+
+    # spectral variants
+    set(CLANG_FLAGS_SPECTRAL ${CLANG_FLAGS_RGB} "-DMDL_DF_SPECTRAL_ENABLE")
+    if (NOT (MDL_DF_SPECTRAL_SAMPLES_OVERRIDE STREQUAL ""))
+        set(CLANG_FLAGS_SPECTRAL
+            ${CLANG_FLAGS_SPECTRAL} "-DMDL_DF_SPECTRAL_SAMPLES=${MDL_DF_SPECTRAL_SAMPLES_OVERRIDE}")
+    endif()
+    add_custom_command(
+        OUTPUT
+            ${_GENERATED_DIR}/libbsdf_spectral_${HS}.bc
+            ${_GENERATED_DIR}/libbsdf_spectral_${HS}.d
+            ${_GENERATED_DIR}/libbsdf_spectral_${HS}.ll
+        COMMAND ${CMAKE_COMMAND} -E echo "Compile libbsdf_spectral_${HS} bytecode using clang ..."
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${_GENERATED_DIR}
+        COMMAND ${clang_PATH}
+            -emit-llvm -c -O3 -ffast-math -fno-vectorize -Wuninitialized -Wconditional-uninitialized -target nvptx64-nvidia-cuda-gnu ${CLANG_FLAGS_SPECTRAL} ${CMAKE_CURRENT_SOURCE_DIR}/libbsdf.cpp
+            -o ${_GENERATED_DIR}/libbsdf_spectral_${HS}.bc -MD -MT ${_GENERATED_DIR}/libbsdf_spectral_${HS}.bc -MP -MF ${_GENERATED_DIR}/libbsdf_spectral_${HS}.d.tmp
+        COMMAND ${CMAKE_COMMAND} -E copy ${_GENERATED_DIR}/libbsdf_spectral_${HS}.d.tmp ${_GENERATED_DIR}/libbsdf_spectral_${HS}.d
+        COMMAND ${CMAKE_COMMAND} -E remove ${_GENERATED_DIR}/libbsdf_spectral_${HS}.d.tmp
+        COMMAND ${clang_PATH}
+            -emit-llvm -S -O3 -ffast-math -fno-vectorize -Wuninitialized -Wconditional-uninitialized -target nvptx64-nvidia-cuda-gnu ${CLANG_FLAGS_SPECTRAL} ${CMAKE_CURRENT_SOURCE_DIR}/libbsdf.cpp
+            -o ${_GENERATED_DIR}/libbsdf_spectral_${HS}.ll
+        DEPENDS
+            ${PROJECT_SOURCES}
+        VERBATIM
+    )
+
+    # also build a debug version
+    add_custom_command(
+        OUTPUT
+            ${_GENERATED_DIR}/libbsdf_spectral_${HS}_debug.bc
+            ${_GENERATED_DIR}/libbsdf_spectral_${HS}_debug.d
+            ${_GENERATED_DIR}/libbsdf_spectral_${HS}_debug.ll
+        COMMAND ${CMAKE_COMMAND} -E echo "Compile libbsdf_spectral_${HS}_debug bytecode using clang ..."
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${_GENERATED_DIR}
+        COMMAND ${clang_PATH}
+            -emit-llvm -c -g -O3 -ffast-math -fno-vectorize -Wuninitialized -Wconditional-uninitialized -target nvptx64-nvidia-cuda-gnu ${CLANG_FLAGS_SPECTRAL} ${CMAKE_CURRENT_SOURCE_DIR}/libbsdf.cpp
+            -o ${_GENERATED_DIR}/libbsdf_spectral_${HS}_debug.bc -MD -MT ${_GENERATED_DIR}/libbsdf_spectral_${HS}_debug.bc -MP -MF ${_GENERATED_DIR}/libbsdf_spectral_${HS}_debug.d.tmp
+        COMMAND ${CMAKE_COMMAND} -E copy ${_GENERATED_DIR}/libbsdf_spectral_${HS}_debug.d.tmp ${_GENERATED_DIR}/libbsdf_spectral_${HS}_debug.d
+        COMMAND ${CMAKE_COMMAND} -E remove ${_GENERATED_DIR}/libbsdf_spectral_${HS}_debug.d.tmp
+        COMMAND ${clang_PATH}
+            -emit-llvm -S -g -O3 -ffast-math -fno-vectorize -Wuninitialized -Wconditional-uninitialized -target nvptx64-nvidia-cuda-gnu ${CLANG_FLAGS_SPECTRAL} ${CMAKE_CURRENT_SOURCE_DIR}/libbsdf.cpp
+            -o ${_GENERATED_DIR}/libbsdf_spectral_${HS}_debug.ll
         DEPENDS
             ${PROJECT_SOURCES}
         VERBATIM

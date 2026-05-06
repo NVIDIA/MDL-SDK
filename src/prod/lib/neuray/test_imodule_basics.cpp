@@ -3299,7 +3299,7 @@ MI_TEST_AUTO_FUNCTION( test_imodule_basics )
         run_tests( neuray.get());
     }
 
-    neuray = nullptr;
+    neuray.reset();
     MI_CHECK( unload());
 }
 

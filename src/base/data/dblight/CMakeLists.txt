@@ -31,6 +31,7 @@ set(PROJECT_NAME base-data-dblight)
 
 # collect sources
 set(PROJECT_HEADERS
+    "dblight_admin_server.h"
     "dblight_database.h"
     "dblight_fragmented_job.h"
     "dblight_info.h"
@@ -42,6 +43,7 @@ set(PROJECT_HEADERS
 
 set(PROJECT_SOURCES
     "dblight_access.cpp"
+    "dblight_admin_server.cpp"
     "dblight_database.cpp"
     "dblight_info.cpp"
     "dblight_scope.cpp"

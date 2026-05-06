@@ -229,7 +229,11 @@ Baker_fragmented_job::Baker_fragmented_job(
     m_num_frags_with_extra_row = m_tex_height - m_num_rows_per_frag * m_num_fragments;
 }
 
-static const mi::Float32_4_4 s_unity(1.0f);
+static const mi::neuraylib::tct_float4_a16 s_unity[3] = {
+    1.0f, 0.0f, 0.0f, 0.0f,
+    0.0f, 1.0f, 0.0f, 0.0f,
+    0.0f, 0.0f, 1.0f, 0.0f
+};
 
 static void prepare_cpu_state(
     mi::neuraylib::Shading_state_environment &state_env,
@@ -410,6 +414,8 @@ void Baker_fragmented_job::execute_fragment(
 }
 
 
+#if 0
+// unused
 static size_t store_value(unsigned char *data, mi::base::Handle<MI::MDL::IValue const> iv)
 {
     switch (iv->get_kind()) {
@@ -526,6 +532,7 @@ static size_t store_value(unsigned char *data, mi::base::Handle<MI::MDL::IValue 
     ASSERT(M_BAKER, !"unsupported value type");
     return 0;
 }
+#endif
 
 // Constructor.
 Baker_code_impl::Baker_code_impl(

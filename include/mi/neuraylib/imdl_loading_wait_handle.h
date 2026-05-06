@@ -49,34 +49,34 @@ namespace neuraylib {
 /// indirectly using imports will block until the initial loading process has ended.
 /// This interface allows to specify how the waiting and the awakening of threads is realized.
 /// The default implementation that comes with the SDK uses conditional variable of the standard
-/// template library. It is sufficient for most applications. Only in case the application wants 
-/// to use a custom thread scheduling or light weight threads that are not compatible with std, 
+/// template library. It is sufficient for most applications. Only in case the application wants
+/// to use a custom thread scheduling or light weight threads that are not compatible with std,
 /// this interface, along with the corresponding factory, has to be implemented.
 class IMdl_loading_wait_handle : public
     base::Interface_declare<0xc942596c,0x80fd,0x46d1,0x9a,0x1d,0x57,0x4c,0x27,0xf9,0x20,0x24>
 {
 public:
     /// Called when the element is currently loaded by another threads.
-    /// Blocks until the loading thread calls \c notify. Calling \c wait after \c notify has been 
-    /// called already is valid. \c wait will not block in this case and return silently. 
-    /// The number of threads that can wait at the same time is not limited. 
+    /// Blocks until the loading thread calls \c notify. Calling \c wait after \c notify has been
+    /// called already is valid. \c wait will not block in this case and return silently.
+    /// The number of threads that can wait at the same time is not limited.
     /// The order in which threads awake after \c notify has been called is not specified.
     virtual void wait() = 0;
 
     /// Called by the loading thread after loading is done to wake the waiting threads. Other
-    /// threads are not supposed to call this method. It is allowed to call notify multiple times  
+    /// threads are not supposed to call this method. It is allowed to call notify multiple times
     /// if other threads are waiting or not. However, it is not allowed to call notify multiple
     /// times with different \c result_codes.
-    /// 
+    ///
     ///
     /// \param result_code      The result code that is passed to the waiting threads.
-    ///                         Values >=  are indicate that the loaded element is available.
+    ///                         Values >= 0 indicate that the loaded element is available.
     ///                         Negative values are treated as failure for dependent element.
     virtual void notify(Sint32 result_code) = 0;
 
     /// Gets the result code that was passed to \c notify. This allows waiting threads to
     /// query the result of the loading process after returning from \c wait.
-    /// 
+    ///
     /// \return       The result code.
     virtual Sint32 get_result_code() const = 0;
 };

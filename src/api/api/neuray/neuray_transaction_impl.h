@@ -33,8 +33,6 @@
 #ifndef API_API_NEURAY_NEURAY_TRANSACTION_IMPL_H
 #define API_API_NEURAY_NEURAY_TRANSACTION_IMPL_H
 
-// #define MI_API_API_NEURAY_USE_NAME_TO_TAG_UNSAFE
-
 #include <mi/neuraylib/itransaction.h>
 
 #include <regex>
@@ -47,6 +45,7 @@
 #include <boost/core/noncopyable.hpp>
 
 #include <base/data/db/i_db_tag.h>
+#include <base/data/idata/i_idata_string_cache.h>
 #include <base/data/serial/i_serial_classid.h>
 #include <base/lib/unordered_dense/unordered_dense.h>
 
@@ -203,24 +202,6 @@ public:
     /// \note This method does \em not increase the reference count of the return value.
     const Class_factory* get_class_factory() const;
 
-#ifdef MI_API_API_NEURAY_USE_NAME_TO_TAG_UNSAFE
-    /// Returns the tag to be used for storing a DB element of that name.
-    ///
-    /// Calls DB::Transaction::name_to_tag() followed by get_tag_for_store(DB::Tag).
-    DB::Tag get_tag_for_store( const char* name);
-
-    /// Returns the tag to be used for storing a DB element with that tag.
-    ///
-    /// Returns the passed tag if it is not the null tag and (has not been been marked for removal
-    /// or is still referenced). Otherwise, it reserves a new tag and returns it.
-    ///
-    /// We must not reuse an existing tag if DB::Transaction::remove() was called for that tag and
-    /// and its reference count is 0: The DB requires that a tag that has been removed, i.e.,
-    /// requested for removal, must not be reused (at least those tags with reference count 0 might
-    /// disappear at any time -- even within a transaction).
-    DB::Tag get_tag_for_store( DB::Tag tag);
-#endif // MI_API_API_NEURAY_USE_NAME_TO_TAG_UNSAFE
-
     /// Record the construction of (an API class for) a DB element.
     ///
     /// Functionality duplicated from the Db_element_tracker, but in the context of the transaction.
@@ -278,14 +259,14 @@ private:
     /// \c true for a short amount of time (at least if networking is enabled).
     bool m_commit_or_abort_warning;
 
-    /// Caches the result of the last get_time_stamp() call.
-    mutable std::string m_timestamp;
+    /// Caches the return values of get_time_stamp().
+    mutable IDATA::String_cache m_string_cache;
 
     /// ID of the transaction (as number)
     mi::Uint32 m_id_as_uint;
 
     /// ID of the transaction (as string).
-    mutable std::string m_id_as_string;
+    std::string m_id_as_string;
 
     /// Lock for #m_elements.
     mi::base::Lock m_elements_lock;
@@ -294,9 +275,7 @@ private:
 
     /// Contains the DB elements currently in use by the API for this transaction.
     ///
-    /// Needs #m_elements_lock. Transactions are not multi-threading-safe anyway, but even the
-    /// release of a DB element manipulates the map, which is not necessarily perceived as "using
-    /// the transaction". So we are a bit more carefule here for this container.
+    /// Needs #m_elements_lock.
     Elements m_elements;
 };
 

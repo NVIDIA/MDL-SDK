@@ -100,7 +100,7 @@ public:
 
     /// Construct from an vector.
     template <typename A>
-    /*implecit*/ Array_ref(std::vector<T, A> const &v)
+    /*implicit*/ Array_ref(std::vector<T, A> const &v)
     : m_arr(v.empty() ? NULL : &v[0]), m_n(v.size())
     {
     }
@@ -141,6 +141,95 @@ public:
 
 private:
     T const *m_arr;
+    size_t  m_n;
+};
+
+/// Helper class to handle array passing safely.
+template<typename T>
+class Mutable_array_ref {
+public:
+    typedef T *iterator;
+    typedef T const *const_iterator;
+
+    /// Construct an empty array reference.
+    /*implicit*/ Mutable_array_ref()
+    : m_arr(NULL)
+    , m_n(0)
+    {
+    }
+
+    /// Construct from a pointer and a length.
+    ///
+    /// \param arr  the array
+    /// \param n    length of the array
+    Mutable_array_ref(T *arr, size_t n)
+    : m_arr(arr)
+    , m_n(n)
+    {
+    }
+
+    /// Construct from a start and an end pointer.
+    ///
+    /// \param begin  the start pointer
+    /// \param end    the end pointer
+    Mutable_array_ref(T *begin, T *end)
+    : m_arr(begin)
+    , m_n(end - begin)
+    {
+    }
+
+    /// Construct from one element.
+    ///
+    /// \param elem  the element
+    /*implicit*/ Mutable_array_ref(T &elem)
+    : m_arr(&elem)
+    , m_n(1)
+    {
+    }
+
+    /// Construct a descriptor from a C array.
+    template <size_t N>
+    /*implicit*/ Mutable_array_ref(T(&arr)[N])
+    : m_arr(arr), m_n(N)
+    {
+    }
+
+    /// Get the begin iterator.
+    iterator begin() const { return m_arr; }
+
+    /// Get the end iterator.
+    iterator end() const { return m_arr + m_n; }
+
+    /// Get the array size.
+    size_t size() const { return m_n; }
+
+    /// Index operator.
+    T &operator[](size_t i) const
+    {
+        MDL_ASSERT(i < m_n && "index out of bounds");
+        return m_arr[i];
+    }
+
+    /// Chop off the first N elements of the array.
+    Mutable_array_ref<T> slice(size_t n) const
+    {
+        MDL_ASSERT(n <= size() && "cannot chop more than whole array");
+        return Mutable_array_ref<T>(&m_arr[n], m_n - n);
+    }
+
+    /// slice(n, m) - Chop off the first N elements of the array, and keep M
+    /// elements in the array.
+    Mutable_array_ref<T> slice(size_t N, size_t M) const
+    {
+        MDL_ASSERT(N + M <= size() && "Invalid size");
+        return Mutable_array_ref<T>(data() + N, M);
+    }
+
+    /// Get the data.
+    T *data() const { return m_arr; }
+
+private:
+    T *m_arr;
     size_t  m_n;
 };
 

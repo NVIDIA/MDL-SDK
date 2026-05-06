@@ -28,8 +28,8 @@
 
 /// \file
 /// \brief Attribute class implementation.
- 
- 
+
+
 #include "pch.h"
 
 #include "i_attr_attribute.h"
@@ -39,7 +39,6 @@
 
 #include <base/data/db/i_db_transaction.h>
 #include <base/data/serial/i_serializer.h>
-#include <base/lib/cont/i_cont_rle_array.h>
 #include <base/lib/log/i_log_logger.h>
 #include <base/lib/zlib/i_zlib.h>
 #include <base/system/main/access_module.h>
@@ -49,15 +48,6 @@ namespace ATTR {
 
 using namespace std;
 using namespace LOG;
-using namespace CONT;
-
-//==================================================================================================
-
-// Default constructor.
-Attachment::Attachment()
-  : m_is_interface(false)
-{}
-
 
 //==================================================================================================
 
@@ -79,18 +69,7 @@ Attribute::Attribute(
     Attribute_propagation override)     // inheritance: parent overrides child
   : m_type(type)
 {
-    init(id_create(m_type.get_name()), override, 1, false, false);
-#if ENABLE_ASSERTIONS
-    if (m_type.get_typecode() == TYPE_ATTACHABLE) {
-        const Type* ref = type.get_child();
-        ASSERT(M_ATTR, ref->get_typecode == TYPE_REF);
-        ASSERT(M_ATTR, ref->get_name() = 0);
-        const Type* value = ref->get_next();
-        ASSERT(M_ATTR, ref->get_typecode != TYPE_ATTACHABLE);
-        ASSERT(M_ATTR, value->get_name() != 0);
-        ASSERT(M_ATTR, value->get_next() == 0);
-    }
-#endif
+    init(id_create(m_type.get_name()), override, 1, false);
     // just to avoid that some strangely configured enum collection enters the system
     ASSERT(M_ATTR, m_type.get_typecode() != TYPE_ENUM
         || (m_type.get_enum() && !m_type.get_enum()->empty()));
@@ -111,7 +90,7 @@ Attribute::Attribute(
         m_type.set_name(attr_module->get_reserved_attr(id));
     }
 
-    init(id, override, 1, false, false);
+    init(id, override, 1, false);
 
     // just to avoid that some strangely configured enum collection enters the system
     ASSERT(M_ATTR, m_type.get_typecode() != TYPE_ENUM
@@ -127,15 +106,14 @@ Attribute::Attribute(
     const char          *name,          // name of attribute (stored in type)
     Uint                type_asize,     // number of elements, > 0
     Attribute_propagation override,     // inheritance: parent overrides child
-    bool                global,         // not inheritable, nailed to element
-    bool                is_const)       // is value immutable?
+    bool                global)         // is value immutable?
   : m_type(type, name, type_asize)
 {
     ASSERT(M_ATTR,                      // that's most probably an error
-        type != TYPE_STRUCT && type != TYPE_ARRAY && type != TYPE_ATTACHABLE && type != TYPE_CALL);
+        type != TYPE_STRUCT && type != TYPE_ARRAY);
     ASSERT(M_ATTR, name && *name);
 
-    init(id_create(name), override, 1, is_const, global);
+    init(id_create(name), override, 1, global);
 
     // just to avoid that some strangely configured enum collection enters the system
     ASSERT(M_ATTR, m_type.get_typecode() != TYPE_ENUM
@@ -149,26 +127,23 @@ Attribute::Attribute(
     Type_code           type,           // primitive type: bool, int, ...
     Uint                type_asize,     // number of elements > 0
     Attribute_propagation override,     // inheritance: parent overrides child
-    bool                global,         // not inheritable, nailed to element
-    bool                is_const)       // is value immutable?
+    bool                global)         // not inheritable, nailed to element
   : m_type(type, 0, type_asize)
 {
     SYSTEM::Access_module<ATTR::Attr_module> attr_module(false);
     m_type.set_name(attr_module->get_reserved_attr(id));
 
     ASSERT(M_ATTR,                      // that's most probably an error
-        type != TYPE_STRUCT && type != TYPE_ARRAY && type != TYPE_ATTACHABLE && type != TYPE_CALL);
+        type != TYPE_STRUCT && type != TYPE_ARRAY);
 
-    init(id, override, 1, is_const, global);
+    init(id, override, 1, global);
 
     // just to avoid that some strangely configured enum collection enters the system
     ASSERT(M_ATTR, m_type.get_typecode() != TYPE_ENUM
         || (m_type.get_enum() && !m_type.get_enum()->empty()));
 }
 
-
-// TODO
-/*namespace {*/ void copy_constructor(Type_iterator&, Type_iterator&); /*}*/
+void copy_constructor(Type_iterator&, Type_iterator&);
 
 Attribute::Attribute(
     const Attribute& other)
@@ -179,7 +154,6 @@ Attribute::Attribute(
         other.m_id,
         other.m_override,
         other.get_listsize(),
-        other.m_type.get_const(),
         other.m_global);
 
     //const size_t size = other.m_type.sizeof_all();
@@ -194,9 +168,6 @@ Attribute::Attribute(
         Type_iterator out_iter(&get_type(), set_values());
         copy_constructor(in_iter, out_iter);
     }
-
-    // (3) finally
-    m_attachments = other.m_attachments;
 
     // just to avoid that some strangely configured enum collection enters the system
     ASSERT(M_ATTR, m_type.get_typecode() != TYPE_ENUM
@@ -332,30 +303,6 @@ Attribute_id Attribute::id_lookup(
 }
 
 
-// Add an attachment to the internal list.
-void Attribute::add_attachment(
-    const Attachment &attachment)       // the attachment
-{
-    m_attachments.append(attachment);
-}
-
-
-// Remove an attachment from the internal list.
-void Attribute::remove_attachment(
-    const char *name)       // the member name
-{
-    const string member_name = name ? name : "";
-
-    int removal_index = -1;
-    for(size_t count = 0; ((count < m_attachments.size()) && (-1 == removal_index)); ++count)
-        if(m_attachments[count].m_member_name == member_name)
-            removal_index = count;
-
-    if(-1 != removal_index)
-        m_attachments.remove(removal_index);
-}
-
-
 // serialize the object to the given serializer including all sub elements.
 // It must return a pointer behind itself (e.g. this + 1) to handle arrays.
 const SERIAL::Serializable* Attribute::serialize(
@@ -375,15 +322,6 @@ const SERIAL::Serializable* Attribute::serialize(
     values += size;
     }
 
-    serializer->write((Uint32)m_attachments.size());
-    for (Uint i = 0; i < m_attachments.size(); ++i) {
-        const Attachment& attachment = m_attachments[i];
-        SERIAL::write(serializer,attachment.m_member_name);
-        serializer->write(attachment.m_target);
-        SERIAL::write(serializer,attachment.m_target_name);
-        serializer->write(attachment.m_is_interface);
-    }
-
     serializer->write(m_global);
 
     return this+1;
@@ -398,15 +336,6 @@ const SERIAL::Serializable * Attribute::serialize_no_values(
     serializer->write(override_as_uint);
 
     m_type.serialize(serializer);
-
-    serializer->write((Uint32)m_attachments.size());
-    for (Uint i = 0; i < m_attachments.size(); ++i) {
-        const Attachment& attachment = m_attachments[i];
-        SERIAL::write(serializer,attachment.m_member_name);
-        serializer->write(attachment.m_target);
-        SERIAL::write(serializer,attachment.m_target_name);
-        serializer->write(attachment.m_is_interface);
-    }
 
     serializer->write(m_global);
 
@@ -439,17 +368,6 @@ SERIAL::Serializable* Attribute::deserialize(
         values += size;
     }
 
-    Uint nr_of_attachments;
-    deser->read(&nr_of_attachments);
-    for (Uint i = 0; i < nr_of_attachments; ++i) {
-        Attachment attachment;
-        SERIAL::read(deser,&attachment.m_member_name);
-        deser->read(&attachment.m_target);
-        SERIAL::read(deser,&attachment.m_target_name);
-        deser->read(&attachment.m_is_interface);
-        m_attachments.append(attachment);
-    }
-
     deser->read(&m_global);
 
     return this+1;
@@ -467,15 +385,6 @@ void Attribute::dump() const
         head += " override";
     mod_log->debug(M_ATTR, LOG::Mod_log::C_DATABASE, "%s", head.c_str());
     //dump_attr_values(get_type(),get_name(),get_values(),1);
-    for (Uint i=0; i < m_attachments.size(); i++) {
-        const Attachment *at = &m_attachments[i];
-        mod_log->debug(M_ATTR, LOG::Mod_log::C_DATABASE,
-                        "\tattachment: %s = shadertag_" FMT_TAG " %s%s",
-                        at->m_member_name.empty() ? "<all>" : at->m_member_name.c_str(),
-                        at->m_target.get_uint(),
-                        at->m_is_interface ? "interface " : "",
-                        at->m_target_name.empty() ? "<all>" : at->m_target_name.c_str());
-    }
 }
 
 // factory function used for deserialization
@@ -522,7 +431,6 @@ Attribute& Attribute::operator=(const Attribute& other)
         other.m_id,
         other.m_override,
         other.get_listsize(),
-        other.m_type.get_const(),
         other.m_global);
 
     //const size_t size = other.m_type.sizeof_all();
@@ -536,9 +444,6 @@ Attribute& Attribute::operator=(const Attribute& other)
     Type_iterator in_iter(&other.get_type(), const_cast<char*>(other.get_values()));
     Type_iterator out_iter(&get_type(), set_values());
     copy_constructor(in_iter, out_iter);
-
-    // (3) finally
-    m_attachments = other.m_attachments;
 
     return *this;
 }
@@ -588,46 +493,16 @@ void copy_constructor(
             in_value += size;
             out_value += size;
         }
-        // rle arrays reset the value pointers accordingly
-        else if (in_it->get_typecode() == TYPE_RLE_UINT_PTR) {
-            Rle_array<Uint>* in_array = *(Rle_array<Uint>**)in_value;
-            Rle_array<Uint>* out_array = new Rle_array<Uint>;
-            Rle_chunk_iterator<Uint> iterator = in_array->begin_chunk();
-            size_t size = in_array->get_index_size();
-            for (size_t i=0; i < size; ++i) {
-                out_array->push_back(iterator.data(), iterator.count());
-                ++iterator;
-            }
-            *(Rle_array<Uint>**)out_value = out_array;
-
-            in_value += sizeof(Rle_array<Uint>*);
-            out_value += sizeof(Rle_array<Uint>*);
-        }
         // structs can be handled recursively
-        else if (in_it->get_typecode() == TYPE_STRUCT || in_it->get_typecode() == TYPE_ATTACHABLE
-            || in_it->get_typecode() == TYPE_CALL)
+        else if (in_it->get_typecode() == TYPE_STRUCT)
         {
             size_t size = in_it->sizeof_elem();
             for (int a=0; a < arraysize; ++a) {
-                if (in_it->get_typecode() == TYPE_CALL) {
-                    // name - which now is actually a tag, but still occupies space of a pointer
-                    memcpy(out_value, in_value, 4);
-                    in_value += Type::sizeof_one(TYPE_STRING);
-                    out_value += Type::sizeof_one(TYPE_STRING);
-                    // parameters
-                    Attribute::set_string(*(char**)out_value, *(const char**)in_value);
-                    in_value += Type::sizeof_one(TYPE_STRING);
-                    out_value += Type::sizeof_one(TYPE_STRING);
-                }
                 Type_iterator in_sub(&in_it, in_value);
                 Type_iterator out_sub(&out_it, out_value);
                 copy_constructor(in_sub, out_sub);
                 out_value += size;
                 in_value += size;
-                if (in_it->get_typecode() == TYPE_CALL) {
-                    out_value -= 2*Type::sizeof_one(TYPE_STRING);
-                    in_value -= 2*Type::sizeof_one(TYPE_STRING);
-                }
             }
         }
         else {
@@ -691,28 +566,13 @@ void destructor(Type_iterator& iter)
             // increase offset by the array element type's size since an array has no size itself
             values += size;
         }
-        else if (iter->get_typecode() == TYPE_RLE_UINT_PTR) {
-            Rle_array<Uint>* array = *(Rle_array<Uint>**)values;
-            delete array;
-            values += sizeof(Rle_array<Uint>*);
-        }
-        else if (iter->get_typecode() == TYPE_STRUCT || iter->get_typecode() == TYPE_ATTACHABLE
-            || iter->get_typecode() == TYPE_CALL)
+        else if (iter->get_typecode() == TYPE_STRUCT)
         {
             size_t size = iter->sizeof_elem();
             for (int a=0; a < arraysize; ++a) {
-                if (iter->get_typecode() == TYPE_CALL) {
-                    // clean up initial string coming next to the tag
-                    // nothing to do for the initial tag - but it occupies space of a pointer
-                    values += Type::sizeof_one(TYPE_STRING);
-                    Attribute::deallocate_storage(*(char **)values);
-                    values += Type::sizeof_one(TYPE_STRING);
-                }
                 Type_iterator sub(&iter, values);
                 destructor(sub);
                 values += size;
-                if (iter->get_typecode() == TYPE_CALL)
-                    values -= 2*Type::sizeof_one(TYPE_STRING);
             }
         }
         else {
@@ -756,11 +616,9 @@ void Attribute::init(
     Attribute_id id,
     Attribute_propagation override,
     Uint list_size,
-    bool is_const,
     bool is_global)
 {
     ASSERT(M_ATTR, m_type.get_typecode() != TYPE_UNDEF);
-    m_type.set_const(is_const);
 
     m_id = id;
     m_override = override;
@@ -806,16 +664,14 @@ Attribute::Attribute(
     Uint                type_asize,     // number of elements, > 0
     Uint                list_size,      // if attribute list, list size > 1
     Attribute_propagation override,     // inheritance: parent overrides child
-    bool                global,         // not inheritable, nailed to element
-    bool                is_const)       // is value immutable?
+    bool                global)         // not inheritable, nailed to element
 : m_id(~0u)
 , m_override(PROPAGATION_UNDEF)
 , m_type(type, name, type_asize)
 , m_values(nullptr)
 , m_global(false)
 {
-    ASSERT(M_ATTR, // that's most probably an error
-        type != TYPE_STRUCT && type != TYPE_ARRAY && type != TYPE_ATTACHABLE && type != TYPE_CALL);
+    ASSERT(M_ATTR, type != TYPE_STRUCT && type != TYPE_ARRAY);
     ASSERT(M_ATTR, name && *name);
     // just to avoid that some strangely configured enum collection enters the system
     ASSERT(M_ATTR, m_type.get_typecode() != TYPE_ENUM
@@ -833,8 +689,7 @@ Attribute::Attribute(
     Uint                type_asize,     // number of elements > 0
     Uint                list_size,      // if attribute list, list size > 1
     Attribute_propagation override,     // inheritance: parent overrides child
-    bool                global,         // not inheritable, nailed to element
-    bool                is_const)       // is value immutable?
+    bool                global)         // not inheritable, nailed to element
 : m_id(~0u)
 , m_override(PROPAGATION_UNDEF)
 , m_type(type, 0, type_asize)
@@ -844,8 +699,7 @@ Attribute::Attribute(
     SYSTEM::Access_module<ATTR::Attr_module> attr_module(false);
     m_type.set_name(attr_module->get_reserved_attr(id));
 
-    ASSERT(M_ATTR,                      // that's most probably an error
-        type != TYPE_STRUCT && type != TYPE_ARRAY && type != TYPE_ATTACHABLE && type != TYPE_CALL);
+    ASSERT(M_ATTR, type != TYPE_STRUCT && type != TYPE_ARRAY);
 
     // just to avoid that some strangely configured enum collection enters the system
     ASSERT(M_ATTR, m_type.get_typecode() != TYPE_ENUM
@@ -879,21 +733,8 @@ size_t calculate_size(Type_iterator& iter)
             // increase offset by the array element type's size since an array has no size itself
             values += size;
         }
-        else if (iter->get_typecode() == TYPE_RLE_UINT_PTR) {
-            Rle_array<Uint>* array = *(Rle_array<Uint>**)values;
-            res += sizeof(Rle_array<Uint>)
-                + array->get_byte_size()
-                // this term is based on assumption that indices are of type size_t
-                + array->get_index_size() * sizeof(size_t);
-
-            // increase offset
-            values += sizeof(Rle_array<Uint>*);
-        }
-        else if (iter->get_typecode() == TYPE_STRUCT || iter->get_typecode() == TYPE_ATTACHABLE
-            || iter->get_typecode() == TYPE_CALL)
+        else if (iter->get_typecode() == TYPE_STRUCT)
         {
-            if (iter->get_typecode() == TYPE_CALL)
-                values += 2*Type::sizeof_one(TYPE_STRING);
             size_t size = iter->sizeof_elem();
             for (int a=0; a < arraysize; ++a) {
                 Type_iterator sub(&iter, values);
@@ -933,10 +774,10 @@ size_t Attribute::get_size() const
         Type_iterator iter(&get_type(), const_cast<char*>(get_values_i(l)));
         res += calculate_size(iter);
     }
-    res += m_attachments.size() * sizeof(Attachment);
     return res;
 }
 
 
 }
 }
+

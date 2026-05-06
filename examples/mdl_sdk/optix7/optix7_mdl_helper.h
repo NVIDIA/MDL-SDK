@@ -319,7 +319,6 @@ Mdl_helper::Mdl_helper(
     m_execution_context->set_option("meters_per_scene_unit", 1.0f);         // equals default
     m_execution_context->set_option("mdl_wavelength_min", 380.0f);          // equals default
     m_execution_context->set_option("mdl_wavelength_max", 780.0f);          // equals default
-    m_execution_context->set_option("include_geometry_normal", true);       // equals default
 
     mi::base::Handle<mi::neuraylib::IMdl_backend_api> mdl_backend_api(
         m_neuray->get_api_component<mi::neuraylib::IMdl_backend_api>());

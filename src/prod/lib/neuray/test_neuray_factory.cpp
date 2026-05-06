@@ -64,7 +64,7 @@ void load_test_unload()
     run_tests( neuray.get());
     run_tests( neuray.get());
 
-    neuray = nullptr;
+    neuray.reset();
     MI_CHECK( unload());
 }
 

@@ -86,6 +86,18 @@ public:
     virtual const char* get_name() const = 0;
 };
 
+/// Used by the Boost intrusive pointer to Info.
+inline void intrusive_ptr_add_ref( Info* info)
+{
+    info->pin();
+}
+
+/// Used by the Boost intrusive pointer to Info.
+inline void intrusive_ptr_release( Info* info)
+{
+    info->unpin();
+}
+
 } // namespace DB
 
 } // namespace MI

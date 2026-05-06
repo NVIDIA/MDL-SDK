@@ -142,10 +142,7 @@ public:
     /// \param base_fname   The base name of the generated functions.
     /// \param context      Pointer to a #mi::neuraylib::IMdl_execution_context which can be used
     ///                     to pass compilation options to the MDL compiler.
-    ///                     The following options are supported by this operation:
-    ///                     - bool "include_geometry_normal" If true, the \c "geometry.normal"
-    ///                       field will be applied to the MDL state prior to evaluation of the
-    ///                       given DF (default: true).
+    ///                     Currently, no options are supported by this operation.
     ///                     During material compilation messages like errors and
     ///                     warnings will be passed to the context for
     ///                     later evaluation by the caller.
@@ -176,10 +173,7 @@ public:
     /// \param function_count        The size of the list of descriptions.
     /// \param[inout] context        Pointer to an #mi::neuraylib::IMdl_execution_context which can
     ///                              be used to pass compilation options to the MDL compiler.
-    ///                              The following options are supported by this operation:
-    ///                              - bool "include_geometry_normal" If true, the
-    ///                                \c "geometry.normal" field will be applied to the MDL state
-    ///                                prior to evaluation of the given DF (default: true).
+    ///                              Currently, no options are supported by this operation.
     ///                              During material compilation messages like errors and
     ///                              warnings will be passed to the context for
     ///                              later evaluation by the caller.
@@ -213,10 +207,7 @@ public:
     /// \param function_count        The size of the list of descriptions.
     /// \param[inout] context        Pointer to an #mi::neuraylib::IMdl_execution_context which can
     ///                              be used to pass compilation options to the MDL compiler.
-    ///                              The following options are supported by this operation:
-    ///                              - bool "include_geometry_normal" If true, the
-    ///                                \c "geometry.normal" field will be applied to the MDL state
-    ///                                prior to evaluation of the given DF (default: true).
+    ///                              Currently, no options are supported by this operation.
     ///                              During material compilation messages like errors and
     ///                              warnings will be passed to the context for
     ///                              later evaluation by the caller.
@@ -375,6 +366,9 @@ private:
 
     /// If true, derivatives should be calculated.
     bool m_calc_derivatives;
+
+    /// If true, enable code generation for spectral rendering.
+    bool m_enable_spectral;
 
     /// The arguments of the compiled materials for which target argument blocks should be
     /// created.

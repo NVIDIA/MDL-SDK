@@ -108,7 +108,8 @@ namespace mi { namespace examples { namespace dxr
             Example_dxr* app,
             mi::examples::gui::Root* gui,
             Scene_constants* scene_data,
-            mdl_d3d12::Camera_controls* camera_controls);
+            mdl_d3d12::Camera_controls* camera_controls,
+            const Example_dxr_options* options);
 
     protected:
         void update(mi::neuraylib::ITransaction* transaction) final;
@@ -117,6 +118,7 @@ namespace mi { namespace examples { namespace dxr
         Example_dxr* m_app;
         Scene_constants* m_scene_data;
         mdl_d3d12::Camera_controls* m_camera_controls;
+        const Example_dxr_options* m_options;
     };
 
     // --------------------------------------------------------------------------------------------

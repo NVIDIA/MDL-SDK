@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
- // examples/mdl_sdk/execution_glsl_vk/example_execution_glsl_vk.vert
+// examples/mdl_sdk/execution_glsl_vk/example_execution_glsl_vk.vert
 
 #version 450
 

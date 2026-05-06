@@ -31,7 +31,6 @@
 #include "generator_dag_unit.h"
 #include "generator_dag_generated_dag.h"
 #include "generator_dag_serializer.h"
-#include "generator_dag_tools.h"
 
 namespace mi {
 namespace mdl {
@@ -129,10 +128,17 @@ void DAG_unit::serialize_factories(DAG_serializer &dag_serializer) const
     m_sym_tab.serialize(dag_serializer);
     m_type_factory.serialize(dag_serializer);
     m_value_factory.serialize(dag_serializer);
+
+    size_t n_files = m_dbg_fnames.size();
+    dag_serializer.write_size_t(n_files);
+
+    for (size_t i = 0; i < n_files; ++i) {
+        dag_serializer.write_cstring(m_dbg_fnames[i]);
+    }
 }
 
-// Serialize the rest of the unit.
-void DAG_unit::serialize_attributes(DAG_serializer &dag_serializer) const
+// Serialize the node name maps of the unit. Must be called after the DAG nodes are serialized.
+void DAG_unit::serialize_name_map(DAG_serializer &dag_serializer) const
 {
     // serialize the node names
     size_t n_names = m_node_name_map.size();
@@ -144,13 +150,6 @@ void DAG_unit::serialize_attributes(DAG_serializer &dag_serializer) const
         Tag_t s = dag_serializer.get_symbol_tag(it.second);
         dag_serializer.write_encoded_tag(s);
     }
-
-    size_t n_files = m_dbg_fnames.size();
-    dag_serializer.write_size_t(n_files);
-
-    for (size_t i = 0; i < n_files; ++i) {
-        dag_serializer.write_cstring(m_dbg_fnames[i]);
-    }
 }
 
 // Deserialize the factories of the unit. Must be called before the DAG nodes are deserialized.
@@ -159,10 +158,18 @@ void DAG_unit::deserialize_factories(DAG_deserializer &dag_deserializer)
     m_sym_tab.deserialize(dag_deserializer);
     m_type_factory.deserialize(dag_deserializer);
     m_value_factory.deserialize(dag_deserializer);
+
+    size_t n_files = dag_deserializer.read_size_t();
+    m_dbg_fnames.reserve(n_files);
+
+    for (size_t i = 0; i < n_files; ++i) {
+        m_dbg_fnames.push_back(Arena_strdup(m_arena, dag_deserializer.read_cstring()));
+    }
 }
 
-// Deserialize the rest of the unit.
-void DAG_unit::deserialize_attributes(DAG_deserializer &dag_deserializer)
+// Deserialize the node name maps of the unit. Must be called after the DAG nodes
+// are deserialized.
+void DAG_unit::deserialize_name_map(DAG_deserializer &dag_deserializer)
 {
     // deserialize the node names
     size_t n_names = dag_deserializer.read_size_t();
@@ -175,13 +182,6 @@ void DAG_unit::deserialize_attributes(DAG_deserializer &dag_deserializer)
         ISymbol const *sym = dag_deserializer.get_symbol(s);
 
         m_node_name_map[node] = sym;
-    }
-
-    size_t n_files = dag_deserializer.read_size_t();
-    m_dbg_fnames.reserve(n_files);
-
-    for (size_t i = 0; i < n_files; ++i) {
-        m_dbg_fnames.push_back(Arena_strdup(m_arena, dag_deserializer.read_cstring()));
     }
 }
 

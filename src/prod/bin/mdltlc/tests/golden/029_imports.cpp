@@ -67,7 +67,12 @@ DAG_node const* Imports::matcher(
     const mi::mdl::Distiller_options *options,
     Rule_result_code &result_code) const
 {
-    auto match_rule1 = [&] (DAG_node const *node, IDistiller_plugin_api::Match_properties &node_props) -> const DAG_node * { return node; };
+    auto match_rule1 = [&] (DAG_node const *node, IDistiller_plugin_api::Match_properties &node_props) -> const DAG_node * {
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0 ,{ mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::No_match, ""});
+        }
+        return node;
+        };
 
 // 029_imports.mdltl:16
 //RUID 485693
@@ -75,27 +80,67 @@ DAG_node const* Imports::matcher(
 
         // match for material(thin_walled, surface, backface, ior, volume, geometry, hair)
         if (node_props0.sema != IDefinition::DS_ELEM_CONSTRUCTOR || node_props0.type_kind != IType::TK_STRUCT || node_props0.struct_id != IType_struct::SID_MATERIAL) {
+            if (event_handler != nullptr) {
+                fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_mismatch,
+                "material(thin_walled, surface, backface, ior, volume, geometry, hair)"});
+            }
             return match_rule1(node0, node_props0);
         }
         DAG_node const *node2 = e.get_compound_argument(node0, 0);
         DAG_node const *v_thin_walled = node2; (void)v_thin_walled;
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "thin_walled"});
+        }
         DAG_node const *node4 = e.get_compound_argument(node0, 1);
         DAG_node const *v_surface = node4; (void)v_surface;
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "surface"});
+        }
         DAG_node const *node6 = e.get_compound_argument(node0, 2);
         DAG_node const *v_backface = node6; (void)v_backface;
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "backface"});
+        }
         DAG_node const *node8 = e.get_compound_argument(node0, 3);
         DAG_node const *v_ior = node8; (void)v_ior;
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "ior"});
+        }
         DAG_node const *node10 = e.get_compound_argument(node0, 4);
         DAG_node const *v_volume = node10; (void)v_volume;
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "volume"});
+        }
         DAG_node const *node12 = e.get_compound_argument(node0, 5);
         DAG_node const *v_geometry = node12; (void)v_geometry;
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "geometry"});
+        }
         DAG_node const *node14 = e.get_compound_argument(node0, 6);
         DAG_node const *v_hair = node14; (void)v_hair;
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "hair"});
+        }
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "material(thin_walled, surface, backface, ior, volume, geometry, hair)"});
+        }
         DAG_DbgInfo root_dbg_info = node0->get_dbg_info();
         (void) root_dbg_info;
 
-        if (event_handler != nullptr)
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Rule_match,
+            ""});
+
             fire_match_event(*event_handler, 0);
+        }
         return e.create_call("material(bool,material_surface,material_surface,color,material_volume,material_geometry,hair_bsdf)",
             IDefinition::DS_ELEM_CONSTRUCTOR, Args_wrapper<7>::mk_args(e, m_node_types,
                 material, v_thin_walled, v_surface, v_backface, v_ior, v_volume,
@@ -147,6 +192,16 @@ void Imports::fire_debug_print(
     Rule_info const &ri = g_rule_info[idx];
     event_handler.debug_print(plugin_api, "Imports", ri.ruid, ri.rname, ri.fname,
         ri.fline, var_name, value);
+}
+
+void Imports::fire_detailed_trace_event(
+    mi::mdl::IRule_matcher_event &event_handler,
+    std::size_t id,
+    mi::mdl::IRule_matcher_event::Detailed_trace_event trace_event)
+{
+    Rule_info const &ri = g_rule_info[id];
+    event_handler.detailed_trace_event("Imports", ri.ruid, ri.rname, ri.fname, ri.fline,
+        trace_event);
 }
 
 

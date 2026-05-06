@@ -32,6 +32,7 @@ set(PROJECT_NAME examples-mdl_sdk-df_vulkan)
 # collect resources
 set(PROJECT_RESOURCES
     "mdl_runtime.glsl"
+    "mdl_target_code_types.glsl"
     "path_trace.comp"
     "display.vert"
     "display.frag"

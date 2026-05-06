@@ -139,6 +139,9 @@ mi::Float32 Image_file_reader_impl::get_gamma() const
 
 mi::neuraylib::ITile* Image_file_reader_impl::read( mi::Uint32 z, mi::Uint32 level) const
 {
+    if( level >= get_miplevels() || z >= get_layers_size( level))
+        return nullptr;
+
     if( !setup_image_input( /*from_constructor*/ false))
         return nullptr;
 
@@ -150,7 +153,9 @@ mi::neuraylib::ITile* Image_file_reader_impl::read( mi::Uint32 z, mi::Uint32 lev
 
     int cpp = m_channel_end - m_channel_start;
     int bpc = IMAGE::get_bytes_per_component( m_pixel_type);
-    int bytes_per_row = m_resolution_x * cpp * bpc;
+    int64_t bytes_per_row = static_cast<int64_t>( m_resolution_x) * cpp * bpc;
+    if( bytes_per_row < 0)
+        return nullptr;
 
     OIIO::TypeDesc format( get_base_type( m_pixel_type));
     auto* data = static_cast<mi::Uint8*>( tile->get_data());
@@ -237,6 +242,9 @@ bool Image_file_reader_impl::setup_image_input( bool from_constructor) const
         // Disable header-only mode and re-create m_image_input below.
         m_nv_header_only = false;
     }
+
+    if( !m_io_proxy)
+        return false;
 
     // Adding a dot here triggers a code path in OIIO that tries all plugins if the one for the
     // claimed format fails. We do not want to support such misnamed files, so we leave out the

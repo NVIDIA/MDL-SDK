@@ -35,10 +35,12 @@
 
 #include <mi/neuraylib/itexture.h>
 
+#include <string>
+
+#include <base/data/idata/i_idata_string_cache.h>
+
 #include "neuray_db_element_impl.h"
 #include "neuray_attribute_set_impl.h"
-
-#include <string>
 
 namespace MI {
 
@@ -85,12 +87,9 @@ public:
 
     mi::neuraylib::Texture_compression get_compression() const;
 
-    // internal methods
-
 private:
 
-    mutable std::string m_cached_selector;
-
+    mutable IDATA::String_cache m_string_cache;
 };
 
 } // namespace NEURAY

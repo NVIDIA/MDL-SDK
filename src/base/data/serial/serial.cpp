@@ -32,15 +32,16 @@
 
 #include "pch.h"
 
+#include <limits>
 #include "serial.h"
 
 #include <set>
+#include <limits>
 
 #include <mi/base/lock.h>
 #include <mi/math/color.h>
-#include <base/lib/mem/i_mem_allocatable.h>
-#include <base/lib/cont/i_cont_bitvector.h>
-#include <limits>
+
+
 #include <base/lib/log/i_log_logger.h>
 
 using namespace std;
@@ -52,7 +53,7 @@ namespace SERIAL
 {
 
 // This class is used to store the factory function for a given class id.
-class Deserialization_class : public MI::MEM::Allocatable
+class Deserialization_class
 {
   public:
     // constructor
@@ -198,19 +199,6 @@ void Serializer_impl::write(const char* value)
     write(value, size);
 }
 
-void Serializer_impl::write(const CONT::Bitvector& value)
-{
-    const size_t nb8  = value.get_binary_size();
-    const Uint8* const data = value.get_binary_data();
-    write_size_t(value.size());
-    write_size_t(nb8);
-    write_range(*this, data, data + nb8);
-}
-
-void Serializer_impl::write(const CONT::Dictionary& value)
-{
-    ASSERT(M_SERIAL, !"should not be called");
-}
 
 void Serializer_impl::clear_shared_objects()
 {
@@ -348,22 +336,6 @@ void Deserializer_impl::read(char** value_pointer)
     (*value_pointer)[size-1] = '\0';
 }
 
-void Deserializer_impl::read(CONT::Bitvector* value_pointer)
-{
-    size_t size;
-    size_t nb8;
-    read_size_t(&size);
-    read_size_t(&nb8);
-    Uint8 *data = MEM::new_array<Uint8>(nb8);
-    read_range(*this, data, data + nb8);
-    value_pointer->set_binary_data(size, data);
-    MEM::delete_array<Uint8>(data);
-}
-
-void Deserializer_impl::read(CONT::Dictionary *value_pointer)
-{
-    ASSERT(M_SERIAL, !"should not be called");
-}
 
 void Deserializer_impl::release(const char *str)
 {

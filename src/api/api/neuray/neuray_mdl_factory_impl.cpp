@@ -234,12 +234,12 @@ mi::neuraylib::IMdl_module_transformer* Mdl_factory_impl::create_module_transfor
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
 
     DB::Tag tag = db_transaction->name_to_tag( module_name);
-    if( !tag || db_transaction->get_class_id( tag) != MDL::ID_MDL_MODULE) {
+    DB::Access<MDL::Mdl_module> db_module( tag, db_transaction);
+    if( !db_module) {
         add_error_message( mdl_context, "Invalid module name.", -2);
         return nullptr;
     }
 
-    DB::Access<MDL::Mdl_module> db_module( tag, db_transaction);
     mi::base::Handle<const mi::mdl::IModule> core_module( db_module->get_core_module());
     const mi::mdl::Module* core_module_impl
         = mi::mdl::impl_cast<mi::mdl::Module>( core_module.get());
@@ -372,18 +372,17 @@ void Mdl_factory_impl::analyze_uniform(
         return;
     }
 
-    mi::base::Handle<MDL::IExpression_direct_call> int_root_expr;
-    SERIAL::Class_id class_id = db_transaction->get_class_id( tag);
-    if( class_id != MDL::ID_MDL_FUNCTION_CALL) {
+    DB::Access<MDL::Mdl_function_call> fc( tag, db_transaction);
+    if( !fc) {
         add_error_message( context_impl, "Invalid root type.", -3);
         return;
     }
 
-    DB::Access<MDL::Mdl_function_call> fc( tag, db_transaction);
-    mi::base::Handle<const MDL::IExpression_list> arguments_int( fc->get_arguments());
     DB::Tag def_tag = fc->get_function_definition( db_transaction);
     DB::Access<MDL::Mdl_function_definition> def( def_tag, db_transaction);
-    int_root_expr = def->create_direct_call( db_transaction, arguments_int.get(), nullptr);
+    mi::base::Handle<const MDL::IExpression_list> arguments_int( fc->get_arguments());
+    mi::base::Handle<MDL::IExpression_direct_call> int_root_expr(
+        def->create_direct_call( db_transaction, arguments_int.get(), nullptr));
     if( !int_root_expr) {
         add_error_message( context_impl, "Failed to create root expression.", -4);
         return;

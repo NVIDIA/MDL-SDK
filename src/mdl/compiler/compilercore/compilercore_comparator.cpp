@@ -31,7 +31,6 @@
 #include "compilercore_mdl.h"
 #include "compilercore_cstring_hash.h"
 #include "compilercore_errors.h"
-#include "compilercore_streams.h"
 #include "compilercore_tools.h"
 #include "compilercore_comparator.h"
 #include "compilercore_thread_context.h"
@@ -41,14 +40,6 @@
 #include "compilercore_file_utils.h"
 #include "compilercore_mangle.h"
 
-//#include <cstring>
-
-//#include <mi/mdl/mdl_declarations.h>
-//#include <mi/mdl/mdl_expressions.h>
-//#include <mi/mdl/mdl_modules.h>
-//#include <mi/mdl/mdl_statements.h>
-//#include <mi/mdl/mdl_symbols.h>
-//#include <mi/mdl/mdl_values.h>
 
 namespace mi {
 namespace mdl {
@@ -1148,6 +1139,8 @@ bool Comparator::compare_types(
     case IType::TK_DOUBLE:
     case IType::TK_STRING:
     case IType::TK_COLOR:
+    case IType::TK_SPECTRAL_SAMPLE:
+    case IType::TK_SPECTRUM:
     case IType::TK_LIGHT_PROFILE:
     case IType::TK_BSDF:
     case IType::TK_HAIR_BSDF:
@@ -1702,6 +1695,8 @@ bool Comparator::compare_values(
     case IValue::VK_MATRIX:
     case IValue::VK_ARRAY:
     case IValue::VK_RGB_COLOR:
+    case IValue::VK_SPECTRUM:
+    case IValue::VK_SPECTRAL_SAMPLE:
     case IValue::VK_STRUCT:
         {
             IValue_compound const *compA = cast<IValue_compound>(valueA);

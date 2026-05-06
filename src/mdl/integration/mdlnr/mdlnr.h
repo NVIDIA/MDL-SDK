@@ -90,6 +90,10 @@ public:
 
     bool get_expose_names_of_let_expressions() const;
 
+    void set_warn_about_nvidia_df(bool value);
+
+    bool get_warn_about_nvidia_df() const;
+
     MDL::Mdl_module_wait_queue* get_module_wait_queue() const;
 
 private:
@@ -121,8 +125,11 @@ private:
     /// Flag that indicates whether the integration should insert casts when needed (and possible).
     bool m_implicit_cast_enabled;
 
-    /// Flag that indicates whether the integration should insert casts when needed (and possible).
+    /// Flag that indicates whether an attempt is made to expose names of let expressions.
     bool m_expose_names_of_let_expressions;
+
+    /// Flag that indicates whether imports of ::nvidia::df emit a deprecation warning.
+    bool m_warn_about_nvidia_df;
 
     /// The module wait queue.
     MDL::Mdl_module_wait_queue *m_module_wait_queue;

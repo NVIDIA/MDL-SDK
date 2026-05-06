@@ -144,7 +144,8 @@ public:
     ///
     /// \param fname  the file name
     ///
-    /// \note The zero value is reserved for "no debug info".
+    /// \note The zero value is reserved for "no debug info", hence the returned file ID
+    ///       is always >= 1.
     /// \note This method does NOT check if the file name is already registered, it should
     ///       only be called from a Dag_builder.
     size_t register_file_name(char const *fname);
@@ -154,12 +155,18 @@ public:
 
     /// Get the file name of a debug info for a file ID.
     ///
-    /// \param id  the file ID
+    /// \param id  the file index (which is the ID minus 1)
+    ///
+    /// \return the file name or nullptr if the index is out of bounds
     char const *get_fname(size_t id) const;
 
     /// Get the file name of a debug info.
     ///
     /// \param dbg_info  the debug info
+    ///
+    /// \return the file name or nullptr if the debug info is not valid
+    ///
+    /// \note Returns "<generated>" or "<builtin>" for the special debug info values.
     char const *get_fname(DAG_DbgInfo dbg_info) const;
 
     /// Get the line of a debug info.
@@ -176,6 +183,10 @@ public:
     bool copy_fname_table(DAG_unit const &other);
 
     /// Check if this unit owns the given DAG node.
+    ///
+    /// \param n  the DAG node
+    ///
+    /// \return true if the node is owned by this unit, false otherwise
     MDL_CHECK_RESULT bool is_owner(DAG_node const *n) const { return m_arena.contains(n); }
 
     /// Import a symbol.
@@ -190,13 +201,16 @@ public:
     /// Get the node name map.
     ///
     /// \return the node name map
+    ///
+    /// \note The node name map is a map from DAG nodes to their associated names (represented
+    ///       as a symbol).
     DAG_unit::Node_name_map const &get_node_name_map() const {
         return m_node_name_map;
     }
 
     /// Set the name for a DAG node.
     ///
-    /// \param n  the DAG node
+    /// \param n    the DAG node
     /// \param sym  the symbol of the name
     void set_node_name(DAG_node const *n, ISymbol const *sym) {
         m_node_name_map[n] = sym;
@@ -207,14 +221,18 @@ public:
     /// \param n  the DAG node
     ///
     /// \return  the symbol of the name or nullptr if there is no associated name for the node
+    ///
+    /// \note The "name" of a node is the name of the let temporary that the user assigned to
+    ///       the the expression that is represented by the node. If there is more then one such
+    ///       temporary, it is undefined which one is returned.
     ISymbol const *get_node_name(DAG_node const *n) const;
 
-    /// Get the name for a DAG node if there is any and the name should influence CSE.
+    /// Get the name for a DAG node used by the common subexpression elimination (CSE) algorithm.
     ///
     /// \param n  the DAG node
     ///
-    /// \return  the symbol of the name or nullptr if there is no associated name for the node
-    ///          or the name should not influence CSE
+    /// \return  The symbol of the name or nullptr if there is no associated name for the node
+    ///          or the name should not influence CSE (\see set_cse_nodes_with_different_names()).
     ISymbol const *get_cse_node_name(DAG_node const *n) const {
         if (m_cse_nodes_with_different_names) {
             return get_node_name(n);
@@ -222,9 +240,11 @@ public:
         return nullptr;
     }
 
-    /// Set whether nodes with different names should be CSE'd.
+    /// Set whether nodes with different names should be combined by the common subexpression
+    /// elimination (CSE) algorithm.
     ///
-    /// \param flag  if true, CSE nodes with different names, otherwise don't
+    /// \param flag  If true, equal nodes with different names will be combined by the CSE
+    ///              algorithm, otherwise they will not be combined.
     ///
     /// \return the previous value
     bool set_cse_nodes_with_different_names(bool flag) {
@@ -233,25 +253,26 @@ public:
         return old;
     }
 
-    /// Serialize the factories of the unit. Must be called before the DAG nodes are serialized.
+    /// Serialize the unit. Must be called before the DAG nodes are serialized.
     ///
     /// \param serializer  the DAG IR serializer
     void serialize_factories(DAG_serializer &serializer) const;
 
-    /// Serialize the rest of the unit.
+    /// Serialize the node name maps of the unit. Must be called after the DAG nodes are serialized.
     ///
     /// \param serializer  the DAG IR serializer
-    void serialize_attributes(DAG_serializer &serializer) const;
+    void serialize_name_map(DAG_serializer &serializer) const;
 
-    /// Deserialize the factories of the unit. Must be called before the DAG nodes are deserialized.
+    /// Deserialize the unit. Must be called before the DAG nodes are deserialized.
     ///
     /// \param deserializer  the DAG IR deserializer
     void deserialize_factories(DAG_deserializer &deserializer);
 
-    /// Deserialize the rest of the unit.
+    /// Deserialize the node name maps of the unit. Must be called after the DAG nodes
+    /// are deserialized.
     ///
     /// \param deserializer  the DAG IR deserializer
-    void deserialize_attributes(DAG_deserializer &deserializer);
+    void deserialize_name_map(DAG_deserializer &deserializer);
 
 private:
     /// The memory arena that contains all entities owned by this unit.

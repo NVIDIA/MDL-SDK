@@ -289,6 +289,7 @@ private:
 class Version_upgrader : public User_constant_remover, public mi::mdl::IClone_modifier
 {
     using Base = User_constant_remover;
+
 public:
     Version_upgrader(
         mi::mdl::IMDL* mdl,
@@ -301,6 +302,8 @@ private:
     /// Promotes call references and its arguments.
     mi::mdl::IExpression* post_visit( mi::mdl::IExpression_call* expr) final;
 
+    using Base::post_visit;
+
     /// Implement IClone_modifier by returning the argument.
     mi::mdl::IExpression* clone_expr_reference( const mi::mdl::IExpression_reference* ref) final
     { return const_cast<mi::mdl::IExpression_reference*>( ref); }
@@ -312,8 +315,6 @@ private:
     { return const_cast<mi::mdl::IQualified_name*>( qname); }
     void adapt_position_owner(mi::mdl::IExpression*) final
     { /* do nothing */ }
-
-    mi::mdl::IMDL* m_mdl;
 
     mi::mdl::IMDL::MDL_version m_from_version;
 
@@ -329,8 +330,7 @@ Version_upgrader::Version_upgrader(
     mi::mdl::IMDL* mdl,
     mi::mdl::Module* module,
     mi::neuraylib::Mdl_version to_version)
-  : Base( module),
-    m_mdl( mdl)
+  : Base( module)
 {
     m_from_version = m_module->get_mdl_version();
     m_to_version = convert_mdl_version( to_version);
@@ -362,23 +362,33 @@ mi::mdl::IExpression* Version_upgrader::post_visit( mi::mdl::IExpression_call* e
     if( !ref)
         return expr;
 
-    mi::Uint32 rules = mi::mdl::Module::PR_NO_CHANGE;
+    mi::mdl::Param_transform_vec xforms( m_module->get_allocator());
+    mi::mdl::Promotion_semantic semantic = mi::mdl::PS_NONE;
     ref = mi::mdl::Module_inliner::promote_call_reference(
-        *m_module, m_from_version, ref, this, rules);
-    if( rules == mi::mdl::Module::PR_NO_CHANGE)
+        *m_module, m_from_version, ref, this, xforms, semantic);
+    if( xforms.empty() && semantic == mi::mdl::PS_NONE)
         return expr;
 
-    if( rules & mi::mdl::Module::PR_FRESNEL_LAYER_TO_COLOR)
+    if( semantic == mi::mdl::PS_UPD_TO_COLOR_FRESNEL_LAYER)
         m_new_imports.insert( "::df::color_fresnel_layer");
-    if( rules & mi::mdl::Module::PR_MEASURED_EDF_ADD_TANGENT_U)
-        m_new_imports.insert( "::state::texture_tangent_u");
+    for( size_t k = 0, n = xforms.size(); k < n; ++k) {
+        switch( xforms[k].get_action()) {
+        case mi::mdl::PA_INS_TANGENT_U:
+            m_new_imports.insert( "::state::texture_tangent_u");
+            break;
+        case mi::mdl::PA_INS_MULTISCATTER:
+            m_new_imports.insert( "::df::diffuse_reflection_bsdf");
+            break;
+        case mi::mdl::PA_INS_BACKSCATTER:
+            m_new_imports.insert("::df::backscatter_modifier");
+            break;
+        default:
+            break;
+        }
+    }
 
     mi::mdl::IExpression_call* call = m_ef->create_call( ref);
-    for( int i = 0, j = 0, n = expr->get_argument_count(); i < n; ++i, ++j) {
-        const mi::mdl::IArgument* arg = m_module->clone_arg( expr->get_argument( i), this);
-        call->add_argument( arg);
-        j = m_module->promote_call_arguments( call, arg, j, rules, /*creator=*/nullptr);
-    }
+    mi::mdl::apply_param_transforms( *m_module, expr, call, this, xforms);
     return call;
 }
 
@@ -658,6 +668,7 @@ mi::mdl::IQualified_name* Alias_remover::get_reference_name(
 class Import_declaration_replacer : public User_constant_remover
 {
     using Base = User_constant_remover;
+
 public:
     Import_declaration_replacer(
         mi::mdl::IMDL* mdl,
@@ -729,6 +740,8 @@ private:
     /// Adapts the names of the expression references if its import declaration is recorded in
     /// \c m_mapping.
     mi::mdl::IExpression* post_visit( mi::mdl::IExpression_reference* expr) final;
+
+    using Base::post_visit;
 
     /// Indicates whether namespace aliases are legal (up to MDL 1.7).
     bool m_namespace_aliases_legal;
@@ -1326,6 +1339,7 @@ private:
 class Resource_file_path_replacer : public User_constant_remover
 {
     using Base = User_constant_remover;
+
 public:
     Resource_file_path_replacer(
         mi::mdl::Module* module,
@@ -1488,6 +1502,7 @@ const mi::mdl::IValue_resource* Resource_file_path_replacer::create_resource(
 class Absolute_resource_file_path_creator : public Resource_file_path_replacer
 {
     using Base = Resource_file_path_replacer;
+
 public:
     Absolute_resource_file_path_creator(
         mi::mdl::Module* module,
@@ -1556,6 +1571,7 @@ private:
 class Relative_resource_file_path_creator : public Resource_file_path_replacer
 {
     using Base = Resource_file_path_replacer;
+
 public:
     Relative_resource_file_path_creator(
         mi::mdl::Module* module,
@@ -1642,6 +1658,7 @@ private:
 class Non_weak_relative_resource_file_path_creator : public Resource_file_path_replacer
 {
     using Base = Resource_file_path_replacer;
+
 public:
     Non_weak_relative_resource_file_path_creator(
         mi::mdl::Module* module,

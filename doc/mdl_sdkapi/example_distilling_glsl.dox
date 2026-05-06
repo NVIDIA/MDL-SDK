@@ -66,7 +66,7 @@ to a predefined GLSL PBR shader to render a sphere in an OpenGL window.
         \c specular and \c normal parameters plus an optional clearcoat (see \c glsl/example_distilling_glsl.frag
         for details). We wrap the access to those parameters into functions (e.g. get_base_color) rather than making
         them uniform inputs to the shader itself. This allows us to use the same code structure for both a baked and
-        a GLSL representation of the distilled MDL materials` texture functions. At program runtime, those access-functions
+        a GLSL representation of the distilled MDL materials' texture functions. At program runtime, those access-functions
         are generated, and, together with a texture runtime, assembled into the final fragment shader.
         
         After parsing the command line and loading and configuring the MDL SDK, all given materials

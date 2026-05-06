@@ -77,10 +77,12 @@ static struct
     const float PI = static_cast<float>(M_PI);
     const mi::Float32_3_struct tangent_u[1] = { {1.0f, 0.0f, 0.0f} };
     const mi::Float32_3_struct tangent_v[1] = { { 0.0f, 1.0f, 0.0f} };
-    const mi::Float32_3_4 identity = mi::Float32_3_4(
+    const mi::neuraylib::tct_float4_a16 identity[3] = {
         1.0f, 0.0f, 0.0f, 0.0f,
         0.0f, 1.0f, 0.0f, 0.0f,
-        0.0f, 0.0f, 1.0f, 0.0f);
+        0.0f, 0.0f, 1.0f, 0.0f
+        // The last row is always implied to be (0, 0, 0, 1).
+    };
 } Constants;
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -755,6 +757,65 @@ inline mi::Float32_3 operator/(const mi::Float32_3& d, float s)
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// Spectral Sample Helper Functions
+///////////////////////////////////////////////////////////////////////////////
+
+tct_spectral_sample make_spectral_sample(float value)
+{
+    tct_spectral_sample ss;
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        ss.values[i] = value;
+
+    return ss;
+}
+
+inline tct_spectral_sample operator+(const tct_spectral_sample& a, const tct_spectral_sample& b)
+{
+    tct_spectral_sample ss;
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        ss.values[i] = a.values[i] + b.values[i];
+    return ss;
+}
+
+inline tct_spectral_sample operator*(const tct_spectral_sample& a, const tct_spectral_sample& b)
+{
+    tct_spectral_sample ss;
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        ss.values[i] = a.values[i] * b.values[i];
+    return ss;
+}
+
+inline tct_spectral_sample operator*(const tct_spectral_sample& s, float scalar)
+{
+    tct_spectral_sample ss;
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        ss.values[i] = s.values[i] * scalar;
+    return ss;
+}
+
+inline tct_spectral_sample operator*(float scalar, const tct_spectral_sample& s)
+{
+    tct_spectral_sample ss;
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        ss.values[i] = scalar * s.values[i];
+    return ss;
+}
+
+inline tct_spectral_sample& operator*=(tct_spectral_sample& a, const tct_spectral_sample& b)
+{
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        a.values[i] *= b.values[i];
+    return a;
+}
+
+inline tct_spectral_sample& operator*=(tct_spectral_sample& s, float scalar)
+{
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        s.values[i] *= scalar;
+    return s;
+}
+
+///////////////////////////////////////////////////////////////////////////////
 // Command Line Options
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -806,8 +867,14 @@ struct Options
     // This example does not support derivatives in combination with the custom texture runtime.
     bool enable_derivatives;
 
-    /// If true, render on one thread only.
+    // If true, render on one thread only.
     bool single_threaded;
+
+    // Whether spectral rendering should be enabled.
+    bool enable_spectral;
+    // Wavelengths range
+    float spectral_min_wavelength; // min spectral wavelength in [nm]
+    float spectral_max_wavelength; // max spectral wavelength in [nm]
 
     // Material to use.
     std::string material_name;
@@ -833,6 +900,9 @@ struct Options
         , use_adapt_normal(false)
         , enable_derivatives(false)
         , single_threaded(false)
+        , enable_spectral(false)
+        , spectral_min_wavelength(400.0f)
+        , spectral_max_wavelength(700.0f)
     {}
 };
 
@@ -887,6 +957,13 @@ struct Isect_info
     mi::Float32_3 tan_v;  // tangent vector in v direction
 };
 
+// Scene shape for the single object rendering; material-driven selection.
+enum class Scene_geometry_type
+{
+    Sphere,
+    Hair
+};
+
 // Render context
 struct Render_context
 {
@@ -894,6 +971,7 @@ struct Render_context
     int max_ray_length;
     bool render_auxiliary;
     bool use_derivatives;
+    bool enable_spectral;
     mi::neuraylib::Df_flags bsdf_data_flags;
 
     // scene data
@@ -943,6 +1021,23 @@ struct Render_context
         float   radius;
     } sphere;
 
+    // Hair strand as open tube
+    struct Hair
+    {
+        mi::Float32_3 center;
+        float radius;
+        float half_height;
+    } hair;
+
+    Scene_geometry_type scene_geometry;
+
+    // spectral
+    struct Spectral
+    {
+        float min_wavelength;
+        float max_wavelength;
+    } spectral;
+
     // MDL cutout opacity
     struct Cutout
     {
@@ -964,6 +1059,7 @@ struct Render_context
         mi::Float32_3 p0;
         mi::Float32_3 dir;
         mi::Float32_3 weight;
+        tct_spectral_sample weight_spectral;
         int level;
         float last_pdf;
         bool is_inside;
@@ -1003,8 +1099,12 @@ struct Render_context
     };
 
     // MDL Backend execution
-    mi::neuraylib::Shading_state_material shading_state;
-    mi::neuraylib::Shading_state_material_with_derivs shading_state_derivs;
+
+    // The non-spectral variants: mi::neuraylib::Shading_state_material and
+    // mi::neuraylib::Shading_state_material_with_derivs can be used instead if
+    // no spectral rendering is required
+    mi::neuraylib::Shading_state_material_spectral shading_state;
+    mi::neuraylib::Shading_state_material_spectral_with_derivs shading_state_derivs;
     mi::base::Handle<const mi::neuraylib::ITarget_code> target_code;
     mi::base::Handle<mi::neuraylib::ITarget_argument_block> argument_block;
     Texture_handler *tex_handler;
@@ -1021,8 +1121,12 @@ struct Render_context
     mi::Size thin_walled_function_index;
     mi::Size cutout_opacity_standalone_function_index;
 
+    // state for multiple importance sampling for spectral rendering
+    float spectral_pdf_ratios[MDL_DF_SPECTRAL_SAMPLES];
+
     Render_context(bool use_derivatives)
         : use_derivatives(use_derivatives)
+        , enable_spectral(false)
         , bsdf_data_flags(mi::neuraylib::DF_FLAGS_ALLOW_REFLECT_AND_TRANSMIT)
         , target_code(nullptr)
         , tex_handler(nullptr)
@@ -1042,13 +1146,19 @@ struct Render_context
         sphere.center = mi::Float32_3(0.f); // sphere in the origin
         sphere.radius = 1.f;
 
+        hair.center = mi::Float32_3(0.f);
+        hair.radius = 0.35f;
+        hair.half_height = 1.5f;
+
+        scene_geometry = Scene_geometry_type::Sphere;
+
         cutout.is_constant = false;
         cutout.constant_opacity = 1.f;
 
         thin_walled.is_constant = true;
         thin_walled.is_thin_walled = false;
 
-        // init constant parameters of material shader state
+        // init constant parameters of spectral material shader state
         shading_state.animation_time = 0.f;
         shading_state.text_coords = nullptr;
         shading_state.tangent_u = Constants.tangent_u;
@@ -1121,8 +1231,103 @@ struct Render_context
         cam.pos.z = -cam.dir.z * dist;
     }
 
+
+    tct_spectral_sample get_wavelengths() const
+    {
+        return use_derivatives ? shading_state_derivs.spectral_wavelengths : shading_state.spectral_wavelengths;
+    }
+
+    // spectral sample to RGB conversion
+    mi::Float32_3 spectral_to_rgb(const tct_spectral_sample &intensities, const bool is_reflectivity = false) const
+    {
+        mi::Float32_3 xyz(0.0f, 0.0f, 0.0f);
+        // weight by CIE XYZ color matching functions
+        // (using Wyman et al - "Simple Analytic Approximations to the CIE XYZ Color Matching Functions")
+        const tct_spectral_sample lambdas = get_wavelengths();
+        for (unsigned int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        {
+            const float lambda = lambdas.values[i];
+            if (lambda < 360.0f || lambda > 830.0f)
+                continue;
+
+            // for reflectivity values we need to multiply by the spectral whitepoint of the RGB color space (normalized to luminance 1)
+            const float factor = is_reflectivity ? ::lookup_d65(lambda) : 1.0f;
+            {
+                const float p1 = (lambda - 442.0f) * ((lambda < 442.0f) ? 0.0624f : 0.0374f);
+                const float p2 = (lambda - 599.8f) * ((lambda < 599.8f) ? 0.0264f : 0.0323f);
+                const float p3 = (lambda - 501.1f) * ((lambda < 501.1f) ? 0.0490f : 0.0382f);
+                xyz.x +=
+                    (0.362f * expf(-0.5f * p1 * p1) + 1.056f * expf(-0.5f * p2 * p2) - 0.065f * expf(-0.5f * p3 * p3)) * intensities.values[i] * factor;
+            }
+            {
+                const float p1 = (lambda - 568.8f) * ((lambda < 568.8f) ? 0.0213f : 0.0247f);
+                const float p2 = (lambda - 530.9f) * ((lambda < 530.9f) ? 0.0613f : 0.0322f);
+                xyz.y +=
+                    (0.821f * expf(-0.5f * p1 * p1) + 0.286f * expf(-0.5f * p2 * p2)) * intensities.values[i] * factor;
+            }
+            {
+                const float p1 = (lambda - 437.0f) * ((lambda < 437.0f) ? 0.0845f : 0.0278f);
+                const float p2 = (lambda - 459.0f) * ((lambda < 459.0f) ? 0.0385f : 0.0725f);
+                xyz.z +=
+                    (1.217f * expf(-0.5f * p1 * p1) + 0.681f * expf(-0.5f * p2 * p2)) * intensities.values[i] * factor;
+            }
+        }
+
+        // apply scaling from radiometric to photometric units
+        xyz *= 683.002f;
+
+        // MDL_DF_SPECTRAL_SAMPLES samples uniformly on wavelength range
+        if (spectral.max_wavelength != spectral.min_wavelength) {
+            xyz *= (spectral.max_wavelength - spectral.min_wavelength) / (float) MDL_DF_SPECTRAL_SAMPLES;
+        }
+
+        // convert to linear sRGB
+        return mi::Float32_3(
+            dot(xyz, mi::Float32_3( 3.240600f, -1.537200f, -0.498600f)),
+            dot(xyz, mi::Float32_3(-0.968900f,  1.875800f,  0.041500f)),
+            dot(xyz, mi::Float32_3( 0.055700f, -0.204000f,  1.057000f)));
+    }
+
+    tct_spectral_sample rgb_to_spectral(const mi::Float32_3 &rgb, const bool is_emission)
+    {
+        if (is_emission)
+            return ::rgb_to_spectral<true>(get_wavelengths(), &rgb.x);
+        else
+            return ::rgb_to_spectral<false>(get_wavelengths(), &rgb.x);
+    }
+
+    float update_spectral_pdf_ratios(const tct_spectral_sample pdfs, const bool specular, const bool specular_dispersion)
+    {
+        // main wavelength has been used for sampling, so MIS weight is
+        // w = p[0] / sum(p) = 1 / (sum(p) / p[0])
+        // for pdf p up to this point in the path
+
+        // here we:
+        // - update the pdf ratios
+        // - compute the new weight
+        // - return factor that changes from old to new weight
+
+        if (specular && !specular_dispersion) // specular without dispersion: nothing to do
+            return 1.0f;
+
+        if (!specular_dispersion && pdfs.values[0] <= 0.0f) // this really has zero probablity
+            return 0.0f;
+
+        float inv_w_old = 1.0f;
+        float inv_w_new = 1.0f;
+        const float inv_p0 = specular_dispersion ? 0.0f : (1.0f / pdfs.values[0]);
+        for (unsigned int i = 1; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        {
+            inv_w_old += spectral_pdf_ratios[i - 1];
+            spectral_pdf_ratios[i - 1] *= pdfs.values[i] * inv_p0;
+            inv_w_new += spectral_pdf_ratios[i - 1];
+        }
+
+        return inv_w_old / inv_w_new;
+    }
+
     // Ray to sphere intersection
-    inline bool isect(const Ray &ray, const Sphere &sphere, Isect_info& isect_info)
+    inline bool isect(const Ray &ray, const Sphere &sphere, Isect_info& isect_info) const
     {
         mi::Float32_3 oc = ray.p0 - sphere.center;
         float b = 2.f * dot(oc, ray.dir);
@@ -1174,6 +1379,62 @@ struct Render_context
         isect_info.tan_v = normalize(isect_info.tan_v);
 
         return true;
+    }
+
+    // Ray to hair intersection
+    inline bool isect(const Ray &ray, const Hair &hair, Isect_info &isect_info) const
+    {
+        const float a = ray.dir.x * ray.dir.x + ray.dir.z * ray.dir.z;
+        const float b = 2.0f * (ray.dir.x * ray.p0.x + ray.dir.z * ray.p0.z);
+        const float c = ray.p0.x * ray.p0.x + ray.p0.z * ray.p0.z - hair.radius * hair.radius;
+
+        float tmp = b * b - 4.0f * a * c;
+        if (tmp < 0.0f)
+            return false;
+
+        tmp = sqrtf(tmp);
+        const float q = (((b < 0.0f) ? -tmp : tmp) - b) * 0.5f;
+        const float t0 = q / a;
+        const float t1 = c / q;
+
+        const float m = fminf(t0, t1);
+        const float distance = m > 0.0f ? m : fmaxf(t0, t1);
+        if (distance < 0.0f)
+            return false;
+
+        // compute geometry state
+        isect_info.pos = ray.p0 + ray.dir * distance;
+
+        isect_info.normal = normalize(mi::Float32_3(isect_info.pos.x, 0.0f, isect_info.pos.z));
+
+        if (fabsf(isect_info.pos.y) > hair.half_height)
+            return false;
+
+        const float phi = atan2f(isect_info.pos.z, isect_info.pos.x);
+
+        isect_info.uvw = mi::Float32_3(
+            (isect_info.pos.y + hair.half_height) / (2.0f * hair.half_height), // position along the hair
+            phi * (float)(0.5f / M_PI) + 0.5f, // position around the hair in the range [0, 1]
+            2.0f * hair.radius); // thickness of the hair
+
+        // compute surface derivatives
+        isect_info.tan_u = mi::Float32_3(0.0, 1.0, 0.0);
+        isect_info.tan_v = cross(isect_info.normal, isect_info.tan_u);
+
+        return true;
+
+    }
+
+    inline bool intersect_scene(const Ray &ray, Isect_info &isect_info) const
+    {
+        switch (scene_geometry)
+        {
+        case Scene_geometry_type::Hair:
+            return isect(ray, hair, isect_info);
+        case Scene_geometry_type::Sphere:
+        default:
+            return isect(ray, sphere, isect_info);
+        }
     }
 
     // build environment importance sampling data
@@ -1462,6 +1723,36 @@ void compile_material_instance(
 
 }
 
+// checks if a compiled material contains none-invalid hair BSDF
+bool contains_hair_bsdf(const mi::neuraylib::ICompiled_material* compiled_material)
+{
+    mi::base::Handle<const mi::neuraylib::IExpression_direct_call> body(
+        compiled_material->get_body());
+
+    mi::base::Handle<const mi::neuraylib::IExpression_list> body_args(body->get_arguments());
+    for (mi::Size i = 0, n = body_args->get_size(); i < n; ++i)
+    {
+        const char* name = body_args->get_name(i);
+        if (strcmp(name, "hair") == 0)
+        {
+            mi::base::Handle<const mi::neuraylib::IExpression> hair_exp(
+                body_args->get_expression(i));
+
+            if (hair_exp->get_kind() != mi::neuraylib::IExpression::EK_CONSTANT)
+                return true;
+
+            mi::base::Handle<const mi::neuraylib::IExpression_constant> hair_exp_const(
+                hair_exp->get_interface<const mi::neuraylib::IExpression_constant>());
+
+            mi::base::Handle<const mi::neuraylib::IValue> hair_exp_const_value(
+                hair_exp_const->get_value());
+
+            return hair_exp_const_value->get_kind() != mi::neuraylib::IValue::VK_INVALID_DF;
+        }
+    }
+    return true;
+}
+
 // Generate and execute native CPU code for a subexpression of a given compiled material.
 void generate_native(
     Render_context& render_context,
@@ -1472,7 +1763,8 @@ void generate_native(
     bool use_custom_tex_runtime,
     bool use_adapt_normal,
     bool enable_derivatives,
-    bool enable_bsdf_flags)
+    bool enable_bsdf_flags,
+    bool enable_spectral)
 {
     Timing timing("generate target code");
 
@@ -1508,10 +1800,16 @@ void generate_native(
         render_context.thin_walled.is_thin_walled = thin_walled_bool->get_value();
     }
 
+    // contains the material a hair bsdf?
+    bool has_hair_bsdf = contains_hair_bsdf(compiled_material.get());
+    if (has_hair_bsdf)
+        render_context.scene_geometry = Scene_geometry_type::Hair;
+
     // back faces could be different for thin walled materials
     bool need_backface_bsdf = false;
     bool need_backface_edf = false;
     bool need_backface_emission_intensity = false;
+
     if (!render_context.thin_walled.is_constant || render_context.thin_walled.is_thin_walled)
     {
         // first, backfaces dfs are only considered for thin_walled materials
@@ -1556,6 +1854,7 @@ void generate_native(
         }
     }
 
+
 #ifdef ADD_EXTRA_TIMERS
     std::chrono::steady_clock::time_point t3 = std::chrono::steady_clock::now();
 #endif
@@ -1586,6 +1885,10 @@ void generate_native(
     if (enable_bsdf_flags)
         check_success(be_native->set_option("libbsdf_flags_in_bsdf_data", "on") == 0);
 
+    // enable spectral rendering
+    if (enable_spectral)
+        check_success(be_native->set_option("libbsdf_enable_spectral", "on") == 0);
+
 #ifdef ADD_EXTRA_TIMERS
     std::chrono::steady_clock::time_point t5 = std::chrono::steady_clock::now();
 #endif
@@ -1599,46 +1902,57 @@ void generate_native(
 #endif
 
     // select expressions to generate code for
+    size_t backface_scattering_index = ~0;
+    size_t backface_edf_index = ~0;
+    size_t backface_emission_intensity_index = ~0;
+    size_t cutout_opacity_desc_index = ~0;
+    size_t thin_walled_desc_index = ~0;
+    size_t hair_desc_index = ~0;
+
     std::vector<mi::neuraylib::Target_function_description> descs;
     descs.push_back(mi::neuraylib::Target_function_description("init"));
+
+
     descs.push_back(mi::neuraylib::Target_function_description("surface.scattering"));
     descs.push_back(mi::neuraylib::Target_function_description("surface.emission.emission"));
     descs.push_back(mi::neuraylib::Target_function_description("surface.emission.intensity"));
 
-    size_t backface_scattering_index = ~0;
     if (need_backface_bsdf)
     {
         backface_scattering_index = descs.size();
         descs.push_back(mi::neuraylib::Target_function_description("backface.scattering"));
     }
 
-    size_t backface_edf_index = ~0;
     if (need_backface_edf)
     {
         backface_edf_index = descs.size();
         descs.push_back(mi::neuraylib::Target_function_description("backface.emission.emission"));
     }
 
-    size_t backface_emission_intensity_index = ~0;
     if (need_backface_emission_intensity)
     {
         backface_emission_intensity_index = descs.size();
         descs.push_back(mi::neuraylib::Target_function_description("backface.emission.intensity"));
     }
 
-    size_t cutout_opacity_desc_index = ~0;
     if (!render_context.cutout.is_constant)
     {
         cutout_opacity_desc_index = descs.size();
         descs.push_back(mi::neuraylib::Target_function_description("geometry.cutout_opacity"));
     }
 
-    size_t thin_walled_desc_index = ~0;
     if (!render_context.thin_walled.is_constant)
     {
         thin_walled_desc_index = descs.size();
         descs.push_back(mi::neuraylib::Target_function_description("thin_walled"));
     }
+
+    if (has_hair_bsdf)
+    {
+        hair_desc_index = descs.size();
+        descs.push_back(mi::neuraylib::Target_function_description("hair"));
+    }
+
 
 #ifdef ADD_EXTRA_TIMERS
     std::chrono::steady_clock::time_point t7 = std::chrono::steady_clock::now();
@@ -1688,7 +2002,10 @@ void generate_native(
     }
 
     render_context.init_function_index = descs[0].function_index;
-    render_context.surface_bsdf_function_index = descs[1].function_index;
+
+    render_context.surface_bsdf_function_index =
+        has_hair_bsdf ? descs[hair_desc_index].function_index : descs[1].function_index;
+
     render_context.surface_edf_function_index = descs[2].function_index;
     render_context.surface_emission_intensity_function_index = descs[3].function_index;
 
@@ -1872,15 +2189,15 @@ void collect_material_arguments_info(
                 // determine pitch of array if there are at least two elements
                 if (param_array_size > 1)
                 {
-                    mi::neuraylib::Target_value_layout_state array_state(
+                    mi::neuraylib::Target_value_layout_state array(
                         layout->get_nested_state(j));
                     mi::neuraylib::Target_value_layout_state next_elem_state(
-                        layout->get_nested_state(1, array_state));
+                        layout->get_nested_state(1, array));
 
                     mi::neuraylib::IValue::Kind kind;
                     mi::Size param_size;
                     mi::Size start_offset = layout->get_layout(
-                        kind, param_size, array_state);
+                        kind, param_size, array);
                     mi::Size next_offset = layout->get_layout(
                         kind, param_size, next_elem_state);
                     param_array_pitch = next_offset - start_offset;
@@ -2035,17 +2352,18 @@ bool trace_shadow(Render_context& rc, Render_context::Ray& shadow_ray, unsigned 
 {
     Isect_info isect_info;
 
-    // ray hits sphere?
-    if (rc.isect(shadow_ray, rc.sphere, isect_info))
+    if (rc.intersect_scene(shadow_ray, isect_info))
     {
-        mi::neuraylib::Shading_state_material shading_state;
+        mi::neuraylib::Shading_state_material_spectral shading_state;
         shading_state.position = isect_info.pos;
         shading_state.normal = shadow_ray.is_inside ? -isect_info.normal : isect_info.normal;
-        shading_state.geom_normal = rc.shading_state.normal;
+        shading_state.geom_normal = shading_state.normal;
         shading_state.text_coords = &isect_info.uvw;
         shading_state.tangent_u = &isect_info.tan_u;
         shading_state.tangent_v = &isect_info.tan_v;
         shading_state.text_results = nullptr;  // no init function used
+        if (rc.enable_spectral)
+            shading_state.spectral_wavelengths = rc.get_wavelengths();
 
         // evaluate material cutout opacity
         float cutout_opacity = rc.cutout.constant_opacity;
@@ -2063,7 +2381,6 @@ bool trace_shadow(Render_context& rc, Render_context::Ray& shadow_ray, unsigned 
 
         // is the surface cut out?.
         return (cutout_opacity >= rnd(seed));
-
     }
     else
     {
@@ -2083,12 +2400,11 @@ bool trace_ray(mi::Float32_3 vp_sample[3], Render_context &rc, Render_context::R
 
     Isect_info isect_info;
 
-    // ray hits sphere?
-    if (rc.isect(ray, rc.sphere, isect_info))
+    if (rc.intersect_scene(ray, isect_info))
     {
         mi::neuraylib::Shading_state_material *shading_state = nullptr;
         mi::neuraylib::Texture_handler_base   *tex_handler   = nullptr;
-        mi::neuraylib::tct_float4 text_results[128];
+        mi::neuraylib::tct_float4_a16 text_results[128];
 
         // update material shader state
         if (rc.use_derivatives)
@@ -2120,10 +2436,9 @@ bool trace_ray(mi::Float32_3 vp_sample[3], Render_context &rc, Render_context::R
             rc.shading_state_derivs.text_results = text_results;
 
             shading_state =
-                reinterpret_cast<mi::neuraylib::Shading_state_material *>(&rc.shading_state_derivs);
+                reinterpret_cast<mi::neuraylib::Shading_state_material*>(&rc.shading_state_derivs);
             tex_handler =
-                reinterpret_cast<mi::neuraylib::Texture_handler_base *>(rc.tex_handler_deriv);
-
+                reinterpret_cast<mi::neuraylib::Texture_handler_base*>(rc.tex_handler_deriv);
         }
         else
         {
@@ -2199,37 +2514,66 @@ bool trace_ray(mi::Float32_3 vp_sample[3], Render_context &rc, Render_context::R
                 uint64_t edf_function_index = (is_thin_walled && ray.is_inside) ?
                     rc.backface_edf_function_index : rc.surface_edf_function_index;
 
-                mi::neuraylib::Edf_evaluate_data<mi::neuraylib::DF_HSM_NONE> eval_data;
-                eval_data.k1 = -ray.dir;
-
-                // evaluate material surface edf
-                ret_code = rc.target_code->execute_edf_evaluate(
-                    edf_function_index + 1,  // edf_function_index corresponds to 'sample'
-                                             // edf_function_index+1 to 'evaluate'
-                    &eval_data,
-                    *shading_state,
-                    tex_handler,
-                    rc.argument_block.get());
-                assert(ret_code == 0 && "execute_edf_evaluate failed");
-
-
-                // emission contribution is only valid for positive pdf
-                if (eval_data.pdf > 1.e-6f)
+                // Lambda to handle emission evaluation for both spectral and non-spectral paths
+                auto evaluate_emission = [&](auto& eval_data, auto& intensity_default)
                 {
-                    uint64_t emission_intensity_function_index = (is_thin_walled && ray.is_inside)
-                        ? rc.backface_emission_intensity_function_index
-                        : rc.surface_emission_intensity_function_index;
+                    eval_data.k1 = -ray.dir;
 
-                    mi::Float32_3 intensity(1.f);
-                    ret_code = rc.target_code->execute(
-                        emission_intensity_function_index,
+                    // evaluate material surface edf
+                    ret_code = rc.target_code->execute_edf_evaluate(
+                        edf_function_index + 1,  // edf_function_index corresponds to 'sample'
+                                                 // edf_function_index+1 to 'evaluate'
+                        &eval_data,
                         *shading_state,
                         tex_handler,
-                        rc.argument_block.get(),
-                        &intensity);
-                    assert(ret_code == 0 && "execute emission intensity function failed");
+                        rc.argument_block.get());
+                    assert(ret_code == 0 && "execute_edf_evaluate failed");
 
-                    vp_sample[VPCH_ILLUM] += static_cast<mi::Float32_3>(eval_data.edf)*intensity*ray.weight;
+                    // emission contribution is only valid for positive pdf
+                    bool valid_emission = false;
+                    if constexpr (std::is_same_v<decltype(eval_data.pdf), tct_spectral_sample>) {
+                        for (unsigned int i = 1; i < MDL_DF_SPECTRAL_SAMPLES && !valid_emission; ++i) {
+                            valid_emission =  (eval_data.pdf.values[i] > 1.e-6f);
+                        }
+                    } else {
+                        valid_emission = (eval_data.pdf > 1.e-6f);
+                    }
+                    if (valid_emission)
+                    {
+                        uint64_t emission_intensity_function_index = (is_thin_walled && ray.is_inside)
+                            ? rc.backface_emission_intensity_function_index
+                            : rc.surface_emission_intensity_function_index;
+
+                        auto intensity = intensity_default;
+                        ret_code = rc.target_code->execute(
+                            emission_intensity_function_index,
+                            *shading_state,
+                            tex_handler,
+                            rc.argument_block.get(),
+                            &intensity);
+                        assert(ret_code == 0 && "execute emission intensity function failed");
+
+                        if constexpr (std::is_same_v<decltype(intensity), tct_spectral_sample>) {
+                            // Spectral rendering path
+                            vp_sample[VPCH_ILLUM] += rc.spectral_to_rgb(eval_data.edf*intensity*ray.weight_spectral);
+                        } else {
+                            // Non-spectral rendering path
+                            vp_sample[VPCH_ILLUM] += static_cast<mi::Float32_3>(eval_data.edf)*intensity*ray.weight;
+                        }
+                    }
+                };
+
+                if (rc.enable_spectral)
+                {
+                    mi::neuraylib::Edf_evaluate_data<mi::neuraylib::DF_HSM_NONE, mi::neuraylib::TCCM_SPECTRAL_SAMPLING> eval_data;
+                    tct_spectral_sample intensity_default = make_spectral_sample(1.f);
+                    evaluate_emission(eval_data, intensity_default);
+                }
+                else
+                {
+                    mi::neuraylib::Edf_evaluate_data<mi::neuraylib::DF_HSM_NONE> eval_data;
+                    mi::Float32_3 intensity_default(1.f);
+                    evaluate_emission(eval_data, intensity_default);
                 }
             }
 
@@ -2239,31 +2583,55 @@ bool trace_ray(mi::Float32_3 vp_sample[3], Render_context &rc, Render_context::R
             // get auxiliary data
             if (rc.render_auxiliary && ray.level == 1)
             {
-                mi::neuraylib::Bsdf_auxiliary_data<mi::neuraylib::DF_HSM_NONE> aux_data;
-                if (ray.is_inside && !is_thin_walled)
+                // Lambda to handle auxiliary evaluation for both spectral and non-spectral paths
+                auto evaluate_auxiliary = [&](auto& aux_data, auto& ior_one, auto& ior_mat)
                 {
-                    aux_data.ior1 = mi::Float32_3(MI_NEURAYLIB_BSDF_USE_MATERIAL_IOR);
-                    aux_data.ior2 = mi::Float32_3(1.0f);
+
+                    if (ray.is_inside && !is_thin_walled)
+                    {
+                        aux_data.ior1 = ior_mat;
+                        aux_data.ior2 = ior_one;
+                    }
+                    else
+                    {
+                        aux_data.ior1 = ior_one;
+                        aux_data.ior2 = ior_mat;
+                    }
+                    aux_data.k1 = -ray.dir;
+                    aux_data.flags = rc.bsdf_data_flags;
+
+                    ret_code = rc.target_code->execute_bsdf_auxiliary(
+                        surface_bsdf_function_index + 3,    // bsdf_function_index corresponds to 'sample'
+                                                            // bsdf_function_index+3 to 'auxiliary'
+                        &aux_data,
+                        *shading_state,
+                        tex_handler,
+                        nullptr);
+                    assert(ret_code == 0 && "execute_bsdf_auxiliary failed");
+
+                    if constexpr (std::is_same_v<decltype(aux_data.albedo_diffuse), tct_spectral_sample>)
+                        vp_sample[VPCH_ALBEDO] = rc.spectral_to_rgb(aux_data.albedo_diffuse + aux_data.albedo_glossy, true);
+                    else
+                        vp_sample[VPCH_ALBEDO] = aux_data.albedo_diffuse + aux_data.albedo_glossy;
+
+                    vp_sample[VPCH_NORMAL] = aux_data.normal;
+                };
+
+                if (rc.enable_spectral)
+                {
+                    mi::neuraylib::Bsdf_auxiliary_data<mi::neuraylib::DF_HSM_NONE, mi::neuraylib::TCCM_SPECTRAL_SAMPLING> aux_data;
+                    tct_spectral_sample ior_one = make_spectral_sample(1.f);
+                    tct_spectral_sample ior_mat = make_spectral_sample(MI_NEURAYLIB_BSDF_USE_MATERIAL_IOR);
+                    evaluate_auxiliary(aux_data, ior_one, ior_mat);
                 }
                 else
                 {
-                    aux_data.ior1 = mi::Float32_3(1.0f);
-                    aux_data.ior2 = mi::Float32_3(MI_NEURAYLIB_BSDF_USE_MATERIAL_IOR);
+                    mi::neuraylib::Bsdf_auxiliary_data<mi::neuraylib::DF_HSM_NONE> aux_data;
+                    mi::Float32_3 ior_one(1.f);
+                    mi::Float32_3 ior_mat(MI_NEURAYLIB_BSDF_USE_MATERIAL_IOR);
+                    evaluate_auxiliary(aux_data, ior_one, ior_mat);
                 }
-                aux_data.k1 = -ray.dir;
-                aux_data.flags = rc.bsdf_data_flags;
 
-                ret_code = rc.target_code->execute_bsdf_auxiliary(
-                    surface_bsdf_function_index + 3,    // bsdf_function_index corresponds to 'sample'
-                                                        // bsdf_function_index+3 to 'auxiliary'
-                    &aux_data,
-                    *shading_state,
-                    tex_handler,
-                    nullptr);
-                assert(ret_code == 0 && "execute_bsdf_auxiliary failed");
-
-                vp_sample[VPCH_ALBEDO] = aux_data.albedo_diffuse + aux_data.albedo_glossy;
-                vp_sample[VPCH_NORMAL] = aux_data.normal;
             }
 
             // evaluate scene lights contribution
@@ -2272,10 +2640,22 @@ bool trace_ray(mi::Float32_3 vp_sample[3], Render_context &rc, Render_context::R
                 float light_pdf = 0.f;
                 mi::Float32_3 radiance_over_pdf = rc.sample_lights(isect_info.pos, light_dir, light_pdf, seed);
 
-                bool light_culled = !(
-                    (ray.level < rc.max_ray_length) &&
-                    (light_pdf != 0.0f) &&
-                    ((dot(normal, light_dir) > 0.f) != (ray.is_inside && !ray.is_inside_cutout)) );
+                // Match df_cuda: sphere uses hemisphere cull; hair skips hemisphere for env (see
+                // cull_env_light GT_HAIR) and uses xz cylinder test for point light (cull_point_light GT_HAIR).
+                bool light_culled = !((ray.level < rc.max_ray_length) && (light_pdf != 0.0f));
+                if (!light_culled && rc.scene_geometry != Scene_geometry_type::Hair)
+                {
+                    light_culled = !(
+                        (dot(normal, light_dir) > 0.f) != (ray.is_inside && !ray.is_inside_cutout));
+                }
+                if (!light_culled && rc.scene_geometry == Scene_geometry_type::Hair
+                    && light_pdf == Constants.DIRAC)
+                {
+                    const mi::Float32_3 lp = rc.omni_light.dir * rc.omni_light.distance;
+                    const float xz2 = lp.x * lp.x + lp.z * lp.z;
+                    const float r = rc.sphere.radius; // same as df_cuda GT_SPHERE_RADIUS for this test
+                    light_culled = xz2 < r * r;
+                }
 
                 // check if light is visible from inside a cutout by checking if a shadow ray can leave the object.
                 if (!light_culled && ray.is_inside_cutout)
@@ -2289,98 +2669,232 @@ bool trace_ray(mi::Float32_3 vp_sample[3], Render_context &rc, Render_context::R
 
                 if (!light_culled)
                 {
-                    mi::neuraylib::Bsdf_evaluate_data<mi::neuraylib::DF_HSM_NONE> eval_data;
-                    if (ray.is_inside && !is_thin_walled)
+                    // Lambda to handle bsdf evaluation for both spectral and non-spectral paths
+                    auto evaluate_bsdf = [&](auto& eval_data, auto& ior_one, auto& ior_mat)
                     {
-                        eval_data.ior1 = mi::Float32_3(MI_NEURAYLIB_BSDF_USE_MATERIAL_IOR);
-                        eval_data.ior2 = mi::Float32_3(1.0f);
+                        if (ray.is_inside && !is_thin_walled)
+                        {
+                            eval_data.ior1 = ior_mat;
+                            eval_data.ior2 = ior_one;
+                        }
+                        else
+                        {
+                            eval_data.ior1 = ior_one;
+                            eval_data.ior2 = ior_mat;
+                        }
+
+                        eval_data.k1 = -ray.dir;
+                        eval_data.k2 = light_dir;
+                        eval_data.flags = rc.bsdf_data_flags;
+
+                        // evaluate material surface bsdf
+                        ret_code = rc.target_code->execute_bsdf_evaluate(
+                            surface_bsdf_function_index + 1,    // bsdf_function_index corresponds to 'sample'
+                                                                // bsdf_function_index+1 to 'evaluate'
+                            &eval_data,
+                            *shading_state,
+                            tex_handler,
+                            rc.argument_block.get());
+                        assert(ret_code == 0 && "execute_bsdf_evaluate failed");
+
+                        if constexpr (std::is_same_v<decltype(eval_data.bsdf_diffuse), tct_spectral_sample>)
+                        {
+                            if (eval_data.pdf.values[0] > 1.e-6f)
+                            {
+                                const float mis_weight = (light_pdf == Constants.DIRAC)
+                                    ? 1.0f : light_pdf / (light_pdf + eval_data.pdf.values[0]);
+
+                                const tct_spectral_sample radiance_over_pdf_spectral = rc.rgb_to_spectral(radiance_over_pdf, true);
+                                vp_sample[VPCH_ILLUM] += rc.spectral_to_rgb(
+                                    (eval_data.bsdf_diffuse + eval_data.bsdf_glossy) * (radiance_over_pdf_spectral * ray.weight_spectral) * mis_weight);
+                            }
+                        }
+                        else
+                        {
+                            if (eval_data.pdf > 1.e-6f)
+                            {
+                                const float mis_weight = (light_pdf == Constants.DIRAC)
+                                    ? 1.0f : light_pdf / (light_pdf + eval_data.pdf);
+
+                                vp_sample[VPCH_ILLUM] +=
+                                    (eval_data.bsdf_diffuse + eval_data.bsdf_glossy) * (radiance_over_pdf * ray.weight) * mis_weight;
+                            }
+                        }
+                    };
+
+                    if (rc.enable_spectral)
+                    {
+                        mi::neuraylib::Bsdf_evaluate_data<mi::neuraylib::DF_HSM_NONE, mi::neuraylib::TCCM_SPECTRAL_SAMPLING> eval_data;
+                        eval_data.bsdf_diffuse = make_spectral_sample(0.f);
+                        eval_data.bsdf_glossy = make_spectral_sample(0.f);
+
+                        tct_spectral_sample ior_one = make_spectral_sample(1.0f);
+                        tct_spectral_sample ior_mat = make_spectral_sample(MI_NEURAYLIB_BSDF_USE_MATERIAL_IOR);
+                        evaluate_bsdf(eval_data, ior_one, ior_mat);
                     }
                     else
                     {
-                        eval_data.ior1 = mi::Float32_3(1.0f);
-                        eval_data.ior2 = mi::Float32_3(MI_NEURAYLIB_BSDF_USE_MATERIAL_IOR);
-                    }
+                        mi::neuraylib::Bsdf_evaluate_data<mi::neuraylib::DF_HSM_NONE> eval_data;
+                        eval_data.bsdf_diffuse = mi::Float32_3(0.f);
+                        eval_data.bsdf_glossy = mi::Float32_3(0.f);
 
-                    eval_data.k1 = -ray.dir;
-                    eval_data.k2 = light_dir;
-                    eval_data.bsdf_diffuse = mi::Float32_3(0.f);
-                    eval_data.bsdf_glossy = mi::Float32_3(0.f);
-                    eval_data.flags = rc.bsdf_data_flags;
-
-                    // evaluate material surface bsdf
-                    ret_code = rc.target_code->execute_bsdf_evaluate(
-                        surface_bsdf_function_index + 1,    // bsdf_function_index corresponds to 'sample'
-                                                            // bsdf_function_index+1 to 'evaluate'
-                        &eval_data,
-                        *shading_state,
-                        tex_handler,
-                        rc.argument_block.get());
-                    assert(ret_code == 0 && "execute_bsdf_evaluate failed");
-
-                    if (eval_data.pdf > 1.e-6f)
-                    {
-                        const float mis_weight = (light_pdf == Constants.DIRAC)
-                            ? 1.0f : light_pdf / (light_pdf + eval_data.pdf);
-
-                        vp_sample[VPCH_ILLUM] += (eval_data.bsdf_diffuse + eval_data.bsdf_glossy)*(radiance_over_pdf * ray.weight)* mis_weight;
+                        mi::Float32_3 ior_one(1.f);
+                        mi::Float32_3 ior_mat(MI_NEURAYLIB_BSDF_USE_MATERIAL_IOR);
+                        evaluate_bsdf(eval_data, ior_one, ior_mat);
                     }
                 }
             }
 
             // sample material bsdf contribution
             {
-                mi::neuraylib::Bsdf_sample_data sample_data;  // input/output data for sample
-                if (ray.is_inside && !is_thin_walled)
+                // Lambda to handle bsdf sampling for both spectral and non-spectral paths
+                auto sample_bsdf = [&](auto& sample_data, auto& ior_one, auto& ior_mat)
                 {
-                    sample_data.ior1 = mi::Float32_3(MI_NEURAYLIB_BSDF_USE_MATERIAL_IOR);
-                    sample_data.ior2 = mi::Float32_3(1.0f);
+                    if (ray.is_inside && !is_thin_walled)
+                    {
+                        sample_data.ior1 = ior_mat;
+                        sample_data.ior2 = ior_one;
+                    }
+                    else
+                    {
+                        sample_data.ior1 = ior_one;
+                        sample_data.ior2 = ior_mat;
+                    }
+                    sample_data.k1 = -ray.dir;                    // outgoing direction
+                    sample_data.xi.x = rnd(seed);
+                    sample_data.xi.y = rnd(seed);
+                    sample_data.xi.z = rnd(seed);
+                    sample_data.xi.w = rnd(seed);
+                    sample_data.flags = rc.bsdf_data_flags;
+
+                    ret_code = rc.target_code->execute_bsdf_sample(
+                        surface_bsdf_function_index,      // bsdf_function_index corresponds to 'sample'
+                        &sample_data,                     // input/output
+                        *shading_state,
+                        tex_handler,
+                        rc.argument_block.get());
+                    assert(ret_code == 0 && "execute_bsdf_sample failed");
+
+                    if (sample_data.event_type != mi::neuraylib::BSDF_EVENT_ABSORB)
+                    {
+                        if constexpr (std::is_same_v<decltype(sample_data.bsdf_over_pdf), tct_spectral_sample>)
+                        {
+                            bool specular = false;
+                            bool specular_dispersion = false;
+                            if ((sample_data.event_type & mi::neuraylib::BSDF_EVENT_SPECULAR) != 0)
+                            {
+                                specular = true;
+                                ray.last_pdf = -1.0f;
+                                if (!is_thin_walled && (sample_data.event_type & mi::neuraylib::BSDF_EVENT_TRANSMISSION) != 0)
+                                {
+                                    for (unsigned int i = 1; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+                                    {
+                                        if (sample_data.ior1.values[i] != sample_data.ior1.values[0] ||
+                                            sample_data.ior2.values[i] != sample_data.ior2.values[0])
+                                        {
+                                            specular_dispersion = true;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            else
+                                ray.last_pdf = sample_data.pdf.values[0];
+
+                            ray.weight_spectral *= sample_data.bsdf_over_pdf;
+                            ray.weight_spectral *= rc.update_spectral_pdf_ratios(sample_data.pdf, specular, specular_dispersion);
+                        }
+                        else
+                        {
+                            if ((sample_data.event_type & mi::neuraylib::BSDF_EVENT_SPECULAR) != 0)
+                                ray.last_pdf = -1.0f;
+                            else
+                                ray.last_pdf = sample_data.pdf;
+
+                            ray.weight *= static_cast<mi::Float32_3>(sample_data.bsdf_over_pdf);
+                        }
+
+                        // there is a scattering event, trace either the reflection or transmission ray
+                        ray.p0 = isect_info.pos;
+                        ray.dir = normalize(sample_data.k2);
+
+                        // medium change?
+                        if (sample_data.event_type & mi::neuraylib::BSDF_EVENT_TRANSMISSION)
+                        {
+                            ray.offset_ray(-mi::Float32_3(geom_normal));
+                            ray.is_inside = !ray.is_inside;
+                            // Match df_cuda continue_ray for GT_HAIR + glossy transmission
+                            if (rc.scene_geometry == Scene_geometry_type::Hair
+                                && sample_data.event_type == mi::neuraylib::BSDF_EVENT_GLOSSY_TRANSMISSION)
+                            {
+                                ray.p0 += ray.dir * (2.0f * rc.hair.radius);
+                                ray.is_inside = false;
+                            }
+                        }
+                        else
+                        {
+                            ray.offset_ray(geom_normal);
+                        }
+
+                        // df_cuda trace_scene: after BSDF sample, if !inside && !inside_cutout the kernel
+                        // evaluates the environment for k2 and returns (no further geometry trace). Recursive
+                        // trace_ray here would re-intersect the open hair cylinder and diverge from CUDA.
+                        const bool hair_escape = (rc.scene_geometry == Scene_geometry_type::Hair
+                            && !ray.is_inside && !ray.is_inside_cutout);
+
+                        if (hair_escape)
+                        {
+                            float env_pdf = 0.f;
+                            const mi::Float32_3 env_rgb = rc.evaluate_environment(env_pdf, ray.dir);
+                            const bool is_specular =
+                                (sample_data.event_type & mi::neuraylib::BSDF_EVENT_SPECULAR) != 0;
+                            float bsdf_pdf_val = 0.f;
+                            if (!is_specular)
+                            {
+                                if constexpr (std::is_same_v<decltype(sample_data.pdf), tct_spectral_sample>)
+                                    bsdf_pdf_val = sample_data.pdf.values[0];
+                                else
+                                    bsdf_pdf_val = sample_data.pdf;
+                            }
+                            if (is_specular || bsdf_pdf_val > 0.f)
+                            {
+                                const float mis_weight = is_specular ? 1.0f
+                                    : ((env_pdf + bsdf_pdf_val > 0.f)
+                                        ? (bsdf_pdf_val / (env_pdf + bsdf_pdf_val))
+                                        : 0.f);
+                                if constexpr (std::is_same_v<decltype(sample_data.bsdf_over_pdf), tct_spectral_sample>)
+                                {
+                                    const tct_spectral_sample env_spec = rc.rgb_to_spectral(env_rgb, true);
+                                    vp_sample[VPCH_ILLUM] +=
+                                        rc.spectral_to_rgb(env_spec * ray.weight_spectral * mis_weight);
+                                }
+                                else
+                                    vp_sample[VPCH_ILLUM] += env_rgb * ray.weight * mis_weight;
+                            }
+                        }
+                        else
+                        {
+                            mi::Float32_3 scat_color[3] = { mi::Float32_3(0.f) };
+                            trace_ray(scat_color, rc, ray, seed);
+                            vp_sample[VPCH_ILLUM] += scat_color[VPCH_ILLUM];
+                        }
+                    }
+                };
+
+                if (rc.enable_spectral)
+                {
+                    mi::neuraylib::Bsdf_sample_data<mi::neuraylib::TCCM_SPECTRAL_SAMPLING> sample_data;  // input/output data for sample
+                    tct_spectral_sample ior_one = make_spectral_sample(1.0f);
+                    tct_spectral_sample ior_mat = make_spectral_sample(MI_NEURAYLIB_BSDF_USE_MATERIAL_IOR);
+                    sample_bsdf(sample_data, ior_one, ior_mat);
+
                 }
                 else
                 {
-                    sample_data.ior1 = mi::Float32_3(1.0f);
-                    sample_data.ior2 = mi::Float32_3(MI_NEURAYLIB_BSDF_USE_MATERIAL_IOR);
-                }
-                sample_data.k1 = -ray.dir;                    // outgoing direction
-                sample_data.xi.x = rnd(seed);
-                sample_data.xi.y = rnd(seed);
-                sample_data.xi.z = rnd(seed);
-                sample_data.xi.w = rnd(seed);
-                sample_data.flags = rc.bsdf_data_flags;
-
-                ret_code = rc.target_code->execute_bsdf_sample(
-                    surface_bsdf_function_index,      // bsdf_function_index corresponds to 'sample'
-                    &sample_data,   // input/output
-                    *shading_state,
-                    tex_handler,
-                    rc.argument_block.get());
-                assert(ret_code == 0 && "execute_bsdf_sample failed");
-
-                if (sample_data.event_type != mi::neuraylib::BSDF_EVENT_ABSORB)
-                {
-                    if ((sample_data.event_type & mi::neuraylib::BSDF_EVENT_SPECULAR) != 0)
-                        ray.last_pdf = -1.0f;
-                    else
-                        ray.last_pdf = sample_data.pdf;
-
-                    // there is a scattering event, trace either the reflection or transmission ray
-                    ray.weight *= static_cast<mi::Float32_3>(sample_data.bsdf_over_pdf);
-                    ray.p0 = isect_info.pos;
-                    ray.dir = normalize(sample_data.k2);
-
-                    // medium change?
-                    if (sample_data.event_type & mi::neuraylib::BSDF_EVENT_TRANSMISSION)
-                    {
-                        ray.offset_ray(-mi::Float32_3(geom_normal));
-                        ray.is_inside = !ray.is_inside;
-                    }
-                    else
-                    {
-                        ray.offset_ray(geom_normal);
-                    }
-
-                    mi::Float32_3 scat_color[3] = {mi::Float32_3(0.f)};
-                    trace_ray(scat_color, rc, ray, seed);
-                    vp_sample[VPCH_ILLUM] += scat_color[VPCH_ILLUM];
+                    mi::neuraylib::Bsdf_sample_data sample_data;  // input/output data for sample
+                    mi::Float32_3 ior_one(1.f);
+                    mi::Float32_3 ior_mat(MI_NEURAYLIB_BSDF_USE_MATERIAL_IOR);
+                    sample_bsdf(sample_data, ior_one, ior_mat);
                 }
             }
             return true;
@@ -2391,7 +2905,14 @@ bool trace_ray(mi::Float32_3 vp_sample[3], Render_context &rc, Render_context::R
     else
     {
         float pdf = 1.f;
-        vp_sample[VPCH_ILLUM] = rc.evaluate_environment(pdf, ray.dir)*ray.weight;
+        const mi::Float32_3 env_val = rc.evaluate_environment(pdf, ray.dir);
+        if (rc.enable_spectral)
+        {
+            const tct_spectral_sample s = rc.rgb_to_spectral(env_val, true) * ray.weight_spectral;
+            vp_sample[VPCH_ILLUM] = rc.spectral_to_rgb(s);
+        }
+        else
+            vp_sample[VPCH_ILLUM] = env_val * ray.weight;
 
         // account multi importance sampling for environment
         if (ray.level > 1 && ray.last_pdf > 0.f)
@@ -2453,10 +2974,32 @@ void render_scene(
             ray.dir = normalize(rc.cam.dir * rc.cam.focal +
                 rc.cam.right * r + rc.cam.up * (rc.cam.aspect * u));
             ray.weight = 1.f;
+            ray.weight_spectral = make_spectral_sample(1.f);
             ray.is_inside = false;
             ray.is_inside_cutout = false;
             ray.level = 0;
             ray.last_pdf = -1.f;
+
+            if (rc.enable_spectral)
+            {
+                // sample wavelengths for this path
+                tct_spectral_sample lambdas;
+                float xi = rnd(seed);
+                for (unsigned int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+                {
+                    xi += 1.0f / float(MDL_DF_SPECTRAL_SAMPLES);
+                    if (xi > 1.0f)
+                        xi -= 1.0f;
+                    lambdas.values[i] = rc.spectral.min_wavelength + (rc.spectral.max_wavelength - rc.spectral.min_wavelength) * xi;
+                }
+                if (rc.use_derivatives)
+                    rc.shading_state_derivs.spectral_wavelengths = lambdas;
+                else
+                    rc.shading_state.spectral_wavelengths = lambdas;
+
+                for (unsigned int i = 0; i < MDL_DF_SPECTRAL_SAMPLES - 1; ++i)
+                    rc.spectral_pdf_ratios[i] = 1.0f;
+            }
 
             //trace camera ray
             bool ray_hit = trace_ray(vp_sample, rc, ray, seed);
@@ -2504,10 +3047,12 @@ void render_scene(
 
             if (dst)
             {
-                // apply gamma correction
-                vp_sample[VPCH_ILLUM].x = powf(vp_sample[VPCH_ILLUM].x, 1.f / 2.2f);
-                vp_sample[VPCH_ILLUM].y = powf(vp_sample[VPCH_ILLUM].y, 1.f / 2.2f);
-                vp_sample[VPCH_ILLUM].z = powf(vp_sample[VPCH_ILLUM].z, 1.f / 2.2f);
+                // apply gamma correction (clamp to 0 first; powf of a negative
+                // base with a non-integer exponent is NaN, and illumination
+                // samples can dip below 0 due to MC/MIS variance)
+                vp_sample[VPCH_ILLUM].x = powf(fmaxf(vp_sample[VPCH_ILLUM].x, 0.f), 1.f / 2.2f);
+                vp_sample[VPCH_ILLUM].y = powf(fmaxf(vp_sample[VPCH_ILLUM].y, 0.f), 1.f / 2.2f);
+                vp_sample[VPCH_ILLUM].z = powf(fmaxf(vp_sample[VPCH_ILLUM].z, 0.f), 1.f / 2.2f);
 
                 // write final pixel
                 vp_sample[VPCH_ILLUM] *= 255.f;
@@ -2557,23 +3102,33 @@ void usage(char const *prog_name)
         << "Options:\n"
         << "  -h|--help                  print this text and exit\n"
         << "  -v|--version               print the MDL SDK version string and exit\n"
+        << "  --no_window                don't open interactive display\n"
+        << "  --nocc                     don't compile the material using class compilation\n"
+        << "  --cr                       use custom texture runtime\n"
+        << "  --an                       use adapt normal function\n"
         << "  --res <x> <y>              resolution (default: 1024x1024)\n"
         << "  --hdr <filename>           environment map\n"
         << "                             (default: nvidia/sdk_examples/resources/environment.hdr)\n"
-        << "  --nocc                     don't compile the material using class compilation\n"
-        << "  --cr                       use custom texture runtime\n"
-        << "  --allowed_scatter_mode <m> limits the allowed scatter mode to \"none\", \"reflect\", "
-        << "\"transmit\" or \"reflect_and_transmit\" (default: restriction disabled)\n"
-        << "  --an                       use adapt normal function\n"
+        << "  --hdr_scale <scale>        environment intensity scale (default: 1.0)\n"
         << "  -d                         enable use of derivatives\n"
-        << "  --no_window                don't open interactive display\n"
         << "  --spp                      samples per pixel (default: 100) for output image when\n"
         << "                             --no_window is used\n"
         << "  -o <outputfile>            image file to write result to\n"
         << "                             (default: example_native.png)\n"
         << "  -oaux                      output albedo and normal auxiliary buffers\n"
+        << "  -f <fov>                   the camera field of view in degree (default: 96.0)\n"
+        << "  --pos <x> <y> <z>          set the camera position (default 0 0 3).\n"
+        << "                             The camera will always look towards (0, 0, 0).\n"
+        << "  -l <x> <y> <z> <r> <g> <b> add an isotropic point light with given coordinates and "
+        "intensity (flux)\n"
         << "  -p|--mdl_path <path>       mdl search path, can occur multiple times\n"
-        << "  --single_threaded          render on one thread only"
+        << "  --max_path_length <num>    maximum path length (default: 6, clamped to 2..100)\n"
+        << "  --allowed_scatter_mode <m> limits the allowed scatter mode to \"none\", \"reflect\", "
+        << "\"transmit\" or \"reflect_and_transmit\" (default: restriction disabled)\n"
+        << "  --single_threaded          render on one thread only\n"
+        << "  --spectral                 enable spectral rendering\n"
+        << "  --spectral_min_wavelength  min spectral wavelength, default: 400[nm]\n"
+        << "  --spectral_max_wavelength  max spectral wavelength, default: 700[nm]\n"
         << "\n"
         << "Viewport controls:\n"
         << "  Mouse               Camera rotation, zoom\n"
@@ -2621,7 +3176,7 @@ int MAIN_UTF8(int argc, char *argv[])
             }
             else if (strcmp(opt, "--max_path_length") == 0 && i < argc - 1)
             {
-                options.max_ray_length = std::max(atoi(argv[++i]), 0);
+                options.max_ray_length = std::min(std::max(atoi(argv[++i]), 2), 100);
             }
             else if (strcmp(opt, "--hdr") == 0 && i < argc - 1)
             {
@@ -2693,6 +3248,18 @@ int MAIN_UTF8(int argc, char *argv[])
             {
                 configure_options.single_threaded = true;
             }
+            else if (strcmp(opt, "--spectral") == 0)
+            {
+                options.enable_spectral = true;
+            }
+            else if (strcmp(opt, "--spectral_min_wavelength") == 0 && i < argc - 1)
+            {
+                options.spectral_min_wavelength = static_cast<float>(atof(argv[++i]));;
+            }
+            else if (strcmp(opt, "--spectral_max_wavelength") == 0 && i < argc - 1)
+            {
+                options.spectral_max_wavelength = static_cast<float>(atof(argv[++i]));;
+            }
             else if (strcmp(opt, "-v") == 0 || strcmp(opt, "--version") == 0)
             {
                 print_version_and_exit = true;
@@ -2751,6 +3318,16 @@ int MAIN_UTF8(int argc, char *argv[])
     // Set some render flags
     rc.render_auxiliary = options.output_auxiliary;
     rc.bsdf_data_flags = options.allowed_scatter_mode;
+    rc.enable_spectral = options.enable_spectral;
+
+    if (rc.enable_spectral)
+    {
+        std::cout << "Spectral rendering enabled. Rendering with " 
+            << MDL_DF_SPECTRAL_SAMPLES << " spectral samples.\n";
+
+        rc.spectral.min_wavelength = options.spectral_min_wavelength;
+        rc.spectral.max_wavelength = options.spectral_max_wavelength;
+    }
 
     {
         // Compiled material arguments information
@@ -2821,7 +3398,8 @@ int MAIN_UTF8(int argc, char *argv[])
                 options.use_custom_tex_runtime,
                 options.use_adapt_normal,
                 options.enable_derivatives,
-                options.enable_bsdf_flags);
+                options.enable_bsdf_flags,
+                options.enable_spectral);
 
             // Collect arguments information for the compiled material
             mat_info.set_name(mdl_name.c_str());
@@ -2862,7 +3440,7 @@ int MAIN_UTF8(int argc, char *argv[])
             else if (options.use_adapt_normal)
             {
                 // only set the m_adapt_normal entry in the vtable of the texture handler object
-                tex_only_adapt_normal_vtable_deriv.m_adapt_normal = adapt_normal;
+                tex_only_adapt_normal_vtable_deriv.m_adapt_normal = adapt_normal_deriv;
                 tex_handler_deriv.vtable = &tex_only_adapt_normal_vtable_deriv;
                 rc.tex_handler_deriv = &tex_handler_deriv;
             }
@@ -3401,6 +3979,39 @@ int MAIN_UTF8(int argc, char *argv[])
                     }
 
                     ImGui::PopID();
+                }
+
+                // Spectral rendering controls
+                if (options.enable_spectral)
+                {
+                    ImGui::Separator();
+                    ImGui::Dummy(ImVec2(0.0f, 3.0f));
+                    ImGui::Text("Spectral Rendering");
+                    ImGui::Separator();
+
+                    if (ImGui::SliderFloat(
+                        "Min Wavelength (nm)",
+                        &rc.spectral.min_wavelength,
+                        380.0f,  // UV start
+                        780.0f)) // IR end
+                    {
+                        changed = true;
+                        if (rc.spectral.max_wavelength < rc.spectral.min_wavelength) {
+                            rc.spectral.max_wavelength = rc.spectral.min_wavelength;
+                        }
+                    }
+
+                    if (ImGui::SliderFloat(
+                        "Max Wavelength (nm)",
+                        &rc.spectral.max_wavelength,
+                        380.0f,  // UV start
+                        780.0f)) // IR end
+                    {
+                        changed = true;
+                        if (rc.spectral.min_wavelength > rc.spectral.max_wavelength) {
+                            rc.spectral.min_wavelength = rc.spectral.max_wavelength;
+                        }
+                    }
                 }
 
                 ImGui::PopItemWidth();

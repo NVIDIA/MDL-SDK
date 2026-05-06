@@ -147,9 +147,6 @@ private:
     void convert_exports(
         const mi::mdl::IArchive_manifest* manifest, mi::mdl::IArchive_manifest::Predefined_key key);
 
-    /// Returns a string representation of mi::mdl::IMDL::MDL_version.
-    static const char* convert_mdl_version( mi::mdl::IMDL::MDL_version version);
-
     /// Returns a string representation of mi::mdl::ISemantic_version.
     static std::string convert_sema_version( const mi::mdl::ISemantic_version* version);
 

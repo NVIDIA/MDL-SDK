@@ -39,8 +39,6 @@
 
 #include <mi/base/config.h>
 
-//#include <thread>
-
 #ifdef MI_PLATFORM_WINDOWS
 #include <mi/base/miwindows.h>
 #include <intrin.h>
@@ -60,9 +58,7 @@ namespace HOST {
 // ********** LINUX and MACOSX ************************************************
 
 #if defined(MI_PLATFORM_LINUX) || defined(MI_PLATFORM_MACOSX)
-
 #ifdef MI_ARCH_X86
-#ifdef MI_ARCH_64BIT
 
 // assembler function to readout the cpuid information, 64-bit x86 Linux & Mac
 void cpuid(int op, int* eax, int* ebx, int* ecx, int* edx)
@@ -86,44 +82,13 @@ void cpuid(int op, int* eax, int* ebx, int* ecx, int* edx)
     *edx = dx;
 }
 
-#else // MI_ARCH_64BIT
-
-// assembler function to readout the cpuid information, 32-bit x86 Linux & Mac
-void cpuid(int op, int* eax, int* ebx, int* ecx, int* edx)
-{
-    unsigned int ax = op, bx = 0, cx = 0, dx = 0;
-
-    __asm__ __volatile__ (
-                 "pushl %%ebx\n\t"
-                 "cpuid\n\t"
-                 "movl %%ebx, %%edi\n\t"
-                 "popl %%ebx\n\t"
-                : "=a" (ax),
-                  "=D" (bx),
-                  "=c" (cx),
-                  "=d" (dx)
-                : "0"  (op) );
-
-    *eax = ax;
-    *ebx = bx;
-    *ecx = cx;
-    *edx = dx;
-}
 #endif // MI_ARCH_X86
-#endif // MI_ARCH_64BIT
 #endif // MI_PLATFORM_LINUX || MI_PLATFORM_MACOSX
 
 // ********** WIN_NT **********************************************************
 
 #ifdef MI_PLATFORM_WINDOWS
 #ifdef MI_ARCH_X86
-
-//#ifdef MI_ARCH_64BIT
-
-//#define cpuid mi_host_cpu_id
-
-// assembler function to readout the cpuid information, 64-bit x86 Windows
-//extern "C" void mi_host_cpu_id(int op, int* eax, int* ebx, int* ecx, int* edx);
 
 void cpuid(int op, int* eax, int* ebx, int* ecx, int* edx)
 {
@@ -134,31 +99,6 @@ void cpuid(int op, int* eax, int* ebx, int* ecx, int* edx)
     *ecx = cpuInfo[2];
     *edx = cpuInfo[3];
 }
-
-/*#else // MI_ARCH_64BIT
-
-// assembler function to readout the cpuid information, 32-bit x86 Windows
-static void cpuid(int op, int* eax, int* ebx, int* ecx, int* edx)
-{
-    unsigned int Regax, Regbx, Regcx, Regdx;
-
-     __asm
-     {
-         mov eax, op
-         cpuid
-         mov Regax, eax
-         mov Regbx, ebx
-         mov Regcx, ecx
-         mov Regdx, edx
-     }
-
-    *eax = Regax;
-    *ebx = Regbx;
-    *ecx = Regcx;
-    *edx = Regdx;
-}
-
-#endif*/ // MI_ARCH_64BIT
 
 int number_of_cpus()
 {

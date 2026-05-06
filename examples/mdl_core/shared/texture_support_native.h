@@ -40,6 +40,7 @@ typedef mi::mdl::tct_deriv_float2                    tct_deriv_float2;
 typedef mi::mdl::tct_deriv_arr_float_2               tct_deriv_arr_float_2;
 typedef mi::mdl::tct_deriv_arr_float_3               tct_deriv_arr_float_3;
 typedef mi::mdl::tct_deriv_arr_float_4               tct_deriv_arr_float_4;
+typedef mi::mdl::tct_spectral_sample                 tct_spectral_sample;
 typedef mi::mdl::Shading_state_material_with_derivs  Shading_state_material_with_derivs;
 typedef mi::mdl::Shading_state_material              Shading_state_material;
 typedef mi::mdl::Texture_handler_base                Texture_handler_base;
@@ -51,13 +52,15 @@ typedef mi::mdl::stdlib::Mbsdf_part                  Mbsdf_part;
 struct Texture
 {
     // Loading texture from file
-    Texture(std::shared_ptr<OIIO::ImageInput> image)
-        : ncomp(4)
+    Texture(
+        std::shared_ptr<OIIO::ImageInput> image,
+        mi::mdl::IValue_texture::gamma_mode gamma_mode)
+    : ncomp(4)
     {
         const OIIO::ImageSpec& spec = image->spec();
         size.x = spec.width;
         size.y = spec.height;
-        size.z = spec.depth; //depth not used
+        size.z = spec.depth;  // depth not used
 
         image_data.resize(ncomp * size.x * size.y);
         mi::Sint32 bytes_per_row = ncomp * size.x * sizeof(float);
@@ -73,9 +76,21 @@ struct Texture
             /*ystride*/ -bytes_per_row,
             /*zstride*/ OIIO::AutoStride);
 
-        if (spec.nchannels <= 3)
-            for (size_t i = 0, n = image_data.size(); i < n; i += ncomp)
+        if (spec.nchannels <= 3) {
+            for (size_t i = 0, n = image_data.size(); i < n; i += ncomp) {
                 image_data[i + 3] = 1.0f;
+            }
+        }
+
+        // Convert to linear color space if necessary
+        if (gamma_mode != mi::mdl::IValue_texture::gamma_linear) {
+            for (size_t i = 0, n = image_data.size(); i < n; i += 4) {
+                // Only adjust r, g and b, not alpha
+                image_data[i    ] = std::pow(image_data[i    ], 2.2f);
+                image_data[i + 1] = std::pow(image_data[i + 1], 2.2f);
+                image_data[i + 2] = std::pow(image_data[i + 2], 2.2f);
+            }
+        }
 
         data = reinterpret_cast<mi::Float32*>(image_data.data());
     }
@@ -706,7 +721,149 @@ void adapt_normal(
     result[2] = normal[2];
 }
 
+// Implementation of adapt_normal() with derivative state.
+void adapt_normal_deriv(
+    float                                  result[3],
+    Texture_handler_base const            *self_base,
+    Shading_state_material_with_derivs    *state,
+    float const                            normal[3])
+{
+    // just return original normal
+    result[0] = normal[0];
+    result[1] = normal[1];
+    result[2] = normal[2];
+}
+
 #endif  // TEX_SUPPORT_NO_DUMMY_ADAPTNORMAL
+
+
+// ------------------------------------------------------------------------------------------------
+// Spectral support (dummy functions)
+//
+// Can be enabled via backend option "jit_libbsdf_spectral".
+// ------------------------------------------------------------------------------------------------
+
+#ifndef TEX_SUPPORT_NO_DUMMY_SPECTRAL
+
+// Implementation of rgb_to_spectral_ior().
+void rgb_to_spectral_ior(
+    tct_spectral_sample                   *result,
+    Texture_handler_base const            *self_base,
+    Shading_state_material                *state,
+    float const                            rgb[3])
+{
+    for (size_t i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i) {
+        result->values[i] = 0.0f;
+    }
+}
+
+// Implementation of rgb_to_spectral_ior() with derivative state.
+void rgb_to_spectral_ior_deriv(
+    tct_spectral_sample                   *result,
+    Texture_handler_base const            *self_base,
+    Shading_state_material_with_derivs    *state,
+    float const                            rgb[3])
+{
+    for (size_t i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i) {
+        result->values[i] = 0.0f;
+    }
+}
+
+// Implementation of rgb_to_spectral_reflectance().
+void rgb_to_spectral_reflectance(
+    tct_spectral_sample                   *result,
+    Texture_handler_base const            *self_base,
+    Shading_state_material                *state,
+    float const                            rgb[3])
+{
+    for (size_t i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i) {
+        result->values[i] = 0.0f;
+    }
+}
+
+// Implementation of rgb_to_spectral_reflectance() with derivative state.
+void rgb_to_spectral_reflectance_deriv(
+    tct_spectral_sample                   *result,
+    Texture_handler_base const            *self_base,
+    Shading_state_material_with_derivs    *state,
+    float const                            rgb[3])
+{
+    for (size_t i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i) {
+        result->values[i] = 0.0f;
+    }
+}
+
+// Implementation of rgb_to_spectral_luminance().
+void rgb_to_spectral_luminance(
+    tct_spectral_sample                   *result,
+    Texture_handler_base const            *self_base,
+    Shading_state_material                *state,
+    float const                            rgb[3])
+{
+    for (size_t i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i) {
+        result->values[i] = 0.0f;
+    }
+}
+
+// Implementation of rgb_to_spectral_luminance() with derivative state.
+void rgb_to_spectral_luminance_deriv(
+    tct_spectral_sample                   *result,
+    Texture_handler_base const            *self_base,
+    Shading_state_material_with_derivs    *state,
+    float const                            rgb[3])
+{
+    for (size_t i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i) {
+        result->values[i] = 0.0f;
+    }
+}
+
+// Implementation of rgb_to_spectral_volume_coefficient().
+void rgb_to_spectral_volume_coefficient(
+    tct_spectral_sample                   *result,
+    Texture_handler_base const            *self_base,
+    Shading_state_material                *state,
+    float const                            rgb[3])
+{
+    for (size_t i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i) {
+        result->values[i] = 0.0f;
+    }
+}
+
+// Implementation of rgb_to_spectral_volume_coefficient() with derivative state.
+void rgb_to_spectral_volume_coefficient_deriv(
+    tct_spectral_sample                   *result,
+    Texture_handler_base const            *self_base,
+    Shading_state_material_with_derivs    *state,
+    float const                            rgb[3])
+{
+    for (size_t i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i) {
+        result->values[i] = 0.0f;
+    }
+}
+
+// Implementation of get_wavelengths().
+void get_wavelengths(
+    tct_spectral_sample                   *result,
+    Texture_handler_base const            *self_base,
+    Shading_state_material                *state)
+{
+    for (size_t i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i) {
+        result->values[i] = 0.0f;
+    }
+}
+
+// Implementation of get_wavelengths() with derivative state.
+void get_wavelengths_deriv(
+    tct_spectral_sample                   *result,
+    Texture_handler_base const            *self_base,
+    Shading_state_material_with_derivs    *state)
+{
+    for (size_t i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i) {
+        result->values[i] = 0.0f;
+    }
+}
+
+#endif  // TEX_SUPPORT_NO_DUMMY_SPECTRAL
 
 
 // ------------------------------------------------------------------------------------------------
@@ -967,6 +1124,11 @@ mi::mdl::Texture_handler_vtable tex_vtable = {
     df_bsdf_measurement_pdf,
     df_bsdf_measurement_albedos,
     adapt_normal,
+    rgb_to_spectral_ior,
+    rgb_to_spectral_reflectance,
+    rgb_to_spectral_luminance,
+    rgb_to_spectral_volume_coefficient,
+    get_wavelengths,
     scene_data_isvalid,
     scene_data_lookup_float,
     scene_data_lookup_float2,
@@ -1012,7 +1174,12 @@ mi::mdl::Texture_handler_deriv_vtable tex_deriv_vtable = {
     df_bsdf_measurement_sample,
     df_bsdf_measurement_pdf,
     df_bsdf_measurement_albedos,
-    adapt_normal,
+    adapt_normal_deriv,
+    rgb_to_spectral_ior_deriv,
+    rgb_to_spectral_reflectance_deriv,
+    rgb_to_spectral_luminance_deriv,
+    rgb_to_spectral_volume_coefficient_deriv,
+    get_wavelengths_deriv,
     scene_data_isvalid,
     scene_data_lookup_float,
     scene_data_lookup_float2,

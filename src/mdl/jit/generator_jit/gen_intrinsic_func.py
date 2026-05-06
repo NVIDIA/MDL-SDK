@@ -135,9 +135,10 @@ class SignatureParser:
 			"texture_cube" : "TC",
 			"texture_ptex" : "TP",
 
-			"string"        : "SS",
-			"light_profile" : "LP",
-			"size_t"        : "ZZ",
+			"string"          : "SS",
+			"light_profile"   : "LP",
+			"size_t"          : "ZZ",
+			"spectral_sample" : "SPS",
 
 			"double *"          : "dd",
 			"float *"           : "ff",
@@ -160,6 +161,7 @@ class SignatureParser:
 			"vdf"                       : "UV",
 			"bsdf_measurement"          : "UM",
 			"scatter_mode"              : "ESM",
+			"backscatter_modifier"      : "EBM",
 			"bsdf_component[<N>]"       : "UAB",
 			"edf_component[<N>]"        : "UAE",
 			"vdf_component[<N>]"        : "UAV",
@@ -992,6 +994,9 @@ class SignatureParser:
 					sys.exit(1)
 				# skip the comma
 				tokens = tokens[1:]
+				if len(tokens) == 0 or tokens[0] == ')':
+					error("extra ',' in parameter list when parsing '%s'" % decl)
+					sys.exit(1)
 
 		signature = self.create_signature(ret_type, args)
 
@@ -6243,8 +6248,21 @@ class SignatureParser:
 		self.register_mdl_runtime_func("mdl_df_light_profile_sample",           "FA3_PTIIFA3")
 		self.register_mdl_runtime_func("mdl_df_light_profile_pdf",              "FF_PTIIFA2")
 
-		# renderer support
-		self.register_mdl_runtime_func("mdl_adapt_normal",           "FA3_PTFA3")
+		# renderer support (the deriv variants have the same signature here, but will be
+		# the correct state types will be used, when the functions are created. Only either
+		# the non-deriv or the deriv variant will be used.)
+		self.register_mdl_runtime_func("mdl_adapt_normal",                       "FA3_PTscFA3")
+		self.register_mdl_runtime_func("mdl_rgb_to_spectral_ior",                "SPS_PTscFA3")
+		self.register_mdl_runtime_func("mdl_rgb_to_spectral_reflectance",        "SPS_PTscFA3")
+		self.register_mdl_runtime_func("mdl_rgb_to_spectral_luminance",          "SPS_PTscFA3")
+		self.register_mdl_runtime_func("mdl_rgb_to_spectral_volume_coefficient", "SPS_PTscFA3")
+		self.register_mdl_runtime_func("mdl_get_wavelengths",                    "SPS_PTsc")
+
+		self.register_mdl_runtime_func("mdl_rgb_to_spectral_ior_deriv",          "SPS_PTscFA3")
+		self.register_mdl_runtime_func("mdl_rgb_to_spectral_reflectance_deriv",  "SPS_PTscFA3")
+		self.register_mdl_runtime_func("mdl_rgb_to_spectral_luminance_deriv",    "SPS_PTscFA3")
+		self.register_mdl_runtime_func("mdl_rgb_to_spectral_volume_coefficient_deriv", "SPS_PTscFA3")
+		self.register_mdl_runtime_func("mdl_get_wavelengths_deriv",              "SPS_PTsc")
 
 		# exception handling
 		self.register_mdl_runtime_func("mdl_out_of_bounds",          "VV_xsIIZZCSII")
@@ -6703,6 +6721,10 @@ class SignatureParser:
 		self.write(f, "llvm::Function *create_state_adapt_microfacet_roughness(Internal_function const *int_func);\n\n")
 		self.write(f, "/// Generate LLVM IR for state::adapt_normal()\n")
 		self.write(f, "llvm::Function *create_state_adapt_normal(Internal_function const *int_func);\n\n")
+		self.write(f, "/// Generate LLVM IR for state::rgb_to_spectral_X() taking variant from Internal_function kind\n")
+		self.write(f, "llvm::Function *create_state_rgb_to_spectral_x(Internal_function const *int_func);\n\n")
+		self.write(f, "/// Generate LLVM IR for state::get_wavelengths()\n")
+		self.write(f, "llvm::Function *create_state_get_wavelengths(Internal_function const *int_func);\n\n")
 		self.write(f, "/// Generate LLVM IR for df::bsdf_measurement_resolution()\n")
 		self.write(f, "llvm::Function *create_df_bsdf_measurement_resolution(Internal_function const *int_func);\n")
 		self.write(f, "/// Generate LLVM IR for df::bsdf_measurement_evaluate()\n")

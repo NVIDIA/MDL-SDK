@@ -29,6 +29,9 @@
 #ifndef MDL_GENERATOR_JIT_STREAMS_H
 #define MDL_GENERATOR_JIT_STREAMS_H 1
 
+#include <mi/base/interface_implement.h>
+#include <mi/mdl/mdl_streams.h>
+
 #include "mdl/compiler/compilercore/compilercore_cc_conf.h"
 #include "mdl/compiler/compilercore/compilercore_allocator.h"
 

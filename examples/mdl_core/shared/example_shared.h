@@ -217,6 +217,9 @@ inline std::string get_examples_mdl_root()
 std::string get_src_shaders_mdl();
 
 /// Returns the path of the current executable.
+///
+/// Direct use of this method to locate files relative to the position of the executable is
+/// deprecated. Use find_resource_file() instead.
 std::string get_executable_folder();
 
 /// Ensures that the console with the log messages does not close immediately. On Windows, the user
@@ -971,8 +974,11 @@ public:
     }
 
 private:
+    /// The DAG containing the material of the material instance.
     mi::base::Handle<mi::mdl::IGenerated_code_dag const> m_dag;
+    /// The index of the material in the DAG.
     size_t m_material_index;
+    /// The material instance itself.
     mi::base::Handle<mi::mdl::IMaterial_instance> m_inst;
 };
 
@@ -1124,7 +1130,7 @@ public:
                 mi::mdl::DAG_constant const *c = mi::mdl::as<mi::mdl::DAG_constant>(node);
                 if (auto const *vc = mi::mdl::as<mi::mdl::IValue_compound>(c->get_value())) {
                     if (mi::mdl::IValue const *subval = vc->get_value(path[0])) {
-                        node = dag_builder->create_constant(subval);
+                        node = dag_builder->create_constant(subval, c->get_dbg_info());
                         return get_dag_arg(node, path.slice(1), dag_builder);
                     }
                 }
@@ -1268,7 +1274,8 @@ public:
                     return mi::mdl::EC_TOO_FEW_ARGUMENTS;
                 def_param = mat_inst->create_constant(
                     mat_inst->get_value_factory()->create_zero(
-                        mat_inst.get_dag_parameter_type(i)));
+                        mat_inst.get_dag_parameter_type(i)),
+                    mi::mdl::DAG_DbgInfo());
             }
 
             real_args.push_back(def_param);
@@ -1286,7 +1293,7 @@ public:
             &m_module_manager,
             /*resource_modifier=*/ nullptr,
             mat_inst.get_dag().get(),
-            int(real_args.size()),
+            real_args.size(),
             real_args.data(),
             /*use_temporaries=*/ false,
             flags,

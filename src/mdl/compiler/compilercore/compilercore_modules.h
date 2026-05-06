@@ -40,6 +40,7 @@
 #include "compilercore_memory_arena.h"
 #include "compilercore_factories.h"
 #include "compilercore_messages.h"
+#include "compilercore_promotion.h"
 #include "compilercore_symbols.h"
 #include "compilercore_names.h"
 #include "compilercore_def_table.h"
@@ -300,7 +301,7 @@ public:
     /// Get the absolute name of the module a definition belongs to.
     ///
     /// \param def  the definition
-    /// 
+    ///
     /// \note  def must belong to this module, else this function returns NULL.
     char const *get_owner_module_name(IDefinition const *def) const MDL_FINAL;
 
@@ -429,6 +430,14 @@ public:
     char const *mangle_dag_name(
         IDefinition const *def,
         IThread_context   *context) const MDL_FINAL;
+
+    /// Find a type defined at global scope of this module given by its name.
+    ///
+    /// \param name  the name of the type
+    ///
+    /// \return The type if the type was defined in this module, NULL otherwise.
+    IType const *find_type(
+        char const *name) const MDL_FINAL;
 
     /// Lookup an exact annotation definition given by its name and an array of of all (positional
     /// parameter types.
@@ -889,9 +898,19 @@ public:
         char const *module_name,
         char const *signature) const;
 
+    /// Mark the module as deprecated.
+    ///
+    /// \param msg  if non-null, an optional deprecation message
+    void mark_deprecated(IValue_string const *msg);
+
+    /// Get the deprecated message for the module if any.
+    ///
+    /// \return the message or NULL if no message was set
+    bool is_deprecated(IValue_string const *&msg) const;
+
     /// Set a deprecated message for a given definition.
     ///
-    /// \param def  the definition
+    /// \param def  the definition, NULL if message regards to the whole module
     /// \param msg  the message
     void set_deprecated_message(Definition const *def, IValue_string const *msg);
 
@@ -971,98 +990,6 @@ public:
         IType_resource const *type,
         bool                 exists);
 
-
-    /// Possible MDL version promotion rules.
-    enum Promotion_rules {
-        PR_NO_CHANGE                    = 0x000000,
-        PR_SPOT_EDF_ADD_SPREAD_PARAM    = 0x000001, ///< add a spread param to spot_edf()
-        PC_MEASURED_EDF_ADD_MULTIPLIER  = 0x000002, ///< add a multiplier param to measured_edf()
-        PR_MEASURED_EDF_ADD_TANGENT_U   = 0x000004, ///< add a tangent_u param to measured_edf()
-        PR_FRESNEL_LAYER_TO_COLOR       = 0x000008, ///< convert fresnel_layer() to color_*()
-        PR_WIDTH_HEIGHT_ADD_UV_TILE     = 0x000010, ///< add an uv_tile param to width()/height()
-        PR_TEXEL_ADD_UV_TILE            = 0x000020, ///< add an uv_tile param to texel_*()
-        PR_ROUNDED_CORNER_ADD_ROUNDNESS = 0x000040, ///< add roundness param to
-                                                    ///< rounded_corner_normal
-        PR_MATERIAL_ADD_HAIR            = 0x000080, ///< add hair bsdf to material constructor
-        PR_INSERT_COLOR_0_AFTER_3       = 0x000100, ///< insert a color(0) after third param
-        PR_MATERIAL_VOLUME_ADD_EMISSION_INTENSITY
-                                        = 0x000200, ///< add emission_intenbsity to material_volume
-                                                    ///< constructor
-        PR_INSERT_DIFF_REFL_BSDF_AFTER_3= 0x000400, ///< insert diffuse_reflection_bsdf() after
-                                                    ///< third param, pre MDL 1.10 variant
-        PR_INSERT_DIFF_REFL_BSDF_10_AFTER_3
-                                        = 0x000800, ///< insert diffuse_reflection_bsdf() after
-                                                    ///< third param, MDL 1.10+ variant
-        PR_INSERT_FLOAT_0_AFTER_1       = 0x001000, ///< insert a 0.0f after first param
-        PR_INSERT_FLOAT_0_AFTER_2       = 0x002000, ///< insert a 0.0f after second param
-        PR_INSERT_FLOAT_0_AFTER_3       = 0x004000, ///< insert a 0.0f after third param
-        PR_INSERT_FLOAT_0_AFTER_6       = 0x008000, ///< insert a 0.0f after sixth param
-        PR_INSERT_FLOAT_0_AFTER_8       = 0x010000, ///< insert a 0.0f after eighths param
-        PR_INSERT_EMPTY_STRING_AFTER_2  = 0x020000, ///< insert an empty string after second param
-        PR_ADD_FALSE_AS_LAST            = 0x040000, ///< add a false as last param
-        PR_INSERT_COLOR_0_AFTER_2       = 0x080000, ///< insert a color(0) after second param
-        PR_INSERT_COLOR_1_AFTER_2       = 0x100000, ///< insert a color(1) after second param
-        PR_CNG_TO_COLOR_FRESNEL_LAYER   = 0x200000, ///< change name to "color_fresnel_layer"
-        PR_ADD_INTENSITY_RADIANT_EXTNCE = 0x400000, ///< add intensity_radiant_exitance as third
-    };
-
-    /// Helper Interface to handle different needs when creating a call to a stdlib
-    /// function.
-    class IStdlib_call_creator {
-    public:
-        /// Create a parameterless stdlib call to <name1> or <name1>::<name2>.
-        ///
-        /// \param args    call arguments
-        /// \param n_args  number of call arguments that will be added
-        /// \param name1   an MDL identifier
-        /// \param name2   an MDL identifier or NULL
-        virtual IExpression_call *create_stdlib_call(
-            IExpression const *args[],
-            size_t            n_args,
-            char const *name1,
-            char const *name2 = NULL) = 0;
-    };
-
-    /// Simple implementation of the stdlib call creator, creates syntactical calls only, no types,
-    /// no definitions.
-    class Syntactical_stdlib_call_creator : public IStdlib_call_creator {
-    public:
-        /// Create a parameterless stdlib call to <name1> or <name1>::<name2>.
-        ///
-        /// \param args    call arguments
-        /// \param n_args  number of call arguments that will be added
-        /// \param name1   an MDL identifier
-        /// \param name2   an MDL identifier or NULL
-        IExpression_call *create_stdlib_call(
-            IExpression const *args[],
-            size_t            n_args,
-            char const        *name1,
-            char const        *name2 = NULL) MDL_FINAL;
-
-        /// Constructor.
-        ///
-        /// \param mod  the module on which calls are created
-        Syntactical_stdlib_call_creator(Module &mod) : m_module(mod) {}
-
-    private:
-        Module &m_module;
-    };
-
-    /// Alters one call argument according to the given promotion rules.
-    /// 
-    /// \param call         the call to alter
-    /// \param arg          the argument at current parameter index
-    /// \param param_index  index of the current parameter
-    /// \param rules        the set of transformation rules to be applied
-    /// \param creator      if non-NULL, a stdlib creator interface to be used
-    /// 
-    /// \return The index of the parameter that was modified, e.g. inserted.
-    int promote_call_arguments(
-        IExpression_call     *call,
-        IArgument const      *arg,
-        int                  param_index,
-        unsigned             rules,
-        IStdlib_call_creator *creator);
 
     /// Clear all function hashes.
     void clear_function_hashes() { m_func_hashes.clear(); }
@@ -1212,6 +1139,31 @@ public:
     /// \returns the import index plus 1, or 0 if abs_name is not part of the import table.
     size_t get_import_index(char const *abs_name) const;
 
+    /// Create an integer literal.
+    ///
+    /// \param v  the integer value
+    IExpression_literal const *create_int_literal(int v);
+
+    /// Create an int2 literal.
+    ///
+    /// \param v  the integer value for both components, i.e. returns int2(v, v)
+    IExpression_literal const *create_int2_literal(int v);
+
+    /// Create a float literal.
+    ///
+    /// \param v  the float value
+    IExpression_literal const *create_float_literal(float v);
+
+    /// Create an (RGB) color(v) literal.
+    ///
+    /// \param v  the value, set to all RGB channels
+    IExpression_literal const *create_color_literal(float v);
+
+    // Create a string literal.
+    ///
+    /// \param v  the value
+    IExpression_literal const *create_string_literal(char const *v);
+
 private:
     /// Get the unique id of the original owner module of a definition.
     ///
@@ -1281,31 +1233,6 @@ private:
         Analysis                      &ana,
         File_resolver                 &res_resolver,
         IResource_restriction_handler &rrh);
-
-    /// Create an integer literal.
-    ///
-    /// \param v  the integer value
-    IExpression_literal const *create_int_literal(int v);
-
-    /// Create an int2 literal.
-    ///
-    /// \param v  the integer value for both components, i.e. returns int2(v, v)
-    IExpression_literal const *create_int2_literal(int v);
-
-    /// Create a float literal.
-    ///
-    /// \param v  the float value
-    IExpression_literal const *create_float_literal(float v);
-
-    /// Create an (RGB) color(v) literal.
-    ///
-    /// \param v  the value, set to all RGB channels
-    IExpression_literal const *create_color_literal(float v);
-
-    // Create a string literal.
-    ///
-    /// \param v  the value
-    IExpression_literal const *create_string_literal(char const *v);
 
 private:
     /// Constructor.
@@ -1379,6 +1306,9 @@ private:
 
     /// Set if this module has function hashes.
     bool m_is_hashed;
+
+    /// Set if this module is deprecated.
+    bool m_is_deprecated;
 
     /// The semantic version if any.
     Semantic_version const *m_sema_version;
@@ -1466,8 +1396,6 @@ private:
     /// Cache for the find_signature function (not-serialized).
     mutable Definition_map m_find_signature_cache;
 
-    /// The syntactical stdlib call creator.
-    Syntactical_stdlib_call_creator m_syn_creator;
 };
 
 /// Construct a Type_name AST element for an MDL type.
@@ -1491,6 +1419,20 @@ IType_name *create_type_name(
 IExpression const *promote_expressions_to_mdl_version(
     IModule           *owner,
     IExpression const *expr);
+
+/// Apply parameter transforms to build the arguments of a promoted call.
+///
+/// \param[in]  mod       the module (provides factories for creating AST nodes)
+/// \param[in]  src_call  the original call expression
+/// \param[out] dst_call  the new call expression to populate with arguments
+/// \param[in]  modifier  a clone modifier for cloning expressions
+/// \param[in]  xforms    the parameter transforms to apply
+void apply_param_transforms(
+    Module                    &mod,
+    IExpression_call const    *src_call,
+    IExpression_call          *dst_call,
+    IClone_modifier           *modifier,
+    Param_transform_vec const &xforms);
 
 // Helper shims for calculation the dynamic memory consumption
 inline size_t dynamic_memory_consumption(Module::Import_entry const &s) { return 0; }

@@ -105,7 +105,7 @@ MI_TEST_AUTO_FUNCTION( test_ischeduling_configuration )
         run_tests( neuray.get());
     }
 
-    neuray = 0;
+    neuray.reset();
     MI_CHECK( unload());
 }
 

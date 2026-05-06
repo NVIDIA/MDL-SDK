@@ -31,6 +31,7 @@
 
 #define CURR_LOC Location(Location::OWNER_FILE_IDX, t->line, t->col)
 #define NEXT_LOC Location(Location::OWNER_FILE_IDX, la->line, la->col)
+#define ERR_EXPR ((Expr *)1)
 
 $tokenPrefix=TOK_
 
@@ -60,6 +61,13 @@ private:
 
     // Counter for generating unique identifiers.
     int m_gensym_counter;
+
+    // Convert a parser error sentinel into a real invalid expression node.
+    Expr *check_expr(Expr *expr) {
+        if (expr == ERR_EXPR)
+            return m_expr_factory->create_invalid(CURR_LOC);
+        return expr;
+    }
 
 public:
     // Get the integer value from a token string.
@@ -283,13 +291,15 @@ attr_entry<Expr_attribute::Expr_attribute_entry &pair > =
       pair.expr = nullptr;
       pair.is_pattern = true;
     .)
-    [ ( '=' (. pair.is_pattern = false; .) | '~' ) expression<pair.expr> ] .
+    [ ( '=' (. pair.is_pattern = false; .) | '~' ) expression<pair.expr>
+      (. pair.expr = check_expr(pair.expr); .)
+    ] .
 
 postconds_opt<Ruleset *&ruleset> =
     [
-      (. Expr *expr = nullptr; .)
+      (. Expr *expr = ERR_EXPR; .)
       POSTCOND postcond_or_expr<expr> ';'
-      (. ruleset->set_postcond_expr(expr); .)
+      (. ruleset->set_postcond_expr(check_expr(expr)); .)
     ] .
 
 result_code<Rule::Result_code &res_code> =
@@ -314,7 +324,7 @@ node<Expr *&expr> =
       (. Location loc = CURR_LOC; .)
         node<expr>
       (.
-        expr = m_expr_factory->create_binary(loc, m_type_factory->create_type_variable(), Expr_binary::OK_TILDE, ref, expr);
+        expr = m_expr_factory->create_binary(loc, m_type_factory->create_type_variable(), Expr_binary::OK_TILDE, ref, check_expr(expr));
       .)
     |
       [ ternary_node_continuation<ref, expr> | call_node_continuation<ref, expr> ]
@@ -322,7 +332,7 @@ node<Expr *&expr> =
     [
       (.
         Expr_attribute::Expr_attribute_vector attrs;
-        Expr *the_expr = expr;
+        Expr *the_expr = check_expr(expr);
         mi::mdl::string node_name(m_alloc);
       .)
       ATTR_BEGIN attribute_expr<attrs, node_name> ATTR_END
@@ -333,11 +343,11 @@ node<Expr *&expr> =
 
 ternary_node_continuation<Expr *expr_cond, Expr *&expr> =
     (.
-      Expr *expr_then, *expr_else;
+      Expr *expr_then = ERR_EXPR, *expr_else = ERR_EXPR;
     .)
     '?' node<expr_then> ':' node<expr_else>
     (.
-      expr = m_expr_factory->create_conditional(expr_cond, expr_then, expr_else);
+      expr = m_expr_factory->create_conditional(check_expr(expr_cond), check_expr(expr_then), check_expr(expr_else));
     .) .
 
 call_node_continuation<Expr *expr_callee, Expr *&expr> =
@@ -350,28 +360,28 @@ call_node_continuation<Expr *expr_callee, Expr *&expr> =
     .) .
 
 paramlist<Expr_call *call_expr> =
-    (. Expr *expr; .)
+    (. Expr *expr = ERR_EXPR; .)
     node<expr>
     (.
-      Argument* arg = m_expr_factory->create_argument(expr);
+      Argument* arg = m_expr_factory->create_argument(check_expr(expr));
       call_expr->add_argument(arg);
     .)
     { ','
       node<expr>
       (.
-        Argument* arg = m_expr_factory->create_argument(expr);
+        Argument* arg = m_expr_factory->create_argument(check_expr(expr));
         call_expr->add_argument(arg);
       .)
     } .
 
 guard<Expr *&guard_expr>
-    (. Expr *expr; .)
+    (. Expr *expr = ERR_EXPR; .)
     =
     IF_KW
     expression<expr>
-    (. guard_expr = m_expr_factory->create_unary(CURR_LOC, m_type_factory->get_bool(), Expr_unary::OK_IF_GUARD, expr); .)
+    (. guard_expr = m_expr_factory->create_unary(CURR_LOC, m_type_factory->get_bool(), Expr_unary::OK_IF_GUARD, check_expr(expr)); .)
     | MAYBE expression<expr>
-    (. guard_expr = m_expr_factory->create_unary(CURR_LOC, m_type_factory->get_bool(), Expr_unary::OK_MAYBE_GUARD, expr); .) .
+    (. guard_expr = m_expr_factory->create_unary(CURR_LOC, m_type_factory->get_bool(), Expr_unary::OK_MAYBE_GUARD, check_expr(expr)); .) .
 
 debug_print<Debug_out_list &deb_outs> = DEBUG_PRINT '(' debug_variable_list<deb_outs> ')' .
 
@@ -395,16 +405,16 @@ debug_variable_list<Debug_out_list &deb_outs> =
 where<Argument_list &bindings> = WHERE binding_list<bindings> .
 
 binding_list<Argument_list &bindings> =
-    (. Expr *expr; .)
+    (. Expr *expr = ERR_EXPR; .)
     binding<expr>
     (.
-      Argument* arg = m_expr_factory->create_argument(expr);
+      Argument* arg = m_expr_factory->create_argument(check_expr(expr));
       bindings.push(arg);
     .)
     {
       binding<expr>
       (.
-        Argument* arg = m_expr_factory->create_argument(expr);
+        Argument* arg = m_expr_factory->create_argument(check_expr(expr));
         bindings.push(arg);
       .)
     } .
@@ -415,12 +425,12 @@ binding<Expr *&expr> =
     (.
       Expr *ref = m_expr_factory->create_reference(CURR_LOC,
          m_type_factory->create_type_variable(), sym);
-      Expr *expr_right;
+      Expr *expr_right = ERR_EXPR;
       Location loc = CURR_LOC;
     .)
     '=' expression<expr_right>
     (.
-      expr = m_expr_factory->create_binary(loc, m_type_factory->create_type_variable(), Expr_binary::OK_ASSIGN, ref, expr_right);
+      expr = m_expr_factory->create_binary(loc, m_type_factory->create_type_variable(), Expr_binary::OK_ASSIGN, ref, check_expr(expr_right));
     .) .
 
 reference_or_call<Expr *&expr> =
@@ -441,27 +451,29 @@ reference_or_call<Expr *&expr> =
     ] .
 
 arglist<Expr_call *call_expr> =
-    (. Expr *expr1; .)
+    (. Expr *expr1 = ERR_EXPR; .)
     expression<expr1>
     (.
-      Argument* arg = m_expr_factory->create_argument(expr1);
+      Argument* arg = m_expr_factory->create_argument(check_expr(expr1));
       call_expr->add_argument(arg);
     .)
     {
-      (. Expr *exprn; .)
+      (. Expr *exprn = ERR_EXPR; .)
       ',' expression<exprn>
       (.
-        Argument* argn = m_expr_factory->create_argument(exprn);
+        Argument* argn = m_expr_factory->create_argument(check_expr(exprn));
         call_expr->add_argument(argn);
       .)
     } .
 
-primary_expr<Expr *&expr> =
+primary_expr<Expr *&expr>
+    (. expr = ERR_EXPR; .)
+    =
     (
       literal<expr>
       | reference_or_call<expr>
       | '(' expression<expr> ')'
-        (. expr->mark_parenthesis(); .)
+        (. expr = check_expr(expr); expr->mark_parenthesis(); .)
       | OPTION '('
         (.
            Location loc = CURR_LOC;
@@ -481,14 +493,14 @@ primary_expr<Expr *&expr> =
           .)
         ]
         (.
-          expr = m_expr_factory->create_unary(CURR_LOC, m_type_factory->get_bool(), Expr_unary::OK_OPTION, expr);
+          expr = m_expr_factory->create_unary(CURR_LOC, m_type_factory->get_bool(), Expr_unary::OK_OPTION, check_expr(expr));
         .)
         ')'
     )
     [
       (.
         Expr_attribute::Expr_attribute_vector attrs;
-        Expr *the_expr = expr;
+        Expr *the_expr = check_expr(expr);
         mi::mdl::string node_name(m_alloc);
       .)
       ATTR_BEGIN attribute_expr<attrs, node_name> ATTR_END
@@ -499,19 +511,20 @@ primary_expr<Expr *&expr> =
 
 postfix_expr<Expr *&expr> =
     primary_expr<expr>
+    (. expr = check_expr(expr); .)
     {
       postfix<expr>
     } .
 
 postfix<Expr *&expr>
     (.
-       Expr *expr_in = expr;
+       Expr *expr_in = check_expr(expr);
        Location loc = CURR_LOC;
     .)
     =
     '[' expression<expr> ']'
     (.
-      expr = m_expr_factory->create_binary(loc, m_type_factory->create_type_variable(), Expr_binary::OK_ARRAY_SUBSCRIPT, expr_in, expr);
+      expr = m_expr_factory->create_binary(loc, m_type_factory->create_type_variable(), Expr_binary::OK_ARRAY_SUBSCRIPT, expr_in, check_expr(expr));
     .)
     | '.'
     (. Symbol *sym = nullptr; .)
@@ -537,16 +550,17 @@ postfix<Expr *&expr>
 
 unary_expr<Expr *&expr>
     (.
-      Expr *expr_sub;
+      expr = ERR_EXPR;
+      Expr *expr_sub = ERR_EXPR;
     .)
     =
       INC_OP unary_expr<expr_sub>
     (.
-      expr = m_expr_factory->create_unary(CURR_LOC, m_type_factory->create_type_variable(), Expr_unary::OK_PRE_INCREMENT, expr_sub);
+      expr = m_expr_factory->create_unary(CURR_LOC, m_type_factory->create_type_variable(), Expr_unary::OK_PRE_INCREMENT, check_expr(expr_sub));
     .)
     | DEC_OP unary_expr<expr_sub>
     (.
-      expr = m_expr_factory->create_unary(CURR_LOC, m_type_factory->create_type_variable(), Expr_unary::OK_PRE_INCREMENT, expr_sub);
+      expr = m_expr_factory->create_unary(CURR_LOC, m_type_factory->create_type_variable(), Expr_unary::OK_PRE_DECREMENT, check_expr(expr_sub));
     .)
     |
       (.
@@ -554,7 +568,7 @@ unary_expr<Expr *&expr>
       .)
       unary_operator<op> unary_expr<expr_sub>
       (.
-        expr = m_expr_factory->create_unary(CURR_LOC, m_type_factory->create_type_variable(), op, expr_sub);
+        expr = m_expr_factory->create_unary(CURR_LOC, m_type_factory->create_type_variable(), op, check_expr(expr_sub));
       .)
     | postfix_expr<expr> .
 
@@ -564,18 +578,21 @@ unary_operator<Expr_unary::Operator &op> =
     | '~' (. op = Expr_unary::OK_BITWISE_COMPLEMENT; .)
     | '!' (. op = Expr_unary::OK_LOGICAL_NOT; .) .
 
-multiplicative_expr<Expr *&expr> =
+multiplicative_expr<Expr *&expr>
+    (. expr = ERR_EXPR; .)
+    =
     unary_expr<expr>
+    (. expr = check_expr(expr); .)
     {
       (.
         Expr *expr_left = expr;
-        Expr *expr_right;
+        Expr *expr_right = ERR_EXPR;
         Expr_binary::Operator op = Expr_binary::OK_PLUS;
         Location loc = CURR_LOC;
       .)
       multiplicative_operator<op> unary_expr<expr_right>
       (.
-        expr = m_expr_factory->create_binary(loc, m_type_factory->create_type_variable(), op, expr_left, expr_right);
+        expr = m_expr_factory->create_binary(loc, m_type_factory->create_type_variable(), op, expr_left, check_expr(expr_right));
       .)
     } .
 
@@ -584,18 +601,21 @@ multiplicative_operator<Expr_binary::Operator &op> =
     | '/' (. op = Expr_binary::OK_DIVIDE; .)
     | '%' (. op = Expr_binary::OK_MODULO; .) .
 
-additive_expr<Expr *&expr> =
+additive_expr<Expr *&expr>
+    (. expr = ERR_EXPR; .)
+    =
     multiplicative_expr<expr>
+    (. expr = check_expr(expr); .)
     {
       (.
         Expr *expr_left = expr;
-        Expr *expr_right;
+        Expr *expr_right = ERR_EXPR;
         Expr_binary::Operator op = Expr_binary::OK_PLUS;
         Location loc = CURR_LOC;
       .)
       additive_operator<op> multiplicative_expr<expr_right>
       (.
-        expr = m_expr_factory->create_binary(loc, m_type_factory->create_type_variable(), op, expr_left, expr_right);
+        expr = m_expr_factory->create_binary(loc, m_type_factory->create_type_variable(), op, expr_left, check_expr(expr_right));
       .)
     } .
 
@@ -603,18 +623,21 @@ additive_operator<Expr_binary::Operator &op> =
       '+' (. op = Expr_binary::OK_PLUS; .)
     | '-' (. op = Expr_binary::OK_MINUS; .) .
 
-shift_expr<Expr *&expr> =
+shift_expr<Expr *&expr>
+    (. expr = ERR_EXPR; .)
+    =
     additive_expr<expr>
+    (. expr = check_expr(expr); .)
     {
       (.
         Expr *expr_left = expr;
-        Expr *expr_right;
+        Expr *expr_right = ERR_EXPR;
         Expr_binary::Operator op = Expr_binary::OK_PLUS;
         Location loc = CURR_LOC;
       .)
       shift_operator<op> additive_expr<expr_right>
       (.
-        expr = m_expr_factory->create_binary(loc, m_type_factory->create_type_variable(), op, expr_left, expr_right);
+        expr = m_expr_factory->create_binary(loc, m_type_factory->create_type_variable(), op, expr_left, check_expr(expr_right));
       .)
     } .
 
@@ -623,18 +646,21 @@ shift_operator<Expr_binary::Operator &op> =
     | ">>" (. op = Expr_binary::OK_SHIFT_RIGHT; .)
     | ">>>" (. op = Expr_binary::OK_SHIFT_RIGHT_ARITH; .) .
 
-relational_expr<Expr *&expr> =
+relational_expr<Expr *&expr>
+    (. expr = ERR_EXPR; .)
+    =
     shift_expr<expr>
+    (. expr = check_expr(expr); .)
     {
       (.
         Expr *expr_left = expr;
-        Expr *expr_right;
+        Expr *expr_right = ERR_EXPR;
         Expr_binary::Operator op = Expr_binary::OK_PLUS;
         Location loc = CURR_LOC;
       .)
       relational_operator<op> shift_expr<expr_right>
       (.
-        expr = m_expr_factory->create_binary(loc, m_type_factory->create_type_variable(), op, expr_left, expr_right);
+        expr = m_expr_factory->create_binary(loc, m_type_factory->create_type_variable(), op, expr_left, check_expr(expr_right));
       .)
     } .
 
@@ -644,18 +670,21 @@ relational_operator<Expr_binary::Operator &op> =
     | '<' (. op = Expr_binary::OK_LESS; .)
     | '>' (. op = Expr_binary::OK_GREATER; .) .
 
-equality_expr<Expr *&expr> =
+equality_expr<Expr *&expr>
+    (. expr = ERR_EXPR; .)
+    =
     relational_expr<expr>
+    (. expr = check_expr(expr); .)
     {
       (.
         Expr *expr_left = expr;
-        Expr *expr_right;
+        Expr *expr_right = ERR_EXPR;
         Expr_binary::Operator op = Expr_binary::OK_PLUS;
         Location loc = CURR_LOC;
       .)
       equality_operator<op> relational_expr<expr_right>
       (.
-        expr = m_expr_factory->create_binary(loc, m_type_factory->create_type_variable(), op, expr_left, expr_right);
+        expr = m_expr_factory->create_binary(loc, m_type_factory->create_type_variable(), op, expr_left, check_expr(expr_right));
       .)
     } .
 
@@ -663,91 +692,111 @@ equality_operator<Expr_binary::Operator &op> =
       "==" (. op = Expr_binary::OK_EQUAL; .)
     | "!=" (. op = Expr_binary::OK_NOT_EQUAL; .) .
 
-and_expr<Expr *&expr> =
+and_expr<Expr *&expr>
+    (. expr = ERR_EXPR; .)
+    =
     equality_expr<expr>
+    (. expr = check_expr(expr); .)
     {
       (.
         Expr *expr_left = expr;
-        Expr *expr_right;
+        Expr *expr_right = ERR_EXPR;
         Location loc = CURR_LOC;
       .)
       '&' equality_expr<expr_right>
       (.
-        expr = m_expr_factory->create_binary(loc, m_type_factory->create_type_variable(), Expr_binary::OK_BITWISE_AND, expr_left, expr_right);
+        expr = m_expr_factory->create_binary(loc, m_type_factory->create_type_variable(), Expr_binary::OK_BITWISE_AND, expr_left, check_expr(expr_right));
       .)
     } .
 
-exclusive_or_expr<Expr *&expr> =
+exclusive_or_expr<Expr *&expr>
+    (. expr = ERR_EXPR; .)
+    =
     and_expr<expr>
+    (. expr = check_expr(expr); .)
     {
       (.
         Expr *expr_left = expr;
-        Expr *expr_right;
+        Expr *expr_right = ERR_EXPR;
         Location loc = CURR_LOC;
       .)
       '^' and_expr<expr_right>
       (.
-        expr = m_expr_factory->create_binary(loc, m_type_factory->create_type_variable(), Expr_binary::OK_BITWISE_AND, expr_left, expr_right);
+        expr = m_expr_factory->create_binary(loc, m_type_factory->create_type_variable(), Expr_binary::OK_BITWISE_XOR, expr_left, check_expr(expr_right));
       .)
     } .
 
-inclusive_or_expr<Expr *&expr> =
+inclusive_or_expr<Expr *&expr>
+    (. expr = ERR_EXPR; .)
+    =
     exclusive_or_expr<expr>
+    (. expr = check_expr(expr); .)
     {
       (.
         Expr *expr_left = expr;
-        Expr *expr_right;
+        Expr *expr_right = ERR_EXPR;
         Location loc = CURR_LOC;
       .)
       '|' exclusive_or_expr<expr_right>
       (.
-        expr = m_expr_factory->create_binary(loc, m_type_factory->create_type_variable(), Expr_binary::OK_BITWISE_XOR, expr_left, expr_right);
+        expr = m_expr_factory->create_binary(loc, m_type_factory->create_type_variable(), Expr_binary::OK_BITWISE_OR, expr_left, check_expr(expr_right));
       .)
     } .
 
-logical_and_expr<Expr *&expr> =
+logical_and_expr<Expr *&expr>
+    (. expr = ERR_EXPR; .)
+    =
     inclusive_or_expr<expr>
+    (. expr = check_expr(expr); .)
     {
       (.
         Expr *expr_left = expr;
-        Expr *expr_right;
+        Expr *expr_right = ERR_EXPR;
         Location loc = CURR_LOC;
       .)
       "&&" inclusive_or_expr<expr_right>
       (.
-        expr = m_expr_factory->create_binary(loc, m_type_factory->create_type_variable(), Expr_binary::OK_LOGICAL_AND, expr_left, expr_right);
+        expr = m_expr_factory->create_binary(loc, m_type_factory->create_type_variable(), Expr_binary::OK_LOGICAL_AND, expr_left, check_expr(expr_right));
       .)
     } .
 
-logical_or_expr<Expr *&expr> =
+logical_or_expr<Expr *&expr>
+    (. expr = ERR_EXPR; .)
+    =
     logical_and_expr<expr>
+    (. expr = check_expr(expr); .)
     {
       (.
         Expr *expr_left = expr;
-        Expr *expr_right;
+        Expr *expr_right = ERR_EXPR;
         Location loc = CURR_LOC;
       .)
       "||" logical_and_expr<expr_right>
       (.
-        expr = m_expr_factory->create_binary(loc, m_type_factory->create_type_variable(), Expr_binary::OK_LOGICAL_OR, expr_left, expr_right);
+        expr = m_expr_factory->create_binary(loc, m_type_factory->create_type_variable(), Expr_binary::OK_LOGICAL_OR, expr_left, check_expr(expr_right));
       .)
     } .
 
-expression<Expr *&expr> =
+expression<Expr *&expr>
+    (. expr = ERR_EXPR; .)
+    =
     logical_or_expr<expr>
+    (. expr = check_expr(expr); .)
     [
       (.
         Expr *expr_cond = expr;
-        Expr *expr_then;
-        Expr *expr_else;
+        Expr *expr_then = ERR_EXPR;
+        Expr *expr_else = ERR_EXPR;
       .)
       '?' expression<expr_then> ':' expression<expr_else>
       (.
-         expr = m_expr_factory->create_conditional(expr_cond, expr_then, expr_else);
+         expr = m_expr_factory->create_conditional(expr_cond, check_expr(expr_then), check_expr(expr_else));
       .)
     ] .
 
-postcond_primary_expr<Expr *&expr> =
+postcond_primary_expr<Expr *&expr>
+    (. expr = ERR_EXPR; .)
+    =
       NONODE
       '('
       (. Symbol *sym = nullptr; .)
@@ -760,36 +809,42 @@ postcond_primary_expr<Expr *&expr> =
       ')'
     | MATCH '(' node<expr> ')'
       (.
-        expr = m_expr_factory->create_unary(CURR_LOC, m_type_factory->create_type_variable(), Expr_unary::OK_MATCH, expr);
+        expr = m_expr_factory->create_unary(CURR_LOC, m_type_factory->create_type_variable(), Expr_unary::OK_MATCH, check_expr(expr));
       .)
     | '(' postcond_or_expr<expr> ')'
-      (. expr->mark_parenthesis(); .) .
+      (. expr = check_expr(expr); expr->mark_parenthesis(); .) .
 
-postcond_and_expr<Expr *&expr> =
+postcond_and_expr<Expr *&expr>
+    (. expr = ERR_EXPR; .)
+    =
     postcond_primary_expr<expr>
+    (. expr = check_expr(expr); .)
     {
       (.
         Expr *expr_left = expr;
-        Expr *expr_right;
+        Expr *expr_right = ERR_EXPR;
         Location loc = CURR_LOC;
       .)
       "&&" postcond_primary_expr<expr_right>
       (.
-        expr = m_expr_factory->create_binary(loc, m_type_factory->create_type_variable(), Expr_binary::OK_LOGICAL_AND, expr_left, expr_right);
+        expr = m_expr_factory->create_binary(loc, m_type_factory->create_type_variable(), Expr_binary::OK_LOGICAL_AND, expr_left, check_expr(expr_right));
       .)
     } .
 
-postcond_or_expr<Expr *&expr> =
+postcond_or_expr<Expr *&expr>
+    (. expr = ERR_EXPR; .)
+    =
     postcond_and_expr<expr>
+    (. expr = check_expr(expr); .)
     {
       (.
         Expr *expr_left = expr;
-        Expr *expr_right;
+        Expr *expr_right = ERR_EXPR;
         Location loc = CURR_LOC;
       .)
       "||" postcond_and_expr<expr_right>
       (.
-        expr = m_expr_factory->create_binary(loc, m_type_factory->create_type_variable(), Expr_binary::OK_LOGICAL_OR, expr_left, expr_right);
+        expr = m_expr_factory->create_binary(loc, m_type_factory->create_type_variable(), Expr_binary::OK_LOGICAL_OR, expr_left, check_expr(expr_right));
       .)
     } .
 

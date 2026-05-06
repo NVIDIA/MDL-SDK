@@ -46,6 +46,10 @@
     using namespace mi::mdl;
 #endif
 
+// Spectral rendering enabled or disabled
+#define TCCM_RGB 0               // No spectral sampling, use RGB
+#define TCCM_SPECTRAL_SAMPLING 1 // Spectral sampling, use spectral samples 
+
 // for LPE support there different options for the renderer, for CUDA a renderer provided buffer
 // can be used to retrieve the contributions of the individual handles (named lobes)
 // Note, a real renderer would go for one specific option only
@@ -1141,10 +1145,10 @@ __device__ inline bool trace_scene(
         // reuse memory for function data
         union
         {
-            Bsdf_sample_data                                            sample_data;
-            Bsdf_evaluate_data<(Df_handle_slot_mode)DF_HANDLE_SLOTS>    eval_data;
-            Bsdf_pdf_data                                               pdf_data;
-            Bsdf_auxiliary_data<(Df_handle_slot_mode)DF_HANDLE_SLOTS>   aux_data;
+            Bsdf_sample_data<> sample_data;
+            Bsdf_evaluate_data<(Df_handle_slot_mode)DF_HANDLE_SLOTS> eval_data;
+            Bsdf_pdf_data<> pdf_data;
+            Bsdf_auxiliary_data<(Df_handle_slot_mode)DF_HANDLE_SLOTS> aux_data;
         };
 
         // initialize shared fields

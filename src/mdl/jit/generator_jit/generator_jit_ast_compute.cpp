@@ -2343,14 +2343,51 @@ bool UnswitchPass::runOnFunction(Function &function)
             BasicBlock *cur_bb = &*it;
             BasicBlock *orig_bb = cur_bb;
             Value *switch_cond = switch_inst->getCondition();
-            for (auto cur_case : switch_inst->cases()) {
-                BasicBlock *next_bb = BasicBlock::Create(llvm_context, "unswitch_case", &function);
+
+            // Collect all case blocks together with the list of case values that jump to them.
+            // Use a vector to deterministically iterate over the case blocks (in insertion order).
+            std::map<BasicBlock *, std::vector<ConstantInt *>> case_block_map;
+            SmallVector<BasicBlock *> case_blocks;
+
+            for (auto switch_case : switch_inst->cases()) {
+                BasicBlock *succ = switch_case.getCaseSuccessor();
+                // skip cases jumping to the default case
+                if (succ == switch_inst->getDefaultDest()) {
+                    continue;
+                }
+
+                auto [map_it, inserted] = case_block_map.try_emplace(succ);
+                if (inserted) {
+                    case_blocks.push_back(succ);
+                }
+                map_it->second.push_back(switch_case.getCaseValue());
+            }
+
+            // create one unswitch block for each case block
+            for (BasicBlock *case_successor : case_blocks) {
+                std::vector<ConstantInt *> &case_values = case_block_map[case_successor];
+
+                char case_name[32];
+                snprintf(case_name, sizeof(case_name), "unswitch_case_%u_",
+                    unsigned(case_values[0]->getZExtValue()));
+
+                BasicBlock *next_bb = BasicBlock::Create(llvm_context, case_name, &function);
+
+                // create condition merging all cases with the same destination
                 Value *case_cond = CmpInst::Create(Instruction::ICmp, ICmpInst::ICMP_EQ,
-                    switch_cond, cur_case.getCaseValue(), "", cur_bb);
-                BranchInst::Create(cur_case.getCaseSuccessor(), next_bb, case_cond, cur_bb);
+                    switch_cond, case_values[0], "", cur_bb);
+                for (size_t i = 1, n = case_values.size(); i < n; ++i) {
+                    Value *next_case_cond = CmpInst::Create(Instruction::ICmp, ICmpInst::ICMP_EQ,
+                        switch_cond, case_values[i], "", cur_bb);
+                    case_cond = BinaryOperator::Create(
+                        Instruction::Or, case_cond, next_case_cond, "", cur_bb);
+                }
+
+                BranchInst::Create(case_successor, next_bb, case_cond, cur_bb);
+
                 // did predecessor for the case successor change? -> fix PHIs
                 if (cur_bb != orig_bb) {
-                    fixPhis(cur_case.getCaseSuccessor(), orig_bb, cur_bb);
+                    fixPhis(case_successor, orig_bb, cur_bb);
                 }
                 cur_bb = next_bb;
             }

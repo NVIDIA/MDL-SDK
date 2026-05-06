@@ -55,6 +55,12 @@ extern const float SPECTRAL_XYZ1964_Z[];
 extern const float D60[];
 extern const float D65[];
 
+// luminance of standard illuminant tables
+// (assuming radiometric spectral radiance values in Watt / sr / m^2 / nm)
+constexpr float D60_LUMINANCE = 7.298330e+04f;
+constexpr float D65_LUMINANCE = 7.194593e+06f;
+constexpr float E_LUMINANCE = 7.298330e+04f; // for table with 1 everywhere
+
 // tables for Smits-styple sRGB to spectrum conversion
 extern const float srgb_relative_s001[];
 extern const float srgb_relative_s010[];

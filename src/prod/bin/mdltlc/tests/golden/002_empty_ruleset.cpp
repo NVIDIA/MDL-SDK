@@ -67,7 +67,12 @@ DAG_node const* Empty_ruleset::matcher(
     const mi::mdl::Distiller_options *options,
     Rule_result_code &result_code) const
 {
-    auto match_rule0 = [&] (DAG_node const *node, IDistiller_plugin_api::Match_properties &node_props) -> const DAG_node * { return node; };
+    auto match_rule0 = [&] (DAG_node const *node, IDistiller_plugin_api::Match_properties &node_props) -> const DAG_node * {
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, -1 ,{ mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::No_match, ""});
+        }
+        return node;
+        };
 
     IDistiller_plugin_api::Match_properties node_props;
     e.get_match_properties(node, node_props);
@@ -113,6 +118,16 @@ void Empty_ruleset::fire_debug_print(
     Rule_info const &ri = g_rule_info[idx];
     event_handler.debug_print(plugin_api, "Empty_ruleset", ri.ruid, ri.rname, ri.fname,
         ri.fline, var_name, value);
+}
+
+void Empty_ruleset::fire_detailed_trace_event(
+    mi::mdl::IRule_matcher_event &event_handler,
+    std::size_t id,
+    mi::mdl::IRule_matcher_event::Detailed_trace_event trace_event)
+{
+    Rule_info const &ri = g_rule_info[id];
+    event_handler.detailed_trace_event("Empty_ruleset", ri.ruid, ri.rname, ri.fname,
+        ri.fline, trace_event);
 }
 
 

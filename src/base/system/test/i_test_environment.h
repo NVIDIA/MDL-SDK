@@ -54,7 +54,7 @@ inline char const * get_env_variable(char const * name)
 inline std::string get_env_path(char const * varname, std::string const & path)
 {
     std::string full_path( get_env_variable(varname) );
-    full_path.append("/").append(path);
+    full_path.append(1,'/').append(path);
     std::replace( full_path.begin(), full_path.end()
 #ifdef WIN_NT
                   , '/', '\\'

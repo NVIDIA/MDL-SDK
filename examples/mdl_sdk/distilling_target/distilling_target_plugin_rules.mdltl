@@ -37,20 +37,20 @@ rules Make_simple_rules topdown { // bottomup would work too
 
     // Alternative BSDFs for glossy interactions are replaced by a
     // simple glossy BSDF.
-    microfacet_beckmann_smith_bsdf(ru,rv,tint,_,t,mode) -->
-        simple_glossy_bsdf( ru,rv,tint,color(0.0),t,mode) repeat_rules;
-    microfacet_beckmann_vcavities_bsdf(ru,rv,tint,_,t,mode) -->
-        simple_glossy_bsdf( ru,rv,tint,color(0.0),t,mode) repeat_rules;
-    microfacet_ggx_smith_bsdf(ru,rv,tint,_,t,mode) -->
-        simple_glossy_bsdf( ru,rv,tint,color(0.0),t,mode) repeat_rules;
-    microfacet_ggx_vcavities_bsdf(ru,rv,tint,_,t,mode) -->
-        simple_glossy_bsdf( ru,rv,tint,color(0.0),t,mode) repeat_rules;
+    microfacet_beckmann_smith_bsdf(ru,rv,tint,_,t,mode,bs,handle) -->
+        simple_glossy_bsdf( ru,rv,tint,color(0.0),t,mode,bs,handle) repeat_rules;
+    microfacet_beckmann_vcavities_bsdf(ru,rv,tint,_,t,mode,bs,handle) -->
+        simple_glossy_bsdf( ru,rv,tint,color(0.0),t,mode,bs,handle) repeat_rules;
+    microfacet_ggx_smith_bsdf(ru,rv,tint,_,t,mode,bs,handle) -->
+        simple_glossy_bsdf( ru,rv,tint,color(0.0),t,mode,bs,handle) repeat_rules;
+    microfacet_ggx_vcavities_bsdf(ru,rv,tint,_,t,mode,bs,handle) -->
+        simple_glossy_bsdf( ru,rv,tint,color(0.0),t,mode,bs,handle) repeat_rules;
     ward_geisler_moroder_bsdf(ru,rv,tint,_,t) -->
         simple_glossy_bsdf( ru,rv,tint,color(0.0),t) repeat_rules;
     backscattering_glossy_reflection_bsdf(ru,rv,tint,_,t,handle) -->
-        simple_glossy_bsdf(ru,rv,tint,color(0.0),t,scatter_reflect,handle);
+        simple_glossy_bsdf(ru,rv,tint,color(0.0),t,scatter_reflect,backscatter_none,handle);
     sheen_bsdf(r,tint,tintt,_,handle) -->
-        simple_glossy_bsdf(r,r,tint,tintt,state::texture_tangent_u(0),scatter_reflect,handle);
+        simple_glossy_bsdf(r,r,tint,tintt,state::texture_tangent_u(0),scatter_reflect,backscatter_none,handle);
 
     // Measured BSDF nodes are replaced by an invalid bsdf()
     measured_bsdf(_) --> bsdf();

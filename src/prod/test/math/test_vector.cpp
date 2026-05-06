@@ -686,9 +686,6 @@ void test_vector_function_overloads ()
     Vector<T,4> v36( -0.21f, -0.18f, -0.06f, 0.4f);
     MI_CHECK_CLOSE_VECTOR( v35, v36, eps);
 
-    Vector<T,4> v38( -0.21f, -0.15f, 0.1f, 0.6f);
-    MI_CHECK_CLOSE_VECTOR( v35, v36, eps);
-
     check_function<T> (log, "log", v1, Vector<T,4> ( -2.302585093, -1.609437912, -1.203972804, -.9162907319));
     check_function<T> (log2, "log2", v1, Vector<T,4> ( -3.321928095, -2.321928095, -1.736965594, -1.321928095));
     check_function<T> (log10, "log10", v1, Vector<T,4> ( -1.000000000, -.6989700043, -.5228787453, -.3979400087));

@@ -38,6 +38,11 @@ static void ansi_make_tempname(char *buf, size_t len, const char *name, zip_uint
 
 /* clang-format off */
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wincompatible-function-pointer-types"
+#endif
+
 zip_win32_file_operations_t ops_ansi = {
     ansi_allocate_tempname,
     CreateFileA,
@@ -49,6 +54,10 @@ zip_win32_file_operations_t ops_ansi = {
     SetFileAttributesA,
     strdup
 };
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
 /* clang-format on */
 

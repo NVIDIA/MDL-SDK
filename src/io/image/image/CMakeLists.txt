@@ -41,7 +41,6 @@ set(PROJECT_HEADERS
     "i_image_mipmap.h"
     "i_image_pixel_conversion.h"
     "i_image_utilities.h"
-    "i_image_utilities_attr.h"
     )
 
 set(PROJECT_SOURCES

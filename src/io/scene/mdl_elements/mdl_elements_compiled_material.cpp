@@ -271,13 +271,12 @@ DB::Tag Mdl_compiled_material::get_connected_function_db_name(
     DB::Tag call_tag = material_instance_tag;
     for( auto& path_token : path_tokens)
     {
-        SERIAL::Class_id class_id = transaction->get_class_id(call_tag);
-        if (class_id != MDL::ID_MDL_FUNCTION_CALL) {
+        DB::Access<Mdl_function_call> fc(call_tag, transaction);
+        if (!fc) {
             ASSERT(M_SCENE, false);
             return {};
         }
 
-        DB::Access<Mdl_function_call> fc(call_tag, transaction);
         DB::Tag next_tag = get_next_call(fc.get_ptr(), path_token);
         if (!next_tag)
             break;
@@ -353,7 +352,7 @@ mi::base::Uuid Mdl_compiled_material::get_hash() const
 
 mi::base::Uuid Mdl_compiled_material::get_slot_hash( mi::neuraylib::Material_slot slot) const
 {
-    mi::mdl::IMaterial_instance::Slot core_slot = ext_slot_to_core_lost( slot);
+    mi::mdl::IMaterial_instance::Slot core_slot = ext_slot_to_core_slot( slot);
     const mi::mdl::DAG_hash* hash = m_core_material_instance->get_slot_hash( core_slot);
     return convert_hash( *hash);
 }

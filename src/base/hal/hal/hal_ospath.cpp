@@ -37,7 +37,6 @@
 #include <base/util/string_utils/i_string_utils.h>
 
 #include <algorithm>
-#include <sstream>
 #include <vector>
 
 #ifndef WIN_NT
@@ -179,7 +178,7 @@ std::string Ospath::normpath(
             size_t ind = out_path.rfind(last_dir.back());
             if (ind == std::string::npos)
                 return orig_in_path;
-            out_path = out_path.substr(0, ind);
+            out_path.erase(ind);
             last_dir.pop_back();
         }
         ++it;

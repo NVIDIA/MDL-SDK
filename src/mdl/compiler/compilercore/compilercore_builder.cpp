@@ -34,9 +34,6 @@
 
 #include "compilercore_symbols.h"
 #include "compilercore_def_table.h"
-#include "compilercore_allocator.h"
-#include "compilercore_factories.h"
-#include "compilercore_mdl.h"
 #include "compilercore_type_cache.h"
 #include "compilercore_builder.h"
 #include "compilercore_tools.h"

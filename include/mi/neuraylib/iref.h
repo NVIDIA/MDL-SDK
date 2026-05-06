@@ -86,7 +86,7 @@ public:
     ///
     /// This templated member function is a wrapper of the non-template variant for the user's
     /// convenience. It eliminates the need to call
-    /// #mi::base::IInterface::get_interface(const Uuid&)
+    /// #mi::base::IInterface::get_interface(const mi::base::Uuid&)
     /// on the returned pointer, since the return type already is a pointer to the type \p T
     /// specified as template parameter.
     ///
@@ -109,7 +109,7 @@ public:
     ///
     /// This templated member function is a wrapper of the non-template variant for the user's
     /// convenience. It eliminates the need to call
-    /// #mi::base::IInterface::get_interface(const Uuid&)
+    /// #mi::base::IInterface::get_interface(const mi::base::Uuid&)
     /// on the returned pointer, since the return type already is a pointer to the type \p T
     /// specified as template parameter.
     ///

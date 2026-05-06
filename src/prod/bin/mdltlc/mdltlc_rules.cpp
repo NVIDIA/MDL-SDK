@@ -358,6 +358,10 @@ Postcond &Ruleset::get_postcond() {
   return m_postcond;
 }
 
+Postcond const &Ruleset::get_postcond() const {
+  return m_postcond;
+}
+
 void Ruleset::set_postcond_expr(Expr *expr)
 {
   m_postcond.set_expr(expr);
@@ -469,4 +473,3 @@ Ruleset *Rule_factory::create_ruleset(Location const &location,
 {
     return m_builder.create<Ruleset>(location, symbol, strategy);
 }
-

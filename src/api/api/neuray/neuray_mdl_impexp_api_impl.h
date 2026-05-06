@@ -105,12 +105,6 @@ public:
         const mi::neuraylib::ICanvas* canvas,
         const mi::IMap* export_options) const final;
 
-    mi::Sint32 deprecated_export_canvas(
-        const char* filename,
-        const mi::neuraylib::ICanvas* canvas,
-        mi::Uint32 quality,
-        bool force_default_gamma) const final;
-
     mi::Sint32 export_lightprofile(
         const char* filename,
         const mi::neuraylib::ILightprofile* lightprofile) const final;

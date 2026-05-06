@@ -71,7 +71,7 @@ automatically.  As a consequence, their inclusion is order independent.
 <table border="2" cellpadding="3" cellspacing="3">
   <tr valign="bottom">
     <th>Math Include Files Grouped by Component</th>
-    <th>Description</th></tr>
+    <th>Description</th>
     <th>Documentation</th>
   </tr>
   <tr valign="top">

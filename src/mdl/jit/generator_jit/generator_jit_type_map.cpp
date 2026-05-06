@@ -105,6 +105,7 @@ Type_mapper::Type_mapper(
 , m_type_double4(llvm::FixedVectorType::get(m_type_double, 4))
 
 , m_type_color(NULL)
+, m_type_spectral_sample(NULL)
 
 // int/float arrays needed in glue code / state interface
 , m_type_arr_int_2(llvm::ArrayType::get(m_type_int, 2))
@@ -277,6 +278,18 @@ Type_mapper::Type_mapper(
 
     // for now, a color is a RGB float
     m_type_color = m_type_float3;
+
+    if (m_tm_mode & TM_SPECTRAL_ENABLED) {
+        llvm::Type *spectral_sample_member_types[1] = {
+            llvm::ArrayType::get(m_type_float, MDL_DF_SPECTRAL_SAMPLES)
+        };
+        m_type_spectral_sample = llvm::StructType::create(
+            context, spectral_sample_member_types, "struct.Spectral_sample_struct");
+    } else {
+        llvm::Type *float3_member_types[3] = { m_type_float, m_type_float, m_type_float };
+        m_type_spectral_sample = llvm::StructType::create(
+            context, float3_member_types, "struct.float3");
+    }
 
     if (use_derivatives()) {
         m_type_deriv_float = lookup_deriv_type(m_type_float);
@@ -465,6 +478,11 @@ llvm::Type *Type_mapper::lookup_type(
         }
     case mdl::IType::TK_COLOR:
         return m_type_color;
+    case IType::TK_SPECTRAL_SAMPLE:
+        return m_type_spectral_sample;
+    case IType::TK_SPECTRUM:
+        MDL_ASSERT(!"NYI");
+        return NULL;
     case mdl::IType::TK_FUNCTION:
         // should never be needed
         MDL_ASSERT(!"requested function type");
@@ -709,6 +727,7 @@ bool Type_mapper::need_reference_return(mi::mdl::IType const *type, int arr_size
         return false;
     case mi::mdl::IType::TK_VECTOR:
     case mi::mdl::IType::TK_COLOR:
+    case mi::mdl::IType::TK_SPECTRAL_SAMPLE:
         if ((m_tm_mode & TM_VECTOR_MASK) == TM_ALL_SCALAR) {
             // returned as an array, needs reference
             return true;
@@ -727,6 +746,20 @@ bool Type_mapper::need_reference_return(mi::mdl::IType const *type, int arr_size
 
         // uninstantiated deferred size arrays use an array_desc<T> struct
         // only return by reference if supported
+        return (m_tm_mode & TM_NO_REFERENCE) == 0;
+    }
+    case mi::mdl::IType::TK_SPECTRUM:
+    {
+        mdl::IType_spectrum const *s_type = cast<mdl::IType_spectrum>(type);
+        if (s_type->get_compound_size() <= 4) {
+            if ((m_tm_mode & TM_VECTOR_MASK) == TM_ALL_SCALAR) {
+                // returned as an array, needs reference
+                return true;
+            }
+            // else returned as a LLVM vector type
+            return false;
+        }
+        // try by reference to save memory and CPU cycles
         return (m_tm_mode & TM_NO_REFERENCE) == 0;
     }
     case mi::mdl::IType::TK_FUNCTION:
@@ -780,6 +813,7 @@ bool Type_mapper::is_passed_by_reference(mi::mdl::IType const *type, int arr_siz
         return false;
     case mi::mdl::IType::TK_VECTOR:
     case mi::mdl::IType::TK_COLOR:
+    case mi::mdl::IType::TK_SPECTRAL_SAMPLE:
         if ((m_tm_mode & TM_VECTOR_MASK) == TM_ALL_SCALAR) {
             // returned as an LLVM array, needs reference
             return true;
@@ -798,6 +832,21 @@ bool Type_mapper::is_passed_by_reference(mi::mdl::IType const *type, int arr_siz
 
             // uninstantiated deferred size arrays use an array_desc<T> struct
             // only return by reference if supported
+            return (m_tm_mode & TM_NO_REFERENCE) == 0;
+        }
+    case mi::mdl::IType::TK_SPECTRUM:
+        {
+            mdl::IType_spectrum const *s_type = cast<mdl::IType_spectrum>(type);
+            if (s_type->get_compound_size() <= 4) {
+                if ((m_tm_mode & TM_VECTOR_MASK) == TM_ALL_SCALAR) {
+                    // returned as an LLVM array, needs reference
+                    return true;
+                }
+                // else represented by LLVM vector types, pass by value
+                return false;
+            }
+
+            // try by reference to save memory and CPU cycles
             return (m_tm_mode & TM_NO_REFERENCE) == 0;
         }
     case mi::mdl::IType::TK_FUNCTION:
@@ -1080,18 +1129,21 @@ llvm::DIType *Type_mapper::get_debug_info_type(
         }
 
     case mi::mdl::IType::TK_COLOR:
+    case mi::mdl::IType::TK_SPECTRAL_SAMPLE:
+    case mi::mdl::IType::TK_SPECTRUM:
         {
-            // modell as <3 * float>
+            // model as <n * float>
+            size_t n = cast<mi::mdl::IType_compound>(type)->get_compound_size();
             llvm::DIType *eltType =
                 diBuilder->createBasicType(
                     "float",
                     /*SizeInBits=*/m_type_float->getPrimitiveSizeInBits(),
                     llvm::dwarf::DW_ATE_float);
 
-            llvm::Metadata    *sub      = diBuilder->getOrCreateSubrange(0, 3 - 1);
+            llvm::Metadata    *sub      = diBuilder->getOrCreateSubrange(0, n - 1);
             llvm::DINodeArray  subArray = diBuilder->getOrCreateArray(sub);
 
-            uint64_t sizeBits = eltType->getSizeInBits() * 3;
+            uint64_t sizeBits = eltType->getSizeInBits() * n;
             uint32_t align    = eltType->getAlignInBits();
 
             return diBuilder->createVectorType(sizeBits, align, eltType, subArray);
@@ -1783,6 +1835,7 @@ llvm::StructType *Type_mapper::construct_core_texture_handler_type(
     llvm::Type *float_type                 = get_float_type();
     llvm::Type *int_type                   = get_int_type();
     llvm::Type *string_type                = get_string_type();
+    llvm::Type *spectral_sample_ptr        = get_spectral_sample_ptr_type();
 
     llvm::FunctionType *tex_lookup_float4_2d_type   = NULL;
     llvm::FunctionType *tex_lookup_float3_2d_type   = NULL;
@@ -1830,6 +1883,12 @@ llvm::StructType *Type_mapper::construct_core_texture_handler_type(
     llvm::FunctionType *scene_data_lookup_deriv_color_type  = NULL;
 
     llvm::FunctionType *adapt_normal_type = NULL;
+
+    llvm::FunctionType *rgb_to_spectral_ior_type = NULL;
+    llvm::FunctionType *rgb_to_spectral_reflectance_type = NULL;
+    llvm::FunctionType *rgb_to_spectral_luminance_type = NULL;
+    llvm::FunctionType *rgb_to_spectral_volume_coefficient_type = NULL;
+    llvm::FunctionType *get_wavelengths_type = NULL;
 
     {
         // virtual void tex_lookup_<T>_2d(
@@ -2254,10 +2313,48 @@ llvm::StructType *Type_mapper::construct_core_texture_handler_type(
             arr_float_3_ptr_type,
             self_ptr_type,
             m_type_state_core_ptr,
-            arr_float_3_ptr_type,
+            arr_float_3_ptr_type
         };
 
         adapt_normal_type =
+            llvm::FunctionType::get(void_type, args, /*isVarArg=*/false);
+    }
+
+    {
+        // virtual void rgb_to_spectral_ior / reflectance / luminance / volume_coefficient(
+        //     tct_spectral_sample               *result,
+        //     Core_tex_handler const            *self_base,
+        //     Shading_state_material            *state,
+        //     float const                        rgb[3]);
+        llvm::Type* args[] = {
+            spectral_sample_ptr,
+            self_ptr_type,
+            m_type_state_core_ptr,
+            arr_float_3_ptr_type
+        };
+
+        rgb_to_spectral_ior_type =
+            llvm::FunctionType::get(void_type, args, /*isVarArg=*/false);
+        rgb_to_spectral_reflectance_type =
+            llvm::FunctionType::get(void_type, args, /*isVarArg=*/false);
+        rgb_to_spectral_luminance_type =
+            llvm::FunctionType::get(void_type, args, /*isVarArg=*/false);
+        rgb_to_spectral_volume_coefficient_type =
+            llvm::FunctionType::get(void_type, args, /*isVarArg=*/false);
+    }
+
+    {
+        // virtual void get_wavelengths(
+        //     tct_spectral_sample               *result,
+        //     Core_tex_handler const            *self_base,
+        //     Shading_state_material            *state);
+        llvm::Type* args[] = {
+            spectral_sample_ptr,
+            self_ptr_type,
+            m_type_state_core_ptr
+        };
+
+        get_wavelengths_type =
             llvm::FunctionType::get(void_type, args, /*isVarArg=*/false);
     }
 
@@ -2438,6 +2535,11 @@ llvm::StructType *Type_mapper::construct_core_texture_handler_type(
         get_ptr(df_bsdf_measurement_pdf_type),
         get_ptr(df_bsdf_measurement_albedos_type),
         get_ptr(adapt_normal_type),
+        get_ptr(rgb_to_spectral_ior_type),
+        get_ptr(rgb_to_spectral_reflectance_type),
+        get_ptr(rgb_to_spectral_luminance_type),
+        get_ptr(rgb_to_spectral_volume_coefficient_type),
+        get_ptr(get_wavelengths_type),
         get_ptr(scene_data_isvalid_type),
         get_ptr(scene_data_lookup_float_type),
         get_ptr(scene_data_lookup_float2_type),

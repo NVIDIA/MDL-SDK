@@ -42,7 +42,6 @@ namespace base {
 @{
 */
 
-// Forward declaration
 class IInterface;
 
 /// Mixin class template for deriving new interface declarations.
@@ -86,7 +85,7 @@ public:
 protected:
     // Acquires a const interface.
     //
-    // Static helper function for implementing #get_interface(const Uuid&).
+    // Static helper function for implementing #get_interface(const mi::base::Uuid&).
     //
     // \param iinterface   The interface to act on.
     // \param interface_id Interface ID of the interface to acquire.
@@ -104,7 +103,7 @@ protected:
 
     // Acquires a mutable interface.
     //
-    // Static helper function for implementing #get_interface(const Uuid&).
+    // Static helper function for implementing #get_interface(const mi::base::Uuid&).
     //
     // \param iinterface   The interface to act on.
     // \param interface_id Interface ID of the interface to acquire.

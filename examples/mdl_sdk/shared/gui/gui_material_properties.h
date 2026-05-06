@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
- // examples/mdl_sdk/shared/gui_material_properties.h
+// examples/mdl_sdk/shared/gui_material_properties.h
 
 #ifndef EXAMPLE_SHARED_GUI_MATERIAL_PROPERTIES_H
 #define EXAMPLE_SHARED_GUI_MATERIAL_PROPERTIES_H

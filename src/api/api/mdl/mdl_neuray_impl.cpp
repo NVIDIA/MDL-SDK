@@ -53,6 +53,7 @@
 // API components
 #include "neuray_database_impl.h"
 #include "neuray_debug_configuration_impl.h"
+#include "neuray_extension_api_impl.h"
 #include "neuray_factory_impl.h"
 #include "neuray_image_api_impl.h"
 #include "neuray_logging_configuration_impl.h"
@@ -107,6 +108,8 @@ Neuray_impl::Neuray_impl()
     m_logging_configuration_impl = new NEURAY::Logging_configuration_impl( nullptr);
     log_startup_message();
     m_debug_configuration_impl = new NEURAY::Debug_configuration_impl();
+    m_extension_api_impl = new NEURAY::Extension_api_impl(
+        static_cast<mi::neuraylib::INeuray*>( this), m_class_factory);
     m_database_impl = new NEURAY::Database_impl( m_status);
     m_image_api_impl = new NEURAY::Image_api_impl( this);
     m_mdl_factory_impl = new NEURAY::Mdl_factory_impl( this, m_class_factory);
@@ -127,6 +130,7 @@ Neuray_impl::Neuray_impl()
     // Register API components that are always available,
     // other API components are registered in start()
     register_api_component<mi::neuraylib::IDebug_configuration>( m_debug_configuration_impl);
+    register_api_component<mi::neuraylib::IExtension_api>( m_extension_api_impl);
     register_api_component<mi::neuraylib::IFactory>( m_factory_impl);
     register_api_component<mi::neuraylib::ILogging_configuration>( m_logging_configuration_impl);
     register_api_component<mi::neuraylib::IMdl_compiler>( m_mdl_compiler_impl);
@@ -157,6 +161,7 @@ Neuray_impl::~Neuray_impl()
     unregister_api_component<mi::neuraylib::IMdl_compiler>();
     unregister_api_component<mi::neuraylib::ILogging_configuration>();
     unregister_api_component<mi::neuraylib::IFactory>();
+    unregister_api_component<mi::neuraylib::IExtension_api>();
     unregister_api_component<mi::neuraylib::IDebug_configuration>();
 
     // Unit tests with a failing check usually hit this assertion because in such a case the
@@ -186,6 +191,7 @@ Neuray_impl::~Neuray_impl()
     ref_count = m_mdle_api_impl->release();                 CHECK_RESULT;
     ref_count = m_image_api_impl->release();                CHECK_RESULT;
     ref_count = m_debug_configuration_impl->release();      CHECK_RESULT;
+    ref_count = m_extension_api_impl->release();            CHECK_RESULT;
     ref_count = m_database_impl->release();                 CHECK_RESULT;
     ref_count = m_logging_configuration_impl->release();    CHECK_RESULT;
     ref_count = m_mdl_compiler_impl->release();             CHECK_RESULT;

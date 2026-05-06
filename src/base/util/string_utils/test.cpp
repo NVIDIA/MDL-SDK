@@ -134,17 +134,17 @@ void check_wchar_surrogate_to_utf8_and_back(
 
 MI_TEST_AUTO_FUNCTION( test_utf8_and_wchar )
 {
-    check_utf8_to_wchar_and_back( "foo");                        // plain ASCII
-    check_utf8_to_wchar_and_back( "first_bmp_\u0001");           // U+0001
-    check_utf8_to_wchar_and_back( "last_ascii_\u007F");          // U+007F
-    check_utf8_to_wchar_and_back( "first_non_ascii_\u0080");     // U+0080
-    check_utf8_to_wchar_and_back( "u_umlaut_ü");                 // U+00FC
-    check_utf8_to_wchar_and_back( "leo_♌");                     // U+264C
-    check_utf8_to_wchar_and_back( "last_bmp_\uFFFF");            // U+FFFF
-    check_utf8_to_wchar_and_back( "first_surrogate_\U00010000"); // U+10000 (U+D800, U+DC00)
-    check_utf8_to_wchar_and_back( "unicorn_🦄");                 // U+1F984 (U+D83E, U+DD84)
-    check_utf8_to_wchar_and_back( "g_clef_𝄞");                   // U+1D11E (U+D834, U+DD1E)
-    check_utf8_to_wchar_and_back( "last_surrogate_\U0010FFFF");  // U+10FFFF (U+DBFF, U+DFFF)
+    check_utf8_to_wchar_and_back( u8"foo");                        // plain ASCII
+    check_utf8_to_wchar_and_back( u8"first_bmp_\u0001");           // U+0001
+    check_utf8_to_wchar_and_back( u8"last_ascii_\u007F");          // U+007F
+    check_utf8_to_wchar_and_back( u8"first_non_ascii_\u0080");     // U+0080
+    check_utf8_to_wchar_and_back( u8"u_umlaut_ü");                 // U+00FC
+    check_utf8_to_wchar_and_back( u8"leo_♌");                     // U+264C
+    check_utf8_to_wchar_and_back( u8"last_bmp_\uFFFF");            // U+FFFF
+    check_utf8_to_wchar_and_back( u8"first_surrogate_\U00010000"); // U+10000 (U+D800, U+DC00)
+    check_utf8_to_wchar_and_back( u8"unicorn_🦄");                 // U+1F984 (U+D83E, U+DD84)
+    check_utf8_to_wchar_and_back( u8"g_clef_𝄞");                   // U+1D11E (U+D834, U+DD1E)
+    check_utf8_to_wchar_and_back( u8"last_surrogate_\U0010FFFF");  // U+10FFFF (U+DBFF, U+DFFF)
 
     check_wchar_to_utf8_and_back( L"foo");
     check_wchar_to_utf8_and_back( L"first_bmp_\u0001");

@@ -32,7 +32,6 @@
 #define MI_NEURAYLIB_IIMAGE_API_H
 
 #include <mi/base/interface_declare.h>
-#include <mi/neuraylib/version.h> // for MI_NEURAYLIB_DEPRECATED_ENUM_VALUE
 
 namespace mi {
 
@@ -496,26 +495,6 @@ public:
     virtual ITile* extract_channel( const ITile* tile, const char* selector) const = 0;
 
     //@}
-
-    virtual IBuffer* deprecated_create_buffer_from_canvas(
-        const ICanvas* canvas,
-        const char* image_format,
-        const char* pixel_type,
-        const char* quality,
-        bool force_default_gamma) const = 0;
-
-#ifdef MI_NEURAYLIB_DEPRECATED_15_0
-    inline IBuffer* create_buffer_from_canvas(
-        const ICanvas* canvas,
-        const char* image_format,
-        const char* pixel_type,
-        const char* quality,
-        bool force_default_gamma = false) const
-    {
-        return deprecated_create_buffer_from_canvas(
-            canvas, image_format, pixel_type, quality, force_default_gamma);
-    }
-#endif
 };
 
 /**@}*/ // end group mi_neuray_rendering / mi_neuray_rtmp

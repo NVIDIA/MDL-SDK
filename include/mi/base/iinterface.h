@@ -67,15 +67,15 @@ class IInterface;
     management of object lifetime through reference counting, see
     #mi::base::IInterface::retain() and #mi::base::IInterface::release(), and the proper
     dynamic-cast like access to derived and otherwise related interfaces, see
-    #mi::base::IInterface::get_interface(const Uuid&).
+    #mi::base::IInterface::get_interface(const mi::base::Uuid&).
 
     In addition to these methods, the class #mi::base::IInterface has an inner type
     #mi::base::IInterface::IID, which is readily convertible to the type mi::base::Uuid. The type
     #mi::base::IInterface::IID has a default constructor which creates a value that contains the
     universally unique identifier (UUID a.k.a. GUID) of this interface. Each interface has such a
     local type #mi::base::IInterface::IID with a distinct and unique value. The value can be passed
-    to the #mi::base::IInterface::get_interface(const Uuid&) methods, introduced below, and this is
-    the mode in which it is normally used.
+    to the #mi::base::IInterface::get_interface(const mi::base::Uuid&) methods, introduced below,
+    and this is the mode in which it is normally used.
 
     \see
       - #mi::base::Handle for a smart-pointer class automating the reference counting
@@ -89,14 +89,15 @@ class IInterface;
       Assume you have an interface pointer \c iptr for an allocator object with the corresponding
       interface #mi::base::IAllocator. You cannot directly cast the pointer to the corresponding
       interface pointer. Instead you need to use the #mi::base::IInterface::get_interface(const
-      Uuid&) method with the corresponding interface ID (IID) value of type #mi::base::Uuid, cast
-      the result and release the interface after you are done using it. You can obtain the necessary
-      IID value by instantiating the \c IID type that is locally embedded in each interface.
+      mi::base::Uuid&) method with the corresponding interface ID (IID) value of type
+      #mi::base::Uuid, cast the result and release the interface after you are done using it. You
+      can obtain the necessary IID value by instantiating the \c IID type that is locally embedded
+      in each interface.
 
     \par
       If you are not sure whether \c iptr refers to an object supporting an #mi::base::IAllocator
       interface you must check that the result of the
-      #mi::base::IInterface::get_interface(const Uuid&) method call is not \c nullptr.
+      #mi::base::IInterface::get_interface(const mi::base::Uuid&) method call is not \c nullptr.
 
     \code
         mi::base::IInterface* iptr = ...;
@@ -236,8 +237,8 @@ public:
 protected:
     // Acquires a const interface.
     //
-    // Static helper function for implementing #get_interface(const Uuid&). On #IInterface, the
-    // method terminates the recursive call chain.
+    // Static helper function for implementing #get_interface(const mi::base::Uuid&). On
+    // #IInterface, the method terminates the recursive call chain.
     //
     // \param iinterface     The interface to act on.
     // \param interface_id   Interface ID of the interface to acquire.
@@ -253,8 +254,8 @@ protected:
 
     // Acquires a mutable interface.
     //
-    // Static helper function for implementing #get_interface(const Uuid&). On #IInterface, the
-    // method terminates the recursive call chain.
+    // Static helper function for implementing #get_interface(const mi::base::Uuid&). On
+    // #IInterface, the method terminates the recursive call chain.
     //
     // \param iinterface     The interface to act on.
     // \param interface_id   Interface ID of the interface to acquire.

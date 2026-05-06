@@ -40,7 +40,10 @@
 #include "mdl/compiler/compilercore/compilercore_mdl.h"
 #include "mdl/compiler/compilercore/compilercore_cstring_hash.h"
 
+#include "mdl/codegenerators/generator_code/generator_code_resource_manager.h"
+
 #include "generator_dag_derivatives.h"
+#include "generator_dag_dumper.h"
 #include "generator_dag_ir.h"
 #include "generator_dag_unit.h"
 
@@ -52,63 +55,6 @@ class Function_context;
 class IMDL;
 class IValue_resource;
 
-/// A value entry in the resource attribute map.
-struct Resource_attr_entry {
-    size_t index;               ///< The "index" value of this resource.
-    bool valid;                 ///< True if this resource is valid.
-    union {
-        struct {
-            unsigned width;              ///< texture width
-            unsigned height;             ///< texture height
-            unsigned depth;              ///< texture depth
-            IType_texture::Shape shape;  ///< texture shape
-        } tex;
-        struct {
-            float power;        ///< light profile power
-            float maximum;      ///< light profile maximum
-        } lp;
-    } u;
-};
-
-struct Resource_hasher {
-    size_t operator()(Resource_tag_tuple const &p) const {
-        cstring_hash cstring_hasher;
-
-        /// Avoid hashing the tag to support lookups without knowing the tag. But include it if no
-        /// URL is known to avoid degeneration to a linear list (in such a case a lookup without
-        /// knowing the tag does not make much sense, either).
-        size_t hash = size_t(p.m_kind) ^ cstring_hasher(p.m_url) ^ cstring_hasher(p.m_selector);
-        if (!p.m_url[0]) {
-            hash ^= p.m_tag;
-        }
-        return hash;
-    }
-};
-
-struct Resource_equal_to {
-    /// Sentinel value to indicate that the tag should not be considered for comparisons.
-    static const int IGNORE_TAG = -1;
-
-    bool operator()(Resource_tag_tuple const &a, Resource_tag_tuple const &b) const {
-        if (a.m_kind != b.m_kind) {
-            return false;
-        }
-        if (a.m_tag != IGNORE_TAG && b.m_tag != IGNORE_TAG && a.m_tag != b.m_tag) {
-            return false;
-        }
-
-        cstring_equal_to cstring_cmp;
-
-        if (!cstring_cmp(a.m_url, b.m_url)) {
-            return false;
-        }
-        return cstring_cmp(a.m_selector, b.m_selector);
-    }
-};
-
-
-typedef hash_map<Resource_tag_tuple, Resource_attr_entry, Resource_hasher, Resource_equal_to>::Type
-    Resource_attr_map;
 
 /// This class handles the creation and compilation of lambda functions.
 ///
@@ -174,10 +120,13 @@ public:
 
     /// Create a constant.
     /// \param  value       The value of the constant.
+    /// \param dbg_info     The debug info for this constant if any.
     /// \returns            The created constant.
     ///
     /// \note Use this method to create arguments of the instance.
-    DAG_constant const *create_constant(IValue const *value) MDL_FINAL;
+    DAG_constant const *create_constant(
+        IValue const *value,
+        DAG_DbgInfo  dbg_info) MDL_FINAL;
 
     /// Create a call.
     /// \param  name            The absolute name of the called function.
@@ -528,9 +477,6 @@ public:
         m_uses_varying_state = uses_varying_state;
     }
 
-    /// Returns true if this lambda function uses lambda_results.
-    bool uses_lambda_results() const { return m_uses_lambda_results; }
-
     /// Returns true if this lambda function uses resources.
     bool uses_resources() const { return true; }
 
@@ -575,6 +521,9 @@ public:
 
     /// Get the node factory.
     DAG_node_factory_impl const &get_node_factory() const { return m_node_factory; }
+
+    /// Get the node factory (non-const).
+    DAG_node_factory_impl &get_node_factory() { return m_node_factory; }
 
     /// Get the type factory.
     Type_factory const &get_type_factory() const { return m_dag_unit.get_type_factory(); }
@@ -755,9 +704,6 @@ private:
     /// If true, the switch function was modified.
     unsigned m_is_modified:1;
 
-    /// If true, this function uses a lambda_results array (libbsdf mode).
-    unsigned m_uses_lambda_results:1;
-
     /// If false, serial number requires an update.
     mutable unsigned m_serial_is_valid:1;
 
@@ -781,94 +727,191 @@ class Distribution_function : public Allocator_interface_implement<IDistribution
     friend class Allocator_builder;
 
 public:
+    /// The possible kinds of special nodes.
+    enum Special_kind {
+        SK_INVALID = -1,                     ///< Invalid special kind.
+        SK_MATERIAL_IOR = 0,                 ///< Special kind for material.ior.
+        SK_MATERIAL_THIN_WALLED,             ///< Special kind for material.thin_walled.
+        SK_MATERIAL_VOLUME_ABSORPTION,       ///< Special kind for
+                                             ///< material.volume.absorption_coefficient.
+        SK_MATERIAL_GEOMETRY_DISPLACEMENT,   ///< Special kind for material.geometry.displacement.
+        SK_MATERIAL_GEOMETRY_CUTOUT_OPACITY, ///< Special kind for material.geometry.cutout_opacity.
+        SK_MATERIAL_GEOMETRY_NORMAL,         ///< Special kind for material.geometry.normal.
+
+        SK_NUM_KINDS                         ///< The number of special kinds.
+    };
+
+    /// The possible evaluation states for a requested node.
+    enum Eval_state {
+        ES_BEGIN_STATE = 0,           ///< The node is evaluated before the end of the evaluation
+                                      ///< of geometry.normal.
+        ES_AFTER_GEOMETRY_NORMAL = 1, ///< The node is evaluated after geometry.normal has been
+                                      ///< evaluated.
+        ES_LAST = ES_AFTER_GEOMETRY_NORMAL
+    };
+
+    /// Struct representing a DAG node explicitly or implicitly requested by the renderer.
+    struct Requested_node {
+        /// Constructor.
+        ///
+        /// \param alloc          the allocator
+        /// \param node           the requested node
+        /// \param path           the path to the requested node in the material instance.
+        ///                       The string must be allocated via the arena.
+        /// \param function_name  the function name for the node if it should be exported,
+        ///                       nullptr otherwise. The string must be allocated via the arena.
+        /// \param eval_state     the state in which the node shall be evaluated
+        Requested_node(
+            IAllocator     *alloc,
+            DAG_node const *node,
+            char const     *path,
+            char const     *function_name,
+            Eval_state      eval_state)
+            : node(node)
+            , path(path)
+            , function_name(function_name)
+            , eval_state(eval_state)
+            , df_handles(alloc)
+        {}
+
+        /// The requested node (owned by the root lambda).
+        DAG_node const *node;
+
+        /// The path to the requested node in the material instance (for debugging).
+        char const     *path;
+
+        /// The function name if an exported function shall be generated.
+        /// nullptr for nodes only required by libbsdf (implicitly requested).
+        char const     *function_name;
+
+        /// The evaluation state at which the node must be evaluated.
+        Eval_state      eval_state;
+
+        /// List of DF handle strings owned by the value factory referenced transitively by the
+        /// requested node.
+        vector<char const *>::Type df_handles;
+    };
+
     /// Initialize this distribution function object for the given material instance
     /// with the given requested functions.
     /// Any additionally required expressions from the material will also be handled.
     /// Any material parameters must already be registered in the root lambda at this point.
-    /// The DAG nodes must already be owned by the root lambda.
     ///
     /// \param mat_instance               the material instance
     /// \param requested_functions        the expressions for which functions will be generated
-    /// \param num_functions              the number of requested functions
-    /// \param include_geometry_normal    if true, the geometry normal will be handled
+    /// \param num_req_functions          the number of requested functions
     /// \param calc_derivative_infos      if true, derivative information will be calculated
-    /// \param allow_double_expr_lambdas  if true, expression lambdas may be created for double
-    ///                                   values
+    /// \param enable_spectral_conversions if true, color parameters will be wrapped with spectral conversions
     /// \param name_resolver              the call name resolver
     ///
     /// \returns EC_NONE, if initialization was successful, an error code otherwise.
     Error_code initialize(
         IMaterial_instance const  *mat_instance,
         Requested_function        *requested_functions,
-        size_t                     num_functions,
-        bool                       include_geometry_normal,
+        size_t                     num_req_functions,
         bool                       calc_derivative_infos,
-        bool                       allow_double_expr_lambdas,
+        bool                       enable_spectral_conversions,
         ICall_name_resolver const *name_resolver) MDL_FINAL;
 
     /// Get the root lambda function used to build nodes and manage parameters and resources.
+    /// The body will be set to the constructor from the used material instance in
+    /// @ref initialize(). If derivatives are enabled, the body will have been rebuilt with
+    /// derivative types.
     Lambda_function *get_root_lambda() const MDL_FINAL;
 
-    /// Add the given function as main lambda function.
+    /// Add a requested node.
     ///
-    /// \param lambda  the function to add
-    size_t add_main_function(ILambda_function *lambda);
+    /// \param node           the DAG node
+    /// \param path           the path to the requested node in the material instance
+    /// \param function_name  a function name if the code for the node should be exported
+    ///                       or nullptr otherwise
+    /// \param eval_state     the state in which the node should be evaluated
+    size_t add_requested_node(
+        DAG_node const *node,
+        char const     *path,
+        char const     *function_name,
+        Eval_state      eval_state);
 
-    /// Get the main lambda function for the given index, representing a requested function.
+    /// Get the requested node for the given index.
+    /// The returned pointer becomes invalid, if more requested nodes are added.
     ///
-    /// \param index  the index of the main lambda
-    ///
-    /// \returns  the requested main lambda function or NULL, if the index is invalid
-    Lambda_function *get_main_function(size_t index) const MDL_FINAL;
+    /// \param index  the index of the requested node
+    Requested_node *get_requested_node(size_t index);
 
-    /// Get the number of main lambda functions.
-    size_t get_main_function_count() const MDL_FINAL;
+    /// Get the requested node for the given index.
+    /// The returned pointer becomes invalid, if more requested nodes are added.
+    ///
+    /// \param index  the index of the requested node
+    Requested_node const *get_requested_node(size_t index) const;
 
-    /// Add the given expression lambda function to the distribution function.
-    /// The index as a decimal string can be used as name in DAG call nodes with the semantics
-    /// DS_INTRINSIC_DAG_CALL_LAMBDA to reference these lambda functions.
-    ///
-    /// \param lambda  the lambda function responsible for calculating an expression
-    ///
-    /// \returns  the index of the expression lambda function
-    size_t add_expr_lambda_function(ILambda_function *lambda) MDL_FINAL;
+    /// Set the number of explicitly requested nodes. These are always the first nodes in the
+    /// list of requested nodes.
+    void set_explicit_requested_node_count(size_t count)
+    {
+        m_explicit_requested_node_count = count;
+    }
 
-    /// Get the expression lambda function for the given index.
-    ///
-    /// \param index  the index of the expression lambda
-    ///
-    /// \returns  the requested expression lambda function or NULL, if the index is invalid
-    Lambda_function *get_expr_lambda(size_t index) const MDL_FINAL;
+    /// Get the number of explicitly requested nodes. These are always the first nodes in the
+    /// list of requested nodes.
+    size_t get_explicit_requested_node_count() const MDL_FINAL
+    {
+        return m_explicit_requested_node_count;
+    }
 
-    /// Get the number of expression lambda functions.
-    size_t get_expr_lambda_count() const MDL_FINAL;
+    /// Get the number of explicitly and implicitly requested nodes.
+    /// The implicitly requested nodes always follow the explicitly requested nodes.
+    size_t get_total_requested_node_count() const MDL_FINAL
+    {
+        return m_requested_nodes.size();
+    }
 
-    /// Set a special lambda function for getting certain material properties.
+    /// Get the DAG node for a requested node.
     ///
-    /// \param kind    the kind of special lambda function to set
-    /// \param lambda  the lambda function to associate with this kind
-    void set_special_lambda_function(
-        Special_kind kind,
-        ILambda_function *lambda) MDL_FINAL;
+    /// \param index  the index of the requested node
+    DAG_node const *get_requested_dag_node(size_t index) const MDL_FINAL
+    {
+        if (index >= m_requested_nodes.size()) {
+            return nullptr;
+        }
+        return m_requested_nodes[index].node;
+    }
 
-    /// Get the expression lambda index for the given special lambda function kind.
+    /// Set a special node for getting certain material properties.
     ///
-    /// \param kind    the kind of special lambda function to get
+    /// \param kind  the kind of special lambda function to set
+    /// \param node  the DAG node to associate with this kind
+    /// \param path  the path to the requested node in the material instance
+    void add_special_node(
+        Special_kind    kind,
+        DAG_node const *node,
+        char const     *path);
+
+    /// Set a special node for getting certain material properties.
     ///
-    /// \returns  the requested expression lambda index or ~0, if the index is invalid or
-    ///           the special lambda function has not been set
-    size_t get_special_lambda_function_index(Special_kind kind) const MDL_FINAL;
+    /// \param kind                  the kind of special lambda function to set
+    /// \param requested_node_index  the index of the requested node
+    void set_special_node(
+        Special_kind  kind,
+        size_t        requested_node_index);
+
+    /// Get the requested node index for the given special node kind.
+    ///
+    /// \param kind    the kind of special node to get
+    ///
+    /// \returns  the requested node index or ~0, if the index is invalid or
+    ///           the special node has not been set
+    size_t get_special_node_index(Special_kind kind) const;
 
     /// Returns the number of distribution function handles referenced by this
     /// distribution function.
-    size_t get_df_handle_count() const MDL_FINAL;
+    size_t get_df_handle_count() const;
 
     /// Returns a distribution function handle referenced by this distribution function.
     ///
     /// \param index  the index of the handle to return
     ///
     /// \return the name of the handle, or \c NULL, if the \p index was out of range.
-    char const *get_df_handle(size_t index) const MDL_FINAL;
+    char const *get_df_handle(size_t index) const;
 
     /// Register a distribution function handle.
     ///
@@ -880,34 +923,6 @@ public:
         m_df_handles.push_back(handle_name);
         return m_df_handles.size() - 1;
     }
-
-    /// Register a distribution function handle for a main function.
-    ///
-    /// \param main_func_index  the index of the main function
-    /// \param handle_name      the name of the new handle
-    ///
-    /// \return the index of the handle
-    size_t add_main_func_df_handle(size_t main_func_index, char const *handle_name)
-    {
-        MDL_ASSERT(main_func_index < m_main_func_df_handles.size());
-        m_main_func_df_handles[main_func_index].push_back(handle_name);
-        return m_main_func_df_handles[main_func_index].size() - 1;
-    }
-
-    /// Returns the number of distribution function handles referenced by a given main function.
-    ///
-    /// \param main_func_index  the index of the main function
-    ///
-    /// \returns  the requested count or ~0, if the index is invalid
-    size_t get_main_func_df_handle_count(size_t main_func_index) const MDL_FINAL;
-
-    /// Returns a distribution function handle referenced by a given main function.
-    ///
-    /// \param main_func_index  the index of the main function
-    /// \param index            the index of the handle to return
-    ///
-    /// \return the name of the handle, or \c NULL, if the \p index was out of range.
-    char const *get_main_func_df_handle(size_t main_func_index, size_t index) const MDL_FINAL;
 
     /// Get the resource attribute map of this distribution function.
     Resource_attr_map const &get_resource_attribute_map() const;
@@ -969,8 +984,8 @@ private:
     /// \param alloc             The allocator.
     /// \param compiler          The core compiler.
     Distribution_function(
-        IAllocator                         *alloc,
-        MDL                                *compiler);
+        IAllocator *alloc,
+        MDL        *compiler);
 
     /// The MDL compiler.
     mi::base::Handle<MDL> m_mdl;
@@ -978,16 +993,16 @@ private:
     /// One lambda function, which owns all nodes and values, and manages parameters and resources.
     mi::base::Handle<Lambda_function> m_root_lambda;
 
-    /// The main lambda functions, which will be exported.
-    vector<mi::base::Handle<Lambda_function> >::Type m_main_functions;
+    /// The number of explicitly requested nodes when the @ref initialize function was called.
+    size_t m_explicit_requested_node_count;
 
-    /// Collection of expression lambdas generated from the DAG.
-    vector<mi::base::Handle<Lambda_function> >::Type m_expr_lambdas;
+    /// List of requested nodes from the material instance.
+    vector<Requested_node>::Type m_requested_nodes;
 
-    /// Array of indexes into the collection of expression lambdas for special lambda functions
+    /// Array of indexes into the collection of requested nodes for special nodes
     /// used to get certain material properties.
     /// They are only set to non ~0 values if they are needed by the BSDFs.
-    size_t m_special_lambdas[SK_NUM_KINDS];
+    size_t m_special_nodes[SK_NUM_KINDS];
 
     /// If true, m_deriv_infos contains valid information.
     bool m_deriv_infos_calculated;
@@ -995,19 +1010,63 @@ private:
     /// The derivative analysis information, if requested during initialization.
     Derivative_infos m_deriv_infos;
 
-    /// List of DF handle strings owned by the value factory of all main functions.
+    /// List of DF handle strings owned by the value factory of all requested nodes.
     vector<char const *>::Type m_df_handles;
-
-    /// List of DF handle strings owned by the value factory per main function.
-    vector<vector<char const *>::Type>::Type m_main_func_df_handles;
 
     typedef vector<Resource_tag_tuple>::Type Resource_tag_map;
 
-    // arena for strings.
+    // Arena for strings.
     Memory_arena m_arena;
 
     /// The resource to tag map.
     Resource_tag_map m_resource_tag_map;
+};
+
+/// Helper class to dump a distribution function as a dot file.
+class Distribution_function_dumper : public DAG_dumper {
+    typedef DAG_dumper Base;
+public:
+    typedef ptr_hash_map<DAG_node const, char const *>::Type Node_color_map;
+
+    /// Constructor.
+    ///
+    /// \param alloc           the allocator
+    /// \param out             an output stream, the dot file is written to
+    /// \param dist_func       the distribution function to dump
+    /// \param node_color_map  a map from DAG nodes to Graphviz color strings
+    Distribution_function_dumper(
+        IAllocator                  *alloc,
+        IOutput_stream              *out,
+        Distribution_function const *dist_func,
+        Node_color_map              &node_color_map);
+
+    /// Dump the distribution function to the output stream.
+    void dump();
+
+    /// Get the parameter name for the given index if any.
+    ///
+    /// \param index  the index of the parameter
+    char const *get_parameter_name(int index) MDL_FINAL;
+
+    /// Get a color for the given node or nullptr for default
+    ///
+    /// \param node  the node
+    char const *get_node_color(DAG_node const *node) MDL_FINAL;
+
+    /// Get a prefix for the label for the given node or nullptr for no prefix.
+    ///
+    /// \param node  the node
+    char const *get_node_label_prefix(DAG_node const *node) MDL_FINAL;
+
+private:
+    /// Buffer used for converting numbers to strings.
+    char m_name_buf[40];
+
+    /// Currently processed distribution function.
+    Distribution_function const *m_dist_func;
+
+    /// Map from DAG nodes to Graphviz color strings.
+    Node_color_map &m_node_color_map;
 };
 
 }  // mdl

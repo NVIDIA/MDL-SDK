@@ -73,8 +73,7 @@ const char* Tile_impl::get_type() const
 
 mi::Size Tile_impl::get_size() const
 {
-    return sizeof( *this)
-        + m_data.size() * sizeof( char);
+    return sizeof( *this) + m_data.size();
 }
 
 void Tile_impl::reset( mi::Uint32 width, mi::Uint32 height, Pixel_type pixel_type)

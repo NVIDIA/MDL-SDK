@@ -45,6 +45,12 @@
 namespace mi {
 namespace mdl {
 
+/// Check if a signed integer division or modulo would overflow.
+static bool is_int_division_overflow(int dividend, int divisor)
+{
+    return dividend == 0x80000000 && divisor == 0xFFFFFFFF;
+}
+
 template<>
 inline Value_factory *impl_cast(IValue_factory *t) {
     return static_cast<Value_factory *>(t);
@@ -429,8 +435,12 @@ public:
         Kind r_kind = rhs->get_kind();
         if (r_kind == s_kind) {
             int divisor = cast<IValue_int>(rhs)->get_value();
-            if (divisor != 0)
+            if (divisor != 0) {
+                if (is_int_division_overflow(m_value, divisor)) {
+                    return factory->create_int(0x80000000);
+                }
                 return factory->create_int(m_value / divisor);
+            }
             return factory->create_bad();
         } else if (r_kind == VK_VECTOR) {
             // scalar by vector element wise division
@@ -456,8 +466,12 @@ public:
         Kind r_kind = rhs->get_kind();
         if (r_kind == s_kind) {
             int divisor = cast<IValue_int>(rhs)->get_value();
-            if (divisor != 0)
+            if (divisor != 0) {
+                if (is_int_division_overflow(m_value, divisor)) {
+                    return factory->create_int(0);
+                }
                 return factory->create_int(m_value % divisor);
+            }
             return factory->create_bad();
         } else if (r_kind == VK_VECTOR) {
             // scalar by vector element wise modulo
@@ -668,6 +682,9 @@ public:
         } else if (r_kind == VK_MATRIX) {
             // float * matrix
             return rhs->multiply(factory, this);
+        } else if (r_kind == VK_SPECTRUM) {
+            // float * spectrum
+            return rhs->multiply(factory, this);
         }
         return factory->create_bad();
     }
@@ -710,6 +727,9 @@ public:
         } else if (r_kind == VK_MATRIX) {
             // float + matrix
             return rhs->add(factory, this);
+        } else if (r_kind == VK_SPECTRUM) {
+            // float + spectrum
+            return rhs->add(factory, this);
         }
         return factory->create_bad();
     }
@@ -727,6 +747,9 @@ public:
             return rhs->minus(factory)->add(factory, this);
         } else if (r_kind == VK_MATRIX) {
             // float - matrix = -matrix + float
+            return rhs->minus(factory)->add(factory, this);
+        } else if (r_kind == VK_SPECTRUM) {
+            // float - spectrum = -spectrum + float
             return rhs->minus(factory)->add(factory, this);
         }
         return factory->create_bad();
@@ -1408,6 +1431,20 @@ protected:
             m_values[i] = values[i];
     }
 
+    /// Constructor.
+    explicit Value_compound(
+        Memory_arena             *arena,
+        Type const               *type,
+        Value_type const *       value,
+        size_t                   size)
+    : Base(type)
+    , m_values(*arena, size)
+    {
+        for (size_t i = 0; i < size; ++i)
+            m_values[i] = value;
+    }
+
+    /// Constructor.
     explicit Value_compound(
         Memory_arena *arena,
         Type const   *type,
@@ -1421,6 +1458,7 @@ protected:
         m_values[1] = value_1;
         m_values[2] = value_2;
     }
+
     /// The compound values.
     Arena_VLA<Value_type const *> m_values;
 };
@@ -1960,7 +1998,7 @@ public:
                 if ((tmp & IValue::CR_EQ) == 0)
                     res = IValue::CR_NE;
             }
-            return res; 
+            return res;
         } else if (rhs_type == m_type->get_element_type()) {
             // vector by scalar element wise compare
             size_t               n = m_values.size();
@@ -1973,7 +2011,7 @@ public:
                 if ((tmp & IValue::CR_EQ) == 0)
                     res = IValue::CR_NE;
             }
-            return res; 
+            return res;
         }
         return IValue::CR_BAD;
     }
@@ -2220,7 +2258,7 @@ public:
             IValue const        *values[4];
             size_t               n = m_values.size();
             IValue_matrix const *o = cast<IValue_matrix>(rhs);
-            
+
             MDL_ASSERT(n <= 4);
             for (size_t i = 0; i < n; ++i) {
                 IValue const *tmp = m_values[i]->add(factory, o->get_value(i));
@@ -2589,6 +2627,230 @@ public:
     }
 };
 
+/// Implementation of the IValue_spectrum interface.
+class Value_spectrum : public Value_compound<IValue_spectrum, IType_spectrum, IValue_float>
+{
+    typedef Value_compound<IValue_spectrum, IType_spectrum, IValue_float> Base;
+public:
+    /// Negate a spectrum value.
+    IValue const *minus(IValue_factory *factory) const MDL_FINAL {
+        size_t n = m_values.size();
+        Small_VLA<IValue_float const *, 8> values(factory->get_allocator(), n);
+
+        for (size_t i = 0; i < n; ++i) {
+            IValue const *tmp = m_values[i]->minus(factory);
+            values[i] = cast<IValue_float>(tmp);
+        }
+        return factory->create_color(m_type, values.data(), n);
+
+    }
+
+    /// Multiply.
+    IValue const *multiply(IValue_factory *factory, IValue const *rhs) const MDL_FINAL {
+        IType const *rhs_type = rhs->get_type();
+        if (rhs->get_kind() == s_kind) {
+            // spectrum by spectrum element wise multiplication
+            size_t n = m_values.size();
+            Small_VLA<IValue_float const *, 8> values(factory->get_allocator(), n);
+            IValue_spectrum const *o = cast<IValue_spectrum>(rhs);
+
+            for (size_t i = 0; i < n; ++i) {
+                IValue const *tmp = m_values[i]->multiply(factory, o->get_value(i));
+                values[i] = cast<IValue_float>(tmp);
+            }
+            return factory->create_color(m_type, values.data(), n);
+        } else if (is<IType_float>(rhs_type)) {
+            // spectrum by float element wise multiplication
+            size_t n = m_values.size();
+            Small_VLA<IValue_float const *, 8> values(factory->get_allocator(), n);
+
+            for (size_t i = 0; i < n; ++i) {
+                IValue const *tmp = m_values[i]->multiply(factory, rhs);
+                values[i] = cast<IValue_float>(tmp);
+            }
+            return factory->create_color(m_type, values.data(), n);
+        }
+        return factory->create_bad();
+    }
+
+    /// Divide.
+    IValue const *divide(IValue_factory *factory, IValue const *rhs) const MDL_FINAL {
+        IType const *rhs_type = rhs->get_type();
+        if (rhs->get_kind() == s_kind) {
+            // spectrum by spectrum element wise division
+            size_t n = m_values.size();
+            Small_VLA<IValue_float const *, 8> values(factory->get_allocator(), n);
+            IValue_spectrum const *o = cast<IValue_spectrum>(rhs);
+
+            for (size_t i = 0; i < n; ++i) {
+                IValue const *tmp = m_values[i]->divide(factory, o->get_value(i));
+                values[i] = cast<IValue_float>(tmp);
+            }
+            return factory->create_color(m_type, values.data(), n);
+        } else if (is<IType_float>(rhs_type)) {
+            // spectrum by float element wise division
+            size_t n = m_values.size();
+            Small_VLA<IValue_float const *, 8> values(factory->get_allocator(), n);
+
+            for (size_t i = 0; i < n; ++i) {
+                IValue const *tmp = m_values[i]->divide(factory, rhs);
+                values[i] = cast<IValue_float>(tmp);
+            }
+            return factory->create_color(m_type, values.data(), n);
+        }
+        return factory->create_bad();
+    }
+
+    /// Add.
+    IValue const *add(IValue_factory *factory, IValue const *rhs) const MDL_FINAL {
+        IType const *rhs_type = rhs->get_type();
+        if (rhs->get_kind() == s_kind) {
+            // spectrum by spectrum element wise addition
+            size_t n = m_values.size();
+            Small_VLA<IValue_float const *, 8> values(factory->get_allocator(), n);
+            IValue_spectrum const *o = cast<IValue_spectrum>(rhs);
+
+            for (size_t i = 0; i < n; ++i) {
+                IValue const *tmp = m_values[i]->add(factory, o->get_value(i));
+                values[i] = cast<IValue_float>(tmp);
+            }
+            return factory->create_color(m_type, values.data(), n);
+        } else if (is<IType_float>(rhs_type)) {
+            // spectrum by float element wise addition
+            size_t n = m_values.size();
+            Small_VLA<IValue_float const *, 8> values(factory->get_allocator(), n);
+
+            for (size_t i = 0; i < n; ++i) {
+                IValue const *tmp = m_values[i]->add(factory, rhs);
+                values[i] = cast<IValue_float>(tmp);
+            }
+            return factory->create_color(m_type, values.data(), n);
+        }
+        return factory->create_bad();
+    }
+
+    /// Subtract.
+    IValue const *sub(IValue_factory *factory, IValue const *rhs) const MDL_FINAL {
+        IType const *rhs_type = rhs->get_type();
+        if (rhs->get_kind() == s_kind) {
+            // spectrum by spectrum element wise subtraction
+            size_t n = m_values.size();
+            Small_VLA<IValue_float const *, 8> values(factory->get_allocator(), n);
+            IValue_spectrum const *o = cast<IValue_spectrum>(rhs);
+
+            for (size_t i = 0; i < n; ++i) {
+                IValue const *tmp = m_values[i]->sub(factory, o->get_value(i));
+                values[i] = cast<IValue_float>(tmp);
+            }
+            return factory->create_color(m_type, values.data(), n);
+        } else if (is<IType_float>(rhs_type)) {
+            // spectrum by float element wise subtraction
+            size_t n = m_values.size();
+            Small_VLA<IValue_float const *, 8> values(factory->get_allocator(), n);
+
+            for (size_t i = 0; i < n; ++i) {
+                IValue const *tmp = m_values[i]->sub(factory, rhs);
+                values[i] = cast<IValue_float>(tmp);
+            }
+            return factory->create_color(m_type, values.data(), n);
+        }
+        return factory->create_bad();
+    }
+
+    /// Compare.
+    IValue::Compare_results compare(IValue const *rhs) const MDL_FINAL {
+        if (rhs->get_kind() == s_kind) {
+            // spectrum by spectrum compare
+            IValue_spectrum const *o = cast<IValue_spectrum>(rhs);
+
+            IValue::Compare_results res = IValue::CR_EQ;
+            for (size_t i = 0, n = m_values.size(); i < n; ++i) {
+                unsigned tmp = m_values[i]->compare(o->get_value(i));
+                if (tmp & IValue::CR_UO)
+                    return IValue::CR_UO;
+                if ((tmp & IValue::CR_EQ) == 0)
+                    res = IValue::CR_NE;
+            }
+            return res;
+        }
+        return IValue::CR_BAD;
+    }
+
+    /// Returns true if the value is the ZERO (i.e. additive neutral).
+    bool is_zero() const MDL_FINAL {
+        bool   neutral = true;
+        size_t n = m_values.size();
+
+        for (size_t i = 0; i < n; ++i) {
+            neutral &= m_values[i]->is_zero();
+        }
+        return neutral;
+    }
+
+    /// Returns true if the value is the ONE (i.e. multiplicative neutral).
+    bool is_one() const MDL_FINAL {
+        // spectrum supports only component-wise multiplication
+        return Value_spectrum::is_all_one();
+    }
+
+    /// Returns true if all components of this value are ONE.
+    bool is_all_one() const MDL_FINAL {
+        bool   all_one = true;
+        size_t n = m_values.size();
+
+        for (size_t i = 0; i < n; ++i) {
+            all_one &= m_values[i]->is_one();
+        }
+        return all_one;
+    }
+
+    /// Constructor.
+    explicit Value_spectrum(
+        Memory_arena               *arena,
+        IType_spectrum const       *type,
+        IValue_float const * const values[],
+        size_t                     n)
+    : Base(arena, type, values, n)
+    {
+    }
+};
+
+/// Implementation of the IValue_spectrum interface.
+class Value_spectral_sample : public Value_compound<IValue_spectral_sample, IType_spectral_sample, IValue_float>
+{
+    typedef Value_compound<IValue_spectral_sample, IType_spectral_sample, IValue_float> Base;
+public:
+    /// Returns true if the value is the ZERO (i.e. additive neutral).
+    bool is_zero() const MDL_FINAL {
+        return m_values[0]->is_zero();
+    }
+
+    /// Returns true if the value is the ONE (i.e. multiplicative neutral).
+    bool is_one() const MDL_FINAL {
+        return m_values[0]->is_one();
+    }
+
+    /// Returns true if all components of this value are ONE.
+    bool is_all_one() const MDL_FINAL {
+        return m_values[0]->is_one();
+    }
+
+    /// Constructor.
+    ///
+    /// \param arena   The memory arena to allocate the value.
+    /// \param type    The type of the spectrum.
+    /// \param value   The value of the spectrum, may only be zero or one.
+    explicit Value_spectral_sample(
+        Memory_arena               *arena,
+        IType_spectral_sample const *type,
+        IValue_float const *       value)
+    : Base(arena, type, value, size_t(MDL_DF_SPECTRAL_SAMPLES))
+    {
+        MDL_ASSERT((value->is_zero() || value->is_one()) &&
+            "Spectral sample value must be zero or one");
+    }
+};
+
 /// Implementation of the IValue_struct interface.
 class Value_struct : public Value_compound<IValue_struct, IType_struct>
 {
@@ -2859,6 +3121,7 @@ IValue const *Value_factory::create_spectrum_color(
     IValue_array const *wavelengths,
     IValue_array const *amplitudes)
 {
+    // FIXME: resample to configured color spectrum
     IValue_float const *zero = create_float(0.0f);
 
     IValue_rgb_color *v = m_builder.create<Value_rgb_color>(
@@ -2867,6 +3130,48 @@ IValue const *Value_factory::create_spectrum_color(
     if (!res.second) {
         m_builder.get_arena()->drop(v);
         return cast<IValue_rgb_color>(*res.first);
+    }
+    return v;
+}
+
+// Create a new zero spectral sample value of type spectral sample.
+IValue_spectral_sample const *Value_factory::create_spectral_sample_zero()
+{
+    return m_zero_spectral_sample_value;
+}
+
+// Create a new one spectral sample value of type spectral sample.
+IValue_spectral_sample const *Value_factory::create_spectral_sample_one()
+{
+    return m_one_spectral_sample_value;
+}
+
+// Create a new color value of a given type.
+IValue const *Value_factory::create_color(
+    IType const                *color_type,
+    IValue_float const * const amplitudes[],
+    size_t                     size)
+{
+    if (is<IType_color>(color_type)) {
+        if (size == 3) {
+            return create_rgb_color(
+                amplitudes[0],
+                amplitudes[1],
+                amplitudes[2]);
+        }
+        return create_bad();
+    }
+
+    if (!is<IType_spectrum>(color_type)) {
+        return create_bad();
+    }
+
+    IValue_spectrum *v = m_builder.create<Value_spectrum>(
+        m_builder.get_arena(), cast<IType_spectrum>(color_type), amplitudes, size);
+    std::pair<Value_table::iterator, bool> res = m_vt.insert(v);
+    if (!res.second) {
+        m_builder.get_arena()->drop(v);
+        return cast<IValue_spectrum>(*res.first);
     }
     return v;
 }
@@ -3014,6 +3319,45 @@ IValue_compound const *Value_factory::create_compound(
             }
             return NULL;
         }
+    case IType::TK_SPECTRUM:
+        {
+            IType_spectrum const *s_type = cast<IType_spectrum>(type);
+            for (size_t i = 0; i < size; ++i) {
+                if (!is<IValue_float>(values[i])) {
+                    return NULL;
+                }
+            }
+            IValue const *res = Value_factory::create_color(
+                s_type,
+                reinterpret_cast<IValue_float const * const *>(values),
+                size);
+            if (IValue_compound const *c_val = as<IValue_compound>(res)) {
+                return c_val;
+            }
+            return NULL;
+        }
+    case IType::TK_SPECTRAL_SAMPLE:
+        {
+            // all values must either be zero or one
+            bool all_zero;
+            if (values[0]->is_zero()) {
+                all_zero = true;
+            } else if (values[0]->is_one()) {
+                all_zero = false;
+            } else {
+                return NULL;
+            }
+            for (size_t i = 1; i < MDL_DF_SPECTRAL_SAMPLES; ++i) {
+                if (values[i] != values[0]) {
+                    return NULL;
+                }
+            }
+            if (all_zero) {
+                return create_spectral_sample_zero();
+            } else {
+                return create_spectral_sample_one();
+            }
+        }
     default:
         MDL_ASSERT(!"unsupported compound type");
         return NULL;
@@ -3093,6 +3437,11 @@ IValue const *Value_factory::create_zero(IType const *type)
             IValue_float const *zero = create_float(0.0f);
             return create_rgb_color(zero, zero, zero);
         }
+    case IType::TK_SPECTRAL_SAMPLE:
+        return create_spectral_sample_zero();
+    case IType::TK_SPECTRUM:
+        MDL_ASSERT(!"NYI");
+        return create_bad();
     case IType::TK_FUNCTION:
     case IType::TK_STRUCT:
     case IType::TK_PTR:
@@ -3154,17 +3503,27 @@ IValue const *Value_factory::import(IValue const *value)
     case IValue::VK_MATRIX:
     case IValue::VK_ARRAY:
     case IValue::VK_RGB_COLOR:
+    case IValue::VK_SPECTRUM:
     case IValue::VK_STRUCT:
         {
             IValue_compound const *v = cast<IValue_compound>(value);
             IType_compound const *tp = cast<IType_compound>(m_tf.import(v->get_type()));
 
             size_t count = v->get_component_count();
-            VLA<IValue const *> values(m_builder.get_arena()->get_allocator(), count);
+            Small_VLA<IValue const *, 8> values(get_allocator(), count);
             for (size_t i = 0; i < count; ++i) {
                 values[i] = import(v->get_value(i));
             }
             return create_compound(tp, values.data(), count);
+        }
+    case IValue::VK_SPECTRAL_SAMPLE:
+        {
+            IValue_spectral_sample const *v = cast<IValue_spectral_sample>(value);
+            if (v->is_zero()) {
+                return create_spectral_sample_zero();
+            } else {
+                return create_spectral_sample_one();
+            }
         }
     case IValue::VK_INVALID_REF:
         {
@@ -3207,6 +3566,12 @@ IValue const *Value_factory::import(IValue const *value)
     return NULL;
 }
 
+/// Get the allocator of the value factory.
+IAllocator *Value_factory::get_allocator()
+{
+    return m_builder.get_arena()->get_allocator();
+}
+
 /// Dump all values owned by this Value table.
 void Value_factory::dump() const
 {
@@ -3227,7 +3592,7 @@ void Value_factory::dump() const
         Allocator_builder m_builder;
     };
 
-    Alloc alloc(m_builder.get_arena()->get_allocator());
+    Alloc alloc(get_allocator());
 
     mi::base::Handle<Debug_Output_stream> dbg(alloc.dbg());
     mi::base::Handle<Printer>             printer(alloc.prt(dbg.get()));
@@ -3265,6 +3630,8 @@ void Value_factory::serialize(Factory_serializer &serializer) const
     serializer.register_value(m_bad_value);
     serializer.register_value(m_true_value);
     serializer.register_value(m_false_value);
+    serializer.register_value(m_zero_spectral_sample_value);
+    serializer.register_value(m_one_spectral_sample_value);
 
     serializer.write_section_tag(Serializer::ST_VALUE_TABLE);
     DOUT(("value factory {\n"));
@@ -3294,6 +3661,8 @@ void Value_factory::deserialize(Factory_deserializer &deserializer)
     deserializer.register_value(Tag_t(1), m_bad_value);
     deserializer.register_value(Tag_t(2), m_true_value);
     deserializer.register_value(Tag_t(3), m_false_value);
+    deserializer.register_value(Tag_t(4), m_zero_spectral_sample_value);
+    deserializer.register_value(Tag_t(5), m_one_spectral_sample_value);
 
 #ifdef ENABLE_ASSERT
     Tag_t t =
@@ -3339,6 +3708,10 @@ bool Value_factory::is_owner(IValue const *value) const
         return true;
     if (value == m_false_value)
         return true;
+    if (value == m_zero_spectral_sample_value)
+        return true;
+    if (value == m_one_spectral_sample_value)
+        return true;
 
     return m_builder.get_arena()->contains(value);
 }
@@ -3353,6 +3726,10 @@ Value_factory::Value_factory(Memory_arena &arena, Type_factory &tf)
 , m_bad_value(m_builder.create<Value_bad>(tf.create_error()))
 , m_true_value(m_builder.create<Value_bool>(tf.create_bool(), true))
 , m_false_value(m_builder.create<Value_bool>(tf.create_bool(), false))
+, m_zero_spectral_sample_value(m_builder.create<Value_spectral_sample>(
+    &arena, tf.create_spectral_sample(), create_float(0.0f)))
+, m_one_spectral_sample_value(m_builder.create<Value_spectral_sample>(
+    &arena, tf.create_spectral_sample(), create_float(1.0f)))
 {
 }
 
@@ -3394,7 +3771,7 @@ size_t Value_factory::IValue_hash::operator() (IValue const *value) const
             char const *c = texture->get_selector();
             return
                 h + hash_string(s) + size_t(kind) * 3 + texture->get_gamma_mode() * 17391 +
-                hash_string(c) * 13 + 
+                hash_string(c) * 13 +
                 size_t(texture->get_tag_value()) * 9 + size_t(texture->get_tag_version()) * 5 +
                 texture->get_bsdf_data_kind() * 7;
         }
@@ -3411,6 +3788,8 @@ size_t Value_factory::IValue_hash::operator() (IValue const *value) const
     case IValue::VK_MATRIX:
     case IValue::VK_ARRAY:
     case IValue::VK_RGB_COLOR:
+    case IValue::VK_SPECTRUM:
+    case IValue::VK_SPECTRAL_SAMPLE:
     case IValue::VK_STRUCT:
         {
             IValue_compound const *c = cast<IValue_compound>(value);
@@ -3489,6 +3868,8 @@ bool Value_factory::IValue_equal::operator()(IValue const *a, IValue const *b) c
     case IValue::VK_MATRIX:
     case IValue::VK_ARRAY:
     case IValue::VK_RGB_COLOR:
+    case IValue::VK_SPECTRUM:
+    case IValue::VK_SPECTRAL_SAMPLE:
     case IValue::VK_STRUCT:
         {
             IValue_compound const *ca = cast<IValue_compound>(a);

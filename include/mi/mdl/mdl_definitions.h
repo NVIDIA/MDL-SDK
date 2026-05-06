@@ -395,10 +395,17 @@ public:
         DS_INTRINSIC_DAG_DECL_CAST,         ///< Cast between compatible declarative structs.
         DS_INTRINSIC_DAG_SET_OBJECT_ID,     ///< Specifies the used object id.
         DS_INTRINSIC_DAG_SET_TRANSFORMS,    ///< Specifies the transform (w2o and o2w) matrices.
-        DS_INTRINSIC_DAG_CALL_LAMBDA,       ///< Calls the lambda function specified by the name.
         DS_INTRINSIC_DAG_MAKE_DERIV,        ///< Create a derivative value from a non-derivative
                                             ///< value, setting dx and dy to zero.
-        DS_INTRINSIC_DAG_LAST = DS_INTRINSIC_DAG_MAKE_DERIV,
+        DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_IOR, ///< Convert RGB color to spectral sample using IOR
+                                            ///< conversion.
+        DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_REFLECTANCE, ///< Convert RGB color to spectral sample
+                                            ///< using reflectance conversion.
+        DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_LUMINANCE, ///< Convert RGB color to spectral sample using
+                                            ///< luminance conversion.
+        DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_VOLUME_COEFFICIENT, ///< Convert RGB color to spectral
+                                            ///< sample using volume coefficient conversion.
+        DS_INTRINSIC_DAG_LAST = DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_VOLUME_COEFFICIENT,
 
         // nvidia::baking annotations
         DS_BAKING_FIRST = 0x0B00,
@@ -417,6 +424,14 @@ public:
         DS_INTRINSIC_JIT_LOOKUP             ///< Texture result lookup.
             = DS_INTRINSIC_JIT_FIRST,
         DS_INTRINSIC_JIT_LAST = DS_INTRINSIC_JIT_LOOKUP,
+
+        // Distiller-specific nodes - never appear outside of the distiller
+        DS_INTRINSIC_DIST_FIRST = 0x8100,
+
+        DS_INTRINSIC_DIST_BSDF_MARKER       ///< bsdf_marker()
+            = DS_INTRINSIC_DIST_FIRST,
+
+        DS_INTRINSIC_DIST_LAST = DS_INTRINSIC_DIST_BSDF_MARKER,
     };
 
     /// Returns the kind of this definition.
@@ -721,6 +736,7 @@ public:
     /// Exception reasons.
     enum Reason {
         ER_INT_DIVISION_BY_ZERO,    ///< Integer division by zero.
+        ER_INT_DIVISION_OVERFLOW,   ///< Integer division overflow.
         ER_INVALID_FLOAT_OPERATION, ///< Invalid float operation.
         ER_INDEX_OUT_OF_BOUND       ///< Index out of bounds.
     };
@@ -731,7 +747,9 @@ public:
     /// \param expr    the erroneous expression
     /// \param index   additional parameter for ER_INDEX_OUT_OF_BOUND
     /// \param length  additional parameter for ER_INDEX_OUT_OF_BOUND
-    virtual void exception(
+    ///
+    /// \return true if the exception results in an error, false otherwise
+    bool virtual exception(
         Reason            r,
         IExpression const *expr,
         int               index = 0,

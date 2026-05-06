@@ -61,6 +61,7 @@
 #include <mi/neuraylib/ienum.h>
 #include <mi/neuraylib/ienum_decl.h>
 #include <mi/neuraylib/iexpression.h>
+#include <mi/neuraylib/iextension_api.h>
 #include <mi/neuraylib/ifactory.h>
 #include <mi/neuraylib/ifunction_call.h>
 #include <mi/neuraylib/ifunction_definition.h>

@@ -39,6 +39,7 @@
 #include "dblight_scope.h"
 
 #include <base/data/db/i_db_element.h>
+#include <base/data/db/i_db_intrusive_ptr.h>
 #include <base/data/sched/i_sched.h>
 #include <base/data/serial/i_serial_buffer_serializer.h>
 #include <base/data/serial/serial.h>
@@ -59,14 +60,14 @@ Transaction_impl::Transaction_impl(
     m_transaction_manager( transaction_manager),
     m_scope( scope),
     m_id( id),
-    m_visibility_id( ~0U)
+    m_state_and_visibility( std::make_shared<State_and_visibility>())
 {
     m_scope->pin();
 }
 
 Transaction_impl::~Transaction_impl()
 {
-    MI_ASSERT( m_state == COMMITTED || m_state == ABORTED);
+    MI_ASSERT( get_state() == COMMITTED || get_state() == ABORTED);
     m_transaction_manager->remove_from_all_transactions( this);
 
     m_scope->unpin();
@@ -95,9 +96,9 @@ bool Transaction_impl::is_open( bool closing_is_open) const
 {
     THREAD::Block block( &m_database->get_lock());
 
-    if( m_state == OPEN)
+    if( get_state() == OPEN)
         return true;
-    if( (m_state == CLOSING) && closing_is_open)
+    if( (get_state() == CLOSING) && closing_is_open)
         return true;
     return false;
 }
@@ -186,7 +187,7 @@ std::pair<DB::Info*,bool> Transaction_impl::access_element_locked(
 {
     m_database->get_lock().check_is_owned_shared_or_exclusive();
 
-    if( m_state != OPEN) {
+    if( get_state() != OPEN) {
         LOG::mod_log->error(
             M_DB, LOG::Mod_log::C_DATABASE, "Use of non-open transaction.");
         return {nullptr, false};
@@ -207,7 +208,7 @@ std::pair<DB::Info*,bool> Transaction_impl::access_element_locked(
 {
     m_database->get_lock().check_is_owned_shared_or_exclusive();
 
-    if( m_state != OPEN) {
+    if( get_state() != OPEN) {
         LOG::mod_log->error(
             M_DB, LOG::Mod_log::C_DATABASE, "Use of non-open transaction.");
         return {nullptr, false};
@@ -311,7 +312,7 @@ std::pair<DB::Info*,bool> Transaction_impl::access_element_shared(
     DB::Tag tag = info->get_tag();
     const char* name = info->get_name();
     if( m_database->get_check_privacy_levels()) {
-        DB::Privacy_level referencing_level = m_scope->get_level();
+        DB::Privacy_level referencing_level = info->get_scope()->get_level();
         check_privacy_levels( referencing_level, references, tag, name, /*store*/ true);
     }
 
@@ -331,7 +332,7 @@ DB::Info* Transaction_impl::edit_element( DB::Tag tag)
 
     THREAD::Block block( &m_database->get_lock());
 
-    if( m_state != OPEN) {
+    if( get_state() != OPEN) {
         LOG::mod_log->error(
             M_DB, LOG::Mod_log::C_DATABASE, "Use of non-open transaction.");
         return nullptr;
@@ -353,7 +354,7 @@ DB::Info* Transaction_impl::edit_element( const char* name)
 
     THREAD::Block block( &m_database->get_lock());
 
-    if( m_state != OPEN) {
+    if( get_state() != OPEN) {
         LOG::mod_log->error(
             M_DB, LOG::Mod_log::C_DATABASE, "Use of non-open transaction.");
         return nullptr;
@@ -373,6 +374,7 @@ DB::Info* Transaction_impl::edit_element_shared( Info_impl* info)
     MI_ASSERT( info);
 
     if( info->get_is_job()) {
+        info->unpin();
         LOG::mod_log->error(
             M_DB, LOG::Mod_log::C_DATABASE, "Invalid edit of job with tag " FMT_TAG,
             info->get_tag().get_uint());
@@ -406,11 +408,13 @@ void Transaction_impl::finish_edit( DB::Info* info, DB::Journal_type journal_typ
     Statistics_helper helper( g_finish_edit);
 
     // Invoke callback to prepare store.
-    info->get_element()->prepare_store( this, info->get_tag());
+    DB::Element_base* element = info->get_element();
+    MI_ASSERT( element);
+    element->prepare_store( this, info->get_tag());
 
     THREAD::Block block( &m_database->get_lock());
 
-    if( m_state != OPEN) {
+    if( get_state() != OPEN) {
         LOG::mod_log->error(
             M_DB, LOG::Mod_log::C_DATABASE, "Use of non-open transaction.");
         return;
@@ -419,20 +423,19 @@ void Transaction_impl::finish_edit( DB::Info* info, DB::Journal_type journal_typ
     // Check serialization.
     if( m_database->get_check_serialization_edit()) {
             SERIAL::Deserialization_manager* manager = m_database->get_deserialization_manager();
-            MI_ASSERT( manager->is_registered( info->get_element()->get_class_id()));
+            MI_ASSERT( manager->is_registered( element->get_class_id()));
             SERIAL::Buffer_serializer serializer;
-            serializer.serialize( info->get_element());
+            serializer.serialize( element);
             SERIAL::Buffer_deserializer deserializer( manager);
-            auto* deserialized_element = static_cast<DB::Element_base*>(
+            element = static_cast<DB::Element_base*>(
                 deserializer.deserialize( serializer.get_buffer(), serializer.get_buffer_size()));
-            static_cast<Info_impl*>( info)->set_element_from_serialization_check(
-                deserialized_element);
+            static_cast<Info_impl*>( info)->set_element_from_serialization_check( element);
     }
 
     m_database->get_info_manager()->finish_edit( static_cast<Info_impl*>( info), this);
 
     if( m_database->get_journal_enabled()) {
-        DB::Journal_type journal_mask = info->get_element()->get_journal_flags();
+        DB::Journal_type journal_mask = element->get_journal_flags();
         journal_type.restrict_journal( journal_mask);
         if( journal_type != DB::JOURNAL_NONE)
             m_journal.emplace_back(
@@ -529,7 +532,7 @@ void Transaction_impl::store_element_internal(
 
     THREAD::Block block( &m_database->get_lock());
 
-    if( m_state != OPEN) {
+    if( get_state() != OPEN) {
         LOG::mod_log->error(
             M_DB, LOG::Mod_log::C_DATABASE, "Use of non-open transaction.");
         delete element;
@@ -609,7 +612,7 @@ DB::Tag Transaction_impl::store(
 {
     DB::Tag tag = m_database->allocate_tag();
     store_job_internal(
-        tag, job, name, privacy_level, DB::JOURNAL_NONE, store_level, /*store_for_rc*/ false);
+        tag, job, name, privacy_level, store_level, /*store_for_rc*/ false);
     return tag;
 }
 
@@ -618,11 +621,9 @@ void Transaction_impl::store(
     SCHED::Job_base* job,
     const char* name,
     DB::Privacy_level privacy_level,
-    DB::Journal_type journal_type,
     DB::Privacy_level store_level)
 {
-    store_job_internal(
-        tag, job, name, privacy_level, journal_type, store_level, /*store_for_rc*/ false);
+    store_job_internal( tag, job, name, privacy_level, store_level, /*store_for_rc*/ false);
 }
 
 DB::Tag Transaction_impl::store_for_reference_counting(
@@ -633,7 +634,7 @@ DB::Tag Transaction_impl::store_for_reference_counting(
 {
     DB::Tag tag = m_database->allocate_tag();
     store_job_internal(
-        tag, job, name, privacy_level, DB::JOURNAL_NONE, store_level, /*store_for_rc*/ true);
+        tag, job, name, privacy_level, store_level, /*store_for_rc*/ true);
     return tag;
 }
 
@@ -642,11 +643,9 @@ void Transaction_impl::store_for_reference_counting(
     SCHED::Job_base* job,
     const char* name,
     DB::Privacy_level privacy_level,
-    DB::Journal_type journal_type,
     DB::Privacy_level store_level)
 {
-    store_job_internal(
-        tag, job, name, privacy_level, journal_type, store_level, /*store_for_rc*/ true);
+    store_job_internal( tag, job, name, privacy_level, store_level, /*store_for_rc*/ true);
 }
 
 void Transaction_impl::store_job_internal(
@@ -654,7 +653,6 @@ void Transaction_impl::store_job_internal(
     SCHED::Job_base* job,
     const char* name,
     DB::Privacy_level privacy_level,
-    DB::Journal_type journal_type,
     DB::Privacy_level store_level,
     bool store_for_rc)
 {
@@ -683,7 +681,7 @@ void Transaction_impl::store_job_internal(
     THREAD::Block block( &m_database->get_lock());
 
     store_job_internal_locked(
-        tag, job, name, privacy_level, journal_type, store_level, store_for_rc, /*temporary*/false);
+        tag, job, name, privacy_level, store_level, store_for_rc, /*temporary*/false);
 }
 
 void Transaction_impl::store_job_internal_locked(
@@ -691,7 +689,6 @@ void Transaction_impl::store_job_internal_locked(
     SCHED::Job_base* job,
     const char* name,
     DB::Privacy_level privacy_level,
-    DB::Journal_type journal_type,
     DB::Privacy_level store_level,
     bool store_for_rc,
     bool temporary)
@@ -702,7 +699,7 @@ void Transaction_impl::store_job_internal_locked(
     MI_ASSERT( !name || name[0]);
     MI_ASSERT( job);
 
-    if( m_state != OPEN) {
+    if( get_state() != OPEN) {
         LOG::mod_log->error(
             M_DB, LOG::Mod_log::C_DATABASE, "Use of non-open transaction.");
         delete job;
@@ -757,11 +754,13 @@ void Transaction_impl::localize(
 {
     Statistics_helper helper( g_localize);
 
-    DB::Info* info = access_element( tag);
+    auto info = make_ptr_no_add_ref<DB::Info>( access_element( tag));
+    if( !info)
+        return;
+
     DB::Element_base* element = info->get_element();
     DB::Element_base* copy = element->copy();
     store( tag, copy, info->get_name(), privacy_level, journal_type, privacy_level);
-    info->unpin();
 }
 
 bool Transaction_impl::remove( DB::Tag tag, bool remove_local_copy)
@@ -770,7 +769,7 @@ bool Transaction_impl::remove( DB::Tag tag, bool remove_local_copy)
 
     THREAD::Block block( &m_database->get_lock());
 
-    if( m_state != OPEN) {
+    if( get_state() != OPEN) {
         LOG::mod_log->error(
             M_DB, LOG::Mod_log::C_DATABASE, "Use of non-open transaction.");
         return false;
@@ -786,20 +785,18 @@ const char* Transaction_impl::tag_to_name( DB::Tag tag)
 
     THREAD::Block_shared block( &m_database->get_lock());
 
-    if( m_state != OPEN) {
+    if( get_state() != OPEN) {
         LOG::mod_log->error(
             M_DB, LOG::Mod_log::C_DATABASE, "Use of non-open transaction.");
         return nullptr;
     }
 
-    Info_impl* info = m_database->get_info_manager()->lookup_info( tag, m_scope, m_id);
+    auto info = make_ptr_no_add_ref<DB::Info>(
+        m_database->get_info_manager()->lookup_info( tag, m_scope, m_id));
     if( !info)
         return nullptr;
 
-    const char* result = info->get_name();
-
-    info->unpin();
-    return result;
+    return info->get_name();
 }
 
 DB::Tag Transaction_impl::name_to_tag( const char* name, Name_to_tag_context context)
@@ -811,7 +808,7 @@ DB::Tag Transaction_impl::name_to_tag( const char* name, Name_to_tag_context con
 
     THREAD::Block_shared block( &m_database->get_lock());
 
-    if( m_state != OPEN) {
+    if( get_state() != OPEN) {
         LOG::mod_log->error(
             M_DB, LOG::Mod_log::C_DATABASE, "Use of non-open transaction.");
         return {};
@@ -821,21 +818,19 @@ DB::Tag Transaction_impl::name_to_tag( const char* name, Name_to_tag_context con
         return {};
 
     Info_manager* info_manager = m_database->get_info_manager();
-    Info_impl* info = info_manager->lookup_info( name, m_scope, m_id);
+    auto info = make_ptr_no_add_ref<DB::Info>( info_manager->lookup_info( name, m_scope, m_id));
     if( !info)
         return {};
 
     DB::Tag tag = info->get_tag();
     MI_ASSERT( tag);
 
-    if( !info_manager->get_tag_is_removed( tag)) {
+    if( !info_manager->get_tag_is_removed( tag, m_scope, m_id)) {
 
-        info->unpin();
         return tag;
 
     } else if( (context == STORE_CONTEXT) && (info_manager->get_tag_reference_count( tag) == 0)) {
 
-        info->unpin();
         return {};
 
     } else {
@@ -853,7 +848,7 @@ DB::Tag Transaction_impl::name_to_tag_unsafe( const char* name)
 
     THREAD::Block_shared block( &m_database->get_lock());
 
-    if( m_state != OPEN) {
+    if( get_state() != OPEN) {
         LOG::mod_log->error(
             M_DB, LOG::Mod_log::C_DATABASE, "Use of non-open transaction.");
         return {};
@@ -862,14 +857,13 @@ DB::Tag Transaction_impl::name_to_tag_unsafe( const char* name)
     if( !name)
         return {};
 
-    Info_impl* info = m_database->get_info_manager()->lookup_info( name, m_scope, m_id);
+    auto info = make_ptr_no_add_ref<DB::Info>(
+        m_database->get_info_manager()->lookup_info( name, m_scope, m_id));
     if( !info)
         return {};
 
     DB::Tag result = info->get_tag();
     MI_ASSERT( result);
-
-    info->unpin();
     return result;
 }
 
@@ -879,37 +873,34 @@ bool Transaction_impl::get_tag_is_job( DB::Tag tag)
 
     THREAD::Block_shared block( &m_database->get_lock());
 
-    if( m_state != OPEN) {
+    if( get_state() != OPEN) {
         LOG::mod_log->error(
             M_DB, LOG::Mod_log::C_DATABASE, "Use of non-open transaction.");
         return false;
     }
 
-    Info_impl* info = m_database->get_info_manager()->lookup_info( tag, m_scope, m_id);
+    auto info = make_ptr_no_add_ref<DB::Info>(
+        m_database->get_info_manager()->lookup_info( tag, m_scope, m_id));
     if( !info)
         return false;
 
-    bool result = info->get_is_job();
-    info->unpin();
-    return result;
+    return info->get_is_job();
 }
 
 SERIAL::Class_id Transaction_impl::get_class_id( DB::Tag tag)
 {
     Statistics_helper helper( g_get_class_id);
 
-    // This method acquires the DB lock for itself.
-    DB::Info* info = access_element_no_stats( tag);
-
-    // Remaining code does not need the lock anymore. If "element" is valid, then it remains valid
-    // as long as "info" is pinned.
+    // Use access_element_no_stats() instead of Info_manager::lookup_info() such that jobs are
+    // executed if necessary. This method acquires the DB lock itself. The remaining code does not
+    // need the lock anymore. If "element" is valid, then it remains valid as long as "info" is
+    // pinned.
+    auto info = make_ptr_no_add_ref<DB::Info>( access_element_no_stats( tag));
 
     if( !info)
         return SERIAL::class_id_unknown;
 
-    SERIAL::Class_id class_id = info->get_element()->get_class_id();
-    info->unpin();
-    return class_id;
+    return info->get_element()->get_class_id();
 }
 
 DB::Privacy_level Transaction_impl::get_tag_privacy_level( DB::Tag tag)
@@ -918,19 +909,18 @@ DB::Privacy_level Transaction_impl::get_tag_privacy_level( DB::Tag tag)
 
     THREAD::Block_shared block( &m_database->get_lock());
 
-    if( m_state != OPEN) {
+    if( get_state() != OPEN) {
         LOG::mod_log->error(
             M_DB, LOG::Mod_log::C_DATABASE, "Use of non-open transaction.");
         return 0;
     }
 
-    Info_impl* info = m_database->get_info_manager()->lookup_info( tag, m_scope, m_id);
+    auto info = make_ptr_no_add_ref<DB::Info>(
+        m_database->get_info_manager()->lookup_info( tag, m_scope, m_id));
     if( !info)
         return 0;
 
-    DB::Privacy_level privacy_level = info->get_privacy_level();
-    info->unpin();
-    return privacy_level;
+    return info->get_privacy_level();
 }
 
 DB::Privacy_level Transaction_impl::get_tag_store_level( DB::Tag tag)
@@ -939,19 +929,18 @@ DB::Privacy_level Transaction_impl::get_tag_store_level( DB::Tag tag)
 
     THREAD::Block_shared block( &m_database->get_lock());
 
-    if( m_state != OPEN) {
+    if( get_state() != OPEN) {
         LOG::mod_log->error(
             M_DB, LOG::Mod_log::C_DATABASE, "Use of non-open transaction.");
         return 0;
     }
 
     DB::Privacy_level store_level;
-    Info_impl* info = m_database->get_info_manager()->lookup_info(
-        tag, m_scope, m_id, &store_level);
+    auto info = make_ptr_no_add_ref<DB::Info>(
+        m_database->get_info_manager()->lookup_info( tag, m_scope, m_id, &store_level));
     if( !info)
         return 0;
 
-    info->unpin();
     return store_level;
 }
 
@@ -961,7 +950,7 @@ mi::Uint32 Transaction_impl::get_tag_reference_count( DB::Tag tag)
 
     THREAD::Block_shared block( &m_database->get_lock());
 
-    if( m_state != OPEN) {
+    if( get_state() != OPEN) {
         LOG::mod_log->error(
             M_DB, LOG::Mod_log::C_DATABASE, "Use of non-open transaction.");
         return 0;
@@ -976,19 +965,18 @@ DB::Tag_version Transaction_impl::get_tag_version( DB::Tag tag)
 
     THREAD::Block_shared block( &m_database->get_lock());
 
-    if( m_state != OPEN) {
+    if( get_state() != OPEN) {
         LOG::mod_log->error(
             M_DB, LOG::Mod_log::C_DATABASE, "Use of non-open transaction.");
         return {};
     }
 
-    Info_impl* info = m_database->get_info_manager()->lookup_info( tag, m_scope, m_id);
+    auto info = make_ptr_no_add_ref<DB::Info>(
+        m_database->get_info_manager()->lookup_info( tag, m_scope, m_id));
     if( !info)
         return {};
 
-    DB::Tag_version result( tag, info->get_transaction_id(), info->get_version());
-    info->unpin();
-    return result;
+    return {tag, info->get_transaction_id(), info->get_version()};
 }
 
 bool Transaction_impl::can_reference_tag(
@@ -1010,12 +998,11 @@ bool Transaction_impl::can_reference_tag_locked(
     while( scope->get_level() > referencing_level)
         scope = scope->get_parent();
 
-    Info_impl* referenced_info = m_database->get_info_manager()->lookup_info(
-        referenced_tag, scope, m_id);
+    auto referenced_info = make_ptr_no_add_ref<DB::Info>(
+        m_database->get_info_manager()->lookup_info( referenced_tag, scope, m_id));
     if( !referenced_info)
         return false;
 
-    referenced_info->unpin();
     return true;
 }
 
@@ -1027,12 +1014,12 @@ bool Transaction_impl::can_reference_tag(
     THREAD::Block_shared block( &m_database->get_lock());
 
     DB::Privacy_level referencing_level;
-    Info_impl* referencing_info = m_database->get_info_manager()->lookup_info(
-        referencing_tag, m_scope, m_id, &referencing_level);
+    auto referencing_info = make_ptr_no_add_ref<DB::Info>(
+        m_database->get_info_manager()->lookup_info(
+            referencing_tag, m_scope, m_id, &referencing_level));
     if( !referencing_info)
         return false;
 
-    referencing_info->unpin();
     return can_reference_tag_locked( referencing_level, referenced_tag);
 }
 
@@ -1042,13 +1029,13 @@ bool Transaction_impl::get_tag_is_removed( DB::Tag tag)
 
     THREAD::Block_shared block( &m_database->get_lock());
 
-    if( m_state != OPEN) {
+    if( get_state() != OPEN) {
         LOG::mod_log->error(
             M_DB, LOG::Mod_log::C_DATABASE, "Use of non-open transaction.");
         return false;
     }
 
-    return m_database->get_info_manager()->get_tag_is_removed( tag);
+    return m_database->get_info_manager()->get_tag_is_removed( tag, m_scope, m_id);
 }
 
 std::unique_ptr<DB::Journal_query_result> Transaction_impl::get_journal(
@@ -1102,12 +1089,14 @@ std::unique_ptr<DB::Journal_query_result> Transaction_impl::get_journal(
 
 mi::Sint32 Transaction_impl::execute_fragmented( DB::Fragmented_job* job, size_t count)
 {
-    if( !job || count == 0)
+    if( !job)
+        return -1;
+    DB::Fragmented_job::Scheduling_mode mode = job->get_scheduling_mode();
+    if( count == 0 && mode != DB::Fragmented_job::ONCE_PER_HOST)
         return -1;
     if( job->get_priority() < 0)
         return -3;
 
-    DB::Fragmented_job::Scheduling_mode mode = job->get_scheduling_mode();
     if( mode == DB::Fragmented_job::ONCE_PER_HOST) {
         count = 1;
     } else if( mode == DB::Fragmented_job::USER_DEFINED) {
@@ -1118,7 +1107,7 @@ mi::Sint32 Transaction_impl::execute_fragmented( DB::Fragmented_job* job, size_t
 
     THREAD::Block block( &m_database->get_lock());
 
-    if( m_state != OPEN) {
+    if( get_state() != OPEN) {
         LOG::mod_log->error(
             M_DB, LOG::Mod_log::C_DATABASE, "Use of non-open transaction.");
         return -4;
@@ -1138,16 +1127,19 @@ mi::Sint32 Transaction_impl::execute_fragmented( DB::Fragmented_job* job, size_t
 mi::Sint32 Transaction_impl::execute_fragmented_async(
     DB::Fragmented_job* job, size_t count, DB::IExecution_listener* listener)
 {
-    if( !job || count == 0)
+    if( !job)
         return -1;
-    if( job->get_scheduling_mode() != DB::Fragmented_job::LOCAL)
+    DB::Fragmented_job::Scheduling_mode mode = job->get_scheduling_mode();
+    if( count == 0 && mode != DB::Fragmented_job::ONCE_PER_HOST)
+        return -1;
+    if( mode != DB::Fragmented_job::LOCAL)
         return -2;
     if( job->get_priority() < 0)
         return -3;
 
     THREAD::Block block( &m_database->get_lock());
 
-    if( m_state != OPEN) {
+    if( get_state() != OPEN) {
         LOG::mod_log->error(
             M_DB, LOG::Mod_log::C_DATABASE, "Use of non-open transaction.");
         return -4;
@@ -1177,13 +1169,14 @@ void Transaction_impl::invalidate_job_results( DB::Tag tag)
 
     THREAD::Block block( &m_database->get_lock());
 
-    if( m_state != OPEN) {
+    if( get_state() != OPEN) {
         LOG::mod_log->error(
             M_DB, LOG::Mod_log::C_DATABASE, "Use of non-open transaction.");
         return;
     }
 
-    Info_impl* info = m_database->get_info_manager()->lookup_info( tag, m_scope, m_id);
+    Info_impl_ptr info = make_ptr_no_add_ref(
+        m_database->get_info_manager()->lookup_info( tag, m_scope, m_id));
     if( !info) {
         LOG::mod_log->fatal(
             M_DB, LOG::Mod_log::C_DATABASE, "Invalidation of invalid tag " FMT_TAG, tag.get_uint());
@@ -1194,19 +1187,14 @@ void Transaction_impl::invalidate_job_results( DB::Tag tag)
         LOG::mod_log->error(
             M_DB, LOG::Mod_log::C_DATABASE, "Invalidation of non-job job with tag " FMT_TAG,
             tag.get_uint());
-        info->unpin();
         return;
     }
 
-    if( !info->get_element()) {
-        info->unpin();
+    if( !info->get_element())
         return;
-    }
 
-    if( is_job_result_valid( info))
-        split_job( info);
-
-    info->unpin();
+    if( is_job_result_valid( info.get()))
+        split_job( info.get());
 }
 
 /// Helper class used with Transaction_impl::advise() below.
@@ -1222,9 +1210,8 @@ public:
 
     void execute( const mi::neuraylib::IJob_execution_context* /*context*/) final
     {
-        DB::Info* info = m_transaction->access_element( m_tag);
-        if( info)
-            info->unpin();
+        auto info = make_ptr_no_add_ref<DB::Info>( m_transaction->access_element( m_tag));
+        info.reset();
 
         // The blocked transaction is not yet closed, i.e., there is at least one other reference
         // alive, and giving up this reference before unblocking is safe. Otherwise, the database
@@ -1263,14 +1250,6 @@ DB::Element_base* Transaction_impl::construct_empty_element( SERIAL::Class_id cl
     return static_cast<DB::Element_base*>( manager->construct( class_id));
 }
 
-bool Transaction_impl::is_visible_for( DB::Transaction_id id) const
-{
-    if( id == m_id)
-        return true;
-
-    return (m_state == COMMITTED) && (m_visibility_id <= id);
-}
-
 bool Transaction_impl::is_job_result_valid( DB::Info* info)
 {
     SCHED::Job_base* job = info->get_job();
@@ -1295,12 +1274,58 @@ void Transaction_impl::split_job( Info_impl* info)
         job_copy,
         name,
         privacy_level,
-        DB::JOURNAL_NONE,
         /*store_level*/ privacy_level,
         // Duplicating the store_for_rc flag from the existing job has no additional effect, and the
         // temporary flag takes care of the new info anyway.
         /*store_for_rc*/ false,
         /*temporary*/ !job->get_is_shared());
+}
+
+void Transaction_impl::wait_for_fragmented_jobs_locked( bool commit)
+{
+    Flexible_lock& lock = m_database->get_lock();
+    lock.check_is_owned();
+
+    MI_ASSERT( get_state() == CLOSING);
+
+    if( m_fragmented_jobs_counter == 0)
+        return;
+
+    LOG::mod_log->debug(
+        M_DB, LOG::Mod_log::C_DATABASE, "%s transaction " FMT_TAG " is waiting for fragmented "
+        "jobs still being executed.", commit ? "Committing" : "Aborting", m_id());
+
+    lock.unlock();
+    m_fragmented_jobs_condition.wait();
+    lock.lock();
+
+    LOG::mod_log->debug(
+        M_DB, LOG::Mod_log::C_DATABASE, "%s transaction " FMT_TAG " continues.",
+        commit ? "Committing" : "Aborting", m_id());
+}
+
+void Transaction_impl::cancel_fragmented_jobs_locked()
+{
+    m_database->get_lock().check_is_owned();
+
+    MI_ASSERT( get_state() == OPEN || get_state() == CLOSING);
+
+    for( auto& job: m_fragmented_jobs)
+        job.cancel();
+
+    m_fragmented_jobs_cancelled = true;
+}
+
+void Transaction_impl::fragmented_job_finished( DBLIGHT::Fragmented_job* job)
+{
+    THREAD::Block block( &m_database->get_lock());
+
+    auto it = Fragmented_jobs_list::s_iterator_to( *job);
+    m_fragmented_jobs.erase( it);
+
+    mi::Uint32 result = --m_fragmented_jobs_counter;
+    if( (result == 0) && (get_state() == CLOSING))
+        m_fragmented_jobs_condition.signal();
 }
 
 namespace {
@@ -1410,7 +1435,8 @@ void Transaction_impl::check_reference_cycles_internal(
         return;
     }
 
-    Info_impl* info = m_database->get_info_manager()->lookup_info( tag, m_scope, m_id);
+    Info_impl_ptr info = make_ptr_no_add_ref(
+        m_database->get_info_manager()->lookup_info( tag, m_scope, m_id));
     if( !info) {
         std::string log_name = get_log_name( name);
         LOG::mod_log->error( M_DB, LOG::Mod_log::C_DATABASE,
@@ -1433,8 +1459,6 @@ void Transaction_impl::check_reference_cycles_internal(
 
     processing.erase( tag);
     done.insert( tag);
-
-    info->unpin();
 }
 
 size_t Transaction_impl::get_pinned_infos_size() const
@@ -1446,10 +1470,6 @@ size_t Transaction_impl::get_pinned_infos_size() const
 void Transaction_impl::unpin_pinned_infos()
 {
     THREAD::Block block( m_pinned_infos_lock);
-
-    for( const auto& info: m_pinned_infos)
-        info->unpin();
-
     m_pinned_infos.clear();
 }
 
@@ -1457,7 +1477,7 @@ bool Transaction_impl::block_commit_or_abort_locked()
 {
     m_database->get_lock().check_is_owned();
 
-    if( m_state != OPEN)
+    if( get_state() != OPEN)
         return false;
 
     ++m_block_counter;
@@ -1468,7 +1488,7 @@ bool Transaction_impl::unblock_commit_or_abort_locked()
 {
     m_database->get_lock().check_is_owned();
 
-    if( (m_state != OPEN) && (m_state != CLOSING))
+    if( (get_state() != OPEN) && (get_state() != CLOSING))
         return false;
 
     if( m_block_counter == 0) {
@@ -1477,7 +1497,7 @@ bool Transaction_impl::unblock_commit_or_abort_locked()
     }
 
     mi::Uint32 result = --m_block_counter;
-    if( (result == 0) && (m_state == CLOSING))
+    if( (result == 0) && (get_state() == CLOSING))
         m_block_condition.signal();
 
     return true;
@@ -1485,10 +1505,10 @@ bool Transaction_impl::unblock_commit_or_abort_locked()
 
 void Transaction_impl::wait_for_unblocked_locked( bool commit)
 {
-    THREAD::Shared_lock& lock = m_database->get_lock();
+    Flexible_lock& lock = m_database->get_lock();
     lock.check_is_owned();
 
-    MI_ASSERT( m_state == CLOSING);
+    MI_ASSERT( get_state() == CLOSING);
 
     if( m_block_counter == 0)
         return;
@@ -1504,54 +1524,6 @@ void Transaction_impl::wait_for_unblocked_locked( bool commit)
     LOG::mod_log->debug(
         M_DB, LOG::Mod_log::C_DATABASE, "%s transaction " FMT_TAG " continues.",
         commit ? "Committing" : "Aborting", m_id());
-}
-
-void Transaction_impl::wait_for_fragmented_jobs_locked( bool commit)
-{
-    THREAD::Shared_lock& lock = m_database->get_lock();
-    lock.check_is_owned();
-
-    MI_ASSERT( m_state == CLOSING);
-
-    if( m_fragmented_jobs_counter == 0)
-        return;
-
-    LOG::mod_log->debug(
-        M_DB, LOG::Mod_log::C_DATABASE, "%s transaction " FMT_TAG " is waiting for fragmented "
-        "jobs still being executed.", commit ? "Committing" : "Aborting", m_id());
-
-    lock.unlock();
-    m_fragmented_jobs_condition.wait();
-    lock.lock();
-
-    LOG::mod_log->debug(
-        M_DB, LOG::Mod_log::C_DATABASE, "%s transaction " FMT_TAG " continues.",
-        commit ? "Committing" : "Aborting", m_id());
-}
-
-void Transaction_impl::cancel_fragmented_jobs_locked()
-{
-    THREAD::Shared_lock& lock = m_database->get_lock();
-    lock.check_is_owned();
-
-    MI_ASSERT( m_state == OPEN || m_state == CLOSING);
-
-    for( auto& job: m_fragmented_jobs)
-        job.cancel();
-
-    m_fragmented_jobs_cancelled = true;
-}
-
-void Transaction_impl::fragmented_job_finished( DBLIGHT::Fragmented_job* job)
-{
-    THREAD::Block block( &m_database->get_lock());
-
-    auto it = Fragmented_jobs_list::s_iterator_to( *job);
-    m_fragmented_jobs.erase( it);
-
-    mi::Uint32 result = --m_fragmented_jobs_counter;
-    if( (result == 0) && (m_state == CLOSING))
-        m_fragmented_jobs_condition.signal();
 }
 
 std::ostream& operator<<( std::ostream& s, const Transaction_impl::State& state)
@@ -1619,8 +1591,13 @@ bool Transaction_manager::end_transaction( Transaction_impl* transaction, bool c
 
     transaction->unpin_pinned_infos();
 
-    transaction->set_visibility_id( m_next_transaction_id);
-    transaction->set_state( commit ? Transaction_impl::COMMITTED : Transaction_impl::ABORTED);
+    if( commit) {
+        transaction->set_state( Transaction_impl::COMMITTED);
+        transaction->set_visibility_id( m_next_transaction_id);
+    } else {
+        transaction->set_state( Transaction_impl::ABORTED);
+        // The visibility ID does not matter. Leave ~0U as a visual indicator.
+    }
 
     if( m_database->get_journal_enabled()) {
 
@@ -1659,7 +1636,7 @@ bool Transaction_manager::end_transaction( Transaction_impl* transaction, bool c
     transaction->unpin();
 
     m_database->get_info_manager()->garbage_collection(
-        /*update_lowest_open_transaction_ids*/ true);
+        /*force*/ false, /*update_lowest_open_transaction_ids*/ true);
 
     return true;
 }
@@ -1673,7 +1650,7 @@ void Transaction_manager::remove_from_all_transactions( Transaction_impl* transa
     m_all_transactions.erase( it);
 }
 
-void Transaction_manager::dump( std::ostream& s, bool verbose, bool mask_pointer_values)
+void Transaction_manager::dump( std::ostream& s, bool /*verbose*/, bool mask_pointer_values)
 {
     m_database->get_lock().check_is_owned_shared_or_exclusive();
     THREAD::Block block( m_all_transactions_lock);
@@ -1682,7 +1659,7 @@ void Transaction_manager::dump( std::ostream& s, bool verbose, bool mask_pointer
 
     for( const auto& t: m_all_transactions) {
 
-        s << "ID " << t.get_id()();
+        s << "Index " << t.get_id()();
         if( !mask_pointer_values) s << " at " << &t;
         s << ": scope ID = " << t.get_scope()->get_id()
           << ", pin count = " << t.get_pin_count()
@@ -1712,8 +1689,42 @@ void Transaction_manager::dump( std::ostream& s, bool verbose, bool mask_pointer
          }
     }
 
-    if( !m_all_transactions.empty())
-        s << std::endl;
+    s << std::endl;
+}
+
+void Transaction_manager:: dump_html( std::ostream& s, const Html_context& context)
+{
+    m_database->get_lock().check_is_owned_shared_or_exclusive();
+    THREAD::Block block( m_all_transactions_lock);
+
+    s << "<table border cellspacing=0 cellpadding=5>\n";
+    s << "<tr>\n";
+    s << "<th>ID</th>\n";
+    s << "<th>Scope ID</th>\n";
+    s << "<th>Pin count</th>\n";
+    s << "<th>State</th>\n";
+    s << "<th>Next seq. number</th>\n";
+    s << "<th>Visibility ID</th>\n";
+    s << "<th># Pinned infos</th>\n";
+    s << "</tr>\n";
+
+    for( const auto& t: m_all_transactions) {
+        const State_and_visibility_ptr& sv = t.get_state_and_visibility();
+        std::string visibility
+            = sv->m_state != Transaction_impl::OPEN ? std::to_string( sv->m_id()) : "-";
+
+        s << "<tr>\n";
+        s << "<td align=right>"  << t.get_id()() << "</td>\n";
+        s << "<td align=right>"  << t.get_scope()->get_id() << "</td>\n";
+        s << "<td align=right>"  << t.get_pin_count() << "</td>\n";
+        s << "<td align=center>" << t.get_state() << "</td>\n";
+        s << "<td align=right>"  << t.get_next_sequence_number() << "</td>\n";
+        s << "<td align=right>"  << visibility << "</td>\n";
+        s << "<td align=right>"  << t.get_pinned_infos_size() << "</td>\n";
+        s << "</tr>\n";
+    }
+
+    s << "</table>\n";
 }
 
 DB::Tag Job_transaction::store(
@@ -1780,12 +1791,11 @@ void Job_transaction::store(
     SCHED::Job_base* job,
     const char* name,
     DB::Privacy_level privacy_level,
-    DB::Journal_type journal_type,
     DB::Privacy_level store_level)
 {
     m_stores_observed = true;
     m_transaction->store_for_reference_counting(
-        tag, job, name, privacy_level, journal_type, store_level);
+        tag, job, name, privacy_level, store_level);
 }
 
 DB::Tag Job_transaction::store_for_reference_counting(
@@ -1804,12 +1814,11 @@ void Job_transaction::store_for_reference_counting(
     SCHED::Job_base* job,
     const char* name,
     DB::Privacy_level privacy_level,
-    DB::Journal_type journal_type,
     DB::Privacy_level store_level)
 {
     m_stores_observed = true;
     m_transaction->store_for_reference_counting(
-        tag, job, name, privacy_level, journal_type, store_level);
+        tag, job, name, privacy_level, store_level);
 }
 
 bool Job_transaction::commit()

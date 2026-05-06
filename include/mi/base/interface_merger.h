@@ -103,7 +103,7 @@ public:
         return MINOR::compare_iid( iid);
     }
 
-    /// Reimplements #mi::base::IInterface::get_interface(const Uuid&) const.
+    /// Reimplements #mi::base::IInterface::get_interface(const mi::base::Uuid&) const.
     ///
     /// Forwards the call to the MAJOR %base class, and then, in case of failure, to the
     /// MINOR %base class.
@@ -118,7 +118,7 @@ public:
         return static_cast<const T*>( get_interface( typename T::IID()));
     }
 
-    /// Reimplements #mi::base::IInterface::get_interface(const Uuid&).
+    /// Reimplements #mi::base::IInterface::get_interface(const mi::base::Uuid&).
     ///
     /// Forwards the call to the MAJOR %base class, and then, in case of failure, to the
     /// MINOR %base class.

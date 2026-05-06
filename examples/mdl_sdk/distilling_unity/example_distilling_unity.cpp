@@ -51,6 +51,12 @@
 float RADINV2[] = { 0, 0.5f, 0.25f, 0.75f, 0.125f, 0.625f, 0.375f, 0.875f, 0.0625f, 0.5625f, 0.3125f, 0.8125f, 0.1875f, 0.6875f, 0.4375f };
 float RADINV3[] = { 0, 0.333333f, 0.666667f, 0.111111f, 0.444444f, 0.777778f, 0.222222f, 0.555556f, 0.888889f, 0.037037f, 0.37037f, 0.703704f, 0.148148f, 0.481481f, 0.814815f };
 
+const mi::neuraylib::tct_float4_a16 identity[3] = {
+    1.0f, 0.0f, 0.0f, 0.0f,
+    0.0f, 1.0f, 0.0f, 0.0f,
+    0.0f, 0.0f, 1.0f, 0.0f
+};
+
 using mi::examples::mdl::g_logger;
 
 // Custom Timing output with a logger
@@ -656,7 +662,6 @@ private:
 
             state.normal = mi::Float32_3(0, 0, 1);
             state.geom_normal = mi::Float32_3(0, 0, 1);
-            //state.position        = mi::Float32_3(0, 0, 0);
             state.animation_time = 0;
             state.ro_data_segment = 0;
 
@@ -678,12 +683,8 @@ private:
             // text result are currently unused
             state.text_results = 0;
 
-            // we have no uniform state here
-            mi::Float32_4_4 world_to_obj(1.0f);
-            mi::Float32_4_4 obj_to_world(1.0f);
-
-            state.world_to_object = &world_to_obj[0];
-            state.object_to_world = &obj_to_world[0];
+            state.world_to_object = identity;
+            state.object_to_world = identity;
             state.object_id = 0;
 
             mi::base::Handle<mi::neuraylib::ITile> tile(texture->get_tile());

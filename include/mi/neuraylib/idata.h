@@ -150,9 +150,9 @@ namespace mi {
     \endif
     </table>
     (1) The type name of an enum is specific to the actual enum type. There is no naming
-        pattern as for the other simple types. \ifnot MDL_SDK_API User-defined enum types require
+        pattern as for the other simple types. User-defined enum types require
         the registration of a corresponding enum declaration with a type name (see
-        #mi::neuraylib::IExtension_api::register_enum_decl()). \endif
+        #mi::neuraylib::IExtension_api::register_enum_decl()).
 
     \par Collections
 
@@ -190,9 +190,9 @@ namespace mi {
         with arrays as members). \n
     (3) For attributes, the array length N must not be zero. \n
     (4) The type name of a structure is specific to the actual structure type. There is no naming
-        pattern as for arrays or maps. \ifnot MDL_SDK_API User-defined structure types require the
+        pattern as for arrays or maps. User-defined structure types require the
         registration of a corresponding structure declaration with a type name (see
-        #mi::neuraylib::IExtension_api::register_structure_decl()). \n \endif \ifnot DICE_API
+        #mi::neuraylib::IExtension_api::register_structure_decl()). \n \ifnot DICE_API
     \endif
 
     \par Compounds
@@ -397,7 +397,7 @@ public:
     ///
     /// This templated member function is a wrapper of the non-template variant for the user's
     /// convenience. It eliminates the need to call
-    /// #mi::base::IInterface::get_interface(const Uuid&)
+    /// #mi::base::IInterface::get_interface(const mi::base::Uuid&)
     /// on the returned pointer, since the return type already is a pointer to the type \p T
     /// specified as template parameter.
     ///
@@ -426,7 +426,7 @@ public:
     ///
     /// This templated member function is a wrapper of the non-template variant for the user's
     /// convenience. It eliminates the need to call
-    /// #mi::base::IInterface::get_interface(const Uuid&)
+    /// #mi::base::IInterface::get_interface(const mi::base::Uuid&)
     /// on the returned pointer, since the return type already is a pointer to the type \p T
     /// specified as template parameter.
     ///
@@ -455,7 +455,7 @@ public:
     ///
     /// This templated member function is a wrapper of the non-template variant for the user's
     /// convenience. It eliminates the need to call
-    /// #mi::base::IInterface::get_interface(const Uuid&)
+    /// #mi::base::IInterface::get_interface(const mi::base::Uuid&)
     /// on the returned pointer, since the return type already is a pointer to the type \p T
     /// specified as template parameter.
     ///
@@ -484,7 +484,7 @@ public:
     ///
     /// This templated member function is a wrapper of the non-template variant for the user's
     /// convenience. It eliminates the need to call
-    /// #mi::base::IInterface::get_interface(const Uuid&)
+    /// #mi::base::IInterface::get_interface(const mi::base::Uuid&)
     /// on the returned pointer, since the return type already is a pointer to the type \p T
     /// specified as template parameter.
     ///

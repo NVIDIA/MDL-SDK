@@ -224,7 +224,7 @@ public:
         buf[i--] = '\0';
         do {
             size_t d = v % 10;
-            buf[i--] = '0' + d;
+            buf[i--] = '0' + char(d);
             v /= 10;
         } while (v > 0);
         write(&buf[i + 1]);

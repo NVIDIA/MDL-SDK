@@ -156,6 +156,7 @@ INPUT                  = . \
                          ../../include/mi/neuraylib/ienum.h \
                          ../../include/mi/neuraylib/ienum_decl.h \
                          ../../include/mi/neuraylib/iexpression.h \
+                         ../../include/mi/neuraylib/iextension_api.h \
                          ../../include/mi/neuraylib/ifactory.h \
                          ../../include/mi/neuraylib/ifunction_call.h \
                          ../../include/mi/neuraylib/ifunction_definition.h \
@@ -412,7 +413,6 @@ PREDEFINED             = MI_FOR_DOXYGEN_ONLY=1 \
                          MI_DLL_EXPORT= \
                          MI_DLL_LOCAL= \
                          MI_PREVENT_MACRO_EXPAND= \
-                         MI_ARCH_64BIT= \
                          MI_CXX_FEATURE_RVALUE_REFERENCES= \
                          __align__(x)=
 EXPAND_AS_DEFINED      = MI_DLL_EXPORT \

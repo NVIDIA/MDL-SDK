@@ -439,9 +439,9 @@ public:
     ///       #get_mdl_name(). They are provided here such that parsing of the MDL name is not
     ///       necessary. Their main use case is one variant of overload resolution if no actual
     ///       arguments are given (see
-    ///       #mi::neuraylib::IModule::get_function_overloads(const char*,const IArray*)const. For
-    ///       almost all other use cases it is strongly recommended to use #get_parameter_types()
-    ///       instead.
+    ///       #mi::neuraylib::IModule::get_function_overloads(const char*,const mi::IArray*)const.
+    ///       For almost all other use cases it is strongly recommended to use
+    ///       #get_parameter_types() instead.
     ///
     /// \param index    The index of the parameter.
     /// \return         The type name of the parameter, or \c nullptr if \p index is out of range.
@@ -476,7 +476,7 @@ public:
     ///
     /// \note This includes, in addition to functions definitions that are explicitly marked as
     ///       declarative, also function definitions that have been analyzed by the MDL compiler
-    //        to be declarative.
+    ///       to be declarative.
     virtual bool is_declarative() const = 0;
 
     /// Indicates whether the function definition is uniform.
@@ -498,7 +498,7 @@ public:
     ///
     /// This templated member function is a wrapper of the non-template variant for the user's
     /// convenience. It eliminates the need to call
-    /// #mi::base::IInterface::get_interface(const Uuid &)
+    /// #mi::base::IInterface::get_interface(const mi::base::Uuid&)
     /// on the returned pointer, since the return type already is a pointer to the type \p T
     /// specified as template parameter.
     ///
@@ -527,7 +527,7 @@ public:
     /// Returns the index position of a parameter.
     ///
     /// \param name     The name of the parameter.
-    /// \return         The index of the parameter, or -1 if \p name is invalid.
+    /// \return         The index of the parameter, or 0U  if \p name is invalid.
     virtual Size get_parameter_index( const char* name) const = 0;
 
     /// Returns the types of all parameters.
@@ -562,7 +562,7 @@ public:
     /// \param index    The index of the parameter.
     /// \param u_index  The index of the enable_if user.
     /// \return         The index of a parameter whose \c enable_if condition depends on this
-    ///                 parameter argument, or ~0 if indexes are out of range.
+    ///                 parameter argument, or ~0U if indexes are out of range.
     virtual Size get_enable_if_user( Size index, Size u_index) const = 0;
 
     /// Returns the annotations of the function definition itself, or \c nullptr if there are no
@@ -592,15 +592,20 @@ public:
 
     /// Returns \c true if the definition is valid, \c false otherwise.
     ///
-    /// A definition can become invalid if the module it has been defined in
-    /// or another module imported by that module has been reloaded. In the first case,
-    /// the definition can no longer be used. In the second case, the
-    /// definition can be validated by reloading the module it has been
-    /// defined in.
-    /// \param context  Execution context that can be queried for error messages
-    ///                 after the operation has finished. Can be \c nullptr.
-    /// \return     - \c true   The definition is valid.
-    ///             - \c false  The definition is invalid.
+    /// A definition can become invalid if the module it has been defined in or another module
+    /// (directly or indirectly) imported by that module has been reloaded. In the first case, the
+    /// definition can no longer be used. In the second case, it might be possible to make an
+    /// invalid definition valid again by reloading the modules of all related import chains, or
+    /// simpler by reloading its module recursively.
+    ///
+    /// \note This method does not return a static property, but performs a potentially expensive
+    ///       computation.
+    ///
+    /// \see #mi::neuraylib::IModule::is_valid()
+    ///
+    /// \param context  Execution context that can be queried for error messages after the
+    ///                 operation has finished. Can be \c nullptr.
+    /// \return         \c true if valid, or \c false otherwise.
     virtual bool is_valid( IMdl_execution_context* context) const = 0;
 
     /// Returns the expression that represents the body of the function (if possible).
@@ -641,7 +646,7 @@ public:
     ///
     /// This templated member function is a wrapper of the non-template variant for the user's
     /// convenience. It eliminates the need to call
-    /// #mi::base::IInterface::get_interface(const Uuid &)
+    /// #mi::base::IInterface::get_interface(const mi::base::Uuid&)
     /// on the returned pointer, since the return type already is a pointer to the type \p T
     /// specified as template parameter.
     ///
@@ -704,10 +709,6 @@ public:
     ///
     /// \return         The mangled name of the function definition.
     virtual const char* get_mangled_name() const = 0;
-
-#ifdef MI_NEURAYLIB_DEPRECATED_15_0
-    inline const char* get_mdl_mangled_name() const { return get_mangled_name(); }
-#endif // MI_NEURAYLIB_DEPRECATED_15_0
 };
 
 /**@}*/ // end group mi_neuray_mdl_elements

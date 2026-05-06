@@ -823,8 +823,19 @@ public:
 
     /// Returns \c true if all imports of the module are valid.
     ///
-    /// \param context     In case of failure, the execution context can be checked for error
-    ///                    messages. Can be \c nullptr.
+    /// A module can become invalid if an (directly or indirectly) imported module has been
+    /// reloaded. It might be possible to make an invalid module valid again by reloading all
+    /// related import chains, or simpler by reloading this module recursively.
+    ///
+    /// \note This method does not return a static property, but performs a potentially expensive
+    ///       computation.
+    ///
+    /// \see #mi::neuraylib::IModule::reload(),
+    ///      #mi::neuraylib::IModule::reload_from_string()
+    ///
+    /// \param context  Execution context that can be queried for error messages after the
+    ///                 operation has finished. Can be \c nullptr.
+    /// \return         \c true if valid, or \c false otherwise.
     virtual bool is_valid( IMdl_execution_context* context) const = 0;
 
     /// Reload the module from disk.

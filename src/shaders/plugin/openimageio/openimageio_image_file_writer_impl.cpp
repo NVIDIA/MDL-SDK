@@ -229,22 +229,36 @@ Image_file_writer_impl::Image_file_writer_impl(
         image_spec["compression"] = "lzw";
     }
 
-    if( m_exr_create_multipart_for_alpha) {
-        m_image_output->open( ext, 2, m_exr_multipart_image_spec);
-    } else
-        m_image_output->open( ext, image_spec);
+    bool success = false;
+    if( m_exr_create_multipart_for_alpha)
+        success = m_image_output->open( ext, 2, m_exr_multipart_image_spec);
+    else
+        success = m_image_output->open( ext, image_spec);
+
+    if( !success) {
+        std::string message = m_image_output->geterror();
+        if( message.empty())
+            message = OIIO::geterror();
+        log( mi::base::MESSAGE_SEVERITY_ERROR, message.c_str());
+        m_image_output.reset();
+        return;
+    }
 }
 
 Image_file_writer_impl::~Image_file_writer_impl()
 {
-    if( m_image_output)
-        m_image_output->close();
+    // No way to signal a failure in close() and write() from the destructor (needs a separate
+    // finalization method).
+
+    if( m_image_output) {
+        [[maybe_unused]] bool success = m_image_output->close();
+        assert( success);
+    }
 
     if( !m_buffer.empty()) {
-        mi::Sint64 count = m_writer->write(
+        [[maybe_unused]] mi::Sint64 count = m_writer->write(
             reinterpret_cast<const char*>( &m_buffer[0]), m_buffer.size());
         assert( static_cast<size_t>( count) ==  m_buffer.size());
-        (void) count;
     }
 }
 
@@ -307,7 +321,9 @@ bool Image_file_writer_impl::write(
     int cpp = IMAGE::get_components_per_pixel( m_pixel_type);
     int bpc = IMAGE::get_bytes_per_component( m_pixel_type);
     int bytes_per_pixel = cpp * bpc;
-    int bytes_per_row = m_resolution_x * cpp * bpc;
+    int64_t bytes_per_row = static_cast<int64_t>( m_resolution_x) * cpp * bpc;
+    if( bytes_per_row < 0)
+        return false;
 
     OIIO::TypeDesc format( get_base_type( m_pixel_type));
 

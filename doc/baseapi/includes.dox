@@ -53,7 +53,7 @@ automatically.  As a consequence, their inclusion is order independent.
 <table border="2" cellpadding="3" cellspacing="3">
   <tr valign="bottom">
     <th>Include Files Grouped by Component</th>
-    <th>Description</th></tr>
+    <th>Description</th>
     <th>Documentation</th>
   </tr>
   <tr valign="top">
@@ -192,24 +192,6 @@ automatically.  As a consequence, their inclusion is order independent.
     <td class="indexkey"><tt> mi/base/iallocator.h</tt></td>
     <td class="indexvalue">
         #mi::base::IAllocator interface to dynamically allocate and deallocate memory.
-    </td>
-    <td class="indexvalue">\ref mi_base_iallocator
-    </td>
-  </tr>
-  <tr valign="top">
-    <td class="indexkey"><tt> mi/base/default_allocator.h</tt></td>
-    <td class="indexvalue">
-        Default implementation for #mi::base::IAllocator interface
-        based on global new and delete.
-    </td>
-    <td class="indexvalue">\ref mi_base_iallocator
-    </td>
-  </tr>
-  <tr valign="top">
-    <td class="indexkey"><tt> mi/base/std_allocator.h</tt></td>
-    <td class="indexvalue">
-        Standard STL %allocator implementation based on an
-        #mi::base::IAllocator interface
     </td>
     <td class="indexvalue">\ref mi_base_iallocator
     </td>

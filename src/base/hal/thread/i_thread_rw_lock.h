@@ -50,8 +50,6 @@ namespace MI {
 
 namespace THREAD {
 
-class Block_shared;
-
 /// Non-recursive reader/writer lock class.
 class Shared_lock
 {
@@ -64,9 +62,6 @@ public:
 
     /// Destructor.
     ~Shared_lock();
-
-    using Block_shared = THREAD::Block_shared;
-    using Block_exclusive = THREAD::Block<Shared_lock>;
 
     /// %Locks the lock in shared mode.
     void lock_shared();
@@ -121,28 +116,34 @@ private:
     /// The srwlock implementing the lock.
     SRWLOCK m_srwlock = SRWLOCK_INIT;
 #endif
+
     /// Number of threads holding the lock in shared mode. Used by the sanity check.
     std::atomic_uint32_t m_locked_shared = 0;
+
     /// Indicates whether lock is held is exclusive mode. Used by the sanity check.
-    bool m_locked_exclusive = false;
+    ///
+    /// Usually 0 or 1. The counter (instead of a flag) is used to detect recursive lock attempts
+    /// since pthread_rwlock_wrlock() is not required to detect this.
+    std::atomic_uint32_t m_locked_exclusive = 0;
 };
 
 /// Utility class to acquire a RW lock in \em shared mode.
 ///
 /// \see THREAD::Shared_lock
+template<typename T>
 class Block_shared
 {
 public:
     /// Constructor.
     ///
     /// Acquires the lock.
-    explicit Block_shared( Shared_lock& lock);
+    explicit Block_shared( T& lock);
 
     /// Constructor.
     ///
     /// \param lock   If not \c NULL, this lock is acquired. If \c NULL, #set() can be used to
     ///               explicitly acquire a lock later.
-    explicit Block_shared( Shared_lock* lock = nullptr);
+    explicit Block_shared( T* lock = nullptr);
 
     Block_shared( const Block_shared&) = delete;
     Block_shared& operator=( const Block_shared&) = delete;
@@ -160,7 +161,7 @@ public:
     /// This method does nothing if the passed lock is already acquired by this class.
     ///
     /// \param lock   The new lock to acquire.
-    void set( Shared_lock* lock);
+    void set( T* lock);
 
     /// Releases the lock.
     ///
@@ -177,14 +178,14 @@ public:
     ///
     /// \param lock   The new lock to acquire.
     /// \return       \c true if the lock was acquired, \c false otherwise.
-    bool try_set( Shared_lock* lock);
+    bool try_set( T* lock);
 
     /// Returns the lock currently owned by this block.
-    Shared_lock* get_lock() const;
+    T* get_lock() const;
 
 private:
     // The lock associated with this helper class.
-    Shared_lock* m_lock;
+    T* m_lock;
 };
 
 inline Shared_lock::~Shared_lock()
@@ -195,7 +196,7 @@ inline Shared_lock::~Shared_lock()
     (void) result;
 #endif
     MI_ASSERT( m_locked_shared == 0);
-    MI_ASSERT( !m_locked_exclusive);
+    MI_ASSERT( m_locked_exclusive == 0);
 }
 
 inline void Shared_lock::lock_shared()
@@ -214,15 +215,13 @@ inline bool Shared_lock::try_lock_shared()
     int result = pthread_rwlock_tryrdlock( &m_rwlock);
     if( result != 0)
         return false;
-    ++m_locked_shared;
-    return true;
 #else
     BOOL result = TryAcquireSRWLockShared( &m_srwlock);
     if( result == FALSE)
         return false;
+#endif
     ++m_locked_shared;
     return true;
-#endif
 }
 
 inline void Shared_lock::unlock_shared()
@@ -247,7 +246,9 @@ inline void Shared_lock::lock()
 #else
     AcquireSRWLockExclusive( &m_srwlock);
 #endif
-    m_locked_exclusive = true;
+    uint32_t count = ++m_locked_exclusive;
+    MI_ASSERT( (count == 1) || !"Incorrent recursive lock attempt of exclusive lock");
+    (void) count;
 }
 
 inline bool Shared_lock::try_lock()
@@ -256,21 +257,20 @@ inline bool Shared_lock::try_lock()
     int result = pthread_rwlock_trywrlock( &m_rwlock);
     if( result != 0)
         return false;
-    m_locked_exclusive = true;
-    return true;
 #else
     BOOL result = TryAcquireSRWLockExclusive( &m_srwlock);
     if( result == FALSE)
         return false;
-    m_locked_exclusive = true;
-    return true;
 #endif
+    uint32_t count = ++m_locked_exclusive;
+    MI_ASSERT( (count == 1) || !"Incorrent recursive lock attempt of exclusive lock");
+    (void) count;
+    return true;
 }
 
 inline void Shared_lock::unlock()
 {
-    MI_ASSERT( m_locked_exclusive);
-    m_locked_exclusive = false;
+    --m_locked_exclusive; // TODO
 #ifndef MI_PLATFORM_WINDOWS
     pthread_rwlock_unlock( &m_rwlock);
 #else
@@ -280,34 +280,38 @@ inline void Shared_lock::unlock()
 
 inline void Shared_lock::check_is_owned()
 {
-    MI_ASSERT( m_locked_exclusive);
+    MI_ASSERT( m_locked_exclusive > 0);
 }
 
 inline void Shared_lock::check_is_owned_shared_or_exclusive()
 {
-    MI_ASSERT( (m_locked_shared > 0) || m_locked_exclusive);
+    MI_ASSERT( (m_locked_shared > 0) || (m_locked_exclusive > 0));
 }
 
-inline Block_shared::Block_shared( Shared_lock& lock)
+template<typename T>
+Block_shared<T>::Block_shared( T& lock)
   : m_lock( &lock)
 {
     m_lock->lock_shared();
 }
 
-inline Block_shared::Block_shared( Shared_lock* lock)
+template<typename T>
+Block_shared<T>::Block_shared( T* lock)
   : m_lock( lock)
 {
     if( m_lock)
         m_lock->lock_shared();
 }
 
-inline Block_shared::~Block_shared()
+template<typename T>
+Block_shared<T>::~Block_shared()
 {
     if( m_lock)
         m_lock->unlock_shared();
 }
 
-inline void Block_shared::set( Shared_lock* lock)
+template<typename T>
+void Block_shared<T>::set( T* lock)
 {
     if( m_lock == lock)
         return;
@@ -319,7 +323,8 @@ inline void Block_shared::set( Shared_lock* lock)
         m_lock->lock_shared();
 }
 
-inline void Block_shared::release()
+template<typename T>
+void Block_shared<T>::release()
 {
     if( m_lock) {
         m_lock->unlock_shared();
@@ -327,7 +332,8 @@ inline void Block_shared::release()
     }
 }
 
-inline bool Block_shared::try_set( Shared_lock* lock)
+template<typename T>
+bool Block_shared<T>::try_set( T* lock)
 {
     if( m_lock == lock)
         return true;
@@ -341,7 +347,8 @@ inline bool Block_shared::try_set( Shared_lock* lock)
         return false;
 }
 
-inline Shared_lock* Block_shared::get_lock() const
+template<typename T>
+T* Block_shared<T>::get_lock() const
 {
     return m_lock;
 }

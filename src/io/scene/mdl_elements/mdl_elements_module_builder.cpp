@@ -148,14 +148,12 @@ mi::Sint32 Mdl_module_builder::add_variant(
     if( !check_valid( context))
         return -1;
 
-    SERIAL::Class_id class_id = m_transaction->get_class_id( prototype_tag);
-    if( class_id != ID_MDL_FUNCTION_DEFINITION) {
+    // get prototype for obtaining defaults and annotations
+    DB::Access<Mdl_function_definition> prototype( prototype_tag, m_transaction);
+    if( !prototype) {
         add_error_message( context, "The prototype has an unsupported type.", -13);
         return -1;
     }
-
-    // get prototype for obtaining defaults and annotations
-    DB::Access<Mdl_function_definition> prototype( prototype_tag, m_transaction);
 
     // get defaults from prototype if \c nullptr
     mi::base::Handle<const IExpression_list> prototype_defaults;
@@ -1519,14 +1517,12 @@ mi::Sint32 Mdl_module_builder::add_function(
     if( !check_valid( context))
         return -1;
 
-    SERIAL::Class_id class_id = m_transaction->get_class_id( prototype_tag);
-    if( class_id != ID_MDL_FUNCTION_DEFINITION) {
-        add_error_message( context, "The prototype has an unsupported type.", -13);
-        return -1;
-    }
-
     // get prototype for obtaining defaults and annotations
     DB::Access<Mdl_function_definition> prototype( prototype_tag, m_transaction);
+    if( !prototype) {
+         add_error_message( context, "The prototype has an unsupported type.", -13);
+        return -1;
+   }
 
     // check for unsupported functions
     mi::neuraylib::IFunction_definition::Semantics sema = prototype->get_semantic();
@@ -2358,8 +2354,8 @@ bool Mdl_module_builder::validate_expression(
             mi::base::Handle<const IExpression_call> call(
                 expr->get_interface<IExpression_call>());
             DB::Tag tag = call->get_call();
-            SERIAL::Class_id class_id = transaction->get_class_id( tag);
-            if( class_id != ID_MDL_FUNCTION_CALL) {
+            DB::Access<Mdl_function_call> function_call( tag, transaction);
+            if( !function_call) {
                 const char* name = transaction->tag_to_name( tag);
                 add_error_message( context,
                     STRING::formatted_string( "Invalid reference to DB element \"%s\" in call "
@@ -2368,7 +2364,6 @@ bool Mdl_module_builder::validate_expression(
                return false;
             }
 
-            DB::Access<Mdl_function_call> function_call( tag, transaction);
             mi::base::Handle<const IExpression_list> args(
                 function_call->get_arguments());
 
@@ -2449,13 +2444,12 @@ const IExpression* Mdl_module_builder::skip_decl_cast_operator( const IExpressio
             mi::base::Handle<const IExpression_call> call(
                 expr->get_interface<IExpression_call>());
             DB::Tag tag = call->get_call();
-            SERIAL::Class_id class_id = m_transaction->get_class_id( tag);
-            if( class_id != ID_MDL_FUNCTION_CALL) {
+            DB::Access<Mdl_function_call> function_call( tag, m_transaction);
+            if( !function_call) {
                 expr->retain();
                 return expr;
             }
 
-            DB::Access<Mdl_function_call> function_call( tag, m_transaction);
             mi::mdl::IDefinition::Semantics sema = function_call->get_core_semantic();
             if( sema != mi::mdl::IDefinition::DS_INTRINSIC_DAG_DECL_CAST) {
                 expr->retain();
@@ -2647,16 +2641,15 @@ void Mdl_module_builder::analyze_uniform(
                 mi::base::Handle<const IExpression_call> call(
                     expr->get_interface<IExpression_call>());
                 DB::Tag tag = call->get_call();
-                SERIAL::Class_id class_id = transaction->get_class_id( tag);
 
-                if( class_id != ID_MDL_FUNCTION_CALL) {
+                DB::Access<Mdl_function_call> function_call( tag, transaction);
+                if( !function_call) {
                     const char* name = transaction->tag_to_name( tag);
                     add_error_message( context, STRING::formatted_string(
                          "Invalid reference to DB element \"%s\" in call expression.", name), -54);
                     return;
                 }
 
-                DB::Access<Mdl_function_call> function_call( tag, transaction);
                 DB::Tag def_tag = function_call->get_function_definition( transaction);
                 if( !def_tag) {
                     const char* name = transaction->tag_to_name( tag);

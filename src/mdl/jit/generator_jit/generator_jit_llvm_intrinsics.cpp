@@ -26,6 +26,8 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
+#include "generator_jit_type_map.h"
+#include "mi/mdl/mdl_spectral_support.h"
 #include "pch.h"
 
 #include <cstdio>
@@ -37,8 +39,6 @@
 #endif
 
 #include <base/system/stlext/i_stlext_restore.h>
-
-#include <vector>
 
 #include <llvm/Bitcode/BitcodeReader.h>
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
@@ -74,6 +74,10 @@
 #include <mdl/compiler/compilercore/compilercore_mangle.h>
 #include <mdl/compiler/compilercore/compilercore_tools.h>
 #include <mdl/runtime/spectral/i_spectral.h>
+
+#ifndef M_PI
+    #define M_PI            3.14159265358979323846
+#endif
 
 #ifdef _MSC_VER
 // declare microsoft stack probing function,
@@ -1237,6 +1241,185 @@ float df_light_profile_pdf(
     return 0.0f;
 }
 
+/// Glue function for mdl_rgb_to_spectral_ior(state_core,float3)
+void mdl_rgb_to_spectral_ior(
+    tct_spectral_sample    *result,
+    Res_data_pair const    *data,
+    Shading_state_material *state,
+    float const            rgb[3])
+{
+    Res_data const          *res_data = data->get_shared_data();
+    IResource_handler const *handler  = res_data->get_resource_handler();
+    if (handler != NULL) {
+        handler->mdl_rgb_to_spectral_ior(result, data->get_thread_data(), state, rgb);
+    } else {
+        for (size_t i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i) {
+            result->values[i] = 0.0f;
+        }
+    }
+}
+
+/// Glue function for mdl_rgb_to_spectral_ior(state_core,float3) with derivative state.
+void mdl_rgb_to_spectral_ior_deriv(
+    tct_spectral_sample    *result,
+    Res_data_pair const    *data,
+    Shading_state_material_with_derivs *state,
+    float const            rgb[3])
+{
+    Res_data const          *res_data = data->get_shared_data();
+    IResource_handler const *handler  = res_data->get_resource_handler();
+    if (handler != NULL) {
+        handler->mdl_rgb_to_spectral_ior_deriv(result, data->get_thread_data(), state, rgb);
+    } else {
+        for (size_t i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i) {
+            result->values[i] = 0.0f;
+        }
+    }
+}
+
+/// Glue function for mdl_rgb_to_spectral_reflectance(state_core,float3)
+void mdl_rgb_to_spectral_reflectance(
+    tct_spectral_sample    *result,
+    Res_data_pair const    *data,
+    Shading_state_material *state,
+    float const            rgb[3])
+{
+    Res_data const          *res_data = data->get_shared_data();
+    IResource_handler const *handler  = res_data->get_resource_handler();
+    if (handler != NULL) {
+        handler->mdl_rgb_to_spectral_reflectance(result, data->get_thread_data(), state, rgb);
+    } else {
+        for (size_t i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i) {
+            result->values[i] = 0.0f;
+        }
+    }
+}
+
+/// Glue function for mdl_rgb_to_spectral_reflectance(state_core,float3) with derivative state.
+void mdl_rgb_to_spectral_reflectance_deriv(
+    tct_spectral_sample    *result,
+    Res_data_pair const    *data,
+    Shading_state_material_with_derivs *state,
+    float const            rgb[3])
+{
+    Res_data const          *res_data = data->get_shared_data();
+    IResource_handler const *handler  = res_data->get_resource_handler();
+    if (handler != NULL) {
+        handler->mdl_rgb_to_spectral_reflectance_deriv(result, data->get_thread_data(), state, rgb);
+    } else {
+        for (size_t i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i) {
+            result->values[i] = 0.0f;
+        }
+    }
+}
+
+/// Glue function for mdl_rgb_to_spectral_luminance(state_core,float3)
+void mdl_rgb_to_spectral_luminance(
+    tct_spectral_sample    *result,
+    Res_data_pair const    *data,
+    Shading_state_material *state,
+    float const            rgb[3])
+{
+    Res_data const          *res_data = data->get_shared_data();
+    IResource_handler const *handler  = res_data->get_resource_handler();
+    if (handler != NULL) {
+        handler->mdl_rgb_to_spectral_luminance(result, data->get_thread_data(), state, rgb);
+    } else {
+        for (size_t i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i) {
+            result->values[i] = 0.0f;
+        }
+    }
+}
+
+/// Glue function for mdl_rgb_to_spectral_luminance(state_core,float3) with derivative state.
+void mdl_rgb_to_spectral_luminance_deriv(
+    tct_spectral_sample    *result,
+    Res_data_pair const    *data,
+    Shading_state_material_with_derivs *state,
+    float const            rgb[3])
+{
+    Res_data const          *res_data = data->get_shared_data();
+    IResource_handler const *handler  = res_data->get_resource_handler();
+    if (handler != NULL) {
+        handler->mdl_rgb_to_spectral_luminance_deriv(result, data->get_thread_data(), state, rgb);
+    } else {
+        for (size_t i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i) {
+            result->values[i] = 0.0f;
+        }
+    }
+}
+
+/// Glue function for mdl_rgb_to_spectral_volume_coefficient(state_core,float3)
+void mdl_rgb_to_spectral_volume_coefficient(
+    tct_spectral_sample    *result,
+    Res_data_pair const    *data,
+    Shading_state_material *state,
+    float const            rgb[3])
+{
+    Res_data const          *res_data = data->get_shared_data();
+    IResource_handler const *handler  = res_data->get_resource_handler();
+    if (handler != NULL) {
+        handler->mdl_rgb_to_spectral_volume_coefficient(
+            result, data->get_thread_data(), state, rgb);
+    } else {
+        for (size_t i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i) {
+            result->values[i] = 0.0f;
+        }
+    }
+}
+
+/// Glue function for mdl_rgb_to_spectral_volume_coefficient(state_core,float3) with derivative state.
+void mdl_rgb_to_spectral_volume_coefficient_deriv(
+    tct_spectral_sample    *result,
+    Res_data_pair const    *data,
+    Shading_state_material_with_derivs *state,
+    float const            rgb[3])
+{
+    Res_data const          *res_data = data->get_shared_data();
+    IResource_handler const *handler  = res_data->get_resource_handler();
+    if (handler != NULL) {
+        handler->mdl_rgb_to_spectral_volume_coefficient_deriv(result, data->get_thread_data(), state, rgb);
+    } else {
+        for (size_t i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i) {
+            result->values[i] = 0.0f;
+        }
+    }
+}
+
+/// Glue function for mdl_get_wavelengths(state_core)
+void mdl_get_wavelengths(
+    tct_spectral_sample    *result,
+    Res_data_pair const    *data,
+    Shading_state_material *state)
+{
+    Res_data const          *res_data = data->get_shared_data();
+    IResource_handler const *handler  = res_data->get_resource_handler();
+    if (handler != NULL) {
+        handler->mdl_get_wavelengths(result, data->get_thread_data(), state);
+    } else {
+        for (size_t i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i) {
+            result->values[i] = 0.0f;
+        }
+    }
+}
+
+/// Glue function for mdl_get_wavelengths(state_core) with derivative state.
+void mdl_get_wavelengths_deriv(
+    tct_spectral_sample    *result,
+    Res_data_pair const    *data,
+    Shading_state_material_with_derivs *state)
+{
+    Res_data const          *res_data = data->get_shared_data();
+    IResource_handler const *handler  = res_data->get_resource_handler();
+    if (handler != NULL) {
+        handler->mdl_get_wavelengths_deriv(result, data->get_thread_data(), state);
+    } else {
+        for (size_t i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i) {
+            result->values[i] = 0.0f;
+        }
+    }
+}
+
 } // anonymous
 
 const int VPRINTF_BUFFER_ALIGNMENT = 8;  // In Bytes.
@@ -2061,6 +2244,15 @@ llvm::Type *MDL_runtime_creator::type_from_signature(
         if (c2 == 'S') {
             signature += 2;
             return m_code_gen.m_type_mapper.get_string_type();
+        }
+        if (c2 == 'P') {
+            char c3 = signature[2];
+            switch (c3) {
+            case 'S':
+                signature += 3;
+                by_ref = true;
+                return m_code_gen.m_type_mapper.get_spectral_sample_type();
+            }
         }
         break;
     case 's':
@@ -3077,6 +3269,35 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
         MDL_ASSERT(!"adapt_normal not available via resource handler interface");
         return func;
 
+    case RT_MDL_RGB_TO_SPECTRAL_IOR:                   // mdl_rgb_to_spectral_ior
+    case RT_MDL_RGB_TO_SPECTRAL_REFLECTANCE:           // mdl_rgb_to_spectral_reflectance
+    case RT_MDL_RGB_TO_SPECTRAL_LUMINANCE:             // mdl_rgb_to_spectral_luminance
+    case RT_MDL_RGB_TO_SPECTRAL_VOLUME_COEFFICIENT:    // mdl_rgb_to_spectral_volume_coefficient
+    case RT_MDL_RGB_TO_SPECTRAL_IOR_DERIV:             // mdl_rgb_to_spectral_ior_deriv
+    case RT_MDL_RGB_TO_SPECTRAL_REFLECTANCE_DERIV:     // mdl_rgb_to_spectral_reflectance_deriv
+    case RT_MDL_RGB_TO_SPECTRAL_LUMINANCE_DERIV:       // mdl_rgb_to_spectral_luminance_deriv
+    case RT_MDL_RGB_TO_SPECTRAL_VOLUME_COEFFICIENT_DERIV: // mdl_rgb_to_spectral_volume_coefficient_deriv
+        func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // result
+        func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
+        func->addParamAttr(2, llvm::Attribute::NoCapture); // state
+        func->addParamAttr(3, llvm::Attribute::NoCapture); // rgb
+        MARK_NATIVE(func);
+        return func;
+
+    case RT_MDL_GET_WAVELENGTHS:                        // mdl_get_wavelengths
+    case RT_MDL_GET_WAVELENGTHS_DERIV:                  // mdl_get_wavelengths_deriv
+        func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // result
+        func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
+        func->addParamAttr(2, llvm::Attribute::NoCapture); // state
+        MARK_NATIVE(func);
+        return func;
+
     case RT_MDL_BLACKBODY:
         func->setDoesNotThrow();
         func->setWillReturn();
@@ -3972,6 +4193,20 @@ void LLVM_code_generator::register_native_runtime_functions(Jitted_code *jitted_
     REG_FUNC(df_light_profile_sample);
     REG_FUNC(df_light_profile_pdf);
 
+    REG_FUNC2("mdl_rgb_to_spectral_ior", mdl_rgb_to_spectral_ior);
+    REG_FUNC2("mdl_rgb_to_spectral_reflectance", mdl_rgb_to_spectral_reflectance);
+    REG_FUNC2("mdl_rgb_to_spectral_luminance", mdl_rgb_to_spectral_luminance);
+    REG_FUNC2("mdl_rgb_to_spectral_volume_coefficient", mdl_rgb_to_spectral_volume_coefficient);
+    REG_FUNC2("mdl_get_wavelengths", mdl_get_wavelengths);
+
+    // we need to register the deriv variants here explicitly, because the runtime functions
+    // are registered in the singleton JIT, which may be used for deriv and non-deriv code
+    REG_FUNC2("mdl_rgb_to_spectral_ior_deriv", mdl_rgb_to_spectral_ior_deriv);
+    REG_FUNC2("mdl_rgb_to_spectral_reflectance_deriv", mdl_rgb_to_spectral_reflectance_deriv);
+    REG_FUNC2("mdl_rgb_to_spectral_luminance_deriv", mdl_rgb_to_spectral_luminance_deriv);
+    REG_FUNC2("mdl_rgb_to_spectral_volume_coefficient_deriv", mdl_rgb_to_spectral_volume_coefficient_deriv);
+    REG_FUNC2("mdl_get_wavelengths_deriv", mdl_get_wavelengths_deriv);
+
     REG_FUNC2("mdl_blackbody", check_sig<FA3_FF>(mi::mdl::spectral::mdl_blackbody));
 
     REG_FUNC2("mdl_debugbreak", check_sig<VV_>(debug::debugbreak));
@@ -4252,7 +4487,9 @@ llvm::Function *MDL_runtime_creator::create_state_adapt_normal(
         llvm::Value *state    = ctx.get_state_parameter();
 
         // adapt_normal is only supported via the texture handler, which will also be used
-        // if the builtin texture runtime is used (which uses the resource handler)
+        // if the builtin texture runtime is used (which uses the resource handler).
+        // The resource handler of the builtin texture runtime is not used, as adapting
+        // the normal is always renderer specific.
         llvm::Value *self_adr = ctx.create_simple_gep_in_bounds(
             res_data, ctx.get_constant(Type_mapper::RDP_THREAD_DATA));
         llvm::Value *self = ctx->CreateBitCast(
@@ -4272,6 +4509,155 @@ llvm::Function *MDL_runtime_creator::create_state_adapt_normal(
         // just return the normal unmodified
         res = a;
     }
+    ctx.create_return(res);
+    return func;
+}
+
+// Generate LLVM IR for state::rgb_to_spectral_X() taking variant from Internal_function kind
+llvm::Function *MDL_runtime_creator::create_state_rgb_to_spectral_x(
+    Internal_function const *int_func)
+{
+    Function_instance inst(
+        m_code_gen.get_allocator(),
+        reinterpret_cast<size_t>(int_func),
+        m_code_gen.target_supports_storage_spaces());
+    LLVM_context_data *ctx_data = m_code_gen.get_or_create_context_data(NULL, inst, "::state");
+    llvm::Function    *func     = ctx_data->get_function();
+    unsigned          flags     = ctx_data->get_function_flags();
+
+    Function_context ctx(m_alloc, m_code_gen, inst, func, flags);
+    llvm::Value *res;
+
+    llvm::Function::arg_iterator arg_it = ctx.get_first_parameter();
+    llvm::Value *a = load_by_value(ctx, arg_it++);
+
+    // convert from float3 vector to float[3] array
+    llvm::Type  *arr_float_3_type = m_code_gen.m_type_mapper.get_arr_float_3_type();
+    llvm::Value *rgb = ctx.create_local(arr_float_3_type, "rgb");
+    ctx.convert_and_store(a, rgb);
+
+    llvm::Value *tmp = ctx.create_local(m_code_gen.m_type_mapper.get_spectral_sample_type(), "tmp");
+
+    llvm::Value *res_data = ctx.get_resource_data_parameter();
+    llvm::Value *state    = ctx.get_state_parameter();
+
+    if (m_has_res_handler) {
+        // with the resource handler, we need to differentiate between the non-deriv and
+        // the deriv variants, because the runtime functions are registered in the singleton JIT
+        Runtime_function rt_func;
+        bool is_deriv = m_code_gen.is_texruntime_with_derivs();
+        switch (int_func->get_kind()) {
+        case Internal_function::KI_STATE_RGB_TO_SPECTRAL_IOR:
+            rt_func = is_deriv ?
+                RT_MDL_RGB_TO_SPECTRAL_IOR_DERIV : RT_MDL_RGB_TO_SPECTRAL_IOR;
+            break;
+        case Internal_function::KI_STATE_RGB_TO_SPECTRAL_REFLECTANCE:
+            rt_func = is_deriv ?
+                RT_MDL_RGB_TO_SPECTRAL_REFLECTANCE_DERIV : RT_MDL_RGB_TO_SPECTRAL_REFLECTANCE;
+            break;
+        case Internal_function::KI_STATE_RGB_TO_SPECTRAL_LUMINANCE:
+            rt_func = is_deriv ?
+                RT_MDL_RGB_TO_SPECTRAL_LUMINANCE_DERIV : RT_MDL_RGB_TO_SPECTRAL_LUMINANCE;
+            break;
+        case Internal_function::KI_STATE_RGB_TO_SPECTRAL_VOLUME_COEFFICIENT:
+            rt_func = is_deriv ?
+                RT_MDL_RGB_TO_SPECTRAL_VOLUME_COEFFICIENT_DERIV :
+                RT_MDL_RGB_TO_SPECTRAL_VOLUME_COEFFICIENT;
+            break;
+        default:
+            MDL_ASSERT(!"Unexpected rgb_to_spectral_X kind");
+            ctx.create_return(llvm::Constant::getNullValue(ctx_data->get_return_type()));
+            return func;
+        }
+        llvm::Function *lookup_func = get_runtime_func(rt_func);
+
+        llvm::Value *args[] = {tmp, res_data, state, rgb};
+        ctx->CreateCall(lookup_func, args);
+    } else {
+        llvm::Value *self_adr = ctx.create_simple_gep_in_bounds(
+            res_data, ctx.get_constant(Type_mapper::RDP_THREAD_DATA));
+        llvm::Value *self = ctx->CreateBitCast(
+            ctx->CreateLoad(self_adr),
+            m_code_gen.m_type_mapper.get_core_tex_handler_ptr_type());
+
+        Type_mapper::Tex_handler_vtable_index thv_index;
+        switch (int_func->get_kind()) {
+        case Internal_function::KI_STATE_RGB_TO_SPECTRAL_IOR:
+            thv_index = Type_mapper::THV_rgb_to_spectral_ior;
+            break;
+        case Internal_function::KI_STATE_RGB_TO_SPECTRAL_REFLECTANCE:
+            thv_index = Type_mapper::THV_rgb_to_spectral_reflectance;
+            break;
+        case Internal_function::KI_STATE_RGB_TO_SPECTRAL_LUMINANCE:
+            thv_index = Type_mapper::THV_rgb_to_spectral_luminance;
+            break;
+        case Internal_function::KI_STATE_RGB_TO_SPECTRAL_VOLUME_COEFFICIENT:
+            thv_index = Type_mapper::THV_rgb_to_spectral_volume_coefficient;
+            break;
+        default:
+            MDL_ASSERT(!"Unexpected rgb_to_spectral_X kind");
+            ctx.create_return(llvm::Constant::getNullValue(ctx_data->get_return_type()));
+            return func;
+        }
+        llvm::FunctionCallee lookup_func = ctx.get_tex_lookup_func(
+            self, thv_index);
+
+        llvm::Value *args[] = {tmp, self, state, rgb};
+        llvm::CallInst *call = ctx->CreateCall(lookup_func, args);
+        call->setDoesNotThrow();
+    }
+
+    res = ctx.load_and_convert(ctx_data->get_return_type(), tmp);
+
+    ctx.create_return(res);
+    return func;
+}
+
+// Generate LLVM IR for state::get_wavelengths()
+llvm::Function *MDL_runtime_creator::create_state_get_wavelengths(
+    Internal_function const *int_func)
+{
+    Function_instance inst(
+        m_code_gen.get_allocator(),
+        reinterpret_cast<size_t>(int_func),
+        m_code_gen.target_supports_storage_spaces());
+    LLVM_context_data *ctx_data = m_code_gen.get_or_create_context_data(NULL, inst, "::state");
+    llvm::Function    *func     = ctx_data->get_function();
+    unsigned          flags     = ctx_data->get_function_flags();
+
+    Function_context ctx(m_alloc, m_code_gen, inst, func, flags);
+    llvm::Value *res;
+
+    llvm::Value *res_data = ctx.get_resource_data_parameter();
+    llvm::Value *state    = ctx.get_state_parameter();
+
+    llvm::Type  *spectral_sample_type = m_code_gen.m_type_mapper.get_spectral_sample_type();
+    llvm::Value *tmp    = ctx.create_local(spectral_sample_type, "tmp");
+
+    if (m_has_res_handler) {
+        bool is_deriv = m_code_gen.is_texruntime_with_derivs();
+        llvm::Function *lookup_func = get_runtime_func(
+            is_deriv ? RT_MDL_GET_WAVELENGTHS_DERIV : RT_MDL_GET_WAVELENGTHS);
+
+        llvm::Value *args[] = {tmp, res_data, state};
+        ctx->CreateCall(lookup_func, args);
+    } else {
+        llvm::Value *self_adr = ctx.create_simple_gep_in_bounds(
+            res_data, ctx.get_constant(Type_mapper::RDP_THREAD_DATA));
+        llvm::Value *self = ctx->CreateBitCast(
+            ctx->CreateLoad(self_adr),
+            m_code_gen.m_type_mapper.get_core_tex_handler_ptr_type());
+
+        llvm::FunctionCallee lookup_func = ctx.get_tex_lookup_func(
+            self, Type_mapper::THV_get_wavelengths);
+
+        llvm::Value *args[] = {tmp, self, state};
+        llvm::CallInst *call = ctx->CreateCall(lookup_func, args);
+        call->setDoesNotThrow();
+    }
+
+    res = ctx.load_and_convert(ctx_data->get_return_type(), tmp);
+
     ctx.create_return(res);
     return func;
 }
@@ -4804,6 +5190,86 @@ llvm::Function *MDL_runtime_creator::get_internal_function(Internal_function con
                 m_internal_funcs[kind] = ctx_data->get_function();
             } else {
                 m_internal_funcs[kind] = create_state_adapt_normal(int_func);
+            }
+            break;
+
+        case Internal_function::KI_STATE_RGB_TO_SPECTRAL_IOR:
+        case Internal_function::KI_STATE_RGB_TO_SPECTRAL_REFLECTANCE:
+        case Internal_function::KI_STATE_RGB_TO_SPECTRAL_LUMINANCE:
+        case Internal_function::KI_STATE_RGB_TO_SPECTRAL_VOLUME_COEFFICIENT:
+            if (m_code_gen.is_spectral_enabled() && m_code_gen.target_is_structured_language()) {
+                char const *func_name = NULL;
+                switch (kind) {
+                case Internal_function::KI_STATE_RGB_TO_SPECTRAL_IOR:
+                    func_name = "mdl_rgb_to_spectral_ior";
+                    break;
+                case Internal_function::KI_STATE_RGB_TO_SPECTRAL_REFLECTANCE:
+                    func_name = "mdl_rgb_to_spectral_reflectance";
+                    break;
+                case Internal_function::KI_STATE_RGB_TO_SPECTRAL_LUMINANCE:
+                    func_name = "mdl_rgb_to_spectral_luminance";
+                    break;
+                case Internal_function::KI_STATE_RGB_TO_SPECTRAL_VOLUME_COEFFICIENT:
+                    func_name = "mdl_rgb_to_spectral_volume_coefficient";
+                    break;
+                default:
+                    MDL_ASSERT(!"Unexpected rgb_to_spectral_X kind");
+                    return NULL;
+                }
+
+                Function_instance inst(
+                    m_code_gen.get_allocator(),
+                    reinterpret_cast<size_t>(int_func),
+                    m_code_gen.target_supports_storage_spaces());
+                LLVM_context_data* ctx_data =
+                    m_code_gen.get_or_create_context_data(NULL, inst, "::state");
+                llvm::Function* func = ctx_data->get_function();
+                func->setLinkage(llvm::GlobalValue::ExternalLinkage);
+                func->setName(func_name);
+                func->setDoesNotThrow();
+                func->setOnlyReadsMemory();
+
+                // mark state and res_data_pair param as read-only
+                unsigned first_arg_no = ctx_data->is_sret_return() ? 1 : 0;
+                func->addParamAttr(first_arg_no, llvm::Attribute::ReadOnly);
+                func->addParamAttr(first_arg_no, llvm::Attribute::NoCapture);
+                if (m_code_gen.target_uses_resource_data_parameter() ) {
+                    func->addParamAttr(first_arg_no + 1, llvm::Attribute::ReadOnly);
+                    func->addParamAttr(first_arg_no + 1, llvm::Attribute::NoCapture);
+                }
+
+                m_internal_funcs[kind] = ctx_data->get_function();
+            } else {
+                m_internal_funcs[kind] = create_state_rgb_to_spectral_x(int_func);
+            }
+            break;
+
+        case Internal_function::KI_STATE_GET_WAVELENGTHS:
+            if (m_code_gen.is_spectral_enabled() && m_code_gen.target_is_structured_language()) {
+                Function_instance inst(
+                    m_code_gen.get_allocator(),
+                    reinterpret_cast<size_t>(int_func),
+                    m_code_gen.target_supports_storage_spaces());
+                LLVM_context_data* ctx_data =
+                    m_code_gen.get_or_create_context_data(NULL, inst, "::state");
+                llvm::Function* func = ctx_data->get_function();
+                func->setLinkage(llvm::GlobalValue::ExternalLinkage);
+                func->setName("mdl_get_wavelengths");
+                func->setDoesNotThrow();
+                func->setOnlyReadsMemory();
+
+                // mark state and res_data_pair param as read-only
+                unsigned first_arg_no = ctx_data->is_sret_return() ? 1 : 0;
+                func->addParamAttr(first_arg_no, llvm::Attribute::ReadOnly);
+                func->addParamAttr(first_arg_no, llvm::Attribute::NoCapture);
+                if (m_code_gen.target_uses_resource_data_parameter() ) {
+                    func->addParamAttr(first_arg_no + 1, llvm::Attribute::ReadOnly);
+                    func->addParamAttr(first_arg_no + 1, llvm::Attribute::NoCapture);
+                }
+
+                m_internal_funcs[kind] = ctx_data->get_function();
+            } else {
+                m_internal_funcs[kind] = create_state_get_wavelengths(int_func);
             }
             break;
 

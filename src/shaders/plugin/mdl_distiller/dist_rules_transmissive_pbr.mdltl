@@ -39,25 +39,25 @@ rules Make_simple_for_tpbr bottomup {
               material_geometry(dis,cutout,n))
         --> material(tw,sf,bf,ior,vol,material_geometry(dis,cutout,state::normal()))
         if n == 0.0;
-    microfacet_ggx_vcavities_bsdf(ru,rv,tint,_,t,mode) -->
-                simple_glossy_bsdf(ru,rv,tint,color(0.0),t,mode)
+    microfacet_ggx_vcavities_bsdf(ru,rv,tint,_,t,mode,bs,handle) -->
+                simple_glossy_bsdf(ru,rv,tint,color(0.0),t,mode,bs,handle)
         if mode == scatter_transmit;
 
-    microfacet_ggx_vcavities_bsdf(ru,rv,tint,_,t,mode) -->
+    microfacet_ggx_vcavities_bsdf(ru,rv,tint,_,t,mode,bs,_) -->
                 custom_curve_layer( nvidia::distilling_support::refl_from_ior(option( global_float_ior)),
-                    1.0,5.0,1.0, microfacet_ggx_vcavities_bsdf(ru,rv,tint,color(0.0),t,scatter_reflect), simple_glossy_bsdf(ru,rv,tint,color(0.0),t,scatter_transmit))
+                    1.0,5.0,1.0, microfacet_ggx_vcavities_bsdf(ru,rv,tint,color(0.0),t,scatter_reflect,bs), simple_glossy_bsdf(ru,rv,tint,color(0.0),t,scatter_transmit,bs))
         if mode == scatter_reflect_transmit;
 
     //fix all reflective glossy/specular to be ggx
-    microfacet_beckmann_smith_bsdf(ru,rv,tint,_,t,mode) --> microfacet_ggx_vcavities_bsdf( ru,rv,tint,color(0.0),t,mode) repeat_rules;
-    specular_bsdf(tint,mode) --> microfacet_ggx_vcavities_bsdf( 0.0,0.0,tint,color(0.0),state::texture_tangent_u(0),mode) repeat_rules;
-    microfacet_beckmann_vcavities_bsdf(ru,rv,tint,_,t,mode)--> microfacet_ggx_vcavities_bsdf( ru,rv,tint,color(0.0),t,mode) repeat_rules;
-    microfacet_ggx_smith_bsdf(ru,rv,tint,_,t,mode) --> microfacet_ggx_vcavities_bsdf( ru,rv,tint,color(0.0),t,mode) repeat_rules;
-    simple_glossy_bsdf(ru,rv,tint,_,t,mode) --> microfacet_ggx_vcavities_bsdf( ru,rv,tint,color(0.0),t,mode) repeat_rules if mode != scatter_transmit;
+    microfacet_beckmann_smith_bsdf(ru,rv,tint,_,t,mode,bs,handle) --> microfacet_ggx_vcavities_bsdf( ru,rv,tint,color(0.0),t,mode,bs,handle) repeat_rules;
+    specular_bsdf(tint,mode,bs,handle) --> microfacet_ggx_vcavities_bsdf( 0.0,0.0,tint,color(0.0),state::texture_tangent_u(0),mode,bs,handle) repeat_rules;
+    microfacet_beckmann_vcavities_bsdf(ru,rv,tint,_,t,mode,bs,handle)--> microfacet_ggx_vcavities_bsdf( ru,rv,tint,color(0.0),t,mode,bs,handle) repeat_rules;
+    microfacet_ggx_smith_bsdf(ru,rv,tint,_,t,mode,bs,handle) --> microfacet_ggx_vcavities_bsdf( ru,rv,tint,color(0.0),t,mode,bs,handle) repeat_rules;
+    simple_glossy_bsdf(ru,rv,tint,_,t,mode,bs,handle) --> microfacet_ggx_vcavities_bsdf( ru,rv,tint,color(0.0),t,mode,bs,handle) repeat_rules if mode != scatter_transmit;
     ward_geisler_moroder_bsdf(ru,rv,tint,_,t) --> microfacet_ggx_vcavities_bsdf( ru,rv,tint,color(0.0),t) repeat_rules;
-    backscattering_glossy_reflection_bsdf(ru,rv,tint,_,t,handle) --> microfacet_ggx_vcavities_bsdf(ru,rv,tint,color(0.0),t,scatter_reflect,handle) repeat_rules;
-    sheen_bsdf(r,tint,tintt,_,handle) --> microfacet_ggx_vcavities_bsdf(r,r,tint,tintt,state::texture_tangent_u(0),scatter_reflect,handle) repeat_rules;
-    microflake_sheen_bsdf(r,tint,tintt,_,handle) --> microfacet_ggx_vcavities_bsdf(r,r,tint,tintt,state::texture_tangent_u(0),scatter_reflect,handle) repeat_rules;
+    backscattering_glossy_reflection_bsdf(ru,rv,tint,_,t,handle) --> microfacet_ggx_vcavities_bsdf(ru,rv,tint,color(0.0),t,scatter_reflect,backscatter_none,handle) repeat_rules;
+    sheen_bsdf(r,tint,tintt,_,handle) --> microfacet_ggx_vcavities_bsdf(r,r,tint,tintt,state::texture_tangent_u(0),scatter_reflect,backscatter_none,handle) repeat_rules;
+    microflake_sheen_bsdf(r,tint,tintt,_,handle) --> microfacet_ggx_vcavities_bsdf(r,r,tint,tintt,state::texture_tangent_u(0),scatter_reflect,backscatter_none,handle) repeat_rules;
 
     //some brutal removal of unsupported components: todo see if we can do better
     measured_bsdf(_) --> bsdf();
@@ -73,7 +73,7 @@ rules Make_simple_for_tpbr bottomup {
                               wrap_repeat,wrap_repeat,float2(0.0,1.0),float2(0.0,1.0),0.0
                       ),1.0),base);
 
-    bsdf_directional_factor(tint_n,tint_g,f82_factor,e,base) -->
+    bsdf_directional_factor(tint_n,tint_g,f82_factor,e,base,_bs) -->
         custom_curve_layer( 0.0,1.0,e, 1.0, bsdf_tint(tint_g*f82_factor,base), bsdf_tint(tint_n,base));
 
     bsdf_clamped_mix_1(w1,df1) --> bsdf_tint( color(w1), df1);
@@ -104,8 +104,8 @@ rules Make_simple_for_tpbr bottomup {
     diffuse_transmission_bsdf(tint) --> simple_glossy_bsdf(1.0,1.0,tint,color(0.0),state::texture_tangent_u(0),scatter_transmit);
 
     //if a glossy is layered on top of a diffuse that's unbumped, bump the diffuse too to emphasize the glossy bump
-    weighted_layer(w,microfacet_ggx_vcavities_bsdf(ru,rv,tint,_,t,m),diffuse_reflection_bsdf(tint1,r),n) -->
-        weighted_layer(w,microfacet_ggx_vcavities_bsdf(ru,rv,tint,color(0.0),t,m),weighted_layer(1.0,diffuse_reflection_bsdf(tint1,r),bsdf(),n),n)
+    weighted_layer(w,microfacet_ggx_vcavities_bsdf(ru,rv,tint,_,t,m,bs,handle),diffuse_reflection_bsdf(tint1,r),n) -->
+        weighted_layer(w,microfacet_ggx_vcavities_bsdf(ru,rv,tint,color(0.0),t,m,bs,handle),weighted_layer(1.0,diffuse_reflection_bsdf(tint1,r),bsdf(),n),n)
         maybe n != state::normal();
     fresnel_layer( ior, _, _, base, _) -->
         base if ior ==1.0;

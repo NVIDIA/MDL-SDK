@@ -119,12 +119,22 @@ public:
     /// Returns the corresponding transaction.
     ///
     /// Returns \c nullptr if the DB element is in state STATE_INVALID.
+    ///
+    /// \note This method also returns \c nullptr if the transaction is no longer open to prevent
+    ///       misuse. This check/behavior is debatable, but requires checks in all callers
+    ///       otherwise.
+    ///
     /// \note This method does \em not increase the reference count of the return value.
     virtual Transaction_impl* get_transaction() const = 0;
 
     /// Returns the corresponding DB transaction.
     ///
     /// Returns \c nullptr if the DB element is in state STATE_INVALID.
+    ///
+    /// \note This method also returns \c nullptr if the transaction is no longer open to prevent
+    ///       misuse. This check/behavior is debatable, but requires checks in all callers
+    ///       otherwise.
+    ///
     /// \note This method does \em not increase the reference count of the return value.
     virtual DB::Transaction* get_db_transaction() const = 0;
 

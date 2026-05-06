@@ -34,6 +34,7 @@
 #define RENDER_MDL_RUNTIME_I_MDLRT_RESOURCE_HANDLER_H
 
 #include <mi/mdl/mdl_generated_executable.h>
+#include <mi/mdl/mdl_target_types.h>
 #include <mi/base/handle.h>
 
 namespace MI {
@@ -604,6 +605,74 @@ public:
         void const      *bm_data,
         void            *thread_data,
         const float     theta_phi[2]) const override;
+
+    /// Handle mdl_rgb_to_spectral_ior(state,float3).
+    virtual void mdl_rgb_to_spectral_ior(
+        mi::mdl::tct_spectral_sample    *result,
+        void                            *thread_data,
+        mi::mdl::Shading_state_material *state,
+        float const                     rgb[3]) const override;
+
+    /// Handle mdl_rgb_to_spectral_ior(state,float3) with derivative state.
+    virtual void mdl_rgb_to_spectral_ior_deriv(
+        mi::mdl::tct_spectral_sample                *result,
+        void                                        *thread_data,
+        mi::mdl::Shading_state_material_with_derivs *state,
+        float const                                 rgb[3]) const override;
+
+    /// Handle mdl_rgb_to_spectral_reflectance(state,float3).
+    virtual void mdl_rgb_to_spectral_reflectance(
+        mi::mdl::tct_spectral_sample    *result,
+        void                            *thread_data,
+        mi::mdl::Shading_state_material *state,
+        float const                     rgb[3]) const override;
+
+    /// Handle mdl_rgb_to_spectral_reflectance(state,float3) with derivative state.
+    virtual void mdl_rgb_to_spectral_reflectance_deriv(
+        mi::mdl::tct_spectral_sample                *result,
+        void                                        *thread_data,
+        mi::mdl::Shading_state_material_with_derivs *state,
+        float const                                 rgb[3]) const override;
+
+    /// Handle mdl_rgb_to_spectral_luminance(state,float3).
+    virtual void mdl_rgb_to_spectral_luminance(
+        mi::mdl::tct_spectral_sample    *result,
+        void                            *thread_data,
+        mi::mdl::Shading_state_material *state,
+        float const                     rgb[3]) const override;
+
+    /// Handle mdl_rgb_to_spectral_luminance(state,float3) with derivative state.
+    virtual void mdl_rgb_to_spectral_luminance_deriv(
+        mi::mdl::tct_spectral_sample                *result,
+        void                                        *thread_data,
+        mi::mdl::Shading_state_material_with_derivs *state,
+        float const                                 rgb[3]) const override;
+
+    /// Handle mdl_rgb_to_spectral_volume_coefficient(state,float3).
+    virtual void mdl_rgb_to_spectral_volume_coefficient(
+        mi::mdl::tct_spectral_sample    *result,
+        void                            *thread_data,
+        mi::mdl::Shading_state_material *state,
+        float const                     rgb[3]) const override;
+
+    /// Handle mdl_rgb_to_spectral_volume_coefficient(state,float3) with derivative state.
+    virtual void mdl_rgb_to_spectral_volume_coefficient_deriv(
+        mi::mdl::tct_spectral_sample                *result,
+        void                                        *thread_data,
+        mi::mdl::Shading_state_material_with_derivs *state,
+        float const                                 rgb[3]) const override;
+
+    /// Handle mdl_get_wavelengths(state).
+    virtual void mdl_get_wavelengths(
+        mi::mdl::tct_spectral_sample    *result,
+        void                            *thread_data,
+        mi::mdl::Shading_state_material *state) const override;
+
+    /// Handle mdl_get_wavelengths(state) with derivative state.
+    virtual void mdl_get_wavelengths_deriv(
+        mi::mdl::tct_spectral_sample                *result,
+        void                                        *thread_data,
+        mi::mdl::Shading_state_material_with_derivs *state) const override;
 
     /// Destructor.
     virtual ~Resource_handler() = default;

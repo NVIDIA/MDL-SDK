@@ -258,9 +258,6 @@ private:
     size_t m_next_dfs_num;
 
     /// Callgraph visitor interface used inside process_scc() and walk()
-    ICallgraph_visitor *m_visitor;
-
-    /// Callgraph visitor interface used inside process_scc() and walk()
     ICallgraph_scc_visitor *m_scc_visitor;
 
     /// Stack for scc.

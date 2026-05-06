@@ -32,7 +32,9 @@
 #include <base/data/db/i_db_info.h>
 
 #include <atomic>
+#include <chrono>
 #include <functional>
+#include <map>
 #include <vector>
 
 #include <boost/core/noncopyable.hpp>
@@ -141,29 +143,29 @@ public:
 
     // methods of DB::Info
 
-    void pin() override;
+    void pin() final;
 
     /// Does \em not invoke the destructor if the pin count drops to zero.
-    void unpin() override;
+    void unpin() final;
 
-    bool get_is_job() const override { return !!m_job; }
+    bool get_is_job() const final { return !!m_job; }
 
     /// Returns \c nullptr for removal infos or not yet executed jobs.
-    DB::Element_base* get_element() const override { return m_element; }
+    DB::Element_base* get_element() const final { return m_element; }
 
-    SCHED::Job_base* get_job() const override { return m_job; }
+    SCHED::Job_base* get_job() const final { return m_job; }
 
-    DB::Tag get_tag() const override { return m_tag; }
+    DB::Tag get_tag() const final { return m_tag; }
 
-    DB::Scope_id get_scope_id() const override { return m_scope_id; }
+    DB::Scope_id get_scope_id() const final { return m_scope_id; }
 
-    DB::Transaction_id get_transaction_id() const override { return m_transaction_id; }
+    DB::Transaction_id get_transaction_id() const final { return m_transaction_id; }
 
-    mi::Uint32 get_version() const override { return m_version; }
+    mi::Uint32 get_version() const final { return m_version; }
 
-    DB::Privacy_level get_privacy_level() const override { return m_privacy_level; }
+    DB::Privacy_level get_privacy_level() const final { return m_privacy_level; }
 
-    const char* get_name() const override;
+    const char* get_name() const final;
 
     // internal methods
 
@@ -179,13 +181,12 @@ public:
     /// Returns the set of tags referenced by the DB element.
     const DB::Tag_set& get_references() const { return m_references; }
 
-    /// Returns the creator transaction.
-    ///
-    /// Can be invalid if the info is visible for all open (and future) transactions. RCS:NEU
-    const Transaction_impl_ptr& get_transaction() const { return m_transaction; }
+    /// Returns the shared pointer with the state and visibility.
+    const State_and_visibility_ptr& get_state_and_visibility() const
+    { return m_state_and_visibility; }
 
-    /// Clears the creator transaction.
-    void clear_transaction() { m_transaction.reset(); }
+    /// Clears the shared pointer with the state and visibility.
+    void release_state_and_visiblity() { m_state_and_visibility.reset(); }
 
     /// Updates #m_references to hold the set of references of the DB element.
     void update_references();
@@ -228,7 +229,7 @@ private:
     /// - the name set pointer (if the info has a name),
     /// - the scope pointer (when the scope is removed),
     /// - the set of references (for edits),
-    /// - the transaction pointer (reset only), and
+    /// - the state and visibility pointer (reset only), and
     /// - the hooks for the intrusive sets.
 
     /// The DB element (or job result) managed (and owned) by this instance, \c nullptr for removal
@@ -263,10 +264,11 @@ private:
     ///       DB::Element_base::get_references().
     DB::Tag_set m_references;
 
-    /// The creator transaction.
+    /// State and visibility of the creator transaction.
     ///
-    /// Can be invalid if the info is visible for all open (and future) transactions.
-    Transaction_impl_ptr m_transaction;
+    /// The shared pointer can be invalid if the info is visible for all open (and future)
+    /// transactions.
+    State_and_visibility_ptr m_state_and_visibility;
 
     /// Privacy level of this info.
     const DB::Privacy_level m_privacy_level;
@@ -371,7 +373,8 @@ public:
     /// Returns the pin count.
     mi::Uint32 get_pin_count() const { return m_pin_count; }
 
-    /// Indicates whether the tag has been marked for removal in the global scope.
+    /// Indicates whether the tag has been marked for global removal and that request is globally
+    /// visible.
     bool get_is_removed() const { return m_is_removed; }
 
     /// Returns the tag shared by all infos. Never empty.
@@ -413,6 +416,13 @@ public:
         DB::Transaction_id transaction_id,
         DB::Privacy_level* level_found = nullptr);
 
+    /// Looks up a global removal info.
+    ///
+    /// \param transaction_id     The transaction ID looking up the info.
+    /// \return                   Returns \c true if a global removal info was found,
+    ///                           \c false otherwise.
+    bool lookup_global_removal_info( DB::Transaction_id transaction_id);
+
     /// Marks the tag for removal in the global scope.
     void set_removed();
 
@@ -420,7 +430,8 @@ private:
     /// Pin count of this tag.
     std::atomic_uint32_t m_pin_count = 1;
 
-    /// Indicates whether this tag was already marked for removal in the global scope.
+    /// Indicates whether this tag was marked for global removal and that request is globally
+    /// visible.
     bool m_is_removed = false;
 
     /// Tag shared by all infos in m_infos.
@@ -440,7 +451,7 @@ inline bool operator<( const Infos_per_tag& lhs, const Infos_per_tag& rhs)
 
 /// A minor page holds an array of Infos_per_tag pointers.
 ///
-/// Does \em not own the Infos_per_tag instances.
+/// Does \em not own the Infos_per_tag instances. See also #Tag_tree.
 class Minor_page
 {
 public:
@@ -487,7 +498,7 @@ private:
 
 /// A major page holds an array of minor page pointers.
 ///
-/// Owns the minor pages, but does \em not own the Infos_per_tag instances.
+/// Owns the minor pages, but does \em not own the Infos_per_tag instances. See also #Tag_tree.
 class Major_page
 {
 public:
@@ -545,6 +556,10 @@ private:
 ///
 /// Technically, the vector is split into a 3-level hierarchy where the intermediate levels are
 /// the major and minor pages, which are allocated and deallocated on demand.
+///
+/// The data structures is similar to a prefix B-tree of height 2 and order 1024. The keys are
+/// implicit and fixed a priori, there is no re-balancing. There is no minimum fill rate/underflow
+/// handling, except the removal of empty nodes.
 ///
 /// Owns the major and minor pages, but does \em not own the Infos_per_tag instances.
 class Tag_tree
@@ -748,21 +763,52 @@ public:
 
     /// Runs the garbage collection.
     ///
+    /// \param force   Indicates whether the GC should be forced independent of configuration
+    ///                options regarding period and interval (\c true if called from the outside,
+    ///                \p false if called for committed/aborted transactions and scope deletions).
     /// \param update_lowest_open_transaction_ids   Indicates whether the lowest open transaction
-    ///     IDs should be updated first. This needs to be avoided when a scope is removed since it
-    ///     causes conflicts with the destructor of the scope being removed.
-    void garbage_collection( bool update_lowest_open_transaction_ids);
+    ///                IDs should be updated first. This needs to be avoided when a scope is removed
+    ///                since it causes conflicts with the destructor of the scope being removed.
+    void garbage_collection( bool force, bool update_lowest_open_transaction_ids);
 
     /// Returns the pin count of the corresponding Infos_per_tag set.
     mi::Uint32 get_tag_reference_count( DB::Tag tag);
 
-    /// Indicates whether the tag has been marked for removal.
-    bool get_tag_is_removed( DB::Tag tag);
+    /// Indicates whether the tag has been marked for global removal (visible from the given
+    /// scope/transaction).
+    bool get_tag_is_removed( DB::Tag tag, DB::Scope* scope, DB::Transaction_id transaction_id);
 
     /// Dumps the state of the info manager to the stream.
     void dump( std::ostream& s, bool verbose, bool mask_pointer_values);
 
+    /// Dumps the state of #m_infos_by_tag to the stream (as HTML).
+    void dump_html_tags( std::ostream& s, const Html_context& context);
+
+    /// Dumps the state of #m_infos_by_name to the stream (as HTML).
+    void dump_html_names( std::ostream& s, const Html_context& context);
+
+    /// Dumps the state of a specific Infos_per_tag to the stream (as HTML).
+    void dump_html_tag( std::ostream& s, const Html_context& context, DB::Tag tag);
+
+    /// Dumps the state of a specific Infos_per_name to the stream (as HTML).
+    void dump_html_name( std::ostream& s, const Html_context& context, const std::string& name);
+
+    /// Dumps the state of the garbage collection to the stream (as HTML).
+    void dump_html_garbage_collection( std::ostream& s, const Html_context& context);
+
+    /// Dumps some statistics about all infos to the stream (as HTML).
+    void dump_html_statistics( std::ostream& s, const Html_context& context);
+
 private:
+    /// Indicates whether the GC should actually be run.
+    ///
+    /// Updates #m_gc_counter and #m_gc_last_timestamp as necessary.
+    ///
+    /// \param force   Indicates whether the GC should be forced independent of configuration
+    ///                options regarding period and interval (\c true if called from the outside,
+    ///                \p false if called for committed/aborted transactions and scope deletions).
+    bool do_run_garbage_collection( bool force);
+
     /// Runs the garbage collection for a particular tag.
     ///
     /// This includes all cleanup methods known, including handling of pin count zero via a call to
@@ -803,6 +849,38 @@ private:
 
     /// Decrements the pin counts of the given tags.
     void decrement_pin_counts( const DB::Tag_set& tag_set, bool from_gc);
+
+    /// Count and size (in bytes) of all infos of a particular class ID.
+    struct Count_and_size { size_t m_count = 0; size_t m_size = 0; };
+
+    /// Count and sizes (in bytes) of all infos, per class IDs.
+    using Statistics = std::map<SERIAL::Class_id, Count_and_size>;
+
+    /// Returns statistics and total count and size of all infos.
+    void get_statistics( Statistics& stats, size_t& sum_count, size_t& sum_sizes) const;
+
+    /// Dumps the table header for state of an info to the stream (as HTML).
+    ///
+    /// \param add_tag   Indicates whether to add the tag or the name as first table cell.
+    void dump_html_info_header( std::ostream& s, const Html_context& context, bool add_tag);
+
+    /// Dumps the state of an info to the stream (as HTML).
+    ///
+    /// \param add_tag   Indicates whether to add the tag or the name as first table cell.
+    void dump_html_info(
+        std::ostream& s, const Html_context& context, const Info_impl& info, bool add_tag);
+
+    /// Dumps the state of a tag set to the stream (as HTML).
+    void dump_html_tag_set(
+        std::ostream& s, const Html_context& context, const DB::Tag_set& tag_set);
+
+    /// Returns all tags referencing the given tag.
+    ///
+    /// \note This method is expensive and should by used for dumping only.
+    DB::Tag_set get_reverse_references( DB::Tag tag) const;
+
+    /// Returns a string representation of the GC method being used.
+    std::string get_gc_method_str() const;
 
     /// Instance of the database this manager belongs to.
     Database_impl* const m_database;
@@ -850,7 +928,7 @@ private:
         GC_GENERAL_CANDIDATES_THEN_PIN_COUNT_ZERO
     };
 
-    /// The default GC method.
+    /// The default GC method (debug configuration option).
     Gc_method m_gc_method = GC_GENERAL_CANDIDATES_THEN_PIN_COUNT_ZERO;
 
     /// Instances of Infos_per_tag on which the GC should run all known cleanup methods.
@@ -868,8 +946,25 @@ private:
     /// Only used when #m_gc_method is not #GC_FULL_SWEEPS_ONLY.
     DB::Tag_set m_gc_candidates_pin_count_zero;
 
+    /// Allows to increase the period between GC runs to every n-th transaction commit/abort and
+    /// scope deletion (debug configuration option).
+    size_t m_gc_period = 1;
+
+    /// Count of GC runs that were skipped due to the GC period being larger than 1.
+    size_t m_gc_counter = 0;
+
+    /// Time interval in seconds that overrides the period above (only useful if #m_gc_period is
+    /// larger than 1, debug configuration option).
+    double m_gc_interval = 1.0;
+
+    /// Timestamp of the last GC run (if #m_gc_period is larger than 1).
+    std::chrono::system_clock::time_point m_gc_last_timestamp;
+
     //@}
 };
+
+/// Intrusive pointer for Info_impl.
+using Info_impl_ptr = boost::intrusive_ptr<Info_impl>;
 
 } // namespace DBLIGHT
 

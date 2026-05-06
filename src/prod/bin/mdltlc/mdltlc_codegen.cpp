@@ -28,6 +28,7 @@
 
 #include "pch.h"
 
+#include <cctype>
 #include <sstream>
 #include <string>
 #include <fstream>
@@ -37,6 +38,7 @@
 #include "mdltlc_compilation_unit.h"
 
 #define MDLTLC_DEBUG_POSTCOND 0
+#define MDLTLC_EMIT_DETAILED_EVENTS 1
 
 static char const *copyright_string =
 R"(/******************************************************************************
@@ -67,6 +69,26 @@ R"(/****************************************************************************
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 )";
+
+static std::string make_header_guard_stem(char const *stemname)
+{
+    std::string guard_stem;
+
+    for (char const *p = stemname; *p != '\0'; ++p) {
+        unsigned char c = static_cast<unsigned char>(*p);
+        if (std::isalnum(c) || c == '_') {
+            guard_stem += static_cast<char>(std::toupper(c));
+        } else {
+            guard_stem += '_';
+        }
+    }
+
+    if (guard_stem.empty()) {
+        guard_stem = "_";
+    }
+
+    return guard_stem;
+}
 
 /// Return the name of the identifier at the head of `expr`. It can be
 /// a call or reference expression. Alias expressions and attributes will
@@ -963,36 +985,45 @@ void Compilation_unit::output_cpp_expr(
             // FIXME: Instead of hard-coding these, come up with
             // better solution.
 
-            if (!strcmp(t->get_name()->get_name(), "scatter_mode") ||
-                !strcmp(t->get_name()->get_name(), "::df::scatter_mode")) {
+            char const *name = t->get_name()->get_name();
+            if (strncmp(name, "::df::", 6) == 0) {
+                name += 6;
+            } else if (strncmp(name, "::tex::", 7) == 0) {
+                name += 7;
+            }
+
+            if (!strcmp(name, "scatter_mode")) {
                 p.string("e.create_scatter_enum_constant");
                 p.with_parens([&] (pp::Pretty_print &p) {
-                        int code = t->lookup_variant(e->get_name());
-                        snprintf(b, sizeof(b), "%d", code);
-                        p.integer(code);
-                    });
-            } else
-                if (!strcmp(t->get_name()->get_name(), "emission_mode") ||
-                    !strcmp(t->get_name()->get_name(), "::df::emission_mode")) {
-                    p.string("e.create_emission_enum_constant");
-                    p.with_parens([&] (pp::Pretty_print &p) {
-                            int code = t->lookup_variant(e->get_name());
-                            snprintf(b, sizeof(b), "%d", code);
-                            p.integer(code);
-                        });
-                } else
-                    if (!strcmp(t->get_name()->get_name(), "wrap_mode") ||
-                        !strcmp(t->get_name()->get_name(), "::tex::wrap_mode")) {
-                        p.string("e.create_wrap_mode_enum_constant");
-                        p.with_parens([&] (pp::Pretty_print &p) {
-                                int code = t->lookup_variant(e->get_name());
-                                snprintf(b, sizeof(b), "%d", code);
-                                p.integer(code);
-                            });
-                    } else {
-                        error(expr->get_location(), "[BUG] unsupported enum type in output_cpp_expr");
-                        MDL_ASSERT(!"[BUG] unsupported enum type in output_cpp_expr");
-                    }
+                    int code = t->lookup_variant(e->get_name());
+                    snprintf(b, sizeof(b), "%d", code);
+                    p.integer(code);
+                });
+            } else if (!strcmp(name, "backscatter_modifier")) {
+                p.string("e.create_backscatter_enum_constant");
+                p.with_parens([&](pp::Pretty_print &p) {
+                    int code = t->lookup_variant(e->get_name());
+                    snprintf(b, sizeof(b), "%d", code);
+                    p.integer(code);
+                });
+            } else if (!strcmp(name, "emission_mode")) {
+                p.string("e.create_emission_enum_constant");
+                p.with_parens([&] (pp::Pretty_print &p) {
+                    int code = t->lookup_variant(e->get_name());
+                    snprintf(b, sizeof(b), "%d", code);
+                    p.integer(code);
+                });
+            } else if (!strcmp(name, "wrap_mode")) {
+                p.string("e.create_wrap_mode_enum_constant");
+                p.with_parens([&] (pp::Pretty_print &p) {
+                    int code = t->lookup_variant(e->get_name());
+                    snprintf(b, sizeof(b), "%d", code);
+                    p.integer(code);
+                });
+            } else {
+                error(expr->get_location(), "[BUG] unsupported enum type in output_cpp_expr");
+                MDL_ASSERT(!"[BUG] unsupported enum type in output_cpp_expr");
+            }
             break;
         }
         default:
@@ -1345,12 +1376,28 @@ void Compilation_unit::output_cpp_matcher_rhs(
 
     // Generate tracer code.
     p.nl();
-    p.string("if (event_handler != nullptr)");
-    p.with_indent([&] (pp::Pretty_print &p) {
+    p.string("if (event_handler != nullptr) ");
+    p.with_braces([&](pp::Pretty_print &p) {
+        p.with_indent([&](pp::Pretty_print &p) {
+#if MDLTLC_EMIT_DETAILED_EVENTS
+            p.nl();
+            p.string("fire_detailed_trace_event(*event_handler, ");
+            p.integer(rule_index);
+            p.comma();
+            p.space();
+            p.string("{ mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Rule_match");
+            p.comma();
+            p.space();
+            p.string("\"\"");
+            p.string("});");
+            p.nl();
+#endif
             p.nl();
             p.string("fire_match_event(*event_handler, ");
             p.integer(rule_index);
             p.string(");");
+            });
+        p.nl();
         });
     p.nl();
 
@@ -1383,6 +1430,7 @@ void Compilation_unit::output_cpp_rule_match1(
     size_t fail_node_index,
     size_t cont_index,
     Expr const *node,
+    Match_context match_context,
     size_t &tmp_index)
 {
     tmp_index += 1;
@@ -1423,9 +1471,47 @@ void Compilation_unit::output_cpp_rule_match1(
         MDL_ASSERT(node_expr && "no call or reference expression found");
     }
 
-    auto emit_call_cont = [&] (size_t to_skip = 0) {
-        p.with_braces([&] (pp::Pretty_print &p) {
-            p.with_indent([&] (pp::Pretty_print&p) {
+    auto emit_call_cont = [&] (Match_context match_context, char const *message, size_t to_skip = 0) {
+        p.with_braces([&](pp::Pretty_print &p) {
+            p.with_indent([&](pp::Pretty_print &p) {
+#if MDLTLC_EMIT_DETAILED_EVENTS
+                p.nl();
+                p.string("if (event_handler != nullptr) ");
+                p.with_braces([&](pp::Pretty_print &p) {
+                    p.with_indent([&](pp::Pretty_print &p) {
+                        p.nl();
+                        p.string("fire_detailed_trace_event(*event_handler, ");
+                        p.integer(rule_index);
+                        p.comma();
+                        p.space();
+                        p.string("{ ");
+                        switch (match_context) {
+                        case Match_context::Rule_match:
+                            p.string("mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_mismatch");
+                            break;
+                        case Match_context::Attribute_match:
+                            p.string("mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Attribute_mismatch");
+                            break;
+                        case Match_context::Attribute_check:
+                            p.string("mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Attribute_missing");
+                            break;
+                        default:
+                            p.string("\"\" /* bug */");
+                        }
+                        p.comma();
+                        p.space();
+                        if (message != nullptr) {
+                            p.chr('"');
+                            p.escaped_string(message);
+                            p.chr('"');
+                        } else {
+                            p.string("\"\"");
+                        }
+                        p.string("});");
+                        });
+                    p.nl();
+                    });
+#endif
                 p.nl();
                 p.string("return match_rule");
                 p.integer(cont_index + to_skip);
@@ -1434,9 +1520,9 @@ void Compilation_unit::output_cpp_rule_match1(
                 p.string(", node_props");
                 p.integer(fail_node_index);
                 p.string(");");
-            });
+                });
             p.nl();
-        });
+            });
     };
 
     if (name_expr != nullptr) {
@@ -1446,6 +1532,8 @@ void Compilation_unit::output_cpp_rule_match1(
         p.integer(node_index);
         p.string(";");
     }
+
+    mi::mdl::string match_pattern(m_arena.get_allocator());
 
     switch (node_expr->get_kind()) {
     case Expr::EK_CALL:
@@ -1460,12 +1548,14 @@ void Compilation_unit::output_cpp_rule_match1(
         if (!first_matcher) {
             p.string("continued ");
         }
+        
         p.string("match for ");
         {
             std::stringstream s_out;
             pp::Pretty_print p1(m_arena, s_out, pp::Pretty_print::LARGE_LINE_WIDTH);
             node_expr->pp(p1);
-            p.string(s_out.str().c_str());
+            match_pattern = s_out.str().c_str();
+            p.string(match_pattern.c_str());
         }
 
         if (first_matcher) {
@@ -1634,7 +1724,7 @@ void Compilation_unit::output_cpp_rule_match1(
                 }
             }
             p.string(") ");
-            emit_call_cont(skip_tl);
+            emit_call_cont(match_context, match_pattern.c_str(), skip_tl);
         }
 
         for (int i = 0; i < call->get_argument_count(); i++) {
@@ -1669,9 +1759,10 @@ void Compilation_unit::output_cpp_rule_match1(
                 p.string("); ");
             }
             output_cpp_rule_match1(p, rule, true, 0, rule_index, tmp_index,
-                                   fail_node_index,
-                                   cont_index, arg,
-                                   tmp_index);
+                fail_node_index,
+                cont_index, arg,
+                match_context,
+                tmp_index);
             tmp_index++;
         }
         break;
@@ -1680,6 +1771,7 @@ void Compilation_unit::output_cpp_rule_match1(
     case Expr::EK_REFERENCE:
     {
         Expr_ref const *ref = cast<Expr_ref>(node_expr);
+        match_pattern = ref->get_name()->get_name();
         if (strcmp(ref->get_name()->get_name(), "_") != 0) {
             p.nl();
             p.string("DAG_node const *v_");
@@ -1697,6 +1789,38 @@ void Compilation_unit::output_cpp_rule_match1(
         MDL_ASSERT(false && "unexpected expression kind");
     }
 
+#if MDLTLC_EMIT_DETAILED_EVENTS
+    p.nl();
+    p.string("if (event_handler != nullptr) ");
+    p.with_braces([&](pp::Pretty_print &p) {
+        p.with_indent([&](pp::Pretty_print &p) {
+            p.nl();
+            p.string("fire_detailed_trace_event(*event_handler, ");
+            p.integer(rule_index);
+            p.comma();
+            p.space();
+            p.string("{ ");
+            switch (match_context) {
+            case Match_context::Rule_match:
+                p.string("mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match");
+                break;
+            case Match_context::Attribute_match:
+                p.string("mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Attribute_match");
+                break;
+            default:
+                p.string("\"\" /* bug */");
+            }
+            p.comma();
+            p.space();
+            p.string("\"");
+            p.escaped_string(match_pattern.c_str());
+            p.string("\"");
+            p.string("});");
+            });
+        p.nl();
+        });
+#endif
+
     // Match all attributes and bind their values to variables.
     if (attr_expr != nullptr) {
         Expr_attribute::Expr_attribute_vector const &attrs = attr_expr->get_attributes();
@@ -1708,7 +1832,7 @@ void Compilation_unit::output_cpp_rule_match1(
             p.string(", \"");
             p.string(ap.name->get_name());
             p.string("\")) ");
-            emit_call_cont();
+            emit_call_cont(Match_context::Attribute_check, ap.name->get_name());
 
             if (ap.expr) {
                 p.nl();
@@ -1728,6 +1852,7 @@ void Compilation_unit::output_cpp_rule_match1(
                                        fail_node_index,
                                        cont_index,
                                        ap.expr,
+                                       Match_context::Attribute_match,
                                        tmp_index);
             }
         }
@@ -1776,6 +1901,7 @@ void Compilation_unit::output_cpp_rule_matcher(
                                    /*fail_node_index=*/rule_index,
                                    /*cont_index=*/cont_index,
                                    lhs,
+                                   Match_context::Rule_match,
                                    tmp_index);
             p.nl();
             mi::mdl::string s(m_arena.get_allocator());
@@ -1937,7 +2063,7 @@ static void get_node_properties(Rule const &rule,
 
 void Compilation_unit::output_cpp_matcher(
     pp::Pretty_print &p,
-    Ruleset &ruleset, mi::mdl::vector<Rule const *>::Type &rules) 
+    Ruleset &ruleset, mi::mdl::vector<Rule const *>::Type &rules)
 {
     // Write function header for matcher function and start switch
     // statement on rules.
@@ -1947,8 +2073,8 @@ void Compilation_unit::output_cpp_matcher(
     p.string("DAG_node const* ");
     p.string(ruleset.get_name());
     p.string("::matcher");
-    p.with_parens([&] (pp::Pretty_print &p) {
-        p.with_indent([&] (pp::Pretty_print &p) {
+    p.with_parens([&](pp::Pretty_print &p) {
+        p.with_indent([&](pp::Pretty_print &p) {
             p.nl();
             p.string_with_nl("IRule_matcher_event *event_handler,\n");
             p.string(m_api_class);
@@ -1957,11 +2083,11 @@ void Compilation_unit::output_cpp_matcher(
                 "DAG_node const *node,\n"
                 "const mi::mdl::Distiller_options *options,\n"
                 "Rule_result_code &result_code");
+            });
         });
-    });
     p.string_with_nl(" const\n");
-    p.with_braces([&] (pp::Pretty_print &p) {
-        p.with_indent([&] (pp::Pretty_print &p) {
+    p.with_braces([&](pp::Pretty_print &p) {
+        p.with_indent([&](pp::Pretty_print &p) {
             p.nl();
             {
                 size_t i = 0;
@@ -2017,7 +2143,30 @@ void Compilation_unit::output_cpp_matcher(
                 p.integer(rules.size());
                 p.string(" = [&] (DAG_node const *node, \
 IDistiller_plugin_api::Match_properties &node_props) -> \
-const DAG_node * { return node; };");
+const DAG_node * ");
+                p.with_braces([&](pp::Pretty_print &p) {
+                    p.with_indent([&](pp::Pretty_print &p) {
+#if MDLTLC_EMIT_DETAILED_EVENTS
+                        p.nl();
+                        p.string("if (event_handler != nullptr) ");
+                        p.with_braces([&](pp::Pretty_print &p) {
+                            p.with_indent([&](pp::Pretty_print &p) {
+                                p.nl();
+                                p.string("fire_detailed_trace_event(*event_handler, ");
+                                p.integer(rules.size() - 1);
+                                p.space();
+                                p.comma();
+                                p.string("{ mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::No_match, \"\"});");
+                                });
+                            p.nl();
+                            });
+                        p.nl();
+#endif                  
+                        p.string("return node;");
+                        p.nl();
+                        });
+                    });
+                p.semicolon();
                 p.nl();
                 i = rules.size();
                 for (auto it(rules.rbegin()), end(rules.rend()); it != end; ++it, --i) {
@@ -2025,9 +2174,9 @@ const DAG_node * { return node; };");
 
                     Rule const &rule = **it;
                     output_cpp_rule_matcher(p, rule,
-                                            first_matcher[i - 1],
-                                            skip_tl[i - 1],
-                                            i - 1, i);
+                        first_matcher[i - 1],
+                        skip_tl[i - 1],
+                        i - 1, i);
                 }
                 p.nl();
                 p.string_with_nl("IDistiller_plugin_api::Match_properties node_props;\n");
@@ -2038,9 +2187,9 @@ const DAG_node * { return node; };");
                 p.nl();
             }
 
-        });
+            });
         p.nl();
-    });
+        });
     p.nl();
     p.nl();
 }
@@ -2612,6 +2761,52 @@ void Compilation_unit::output_cpp_event_handler(pp::Pretty_print &p,
     p.nl();
     p.nl();
 
+#if MDLTLC_EMIT_DETAILED_EVENTS
+    p.string("void ");
+    p.string(ruleset.get_name());
+    p.string("::fire_detailed_trace_event");
+    p.with_parens([&](pp::Pretty_print &p) {
+        p.with_indent([&](pp::Pretty_print &p) {
+            p.nl();
+            p.string("mi::mdl::IRule_matcher_event &event_handler,");
+            p.nl();
+            p.string("std::size_t id,");
+            p.nl();
+            p.string("mi::mdl::IRule_matcher_event::Detailed_trace_event trace_event");
+            });
+        });
+    p.nl();
+    p.with_braces([&](pp::Pretty_print &p) {
+        p.with_indent([&](pp::Pretty_print &p) {
+            p.nl();
+            p.string("Rule_info const &ri = g_rule_info[id];");
+            p.nl();
+            p.string("event_handler.detailed_trace_event");
+            p.with_indent([&](pp::Pretty_print &p) {
+                p.with_parens([&](pp::Pretty_print &p) {
+                    p.string("\"");
+                    p.string(ruleset.get_name());
+                    p.string("\",");
+                    p.space();
+                    p.string("ri.ruid,");
+                    p.space();
+                    p.string("ri.rname,");
+                    p.space();
+                    p.string("ri.fname,");
+                    p.space();
+                    p.string("ri.fline,");
+                    p.space();
+                    p.string("trace_event");
+                    });
+                p.semicolon();
+                });
+            });
+        p.nl();
+        });
+    p.nl();
+    p.nl();
+#endif
+
 }
 
 /// Comparison functor for sorting rules by the root node value of the pattern
@@ -2745,7 +2940,7 @@ void Compilation_unit::output_cpp(mi::mdl::string const &stem_name, mi::mdl::str
                  rend(it->get_rules().end());
              rit != rend; ++rit)
             {
-                used_target_materials(m_arena, rit->get_rhs(), used_materials);
+                used_target_materials(rit->get_rhs(), used_materials);
             }
 
         p.string_with_nl(
@@ -2963,12 +3158,7 @@ void Compilation_unit::output_h(
     mi::mdl::string const &stemname,
     mi::mdl::string const &h_name)
 {
-    mi::mdl::string upper_stemname(stemname);
-
-    std::transform(upper_stemname.begin(),
-                   upper_stemname.end(),
-                   upper_stemname.begin(),
-                   toupper);
+    std::string guard_stem = make_header_guard_stem(stemname.c_str());
 
     std::fstream h_stream(h_name.c_str(), std::ios_base::out);
     if (!h_stream) {
@@ -2986,11 +3176,11 @@ void Compilation_unit::output_h(
         "// Generated by mdltlc\n"
         "\n"
         "#ifndef MDL_DISTILLER_DIST_");
-    p.string(upper_stemname.c_str());
+    p.string(guard_stem.c_str());
     p.string_with_nl
         ("_H\n"
          "#define MDL_DISTILLER_DIST_");
-    p.string(upper_stemname.c_str());
+    p.string(guard_stem.c_str());
     p.string_with_nl("_H\n\n");
 
     // Write include statements and open namespace.
@@ -3078,7 +3268,7 @@ void Compilation_unit::output_h(
                     });
                 p.nl();
                 p.string_with_nl(
-                    "\n\n"
+                    "\n"
                     "static void fire_debug_print(");
                 p.with_indent([&] (pp::Pretty_print &p) {
                     p.nl();
@@ -3092,8 +3282,22 @@ void Compilation_unit::output_h(
                     p.nl();
                     p.string("mi::mdl::DAG_node const *value);");
                 });
+                p.nl();
 
-
+#if MDLTLC_EMIT_DETAILED_EVENTS
+                p.string_with_nl(
+                    "\n"
+                    "static void fire_detailed_trace_event(");
+                p.with_indent([&](pp::Pretty_print &p) {
+                    p.nl();
+                    p.string("mi::mdl::IRule_matcher_event &event_handler,");
+                    p.nl();
+                    p.string("std::size_t id,");
+                    p.nl();
+                    p.string("mi::mdl::IRule_matcher_event::Detailed_trace_event trace_event);");
+                    });
+                p.nl();
+#endif
                 // Print prototypes for postcondition support functions.
 
                 if (!it->get_postcond().is_empty()) {

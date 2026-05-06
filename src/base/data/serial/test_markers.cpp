@@ -74,6 +74,7 @@ MI_TEST_AUTO_FUNCTION( test_extension_marker )
     Test_type_2 *dst = dynamic_cast<Test_type_2*>(deserializer.deserialize(false));
 
     MI_REQUIRE_EQUAL(src, *dst);
+    delete dst;
 }
 
 /// Serialize object without extension. Deserialize without it.
@@ -95,6 +96,7 @@ MI_TEST_AUTO_FUNCTION( test_extension_marker_no_serialized_extension )
     Test_type_2 *dst = dynamic_cast<Test_type_2*>(deserializer.deserialize(false));
 
     MI_REQUIRE_EQUAL(src, *dst);
+    delete dst;
 }
 
 /// Serialize object with extension without deserializer knowing about it.
@@ -117,6 +119,7 @@ MI_TEST_AUTO_FUNCTION( test_extension_marker_no_deserialized_extension )
 
     MI_REQUIRE_EQUAL(src, *dst);
     MI_REQUIRE(!dst->m_ext_found);
+    delete dst;
 }
 
 /// Serialize object with end marker inside payload. Expect correct deserialization.
@@ -138,6 +141,7 @@ MI_TEST_AUTO_FUNCTION( test_extension_marker_with_end_marker_in_payload )
     Test_type_2 *dst = dynamic_cast<Test_type_2*>(deserializer.deserialize(false));
 
     MI_REQUIRE_EQUAL(src, *dst);
+    delete dst;
 }
 
 /// Serialize object with extension marker in payload
@@ -161,6 +165,7 @@ MI_TEST_AUTO_FUNCTION( test_extension_marker_with_ext_marker_in_payload )
     MI_REQUIRE_EQUAL(src.m_int, dst->m_int);
     MI_REQUIRE_EQUAL(src.m_ext, dst->m_ext);
     MI_REQUIRE_EQUAL(src, *dst);
+    delete dst;
 }
 
 /// Serialize multiple objects with various options.
@@ -197,6 +202,7 @@ MI_TEST_AUTO_FUNCTION( test_multiple_mixed_objects )
             MI_REQUIRE_EQUAL(*dynamic_cast<Test_type_2*>(src_objects[i]), *dynamic_cast<Test_type_2*>(dst));
         else
             MI_REQUIRE_MSG(false, "Unknown type.");
+        delete dst;
     }
 
     for (int i = 0; i < src_objects.size(); i++)
@@ -243,13 +249,13 @@ MI_TEST_AUTO_FUNCTION( test_extension_marker_with_nested_object )
 
     Buffer_serializer serializer;
 
-    Test_type_2 s2;
-    s2.m_int = 11;
-    s2.m_ext = 22;
+    Test_type_2* s2 = new Test_type_2;
+    s2->m_int = 11;
+    s2->m_ext = 22;
 
     Test_type_3 s3;
     s3.m_data = 33;
-    s3.m_ptr = &s2;
+    s3.m_ptr = s2; // s3 owns now s2
 
     serializer.serialize(&s3, false);
 
@@ -284,6 +290,8 @@ MI_TEST_AUTO_FUNCTION( test_extension_marker_with_nested_object )
     deserializer.reset(buf, buf_sz);
     Test_type_3 *dst = dynamic_cast<Test_type_3*>(deserializer.deserialize(false));
     MI_REQUIRE_EQUAL(s3, *dst);
+
+    delete dst;
 }
 
 /// Serialize serializable object with a nested serializable object. This time use
@@ -303,7 +311,7 @@ MI_TEST_AUTO_FUNCTION( test_extension_marker_with_recursive_nesting )
     // Deserialize
     Buffer_deserializer deserializer(dmh.get());
     deserializer.reset(serializer.get_buffer(), serializer.get_buffer_size());
-    deserializer.deserialize(false);
+    delete deserializer.deserialize(false);
 }
 
 MI_TEST_AUTO_FUNCTION( test_serializer_checksummer_simple )
@@ -384,7 +392,7 @@ MI_TEST_AUTO_FUNCTION( test_deserializer_bad_checksum )
     deserializer.set_error_handler(err_handler.get());
 
     deserializer.reset(serializer.get_buffer(), serializer.get_buffer_size());
-    deserializer.deserialize(false);
+    delete deserializer.deserialize(false);
 
     MI_REQUIRE_EQUAL(err_handler->m_last_status, MARKER_BAD_CHECKSUM);
     MI_REQUIRE_EQUAL(err_handler->m_last_class_id, ID_TEST_TYPE_2_CLASS_ID);

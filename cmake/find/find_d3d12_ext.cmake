@@ -47,7 +47,7 @@ function(FIND_D3D12_EXT)
 
     if(${_SDK_VERSION_STRING} VERSION_LESS "10.0.17763.0")
         # use the guessed windows kit folder and look for the latest version
-        message(WARNING "Guessing the Windows Kit directory. If the configuration fails, try to set 'CMAKE_WINDOWS_KITS_10_DIR'. The specified directory is expected to contain Include/10.0.* directories, where * has to be >=17763. The guessed path is '${CMAKE_WINDOWS_KITS_10_DIR}'.")
+        message(STATUS "Guessing the Windows Kit directory. If the configuration fails, try to set 'CMAKE_WINDOWS_KITS_10_DIR'. The specified directory is expected to contain Include/10.0.* directories, where * has to be >= 17763. The guessed path is '${CMAKE_WINDOWS_KITS_10_DIR}'.")
         # find the latest version
         file(GLOB _KITS RELATIVE ${CMAKE_WINDOWS_KITS_10_DIR}/Include ${CMAKE_WINDOWS_KITS_10_DIR}/Include/*)
         foreach(_KIT ${_KITS})
@@ -61,7 +61,7 @@ function(FIND_D3D12_EXT)
             message(FATAL_ERROR "Windows SDK Version 10.0.17763.0 or later is required for Direct3D with ray tracing support.")
         endif()
 
-        message(WARNING "Using Windows 10 Kit version ${_SDK_VERSION_STRING}. It might be needed to set this version manually in the 'General'-section in the Visual Studio property page of projects that use D3D12.")
+        message(STATUS "Using Windows 10 Kit version ${_SDK_VERSION_STRING}.")
     endif()
 
     # to get the IDxcCompiler3 we can not rely on the DXC delivered with windows

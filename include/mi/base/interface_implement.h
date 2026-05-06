@@ -42,14 +42,13 @@ namespace base {
 @{
 */
 
-// Forward declaration
 class IInterface;
 
 /// Mixin class template for deriving interface implementations.
 ///
 /// #mi::base::Interface_implement is a mixin class template that allows you to derive
 /// interface class implementations easily. It provides you with the full implementation
-/// of reference counting and the #mi::base::IInterface::get_interface(const Uuid&)
+/// of reference counting and the #mi::base::IInterface::get_interface(const mi::base::Uuid&)
 /// method. It requires that you used interfaces derived from the corresponding mixin
 /// class template #mi::base::Interface_declare.
 ///
@@ -184,7 +183,7 @@ private:
 ///
 /// #mi::base::Interface_implement_2 is a mixin class template that allows you to derive
 /// interface class implementations easily. It provides you with the full implementation
-/// of reference counting and the #mi::base::IInterface::get_interface(const Uuid&)
+/// of reference counting and the #mi::base::IInterface::get_interface(const mi::base::Uuid&)
 /// method. It requires that you used interfaces derived from the corresponding mixin
 /// class template #mi::base::Interface_declare.
 ///
@@ -234,7 +233,7 @@ public:
     ///
     /// Increments the reference count of the object referenced through this interface
     /// and returns the new reference count. The operation is thread-safe.
-    virtual Uint32 retain() const
+    virtual Uint32 retain() const override
     {
         return ++m_refcnt;
     }
@@ -244,7 +243,7 @@ public:
     /// Decrements the reference count of the object referenced through this interface
     /// and returns the new reference count. If the reference count dropped to
     /// zero, the object will be deleted. The operation is thread-safe.
-    virtual Uint32 release() const
+    virtual Uint32 release() const override
     {
         Uint32 cnt = --m_refcnt;
         if( !cnt)
@@ -262,7 +261,7 @@ public:
     /// In the case of a non-\c nullptr return value, the caller receives ownership of the
     /// new interface pointer, whose reference count has been retained once. The caller
     /// must release the returned interface pointer at the end to prevent a memory leak.
-    virtual const IInterface* get_interface( const Uuid& interface_id) const
+    virtual const IInterface* get_interface( const Uuid& interface_id) const override
     {
         const IInterface* iptr = I1::get_interface_static(
             static_cast<const I1*>( this), interface_id);
@@ -282,7 +281,7 @@ public:
     /// In the case of a non-\c nullptr return value, the caller receives ownership of the
     /// new interface pointer, whose reference count has been retained once. The caller
     /// must release the returned interface pointer at the end to prevent a memory leak.
-    virtual IInterface* get_interface( const Uuid& interface_id)
+    virtual IInterface* get_interface( const Uuid& interface_id) override
     {
         IInterface* iptr = I1::get_interface_static( static_cast<I1*>( this), interface_id);
         if( iptr)
@@ -294,7 +293,7 @@ public:
     using I1::get_interface;
 
     /// Returns the interface ID of the most derived interface.
-    Uuid get_iid() const
+    Uuid get_iid() const override
     {
         return typename I1::IID();
     }
@@ -312,7 +311,7 @@ private:
 ///
 /// #mi::base::Interface_implement is a mixin class template that allows you to derive
 /// interface class implementations easily. It provides you with a special implementation
-/// of reference counting and the #mi::base::IInterface::get_interface(const Uuid&)
+/// of reference counting and the #mi::base::IInterface::get_interface(const mi::base::Uuid&)
 /// method. It requires that you used interfaces derived from the corresponding mixin
 /// class template #mi::base::Interface_declare.
 ///

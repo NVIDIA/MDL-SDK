@@ -52,7 +52,7 @@ namespace MI_OIIO {
 /// Value of the debug option \c ignore_gamma_metadata_on_import.
 ///
 /// \c true:  metadata about the gamma value is ignored
-/// \c false: metadata about the gamma value is taked into account
+/// \c false: metadata about the gamma value is taken into account
 extern bool g_ignore_gamma_metadata_on_import;
 
 /// Value of the debug option \c linear_gamma_for_single_uint16_channel.

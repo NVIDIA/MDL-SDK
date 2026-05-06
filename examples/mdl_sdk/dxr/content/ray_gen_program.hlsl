@@ -36,8 +36,32 @@ float3 trace_path(inout RayDesc ray, inout uint seed)
 {
     // Initialize the ray payload
     RadianceHitInfo payload;
-    payload.contribution = float3(0.0f, 0.0f, 0.0f);
+
+#if defined(MDL_SPECTRAL_RENDERING)
+    {
+        // Uniform wavelength sampling across the configured wavelength range for this path.
+        float xi = rnd(seed);
+        int i;
+        [unroll] for (i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        {
+            xi += 1.0f / float(MDL_DF_SPECTRAL_SAMPLES);
+            if (xi > 1.0f) xi -= 1.0f;
+            payload.spectral_wavelengths.values[i] = lerp(
+                scene_constants.spectral_min_wavelength,
+                scene_constants.spectral_max_wavelength, xi);
+        }
+
+        // Initialize the weight and spectral PDF ratios.
+        [unroll] for (i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+            payload.weight.values[i] = 1.0f;
+        [unroll] for (i = 0; i < MDL_DF_SPECTRAL_SAMPLES - 1; ++i)
+            payload.spectral_pdf_ratios[i] = 1.0f;
+    }
+#else
     payload.weight = float3(1.0f, 1.0f, 1.0f);
+#endif
+
+    payload.contribution = float3(0.0f, 0.0f, 0.0f);
     payload.seed = seed;
     payload.last_bsdf_pdf = DIRAC;
     payload.flags = FLAG_FIRST_PATH_SEGMENT | FLAG_CAMERA_RAY;
@@ -262,7 +286,7 @@ void RayGenProgram()
 
     // apply gamma corrections for display
     FrameBuffer[launch_index.xy] =
-        float4(pow(color, scene_constants.output_gamma_correction), 1.0f);
+        float4(pow(max(color, 0.0f), scene_constants.output_gamma_correction), 1.0f);
 
     // write auxiliary buffer
     #if defined(ENABLE_AUXILIARY)

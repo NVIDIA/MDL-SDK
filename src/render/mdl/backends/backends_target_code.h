@@ -586,7 +586,7 @@ public:
     ///    - -2 cannot execute: not native code or the given function is not a BSDF sample function
     mi::Sint32 execute_bsdf_sample(
         mi::Size index,
-        mi::neuraylib::Bsdf_sample_data *data,
+        mi::neuraylib::Bsdf_sample_data_base *data,
         const mi::neuraylib::Shading_state_material& state,
         mi::neuraylib::Texture_handler_base* tex_handler,
         const mi::neuraylib::ITarget_argument_block *cap_args) const override;
@@ -636,7 +636,7 @@ public:
     ///         function
     mi::Sint32 execute_bsdf_pdf(
         mi::Size index,
-        mi::neuraylib::Bsdf_pdf_data *data,
+        mi::neuraylib::Bsdf_pdf_data_base *data,
         const mi::neuraylib::Shading_state_material& state,
         mi::neuraylib::Texture_handler_base* tex_handler,
         const mi::neuraylib::ITarget_argument_block *cap_args) const override;
@@ -660,7 +660,7 @@ public:
     /// Run the EDF sample function for this code on the native CPU.
     mi::Sint32 execute_edf_sample(
         Size index,
-        mi::neuraylib::Edf_sample_data *data,
+        mi::neuraylib::Edf_sample_data_base *data,
         const mi::neuraylib::Shading_state_material& state,
         mi::neuraylib::Texture_handler_base* tex_handler,
         const mi::neuraylib::ITarget_argument_block *cap_args) const override;

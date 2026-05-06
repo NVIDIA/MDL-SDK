@@ -32,6 +32,8 @@
 #include "pch.h"
 
 #define MI_TEST_AUTO_SUITE_NAME "base/hal/thread Test Suite"
+#define MI_TEST_IMPLEMENT_TEST_MAIN_INSTEAD_OF_MAIN
+
 #include <base/system/test/i_test_auto_driver.h>
 
 #include <cstdio>
@@ -62,6 +64,8 @@ using MI::THREAD::Lock;
 using MI::THREAD::Recursive_lock;
 using MI::THREAD::Shared_lock;
 using MI::THREAD::Condition;
+using MI::THREAD::Block;
+using MI::THREAD::Block_shared;
 
 #ifndef MI_PLATFORM_WINDOWS
 
@@ -213,7 +217,9 @@ protected:
 
 bool test_counter_lock()
 {
+#ifdef MI_TEST_VERBOSE
     double time = 0.0;
+#endif
     int i;
 
 #ifdef MI_TEST_VERBOSE
@@ -226,9 +232,9 @@ bool test_counter_lock()
         counter[i]->start();
     for(i = 0; i < max_counter; i++)
         counter[i]->join();
+#ifdef MI_TEST_VERBOSE
     for(i = 0; i < max_counter; i++)
         time += counter[i]->get_ttime();
-#ifdef MI_TEST_VERBOSE
     printf("the_count == %d\n",the_count);
     printf("%f counts / second\n",the_count / time);
     printf("%f milliseconds / count\n",1000 * time / the_count);
@@ -240,7 +246,9 @@ bool test_counter_lock()
 
 bool test_condition()
 {
+#ifdef MI_TEST_VERBOSE
     double time = 0.0;
+#endif
     int i;
 
 #ifdef MI_TEST_VERBOSE
@@ -256,9 +264,9 @@ bool test_condition()
     condition[0]->signal();
     for(i = 0; i < max_counter; i++)
         counter[i]->join();
+#ifdef MI_TEST_VERBOSE
     for(i = 0; i < max_counter; i++)
         time += counter[i]->get_ttime();
-#ifdef MI_TEST_VERBOSE
     printf("the_count == %d\n",the_count);
     printf("%f counts / second\n",the_count / time);
     printf("%f milliseconds / count\n",1000 * time / the_count);
@@ -412,7 +420,9 @@ public:
 
 bool test_passive_server()
 {
+#ifdef MI_TEST_VERBOSE
     double time = 0.0;
+#endif
 
 #ifdef MI_TEST_VERBOSE
     printf("testing passive server\n");
@@ -425,9 +435,9 @@ bool test_passive_server()
     client_2.start();
     client_1.join();
     client_2.join();
+#ifdef MI_TEST_VERBOSE
     time += client_1.get_ttime();
     time += client_2.get_ttime();
-#ifdef MI_TEST_VERBOSE
     printf("count == %d\n",passive_server.get_count());
     printf("%f services / second\n",1000000 / time);
     printf("%f milliseconds / service\n",time / 1000);
@@ -437,7 +447,9 @@ bool test_passive_server()
 
 bool test_active_server()
 {
+#ifdef MI_TEST_VERBOSE
     double time = 0.0;
+#endif
 
 #ifdef MI_TEST_VERBOSE
     printf("testing active server\n");
@@ -452,10 +464,10 @@ bool test_active_server()
     client_1.join();
     client_2.join();
     active_server.join();
+#ifdef MI_TEST_VERBOSE
     time += client_1.get_ttime();
     time += client_2.get_ttime();
     time += active_server.get_ttime();
-#ifdef MI_TEST_VERBOSE
     printf("count == %d\n",active_server.get_count());
     printf("%f services / second\n",1000000 / time);
     printf("%f milliseconds / service\n",time / 1000);
@@ -545,6 +557,7 @@ bool test_pin_cpu()
         if (cpu != thr.get_cpu())
             return false;
     }
+    (void) f;
 
     thr.unpin_cpu();
 
@@ -746,22 +759,22 @@ MI_TEST_AUTO_FUNCTION( test_rw_lock_block )
     {
         // lock_shared() on unlocked lock
         Shared_lock lock;
-        Shared_lock::Block_shared block( &lock);
+        Block_shared block( &lock);
         lock.check_is_owned_shared();
     }
 
     {
         // lock_shared() on shared locked lock
         Shared_lock lock;
-        Shared_lock::Block_shared block1( &lock);
-        Shared_lock::Block_shared block2( &lock);
+        Block_shared block1( &lock);
+        Block_shared block2( &lock);
         lock.check_is_owned_shared();
     }
 
     {
         // try_lock_shared() on unlocked lock
         Shared_lock lock;
-        Shared_lock::Block_shared block;
+        Block_shared<Shared_lock> block;
         bool success = block.try_set( &lock);
         MI_CHECK( success);
         lock.check_is_owned_shared();
@@ -770,11 +783,11 @@ MI_TEST_AUTO_FUNCTION( test_rw_lock_block )
     {
         // try_lock_shared() on shared locked lock
         Shared_lock lock;
-        Shared_lock::Block_shared block1;
+        Block_shared<Shared_lock> block1;
         bool success = block1.try_set( &lock);
         MI_CHECK( success);
         lock.check_is_owned_shared();
-        Shared_lock::Block_shared block2;
+        Block_shared<Shared_lock> block2;
         success = block2.try_set( &lock);
         MI_CHECK( success);
         lock.check_is_owned_shared();
@@ -783,14 +796,14 @@ MI_TEST_AUTO_FUNCTION( test_rw_lock_block )
     {
         // lock_exclusive() on unlocked lock
         Shared_lock lock;
-        Shared_lock::Block_exclusive block( &lock);
+        Block block( &lock);
         lock.check_is_owned();
     }
 
     {
         // try_lock_exclusive() on unlocked lock
         Shared_lock lock;
-        Shared_lock::Block_exclusive block;
+        Block<Shared_lock> block;
         bool success = block.try_set( &lock);
         MI_CHECK( success);
         lock.check_is_owned();
@@ -799,11 +812,11 @@ MI_TEST_AUTO_FUNCTION( test_rw_lock_block )
     {
         // try_lock_exclusive() on exclusively locked lock
         Shared_lock lock;
-        Shared_lock::Block_exclusive block1;
+        Block<Shared_lock> block1;
         bool success = block1.try_set( &lock);
         MI_CHECK( success);
         lock.check_is_owned();
-        Shared_lock::Block_exclusive block2;
+        Block<Shared_lock> block2;
         success = block2.try_set( &lock);
         MI_CHECK( !success);
         lock.check_is_owned();
@@ -812,11 +825,11 @@ MI_TEST_AUTO_FUNCTION( test_rw_lock_block )
     {
         // try_lock_shared() on exclusively locked lock
         Shared_lock lock;
-        Shared_lock::Block_exclusive block1;
+        Block<Shared_lock> block1;
         bool success = block1.try_set( &lock);
         MI_CHECK( success);
         lock.check_is_owned();
-        Shared_lock::Block_shared block2;
+        Block_shared<Shared_lock> block2;
         success = block2.try_set( &lock);
         MI_CHECK( !success);
         lock.check_is_owned();
@@ -825,13 +838,15 @@ MI_TEST_AUTO_FUNCTION( test_rw_lock_block )
     {
         // try_lock_exclusive() on shared locked lock
         Shared_lock lock;
-        Shared_lock::Block_shared block1;
+        Block_shared<Shared_lock> block1;
         bool success = block1.try_set( &lock);
         MI_CHECK( success);
         lock.check_is_owned_shared();
-        Shared_lock::Block_exclusive block2;
+        Block<Shared_lock> block2;
         success = block2.try_set( &lock);
         MI_CHECK( !success);
     }
 }
+
+MI_TEST_MAIN_CALLING_TEST_MAIN();
 

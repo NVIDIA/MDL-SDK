@@ -29,6 +29,8 @@
 #ifndef MDL_GENERATOR_DAG_DERIVATIVES_H
 #define MDL_GENERATOR_DAG_DERIVATIVES_H 1
 
+#include <mi/mdl/mdl_definitions.h>
+
 #include <mdl/compiler/compilercore/compilercore_memory_arena.h>
 #include <mdl/compiler/compilercore/compilercore_bitset.h>
 #include <mdl/compiler/compilercore/compilercore_function_instance.h>
@@ -39,8 +41,9 @@ namespace mdl {
 class DAG_node;
 class DAG_call;
 class ICall_name_resolver;
-class IDefinition;
 class IExpression;
+class IType;
+class IType_struct;
 class Lambda_function;
 
 /// Class providing derivative analysis information for a function instance.
@@ -178,19 +181,21 @@ private:
 };
 
 
-/// Helper class to build a new DAG with derivative types where needed.
-class Deriv_DAG_builder
+/// Helper class to build a new DAG with derivative types and/or spectral conversions where needed.
+class DAG_rebuilder
 {
 public:
     /// Constructor.
     ///
-    /// \param alloc        the allocator
-    /// \param lambda       the lambda which will own the new DAG nodes
-    /// \param deriv_infos  the derivative information
-    Deriv_DAG_builder(
+    /// \param alloc                        the allocator
+    /// \param lambda                       the lambda which will own the new DAG nodes
+    /// \param deriv_infos                  the derivative information, or NULL if derivatives are disabled
+    /// \param enable_spectral_conversions  if true, wrap color parameters with spectral conversions
+    DAG_rebuilder(
         IAllocator *alloc,
         Lambda_function &lambda,
-        Derivative_infos &deriv_infos);
+        Derivative_infos *deriv_infos,
+        bool enable_spectral_conversions);
 
     /// Gets or creates an MDL derivative type for a given type.
     ///
@@ -211,6 +216,28 @@ public:
     IValue const *create_dual_comp_zero(IType const *type);
 
 private:
+    /// Apply spectral conversion to an argument using a known conversion semantic.
+    ///
+    /// \param conv_semantic  the spectral conversion intrinsic to apply, or DS_UNKNOWN for none
+    /// \param arg            the argument node
+    ///
+    /// \returns the argument node, potentially wrapped in a spectral conversion call
+    DAG_node const *apply_spectral_conversion(
+        IDefinition::Semantics  conv_semantic,
+        DAG_node const         *arg);
+
+    /// Apply spectral conversion to an argument if needed.
+    ///
+    /// \param call        the call containing the argument
+    /// \param arg         the argument node
+    /// \param param_name  the parameter name
+    ///
+    /// \returns the argument node, potentially wrapped in a spectral conversion call
+    DAG_node const *apply_spectral_conversion(
+        DAG_call const *call,
+        DAG_node const *arg,
+        char const     *param_name);
+
     /// The allocator.
     IAllocator *m_alloc;
 
@@ -223,8 +250,11 @@ private:
     /// The type factory of the lambda function.
     Type_factory &m_tf;
 
-    /// The derivative infos.
-    Derivative_infos &m_deriv_infos;
+    /// The derivative infos, or NULL if derivatives are disabled.
+    Derivative_infos *m_deriv_infos;
+
+    /// If true, wrap color parameters of BSDF/EDF nodes with spectral conversion calls.
+    bool m_enable_spectral_conversions;
 
     typedef ptr_hash_map<IType const, IType_struct const *>::Type Deriv_type_map;
 
@@ -242,6 +272,32 @@ private:
     /// Symbols for the derivative types.
     ISymbol const *sym_val, *sym_dx, *sym_dy;
 };
+
+/// Determine which spectral conversion intrinsic should be applied to a color field of a
+/// struct type. Handles the material constructor struct cases (SID_MATERIAL, SID_MATERIAL_EMISSION,
+/// SID_MATERIAL_VOLUME, df::color_bsdf_component, df::color_edf_component). BSDF/EDF/VDF call
+/// semantics are not considered here; use the DAG_call overload for those.
+///
+/// \param struct_type  the struct type of the containing value or call
+/// \param param_name   the name of the field
+///
+/// \returns one of DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_*, or DS_UNKNOWN if no conversion is needed
+IDefinition::Semantics get_spectral_conversion_type(
+    IType_struct const *struct_type,
+    char const         *param_name);
+
+/// Determine which spectral conversion intrinsic should be applied to a color parameter of a
+/// DAG call.
+///
+/// \param call        the call containing the parameter
+/// \param param_name  the name of the parameter
+/// \param param_type  the type of the parameter
+///
+/// \returns one of DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_*, or DS_UNKNOWN if no conversion is needed
+IDefinition::Semantics get_spectral_conversion_type(
+    DAG_call const *call,
+    char const     *param_name,
+    IType const    *param_type);
 
 }  // mdl
 }  // mi

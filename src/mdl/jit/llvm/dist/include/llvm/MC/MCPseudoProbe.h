@@ -77,8 +77,8 @@ class MCPseudoProbe {
 public:
   MCPseudoProbe(MCSymbol *Label, uint64_t Guid, uint64_t Index, uint64_t Type,
                 uint64_t Attributes)
-      : Label(Label), Guid(Guid), Index(Index), Type(Type),
-        Attributes(Attributes) {
+      : Label(Label), Guid(Guid), Index(Index), Type(uint8_t(Type)),
+        Attributes(uint8_t(Attributes)) {
     assert(Type <= 0xFF && "Probe type too big to encode, exceeding 2^8");
     assert(Attributes <= 0xFF &&
            "Probe attributes too big to encode, exceeding 2^16");

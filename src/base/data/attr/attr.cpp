@@ -28,7 +28,7 @@
 
 /// \file
 /// \brief non-inlined functions
-/// 
+///
 /// An attribute is an extra piece of data that can be attached to a database element. It is named
 /// (although names are converted to perfect hashes early on, for faster lookup). All inheritance is
 /// based on attributes. Attributes are collected in attribute sets, one of which is in every
@@ -40,7 +40,6 @@
 #include "i_attr_utilities.h"
 
 #include <base/data/serial/i_serializer.h>
-#include <base/lib/cont/i_cont_rle_array.h>
 #include <base/lib/log/i_log_logger.h>
 
 #include <algorithm>
@@ -52,7 +51,6 @@ namespace MI {
 namespace ATTR {
 
 using namespace LOG;
-using namespace CONT;
 using namespace std;
 
 // iterate over a type using the given type iterator and serialize all data
@@ -80,34 +78,9 @@ static void do_serialize_data(
             value = array->m_value;
         }
 
-        if (it->get_typecode() == TYPE_RLE_UINT_PTR) {
-            // runlength encoded arrays of unsigned integers are handled
-            // specially
-            Rle_array<Uint> *array = *(Rle_array<Uint>**)value;
-            Uint size = (Uint)array->get_index_size();
-            serializer->write(size);
-            Rle_chunk_iterator<Uint> iterator = array->begin_chunk();
-            for (Uint i = 0; i < size; i++) {
-                serializer->write((Uint)iterator.count());
-                serializer->write(iterator.data());
-                ++iterator;
-            }
-        } else if (it->get_typecode() == TYPE_STRUCT || it->get_typecode() == TYPE_ATTACHABLE) {
+        if (it->get_typecode() == TYPE_STRUCT) {
             size_t size = it->sizeof_elem();
             for (int a=0; a < arraysize; a++) {
-                Type_iterator sub(it, value);
-                do_serialize_data(serializer, &sub);
-                value += size;
-            }
-        } else if (it->get_typecode() == TYPE_CALL) {
-            size_t size = it->sizeof_elem() - 2*Type::sizeof_one(TYPE_STRING);
-            for (int a=0; a < arraysize; a++) {
-                // first serialize two const char* - actually one DB::Tag and one const char*
-                serializer->write(*(DB::Tag*)value);
-                value += Type::sizeof_one(TYPE_STRING);
-                serializer->write(*(char**)value);
-                value += Type::sizeof_one(TYPE_STRING);
-                // now dive into "structure"
                 Type_iterator sub(it, value);
                 do_serialize_data(serializer, &sub);
                 value += size;
@@ -182,35 +155,9 @@ static void do_deserialize_data(
             value = array->m_value;
         }
 
-        if (it->get_typecode() == TYPE_RLE_UINT_PTR) {
-            Rle_array<Uint> *array = new Rle_array<Uint>;
-            *(Rle_array<Uint>**)value = array;
-            Uint size;
-            deser->read(&size);
-            for (Uint i = 0; i < size; i++) {
-                Uint count, data;
-                deser->read(&count);
-                deser->read(&data);
-                array->push_back(data, count);
-            }
-        }
-        else if (it->get_typecode() == TYPE_STRUCT ||it->get_typecode() == TYPE_ATTACHABLE) {
+        if (it->get_typecode() == TYPE_STRUCT) {
             size_t size = it->sizeof_elem();
             for (int a=0; a < arraysize; a++) {
-                Type_iterator sub(it, value);
-                do_deserialize_data(deser, &sub);
-                value += size;
-            }
-        }
-        else if (it->get_typecode() == TYPE_CALL) {
-            size_t size = it->sizeof_elem() - 2*Type::sizeof_one(TYPE_STRING);
-            for (int a=0; a < arraysize; a++) {
-                // first serialize two const char* - actually one DB::Tag and one const char*
-                deser->read((DB::Tag*)value);
-                value += Type::sizeof_one(TYPE_STRING);
-                deser->read((char   **)value);
-                value += Type::sizeof_one(TYPE_STRING);
-                // now dive into "structure"
                 Type_iterator sub(it, value);
                 do_deserialize_data(deser, &sub);
                 value += size;
@@ -274,3 +221,4 @@ Type_iterator::Type_iterator(const Type_iterator& iter)
 
 }
 }
+

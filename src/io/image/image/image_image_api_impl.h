@@ -124,13 +124,6 @@ public:
         const char* pixel_type,
         const mi::IMap* export_options) const;
 
-    mi::neuraylib::IBuffer* deprecated_create_buffer_from_canvas(
-        const mi::neuraylib::ICanvas* canvas,
-        const char* image_format,
-        const char* pixel_type,
-        const char* quality,
-        bool force_default_gamma) const;
-
     mi::neuraylib::ICanvas* create_canvas_from_buffer(
         const mi::neuraylib::IBuffer* buffer,
         const char* image_format,

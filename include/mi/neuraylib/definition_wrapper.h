@@ -237,7 +237,7 @@ public:
     /// \param index    The index of the parameter.
     /// \param u_index  The index of the enable_if user.
     /// \return         The index of a parameter whose \c enable_if condition depends on this
-    ///                 parameter argument, or ~0 if indexes are out of range.
+    ///                 parameter argument, or ~0U if indexes are out of range.
     Size get_enable_if_user( Size index, Size u_index) const;
 
     //@}

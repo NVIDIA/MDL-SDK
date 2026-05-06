@@ -660,10 +660,9 @@ IExpression* Expression_factory::clone(
             if( copy_immutable_calls) {
                 ASSERT( M_SCENE, transaction);
                 DB::Tag call_tag = expr_call->get_call();
-                SERIAL::Class_id class_id = transaction->get_class_id( call_tag);
-                if( class_id != ID_MDL_FUNCTION_CALL)
-                    return nullptr;
                 DB::Access<Mdl_function_call> fc( call_tag, transaction);
+                if( !fc)
+                    return nullptr;
                 if( fc->is_immutable())
                     return deep_copy( this, transaction, expr_call.get(), /*call_context*/ nullptr);
             }
@@ -1575,14 +1574,15 @@ mi::Sint32 Expression_factory::compare_static(
             if( (flags & mi::neuraylib::IExpression_factory::DEEP_CALL_COMPARISONS) != 0) {
 
                 // Get referenced function calls
-                SERIAL::Class_id lhs_class_id = transaction->get_class_id( lhs_tag);
-                SERIAL::Class_id rhs_class_id = transaction->get_class_id( rhs_tag);
+                DB::Access<Mdl_function_call> lhs_fc( lhs_tag, transaction);
+                DB::Access<Mdl_function_call> rhs_fc( rhs_tag, transaction);
+
+                SERIAL::Class_id lhs_class_id = lhs_fc.get_class_id();
+                SERIAL::Class_id rhs_class_id = rhs_fc.get_class_id();
                 if( lhs_class_id < rhs_class_id) return -1;
                 if( lhs_class_id > rhs_class_id) return +1;
                 // Not much we can do if both class IDs are equal and wrong.
                 if( lhs_class_id != ID_MDL_FUNCTION_CALL) return 0;
-                DB::Access<Mdl_function_call> lhs_fc( lhs_tag, transaction);
-                DB::Access<Mdl_function_call> rhs_fc( rhs_tag, transaction);
 
                 // Compare underlying function definition
                 DB::Tag lhs_fd_tag = lhs_fc->get_function_definition( transaction);

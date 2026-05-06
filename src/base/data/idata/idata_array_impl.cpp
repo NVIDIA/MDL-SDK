@@ -62,10 +62,11 @@ Array_impl_base<T>::Array_impl_base(
 template <typename T>
 const char* Array_impl_base<T>::get_key( mi::Size index) const
 {
-    if( !index_to_key( index, m_cached_key))
+    std::string key;
+    if( !index_to_key( index, key))
         return nullptr;
 
-    return m_cached_key.c_str();
+    return m_string_cache.add( key);
 }
 
 template <typename T>
@@ -177,7 +178,7 @@ bool Array_impl_base<T>::set_length_internal( mi::Size length)
             m_transaction, element_type_name.c_str());
         if( !element) {
             // might happen for no longer registered type names
-            m_array.resize( i>0 ? i-1 : 0);
+            m_array.resize( i);
             return false;
         }
         m_array[i] = element;
@@ -444,10 +445,11 @@ Array_impl_proxy::Array_impl_proxy(
 
 const char* Array_impl_proxy::get_key( mi::Size index) const
 {
-    if( !index_to_key( index, m_cached_key))
+    std::string key;
+    if( !index_to_key( index, key))
         return nullptr;
 
-    return m_cached_key.c_str();
+    return m_string_cache.add( key);
 }
 
 bool Array_impl_proxy::has_key( const char* key) const
@@ -558,6 +560,12 @@ mi::Sint32 Array_impl_proxy::set_element(
 void Array_impl_proxy::set_pointer_and_owner(
     void* pointer, const mi::base::IInterface* owner)
 {
+    MI_ASSERT( pointer);
+    MI_ASSERT( owner);
+
+    mi::base::Handle attribute_context( owner->get_interface<IAttribute_context>());
+    MI_ASSERT( attribute_context);
+
     m_owner = make_handle_dup( owner);
 }
 
@@ -654,10 +662,11 @@ Dynamic_array_impl_proxy::~Dynamic_array_impl_proxy()
 
 const char* Dynamic_array_impl_proxy::get_key( mi::Size index) const
 {
-    if( !index_to_key( index, m_cached_key))
+    std::string key;
+    if( !index_to_key( index, key))
         return nullptr;
 
-    return m_cached_key.c_str();
+    return m_string_cache.add( key);
 }
 
 bool Dynamic_array_impl_proxy::has_key( const char* key) const
@@ -865,12 +874,17 @@ mi::base::IInterface* Dynamic_array_impl_proxy::front()
 void Dynamic_array_impl_proxy::set_pointer_and_owner(
     void* pointer, const mi::base::IInterface* owner)
 {
+    MI_ASSERT( pointer);
+    MI_ASSERT( owner);
+
+    mi::base::Handle attribute_context( owner->get_interface<IAttribute_context>());
+    MI_ASSERT( attribute_context);
+
     m_pointer = pointer;
     m_owner = make_handle_dup( owner);
 
     m_length = static_cast<ATTR::Dynamic_array*>( pointer)->m_count;
 
-    mi::base::Handle attribute_context( m_owner->get_interface<IAttribute_context>());
     m_size_of_element = attribute_context->get_sizeof_elem( m_attribute_name.c_str());
     MI_ASSERT( m_size_of_element > 0);
 

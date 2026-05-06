@@ -304,6 +304,13 @@ public:
     ///       module, do NOT decrease it just because of this call.
     Module const *tos_module() const;
 
+    /// Fill the file ID table from another DAG_unit.
+    ///
+    /// \param unit  the DAG-unit from which the file ID table is copied
+    ///
+    /// \note: This assumes that the current file ID table is empty.
+    void get_file_id_table(DAG_unit const &unit);
+
     /// Get the unique file ID for the given file name.
     ///
     /// \param fname  a file name
@@ -414,6 +421,11 @@ public:
         IType const    *f_type,
         DAG_DbgInfo    dbg_info);
 
+    /// Convert an AST position into a DAG debug info.
+    ///
+    /// \param pos  the AST position if any
+    DAG_DbgInfo get_dbg_info(Position const *pos);
+
 private:
     /// Get the allocator.
     IAllocator *get_allocator() const { return m_alloc; }
@@ -428,11 +440,6 @@ private:
     static IDefinition const *get_parameter_definition(
         IDeclaration_function const *decl,
         int                         index);
-
-    /// Convert an AST position into a DAG debug info.
-    ///
-    /// \param pos  the AST position if any
-    DAG_DbgInfo get_dbg_info(Position const *pos);
 
     /// Convert an AST position into a DAG debug info.
     ///
@@ -578,8 +585,11 @@ private:
 
     /// Creates a default initializer for the given type.
     ///
-    /// \param type  the type
-    DAG_constant const *default_initializer(IType const *type);
+    /// \param type      the type
+    /// \param dbg_info  the debug info for the initializer if any
+    DAG_constant const *default_initializer(
+        IType const *type,
+        DAG_DbgInfo dbg_info);
 
     /// Creates a default initializer for the given type.
     ///

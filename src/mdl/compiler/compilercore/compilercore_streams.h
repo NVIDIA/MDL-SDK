@@ -265,8 +265,10 @@ private:
     ~Debug_Output_stream() MDL_FINAL;
 
 private:
+#ifndef _WIN32
     /// The file handle.
     FILE *m_file;
+#endif
 };
 
 /// Implementation of the IOutput_stream interface using a growing buffer.

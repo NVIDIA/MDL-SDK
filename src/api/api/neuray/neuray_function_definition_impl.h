@@ -35,6 +35,8 @@
 
 #include <mi/neuraylib/ifunction_definition.h>
 
+#include <base/data/idata/i_idata_string_cache.h>
+
 #include "neuray_db_element_impl.h"
 #include "neuray_attribute_set_impl.h"
 
@@ -135,8 +137,7 @@ public:
     const char* get_mangled_name() const final;
 
 private:
-    mutable std::string m_cached_thumbnail;
-    mutable std::string m_cached_mangled_name;
+    mutable IDATA::String_cache m_string_cache;
 };
 
 } // namespace NEURAY

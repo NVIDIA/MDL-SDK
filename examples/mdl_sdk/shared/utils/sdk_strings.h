@@ -26,9 +26,9 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
- // examples/mdl_sdk/shared/utils/sdk_strings.h
- //
- // Code shared by all examples
+// examples/mdl_sdk/shared/utils/sdk_strings.h
+//
+// Code shared by all examples
 
 #ifndef EXAMPLE_SHARED_UTILS_STRINGS_H
 #define EXAMPLE_SHARED_UTILS_STRINGS_H

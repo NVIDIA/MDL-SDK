@@ -44,7 +44,7 @@
  */
 
 // The current copyright year string.
-#define MI_COPYRIGHT_YEARS_STRING "2025"
+#define MI_COPYRIGHT_YEARS_STRING "2026"
 
 // The NVIDIA company name string for copyrights etc.
 #define MI_COPYRIGHT_COMPANY_STRING "NVIDIA Corporation"
@@ -226,12 +226,8 @@
 #elif defined(__GNUC__) && !defined(__ICC) // #elif defined(__ICC)
 
 #ifndef MI_SKIP_COMPILER_VERSION_CHECK
-#if ((__GNUC__ < 3) || ((__GNUC__ == 3) && (__GNUC_MINOR__ < 3)))
-#error GNU C++ compiler version is unsupported (smaller than 3.3).
-#endif
-
-#if ((__GNUC__ < 3) || ((__GNUC__ == 3) && (__GNUC_MINOR__ < 4)))
-#warning GNU C++ compiler version is unsupported (smaller than 3.4).
+#if ((__GNUC__ < 6) || ((__GNUC__ == 6) && (__GNUC_MINOR__ < 1)))
+#error GNU C++ compiler version is unsupported (smaller than 6.1).
 #endif
 #endif // MI_SKIP_COMPILER_VERSION_CHECK
 
@@ -258,16 +254,6 @@
 #if !defined(MI_ARCH_LITTLE_ENDIAN)
 #define MI_ARCH_LITTLE_ENDIAN
 #endif // !defined(MI_ARCH_LITTLE_ENDIAN)
-
-#elif defined(__sparcv9) // defined(_M_IX86) || defined(__i386__)
-
-#if ! defined( MI_ARCH_SPARC_64)
-#define MI_ARCH_SPARC_64
-#endif // !defined( MI_ARCH_SPARC_64)
-
-#if !defined(MI_ARCH_BIG_ENDIAN)
-#define MI_ARCH_BIG_ENDIAN
-#endif // !defined(MI_ARCH_BIG_ENDIAN)
 
 #elif defined(__powerpc64__)
 
@@ -300,7 +286,6 @@
 #endif
 
 #if    defined(MI_ARCH_X86_64) \
-    || defined(MI_ARCH_SPARC_64) \
     || defined(MI_ARCH_POWERPC_64) \
     || defined(MI_ARCH_ARM_64)
 #define MI_ARCH_64BIT

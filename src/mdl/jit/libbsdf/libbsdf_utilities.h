@@ -29,21 +29,26 @@
 #ifndef MDL_LIBBSDF_UTILITIES_H
 #define MDL_LIBBSDF_UTILITIES_H
 
+#ifdef MDL_DF_SPECTRAL_ENABLE
+#ifndef MDL_DF_SPECTRAL_SAMPLES
+#error Definition of MDL_DF_SPECTRAL_SAMPLES missing
+#endif
+#endif
 
 BSDF_INLINE void absorb(BSDF_sample_data *data)
 {
-    data->pdf        = 0.f;
+    data->pdf        = make_pdf_sample(0.f);
     data->event_type = BSDF_EVENT_ABSORB;
 }
 
 BSDF_INLINE void absorb(BSDF_evaluate_data *data)
 {
-    data->pdf  = 0.0f;
+    data->pdf  = make_pdf_sample(0.0f);
 }
 
 BSDF_INLINE void absorb(BSDF_pdf_data *data)
 {
-    data->pdf  = 0.0f;
+    data->pdf  = make_pdf_sample(0.0f);
 }
 
 BSDF_INLINE void absorb(BSDF_auxiliary_data *data)
@@ -52,11 +57,8 @@ BSDF_INLINE void absorb(BSDF_auxiliary_data *data)
 
 BSDF_INLINE BSDF_pdf_data to_pdf_data(const BSDF_sample_data* sample_data)
 {
-    BSDF_pdf_data res;
-    res.ior1 = sample_data->ior1;
-    res.ior2 = sample_data->ior2;
-    res.k1 = sample_data->k1;
-    res.k2 = sample_data->k2;
+    BSDF_pdf_data res = { sample_data->ior1, sample_data->ior2, sample_data->k1, sample_data->k2, 0.0f, DF_FLAGS_NONE };
+
     if (is_bsdf_flags_enabled()) {
         res.flags = sample_data->flags;
     } else {
@@ -71,20 +73,20 @@ BSDF_INLINE BSDF_pdf_data to_pdf_data(const BSDF_sample_data* sample_data)
 BSDF_INLINE void no_emission(EDF_sample_data *data)
 {
     data->k1 = make_float3(0.0f, 0.0f, 0.0f);
-    data->pdf = 0.f;
-    data->edf_over_pdf = make_float3(0.0f, 0.0f, 0.0f);
+    data->pdf = make_pdf_sample(0.f);
+    data->edf_over_pdf = make<color_sample>(0.0f);
     data->event_type = EDF_EVENT_NONE;
 }
 
 BSDF_INLINE void no_emission(EDF_evaluate_data *data)
 {
     // keep cos if set
-    data->pdf = 0.f;
+    data->pdf = make_pdf_sample(0.0f);
 }
 
 BSDF_INLINE void no_emission(EDF_pdf_data *data)
 {
-    data->pdf = 0.0f;
+    data->pdf = make_pdf_sample(0.0f);
 }
 
 BSDF_INLINE void no_emission(EDF_auxiliary_data *data)
@@ -111,63 +113,100 @@ BSDF_INLINE EDF_pdf_data to_pdf_data(const EDF_sample_data* sample_data)
 template<typename TDF_data>
 BSDF_INLINE void no_contribution(TDF_data* data, const float3& normal);
 
-template<> BSDF_INLINE void no_contribution(BSDF_sample_data* data, const float3& normal) { 
+template<> BSDF_INLINE void no_contribution(BSDF_sample_data* data, const float3& normal) {
     absorb(data); }
-template<> BSDF_INLINE void no_contribution(BSDF_evaluate_data* data, const float3& normal) { 
+template<> BSDF_INLINE void no_contribution(BSDF_evaluate_data* data, const float3& normal) {
     absorb(data); }
-template<> BSDF_INLINE void no_contribution(BSDF_pdf_data* data, const float3& normal) { 
+template<> BSDF_INLINE void no_contribution(BSDF_pdf_data* data, const float3& normal) {
     absorb(data); }
-template<> BSDF_INLINE void no_contribution(BSDF_auxiliary_data* data, const float3& normal) { 
+template<> BSDF_INLINE void no_contribution(BSDF_auxiliary_data* data, const float3& normal) {
     absorb(data); }
-template<> BSDF_INLINE void no_contribution(EDF_sample_data* data, const float3& normal) { 
+template<> BSDF_INLINE void no_contribution(EDF_sample_data* data, const float3& normal) {
     no_emission(data); }
-template<> BSDF_INLINE void no_contribution(EDF_evaluate_data* data, const float3& normal) { 
+template<> BSDF_INLINE void no_contribution(EDF_evaluate_data* data, const float3& normal) {
     no_emission(data); }
-template<> BSDF_INLINE void no_contribution(EDF_pdf_data* data, const float3& normal) { 
+template<> BSDF_INLINE void no_contribution(EDF_pdf_data* data, const float3& normal) {
     no_emission(data); }
 template<> BSDF_INLINE void no_contribution(EDF_auxiliary_data* data, const float3& normal) {
     no_emission(data); }
 
+BSDF_INLINE float3 apply_backscatter(
+    const float3 &k,
+    const backscatter_modifier backscatter, const bool is_reflection,
+    const float3 &normal,
+    const float nk,
+    const bool is_k1)
+{
+    const bool mirror = ((backscatter == backscatter_reflect_transmit) ||
+                         (backscatter == backscatter_reflect) && is_reflection ||
+                         (backscatter == backscatter_transmit) && !is_reflection);
+    if (!mirror)
+        return k;
+
+    // normal always points into same hemisphere as k1, if we mirror k2 it may be on the other side
+    const float s = (is_reflection || is_k1) ? 1.0f : -1.0f;
+    return -k + s * 2.0f * nk * normal;
+}
+
 // obtain IOR values on both sides of the surface
 template<typename Data>
-BSDF_INLINE float2 process_ior(Data *data, State *state)
+BSDF_INLINE void process_ior(Data *data, State *state)
 {
-    if (data->ior1.x == BSDF_USE_MATERIAL_IOR)
+    if(use_material_ior(data->ior1))
         data->ior1 = get_material_ior(state);
-    if (data->ior2.x == BSDF_USE_MATERIAL_IOR)
+    if (use_material_ior(data->ior2))
         data->ior2 = get_material_ior(state);
+}
 
-    // using color IORs would require some sort of spectral rendering, as of now libbsdf
-    // reduces that to scalar by averaging
-    float2 ior = make_float2(
-        (data->ior1.x + data->ior1.y + data->ior1.z) * (float)(1.0 / 3.0),
-        (data->ior2.x + data->ior2.y + data->ior2.z) * (float)(1.0 / 3.0));
+template<typename Data>
+BSDF_INLINE color_sample process_incoming_ior(Data *data, State *state)
+{
+    if(use_material_ior(data->ior1))
+        data->ior1 = get_material_ior(state);
+
+    return data->ior1;
+}
+
+
+template<typename Data>
+BSDF_INLINE float2 get_refraction_ior(bool &dispersion, Data *data)
+{
+    dispersion = false;
+    float2 ior;
+#ifdef MDL_DF_SPECTRAL_ENABLE
+    ior = make_float2(data->ior1.values[0], data->ior2.values[0]);
+    for (unsigned int i = 1; i < MDL_DF_SPECTRAL_SAMPLES && !dispersion; ++i)
+        dispersion = data->ior1.values[i] != ior.x || data->ior2.values[i] != ior.y;
+#else
+    ior = make_float2(average(data->ior1), average(data->ior2));
+#endif
 
     // ensure a certain threshold between incoming and outgoing IOR to avoid
     // numerical issues with microfacet BSDFs and half vector computation
     const float IOR_THRESHOLD = 1e-4f;
     const float ior_diff = ior.y - ior.x;
     if (math::abs(ior_diff) < IOR_THRESHOLD) {
-        ior.y = ior.x + copysignf(IOR_THRESHOLD, ior_diff);
+        // due to fused multiply adds, the difference may be off by 1 ULP leading to -0
+        // don't copy the sign of -0, but treat it as 0
+        const float ZERO_THRESHOLD = 1.192092896e-07f; // == FLT_EPSILON
+        if (math::abs(ior_diff) <= ZERO_THRESHOLD) {
+            ior.y = ior.x + IOR_THRESHOLD;
+        } else {
+            ior.y = ior.x + copysignf(IOR_THRESHOLD, ior_diff);
+        }
     }
 
     return ior;
 }
 
-template<typename Data>
-BSDF_INLINE float3 process_incoming_ior(Data *data, State *state)
+
+
+BSDF_INLINE void compute_eta(float &eta, const color_sample &ior1, const color_sample &ior2)
 {
-    if (data->ior1.x == BSDF_USE_MATERIAL_IOR)
-        data->ior1 = get_material_ior(state);
-    return data->ior1;
+    eta = average(ior2) / average(ior1);
 }
 
-BSDF_INLINE void compute_eta(float &eta, const float3 &ior1, const float3 &ior2)
-{
-    eta = (ior2.x + ior2.y + ior2.z) / (ior1.x + ior1.y + ior1.z);
-}
-
-BSDF_INLINE void compute_eta(float3 &eta, const float3 &ior1, const float3 &ior2)
+BSDF_INLINE void compute_eta(color_sample &eta, const color_sample &ior1, const color_sample &ior2)
 {
     eta = ior2 / ior1;
 }
@@ -177,22 +216,20 @@ BSDF_INLINE void compute_eta(float3 &eta, const float3 &ior1, const float3 &ior2
 template<typename Data>
 BSDF_INLINE float2 process_ior_fresnel_layer(Data *data, State *state, const float ior_param)
 {
-    const float3 material_ior = get_material_ior(state);
-    
-    if (data->ior1.x == BSDF_USE_MATERIAL_IOR)
-        data->ior1 = material_ior;
-    if (data->ior2.x == BSDF_USE_MATERIAL_IOR)
-        data->ior2 = material_ior;
+    const color_sample material_ior = get_material_ior(state);
+
+    if (use_material_ior(data->ior1))
+        data->ior1 = get_material_ior(state);
+    if (use_material_ior(data->ior2))
+        data->ior2 = get_material_ior(state);
+
 
     //!! this property should be communicated by the renderer
-    const bool outside =
-        (material_ior.x == data->ior2.x) &&
-        (material_ior.y == data->ior2.y) &&
-        (material_ior.z == data->ior2.z);
+    const bool outside = material_ior == data->ior2;
 
     float2 ior = make_float2(
-        outside ? (data->ior1.x + data->ior1.y + data->ior1.z) * (float)(1.0 / 3.0) : ior_param,
-        outside ? ior_param : (data->ior2.x + data->ior2.y + data->ior2.z) * (float)(1.0 / 3.0));
+        outside ? average(data->ior1) : ior_param,
+        outside ? ior_param : average(data->ior2));
 
     const float IOR_THRESHOLD = 1e-4f;
     const float ior_diff = ior.y - ior.x;
@@ -207,33 +244,28 @@ BSDF_INLINE float2 process_ior_fresnel_layer(Data *data, State *state, const flo
 // the parameter of the layerer for weight computation
 struct Color_fresnel_ior {
     float2 ior;
-    float3 eta;
+    color_sample eta;
 };
+
 template<typename Data>
-BSDF_INLINE Color_fresnel_ior process_ior_color_fresnel_layer(Data *data, State *state, const float3 &ior_param)
+BSDF_INLINE Color_fresnel_ior process_ior_color_fresnel_layer(Data *data, State *state, const color_sample &ior_param)
 {
-    const float3 material_ior = get_material_ior(state);
-    
-    if (data->ior1.x == BSDF_USE_MATERIAL_IOR)
+    const color_sample material_ior = get_material_ior(state);
+
+    if (use_material_ior(data->ior1))
         data->ior1 = material_ior;
-    if (data->ior2.x == BSDF_USE_MATERIAL_IOR)
+    if (use_material_ior(data->ior2))
         data->ior2 = material_ior;
 
     //!! this property should be communicated by the renderer
-    const bool outside =
-        (material_ior.x == data->ior2.x) &&
-        (material_ior.y == data->ior2.y) &&
-        (material_ior.z == data->ior2.z);
+    const bool outside = material_ior == data->ior2;
 
-    const float3 ior1 = outside ? data->ior1 : ior_param;
-    const float3 ior2 = outside ? ior_param : data->ior2;
+    const color_sample ior1 = outside ? data->ior1 : ior_param;
+    const color_sample ior2 = outside ? ior_param : data->ior2;
 
-    Color_fresnel_ior ret_val;
-    ret_val.eta = ior2 / ior1;
-        
-    ret_val.ior = make_float2(
-        (ior1.x + ior1.y + ior1.z) * (float)(1.0 / 3.0),
-        (ior2.x + ior2.y + ior2.z) * (float)(1.0 / 3.0));
+    Color_fresnel_ior ret_val = {
+        make_float2(average(ior1), average(ior2)),
+        ior2 / ior1 };
 
     const float IOR_THRESHOLD = 1e-4f;
     const float ior_diff = ret_val.ior.y - ret_val.ior.x;
@@ -247,33 +279,29 @@ BSDF_INLINE Color_fresnel_ior process_ior_color_fresnel_layer(Data *data, State 
 // variant of the above for color thin film Fresnel layering, replaces one of the IORs by
 // the parameter of the layerer for weight computation
 struct Thin_film_color_fresnel_ior {
-    float3 ior1;
-    float3 ior2;
+    color_sample ior1;
+    color_sample ior2;
     float2 ior;
 };
+
 template<typename Data>
-BSDF_INLINE Thin_film_color_fresnel_ior process_ior_thin_film_color_fresnel_layer(Data *data, State *state, const float3 &ior_param)
+BSDF_INLINE Thin_film_color_fresnel_ior process_ior_thin_film_color_fresnel_layer(Data *data, State *state, const color_sample &ior_param)
 {
-    const float3 material_ior = get_material_ior(state);
-    
-    if (data->ior1.x == BSDF_USE_MATERIAL_IOR)
+    const color_sample material_ior = get_material_ior(state);
+
+    if (use_material_ior(data->ior1))
         data->ior1 = material_ior;
-    if (data->ior2.x == BSDF_USE_MATERIAL_IOR)
+    if (use_material_ior(data->ior2))
         data->ior2 = material_ior;
 
     //!! this property should be communicated by the renderer
-    const bool outside =
-        (material_ior.x == data->ior2.x) &&
-        (material_ior.y == data->ior2.y) &&
-        (material_ior.z == data->ior2.z);
+    const bool outside = material_ior == data->ior2;
 
-    Thin_film_color_fresnel_ior ret_val;
-    ret_val.ior1 = outside ? data->ior1 : ior_param;
-    ret_val.ior2 = outside ? ior_param : data->ior2;
+    Thin_film_color_fresnel_ior ret_val = {
+        outside ? data->ior1 : ior_param,
+        outside ? ior_param : data->ior2 };
 
-    ret_val.ior = make_float2(
-        (ret_val.ior1.x + ret_val.ior1.y + ret_val.ior1.z) * (float)(1.0 / 3.0),
-        (ret_val.ior2.x + ret_val.ior2.y + ret_val.ior2.z) * (float)(1.0 / 3.0));
+    ret_val.ior = make_float2(average(ret_val.ior1), average(ret_val.ior2));
 
     const float IOR_THRESHOLD = 1e-4f;
     const float ior_diff = ret_val.ior.y - ret_val.ior.x;
@@ -328,7 +356,7 @@ BSDF_INLINE float oren_nayar_albedo(
 {
     const float st_sqd = math::saturate(1.0f - ct * ct);
     const float st = math::sqrt(st_sqd);
-    
+
     return A + (float)(1.0 / M_PI) * B * (
         st * (math::acos(ct) - st * ct) +
         (float)(2.0 / 3.0) * (st / ct) * (1.0f - st * st_sqd - ct));
@@ -405,7 +433,7 @@ BSDF_INLINE float f0(const float ui, const float uo, const float c)
         (-1.9208967199948512f - 242.16001167844007f * tmp2 - 21.914139454773085f * tmp1 + 266.06342182761813f * tmp3) /
         (1499.904420175135f + 457.4200839912641f * tmp2 + 215.77342164754094f * tmp1);
 
-    
+
     return
         (float)(0.5 / M_PI) * H0(ui, c) * H0(uo, c) / ( ui + uo ) *
         (A + C * ui * uo + E * ui * ui * uo * uo + B * (ui + uo) + D * ui * uo * (ui + uo) + F * (ui * ui + uo * uo));
@@ -420,17 +448,24 @@ BSDF_INLINE float f1m(const float ui, const float uo, const float c)
             - (4.0f * c * (1.0f + l * ui) * (1.0f + l * uo) * H1(ui, c) *H1(uo, c)) /3.0f)) / (8.0f * (ui + uo)));
 }
 
-BSDF_INLINE float3 lambert_sphere_brdf(
+BSDF_INLINE color_sample lambert_sphere_brdf(
     const float3 &k1,
     const float3 &k2,
     const float nk1,
     const float nk2,
-    const float3 &albedo)
+    const color_sample &albedo)
 {
-    const float3 c = make_float3(
+#ifdef MDL_DF_SPECTRAL_ENABLE
+    color_sample c;
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        c.values[i] = (1.0f - math::pow(1.0f - albedo.values[i], 2.73556f)) / (1.0f - 0.184096f * math::pow(1.f - albedo.values[i], 2.48423f));
+#else
+    const color_sample c = make_float3(
         (1.0f - math::pow(1.0f - albedo.x, 2.73556f)) / (1.0f - 0.184096f * math::pow(1.f - albedo.x, 2.48423f)),
         (1.0f - math::pow(1.0f - albedo.y, 2.73556f)) / (1.0f - 0.184096f * math::pow(1.f - albedo.y, 2.48423f)),
         (1.0f - math::pow(1.0f - albedo.z, 2.73556f)) / (1.0f - 0.184096f * math::pow(1.f - albedo.z, 2.48423f)));
+#endif
+
 
     const float k1k2 = math::dot(k1, k2);
     const float cosphisinisino = (k1k2 - nk1 * nk2); // cos(phi) * sin(theta_i) * sin(theta_o)
@@ -438,8 +473,22 @@ BSDF_INLINE float3 lambert_sphere_brdf(
     const float f_single = lambert_sphere_phase_function(-k1k2) / (nk1 + nk2);
     const float F0_single = (float)(1.0 / M_PI) *
         (207.0f + 256.0f * nk1 * nk2 - 45.0f * nk1 * nk1 + 45.0f * nk2 * nk2 * (-1.0f + 3.0f * nk1 * nk1)) / (768.0f * (nk1 + nk2));
-    
-    float3 brdf = c * (f_single - F0_single);
+
+    color_sample brdf = c * (f_single - F0_single);
+
+#ifdef MDL_DF_SPECTRAL_ENABLE
+
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+    {
+        brdf.values[i] += f0(nk2, nk1, c.values[i]) + f1m(nk2, nk1, c.values[i]) * cosphisinisino;
+        if (brdf.values[i] < 0.f)
+            brdf.values[i] = 0.f;
+    }
+
+    return brdf;
+
+#else
+
     brdf += make_float3( // F0
         f0(nk2, nk1, c.x),
         f0(nk2, nk1, c.y),
@@ -450,6 +499,9 @@ BSDF_INLINE float3 lambert_sphere_brdf(
         f1m(nk2, nk1, c.z) * cosphisinisino);
 
     return math::max(brdf, make_float3(0.0f, 0.0f, 0.0f));
+
+#endif // MDL_DF_SPECTRAL_ENABLE
+
 }
 
 
@@ -474,17 +526,34 @@ BSDF_INLINE float ior_fresnel(
     return math::saturate(fres);
 }
 
-BSDF_INLINE float3 ior_fresnel(
-    const float3 &eta,  // refracted / reflected ior
+BSDF_INLINE color_sample ior_fresnel(
+    const color_sample &eta,  // refracted / reflected ior
     const float kh)     // cosine between of angle normal/half-vector and direction
 {
-    float3 result;
+    color_sample result;
+
+#ifdef MDL_DF_SPECTRAL_ENABLE
+
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+    {
+        if (i == 0)
+            result.values[i] = ior_fresnel(eta.values[i], kh);
+        else
+            result.values[i] =
+                (eta.values[i] == eta.values[i-1]) ? result.values[i-1] : ior_fresnel(eta.values[i], kh);
+    }
+
+#else
+
     result.x = ior_fresnel(eta.x, kh);
     result.y = (eta.y == eta.x) ? result.x : ior_fresnel(eta.y, kh);
     result.z = (eta.z == eta.x) ? result.x : ior_fresnel(eta.z, kh);
-    return result;
-}
 
+#endif
+
+    return result;
+
+}
 
 // Fresnel equation for an equal mix of polarization, with complex ior on transmitted side
 // https://seblagarde.wordpress.com/2013/04/29/memo-on-fresnel-equations
@@ -512,15 +581,28 @@ BSDF_INLINE float complex_ior_fresnel(
     return math::saturate(0.5f * (rp + rs));
 }
 
-BSDF_INLINE float3 complex_ior_fresnel(
-    const float3 &eta,   // transmitted ior / incoming ior
-    const float3 &eta_k, // transmitted extinction / incoming ior
+BSDF_INLINE color_sample complex_ior_fresnel(
+    const color_sample& eta,   // transmitted ior / incoming ior
+    const color_sample& eta_k, // transmitted extinction / incoming ior
     const float costheta)
 {
+#ifdef MDL_DF_SPECTRAL_ENABLE
+
+    Spectral_sample_struct a;
+
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        a.values[i] = complex_ior_fresnel(eta.values[i], eta_k.values[i], costheta);
+
+    return a;
+
+#else
+
     return make_float3(
         complex_ior_fresnel(eta.x, eta_k.x, costheta),
         complex_ior_fresnel(eta.y, eta_k.y, costheta),
         complex_ior_fresnel(eta.z, eta_k.z, costheta));
+
+#endif // MDL_DF_SPECTRAL_ENABLE
 }
 
 // configurable Schlick-style Fresnel curve
@@ -542,11 +624,11 @@ BSDF_INLINE float custom_curve_factor(
 }
 
 // color variant of the above
-BSDF_INLINE float3 custom_curve_factor(
+BSDF_INLINE color_sample custom_curve_factor(
     const float kh,
     const float exponent,
-    const float3 &normal_reflectivity,
-    const float3 &grazing_reflectivity)
+    const color_sample &normal_reflectivity,
+    const color_sample &grazing_reflectivity)
 {
     const float f = 1.0f - math::saturate(kh);
     float f5;
@@ -562,18 +644,18 @@ BSDF_INLINE float3 custom_curve_factor(
 
 // and extended with 'f82' factor
 // https://renderwonk.com/publications/wp-generalization-adobe/gen-adobe.pdf
-BSDF_INLINE float3 generalized_custom_curve_factor(
+BSDF_INLINE color_sample generalized_custom_curve_factor(
     const float kh,
     const float exponent,
-    const float3 &normal_reflectivity,
-    const float3 &grazing_reflectivity,
-    const float3 &f82_factor)
+    const color_sample &normal_reflectivity,
+    const color_sample &grazing_reflectivity,
+    const color_sample &f82_factor)
 {
     const float f = 1.0f - math::saturate(kh);
     const float f2 = f * f;
     const float f5 = f2 * f2 * f;
 
-    const float fc = (exponent == 5.0f) ? f5 : math::pow(f, exponent);
+    const float fc = (exponent == 5.0f) ? f5 : ((exponent == 0.0f) ? 1.0f : math::pow(f, exponent));
     const float f6 = f5 * f;
 
     // cos_theta_max = 1/7 ~= cos(82deg)
@@ -586,10 +668,10 @@ BSDF_INLINE float3 generalized_custom_curve_factor(
     } else
         mc = math::pow(m, exponent);
 
-    const float3 d = grazing_reflectivity - normal_reflectivity;
-    const float3 a = (normal_reflectivity + d * mc) * tmp * (make_float3(1.0f, 1.0f, 1.0f) - f82_factor);
+    const color_sample d = grazing_reflectivity - normal_reflectivity;
+    const color_sample a = (normal_reflectivity + d * mc) * tmp * (make<color_sample>(1.0f) - f82_factor);
 
-    return math::saturate(normal_reflectivity + d * fc - a * kh * f6);
+    return saturate(normal_reflectivity + d * fc - a * kh * f6);
 }
 
 
@@ -1214,20 +1296,72 @@ BSDF_INLINE float2 fresnel_dielectric(const float n_a, const float n_b, const fl
 
 // compute the reflection color tint caused by a thin-film coating
 // for reference, see Born/Wolf - "Principles of Optics", section 13.4.2, equation 30
-BSDF_INLINE float3 thin_film_factor(
+BSDF_INLINE color_sample thin_film_factor(
+#ifdef MDL_DF_SPECTRAL_ENABLE
+    const color_sample &lambda,
+#endif
     float coating_thickness,
-    const float3 &coating_ior3,
-    const float3 &base_ior3,
-    const float3 &base_k3,
-    const float3 &incoming_ior3,
+    const color_sample &coating_ior3,
+    const color_sample &base_ior3,
+    const color_sample &base_k3,
+    const color_sample &incoming_ior3,
     const float kh)
 {
     if (coating_thickness <= 0.0f) {
         // for no coating just do the RGB math to ensure match with uncoated variant
         // (as using the spectral computation below will yield differences)
-        const float3 inv_incoming_ior3 = make_float3(1.0f, 1.0f, 1.0f) / incoming_ior3;
+        const color_sample inv_incoming_ior3 = make<color_sample>(1.0f) / incoming_ior3;
         return complex_ior_fresnel(base_ior3 * inv_incoming_ior3, base_k3 * inv_incoming_ior3, kh);
     }
+
+#ifdef MDL_DF_SPECTRAL_ENABLE
+    const float sin0_sqr = math::max(1.0f - kh * kh, 0.0f);
+    color_sample s;
+    for (unsigned int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+    {
+        const float incoming_ior = incoming_ior3.values[i];
+        const float coating_ior = coating_ior3.values[i];
+
+        const float eta01 = incoming_ior / coating_ior;
+        const float eta01_sqr = eta01 * eta01;
+        const float sin1_sqr = eta01_sqr * sin0_sqr;
+
+        if (sin1_sqr > 1.0f) {
+            s.values[i] = 1.0f;
+        } else {
+            const float cos1 = math::sqrt(math::max(1.0f - sin1_sqr, 0.0f));
+
+            const float2 R01 = fresnel_dielectric(incoming_ior, coating_ior, kh, cos1);
+            const float base_ior = base_ior3.values[i];
+            const float base_k = base_k3.values[i];
+            float2 phi12_sin, phi12_cos;
+            const float2 R12 = fresnel_conductor(phi12_sin, phi12_cos, coating_ior, base_ior, base_k, cos1, sin1_sqr);
+
+            const float tmp = (float)(4.0 * M_PI) * coating_ior * coating_thickness * cos1;
+
+            const float R01R12_s = math::max(R01.x * R12.x, 0.0f);
+            const float r01r12_s = math::sqrt(R01R12_s);
+            const float R01R12_p = math::max(R01.y * R12.y, 0.0f);
+            const float r01r12_p = math::sqrt(R01R12_p);
+
+
+            const float phi = tmp / lambda.values[i];
+
+            float phi_s, phi_c;
+            math::sincos(phi, &phi_s, &phi_c);
+            const float cos_phi_s = phi_c * phi12_cos.x - phi_s * phi12_sin.x; // cos(a+b) = cos(a) * cos(b) - sin(a) * sin(b)
+            const float tmp_s = 2.0f * r01r12_s * cos_phi_s;
+            const float R_s = (R01.x + R12.x + tmp_s) / (1.0f + R01R12_s + tmp_s);
+
+            const float cos_phi_p = phi_c * phi12_cos.y - phi_s * phi12_sin.y; // cos(a+b) = cos(a) * cos(b) - sin(a) * sin(b)
+            const float tmp_p = 2.0f * r01r12_p * cos_phi_p;
+            const float R_p = (R01.y + R12.y + tmp_p) / (1.0f + R01R12_p + tmp_p);
+
+            s.values[i] = (0.5f * (R_s + R_p));
+        }
+    }
+    return s;
+#else
 
     float3 xyz = make_float3(0.0f, 0.0f, 0.0f);
 
@@ -1251,7 +1385,9 @@ BSDF_INLINE float3 thin_film_factor(
     float base_ior = base_ior3.z;
     float base_k = base_k3.z;
     float incoming_ior = incoming_ior3.z;
+
     float lambda = lambda_min + 0.5f * lambda_step;
+
 
     unsigned int i = 0;
     while (i < 16)
@@ -1271,6 +1407,7 @@ BSDF_INLINE float3 thin_film_factor(
 
                 float coating_ior_next;
                 float incoming_ior_next;
+
                 if (i >= 10) {
                     coating_ior_next = coating_ior3.x;
                     base_ior = base_ior3.x;
@@ -1287,6 +1424,7 @@ BSDF_INLINE float3 thin_film_factor(
                     base_k = base_k3.z;
                     incoming_ior_next = incoming_ior3.z;
                 }
+
                 if (coating_ior_next != coating_ior || incoming_ior_next != incoming_ior) {
                     coating_ior = coating_ior_next;
                     incoming_ior = incoming_ior_next;
@@ -1295,7 +1433,7 @@ BSDF_INLINE float3 thin_film_factor(
             }
         }
         else
-        {        
+        {
             const float cos1 = math::sqrt(math::max(1.0f - sin1_sqr, 0.0f));
 
             const float2 R01 = fresnel_dielectric(incoming_ior, coating_ior, kh, cos1);
@@ -1333,6 +1471,7 @@ BSDF_INLINE float3 thin_film_factor(
                 float base_ior_next;
                 float base_k_next;
                 float incoming_ior_next;
+
                 if (i >= 10) {
                     coating_ior_next = coating_ior3.x;
                     base_ior_next = base_ior3.x;
@@ -1349,6 +1488,7 @@ BSDF_INLINE float3 thin_film_factor(
                     base_k_next = base_k3.z;
                     incoming_ior_next = incoming_ior3.z;
                 }
+
                 if (coating_ior_next != coating_ior || base_ior_next != base_ior || base_k_next != base_k || incoming_ior_next != incoming_ior) {
                     coating_ior = coating_ior_next;
                     base_ior = base_ior_next;
@@ -1370,10 +1510,14 @@ BSDF_INLINE float3 thin_film_factor(
                                               + xyz.z * (float)( 0.041500 / 0.341582),
         xyz.x * (float)( 0.055700 / 0.326950) + xyz.y * (float)(-0.204000 / 0.326950)
                                               + xyz.z * (float)( 1.057000 / 0.326950)));
+#endif // MDL_DF_SPECTRAL_ENABLE
 }
 
-BSDF_INLINE float3 thin_film_factor(
-    const float3 coating_ior3,
+BSDF_INLINE color_sample thin_film_factor(
+#ifdef MDL_DF_SPECTRAL_ENABLE
+    const color_sample &lambda,
+#endif
+    const color_sample coating_ior3,
     const float coating_thickness,
     const float2 material_ior,
     const float3 &k1,
@@ -1388,13 +1532,20 @@ BSDF_INLINE float3 thin_film_factor(
 
     const float kh = math::abs(math::dot(k1, h));
 
-    const float3 base_ior = make<float3>(material_ior.y);
-    const float3 base_k = make<float3>(0.0f);
-    const float3 incoming_ior = make<float3>(material_ior.x);
-    return thin_film_factor(coating_thickness, coating_ior3, base_ior, base_k, incoming_ior, kh);
+    const color_sample base_ior = make<color_sample>(material_ior.y); //!! TODO SPECTRAL: manage spectral material IOR
+    const color_sample base_k = make<color_sample>(0.0f);
+    const color_sample incoming_ior = make<color_sample>(material_ior.x); //!! TODO SPECTRAL: manage spectral material IOR
+    return thin_film_factor(
+#ifdef MDL_DF_SPECTRAL_ENABLE
+        lambda,
+#endif
+        coating_thickness, coating_ior3, base_ior, base_k, incoming_ior, kh);
 }
 
-BSDF_INLINE float3 thin_film_factor(
+BSDF_INLINE color_sample thin_film_factor(
+#ifdef MDL_DF_SPECTRAL_ENABLE
+    const color_sample &lambda,
+#endif
     float coating_thickness,
     const float coating_ior,
     const float base_ior,
@@ -1408,7 +1559,7 @@ BSDF_INLINE float3 thin_film_factor(
     const float eta01_sqr = eta01 * eta01;
     const float sin1_sqr = eta01_sqr * sin0_sqr;
     if (sin1_sqr > 1.0f) // TIR at first interface
-        return make_float3(1.0f, 1.0f, 1.0f);
+        return make<color_sample>(1.0f);
 
     const float cos1 = math::sqrt(math::max(1.0f - sin1_sqr, 0.0f));
 
@@ -1423,6 +1574,26 @@ BSDF_INLINE float3 thin_film_factor(
     const float R01R12_p = math::max(R01.y * R12.y, 0.0f);
     const float r01r12_p = math::sqrt(R01R12_p);
 
+#ifdef MDL_DF_SPECTRAL_ENABLE
+    color_sample s;
+    for (unsigned int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+    {
+        const float phi = tmp / lambda.values[i];
+
+        float phi_s, phi_c;
+        math::sincos(phi, &phi_s, &phi_c);
+        const float cos_phi_s = phi_c * phi12_cos.x - phi_s * phi12_sin.x; // cos(a+b) = cos(a) * cos(b) - sin(a) * sin(b)
+        const float tmp_s = 2.0f * r01r12_s * cos_phi_s;
+        const float R_s = (R01.x + R12.x + tmp_s) / (1.0f + R01R12_s + tmp_s);
+
+        const float cos_phi_p = phi_c * phi12_cos.y - phi_s * phi12_sin.y; // cos(a+b) = cos(a) * cos(b) - sin(a) * sin(b)
+        const float tmp_p = 2.0f * r01r12_p * cos_phi_p;
+        const float R_p = (R01.y + R12.y + tmp_p) / (1.0f + R01R12_p + tmp_p);
+
+        s.values[i] = 0.5f * (R_s + R_p);
+    }
+    return s;
+#else
     float3 xyz = make_float3(0.0f, 0.0f, 0.0f);
 
     //!! using low res color matching functions here
@@ -1468,13 +1639,14 @@ BSDF_INLINE float3 thin_film_factor(
                                               + xyz.z * (float)( 0.041500 / 0.341582),
         xyz.x * (float)( 0.055700 / 0.326950) + xyz.y * (float)(-0.204000 / 0.326950)
                                               + xyz.z * (float)( 1.057000 / 0.326950)));
+#endif // MDL_DF_SPECTRAL_ENABLE
 }
 
 
 // evaluate measured color curve
-BSDF_INLINE float3 measured_curve_factor(
+BSDF_INLINE color_sample measured_curve_factor(
     const float cosine,
-    const float3 * values,
+    const color_sample * values,
     const unsigned int num_values)
 {
     const float angle01 = math::acos(math::min(cosine, 1.0f)) * (float)(2.0 / M_PI);
@@ -1488,15 +1660,15 @@ BSDF_INLINE float3 measured_curve_factor(
     return values[idx0] * cw0 + values[idx1] * cw1;
 }
 
-BSDF_INLINE float3 measured_curve_factor_eval(
+BSDF_INLINE color_sample measured_curve_factor_eval(
     const float cosine,
-    const float3 * values,
+    const color_sample * values,
     const unsigned int num_values)
 {
     if (num_values == 0)
-        return make_float3(0, 0, 0);
+        return make<color_sample>(0.0f);
     else
-        return math::saturate(measured_curve_factor(cosine, values, num_values));
+        return saturate(measured_curve_factor(cosine, values, num_values));
 }
 
 BSDF_INLINE float3 measured_curve_factor_eval(
@@ -1522,63 +1694,81 @@ BSDF_INLINE float3 measured_curve_factor_eval(
     }
 }
 
-BSDF_INLINE float measured_curve_factor_estimate(
+BSDF_INLINE pdf_sample measured_curve_factor_estimate(
     const float cosine,
-    const float3 * values,
+    const color_sample * values,
     const unsigned int num_values)
 {
     if (num_values == 0)
-        return 0;
+        return make<pdf_sample>(0.0f);
     else
-        return math::luminance(math::saturate(measured_curve_factor(
+        return create_probability(saturate(measured_curve_factor(
             cosine, values, num_values)));
 }
 
-BSDF_INLINE float3 color_measured_curve_factor_eval(
+BSDF_INLINE color_sample color_measured_curve_factor_eval(
     const float cosine,
-    const float3 * values,
+    const color_sample * values,
     const unsigned int num_values,
-    const float3 &weight)
+    const color_sample &weight)
 {
     if (num_values == 0)
-        return make_float3(0, 0, 0);
+        return make<color_sample>(0.0f);
     else
-        return math::saturate(weight) *
-            math::saturate(measured_curve_factor(cosine, values, num_values));
+        return saturate(weight) *
+            saturate(measured_curve_factor(cosine, values, num_values));
 }
 
-BSDF_INLINE float color_measured_curve_factor_estimate(
+BSDF_INLINE pdf_sample color_measured_curve_factor_estimate(
     const float cosine,
-    const float3 * values,
+    const color_sample * values,
     const unsigned int num_values,
-    const float3 &weight)
+    const color_sample &weight)
 {
     if (num_values == 0)
-        return 0;
+        return make<pdf_sample>(0.0f);
     else
-        return math::luminance(
-            math::saturate(weight) *
-            math::saturate(measured_curve_factor(cosine, values, num_values)));
+        return create_probability(
+            saturate(weight) *
+            saturate(measured_curve_factor(cosine, values, num_values)));
 }
 
 // approximate complex IOR from normal and grazing reflectivity
 // Gulbrandsen - "Artist Friendly Metallic Fresnel"
 struct Complex_ior {
-    float3 n;
-    float3 k;
+    color_sample n;
+    color_sample k;
 };
 BSDF_INLINE Complex_ior schlick_to_conductor_fresnel(
-    float3 r, const float3 &g)
+    color_sample r, const color_sample &g)
 {
     constexpr float eps = 1.e-2f;
+    Complex_ior ret;
+
+#ifdef  MDL_DF_SPECTRAL_ENABLE
+
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+    {
+        r.values[i] = (1.0f - r.values[i]) * eps + r.values[i] * (1.0f - eps);
+        const float r_sqrt = math::sqrt(r.values[i]);
+        const float tmp = 1.0f - r.values[i];
+
+        ret.n.values[i] = g.values[i] * tmp /
+            (1.0f + r.values[i]) + (1.0f - g.values[i]) * (1.0f + r_sqrt) / (1.0f - r_sqrt);
+
+        ret.k.values[i] = math::sqrt(math::max((r.values[i] * (ret.n.values[i] + 1.0f) * (ret.n.values[i] + 1.0f) -
+            (ret.n.values[i] - 1.0f) * (ret.n.values[i] - 1.0f)) / tmp, 0.0f));
+    }
+
+#else
+
     r.x = (1.0f - r.x) * eps + r.x * (1.0f - eps);
     r.y = (1.0f - r.y) * eps + r.y * (1.0f - eps);
     r.z = (1.0f - r.z) * eps + r.z * (1.0f - eps);
-    
-    const float3 r_sqrt = math::sqrt(r);
-    const float3 tmp = make_float3(1.0f - r.x, 1.0f - r.y, 1.0f - r.z);
 
-    Complex_ior ret;
+    const color_sample r_sqrt = math::sqrt(r);
+    const color_sample tmp = make_float3(1.0f - r.x, 1.0f - r.y, 1.0f - r.z);
+
     ret.n.x = g.x * tmp.x / (1.0f + r.x) + (1.0f - g.x) * (1.0f + r_sqrt.x) / (1.0f - r_sqrt.x);
     ret.n.y = g.y * tmp.y / (1.0f + r.y) + (1.0f - g.y) * (1.0f + r_sqrt.y) / (1.0f - r_sqrt.y);
     ret.n.z = g.z * tmp.z / (1.0f + r.z) + (1.0f - g.z) * (1.0f + r_sqrt.z) / (1.0f - r_sqrt.z);
@@ -1586,55 +1776,75 @@ BSDF_INLINE Complex_ior schlick_to_conductor_fresnel(
     ret.k.x = math::sqrt(math::max((r.x * (ret.n.x + 1.0f) * (ret.n.x + 1.0f) - (ret.n.x - 1.0f) * (ret.n.x - 1.0f)) / tmp.x, 0.0f));
     ret.k.y = math::sqrt(math::max((r.y * (ret.n.y + 1.0f) * (ret.n.y + 1.0f) - (ret.n.y - 1.0f) * (ret.n.y - 1.0f)) / tmp.y, 0.0f));
     ret.k.z = math::sqrt(math::max((r.z * (ret.n.z + 1.0f) * (ret.n.z + 1.0f) - (ret.n.z - 1.0f) * (ret.n.z - 1.0f)) / tmp.z, 0.0f));
+
+#endif //  MDL_DF_SPECTRAL_ENABLE
+
     return ret;
 }
 
 // compute IOR producing given normal incidence reflectivity
-BSDF_INLINE float3 schlick_to_dielectric_fresnel(
-    const float3 &r)
+BSDF_INLINE color_sample schlick_to_dielectric_fresnel(
+    const color_sample &r)
 {
-    const float3 tmp = math::sqrt(math::clamp(r, make_float3(0.0f, 0.0f, 0.0f), make_float3(0.98f, 0.98f, 0.98f)));
+#ifdef MDL_DF_SPECTRAL_ENABLE
 
+    color_sample sp;
+
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+    {
+        const float tmp = math::sqrt(math::clamp(r.values[i], 0.f, 0.98f));
+        sp.values[i] = (1.0f + tmp) / (1.0f - tmp);
+    }
+
+    return sp;
+
+#else
+
+    const color_sample tmp = math::sqrt(math::clamp(r, make<color_sample>(0.0f), make<color_sample>(0.98f)));
     return make_float3(
         (1.0f + tmp.x) / (1.0f - tmp.x),
         (1.0f + tmp.y) / (1.0f - tmp.y),
         (1.0f + tmp.z) / (1.0f - tmp.z));
+
+#endif
 }
 
-BSDF_INLINE float3 apply_coating_color_shift(
-    const float3 &input,
-    const float3 &coated_fresnel,
-    const float3 &uncoated_fresnel)
+BSDF_INLINE color_sample apply_coating_color_shift(
+    const color_sample &input,
+    const color_sample &coated_fresnel,
+    const color_sample &uncoated_fresnel)
 {
-    const float3 result = input + (coated_fresnel - uncoated_fresnel);
-    return math::saturate(result);
+    const color_sample result = input + (coated_fresnel - uncoated_fresnel);
+    return saturate(result);
 }
-
 
 template<typename Data>
-BSDF_INLINE float3 thin_film_custom_curve_factor_conductor(
+BSDF_INLINE color_sample thin_film_custom_curve_factor_conductor(
     Data *data,
     State *state,
     const float kh,
     const float exponent,
-    const float3 &normal_reflectivity,
-    const float3 &grazing_reflectivity,
-    const float3 &f82_factor,
+    const color_sample &normal_reflectivity,
+    const color_sample &grazing_reflectivity,
+    const color_sample &f82_factor,
     const float coating_thickness,
-    const float3 coating_ior)
+    const color_sample coating_ior)
 {
-    float3 result = generalized_custom_curve_factor(kh, exponent, normal_reflectivity, grazing_reflectivity, f82_factor);
+    color_sample result = generalized_custom_curve_factor(kh, exponent, normal_reflectivity, grazing_reflectivity, f82_factor);
     if (coating_thickness > 0.0f) {
 
         const Complex_ior c = schlick_to_conductor_fresnel(normal_reflectivity, grazing_reflectivity * f82_factor);
 
-        const float3 incoming_ior = process_incoming_ior(data, state);
-        const float3 inv_eta_i = make<float3>(1.0f) / incoming_ior;
-        const float3 eta = c.n * inv_eta_i;
-        const float3 eta_k = c.k * inv_eta_i;
-        const float3 uncoated_fresnel = complex_ior_fresnel(eta, eta_k, kh);
+        const color_sample incoming_ior = process_incoming_ior(data, state);
+        const color_sample inv_eta_i = make<color_sample>(1.0f) / incoming_ior;
+        const color_sample eta = c.n * inv_eta_i;
+        const color_sample eta_k = c.k * inv_eta_i;
+        const color_sample uncoated_fresnel = complex_ior_fresnel(eta, eta_k, kh);
 
-        const float3 coated_fresnel = thin_film_factor(
+        const color_sample coated_fresnel = thin_film_factor(
+#ifdef MDL_DF_SPECTRAL_ENABLE
+            state->get_wavelengths(),
+#endif
             coating_thickness, coating_ior, c.n, c.k, incoming_ior, kh);
 
         result = apply_coating_color_shift(result, coated_fresnel, uncoated_fresnel);
@@ -1643,18 +1853,18 @@ BSDF_INLINE float3 thin_film_custom_curve_factor_conductor(
 }
 
 template<typename Data>
-BSDF_INLINE float3 coat_absorption(
+BSDF_INLINE color_sample coat_absorption(
     Data *data,
     State *state,
-    const float3 &ior,
-    const float3 &absorption_coefficient,
+    const color_sample &ior,
+    const color_sample &absorption_coefficient,
     const float thickness,
     const float3 &normal,
     const float3 &k2)
 {
-    const float3 optical_depth = math::max(absorption_coefficient, make<float3>(0.0f)) * math::max(thickness, 0.0f);
-    if (optical_depth.x <= 0.0f && optical_depth.y <= 0.0f && optical_depth.z <= 0.0f)
-        return make_float3(1.0f, 1.0f, 1.0f);
+    const color_sample optical_depth = max(absorption_coefficient, make<color_sample>(0.0f)) * math::max(thickness, 0.0f);
+    if (optical_depth <= 0.0f)
+        return make<color_sample>(1.0f);
 
     float3 shading_normal, geometry_normal;
     get_oriented_normals(
@@ -1662,11 +1872,39 @@ BSDF_INLINE float3 coat_absorption(
 
     const float nk1 = math::abs(math::dot(data->k1, shading_normal));
     const float nk2 = math::abs(math::dot(k2, shading_normal));
-    
-    const float incoming_ior = process_ior(data, state).x;
-    const float3 eta = make_float3(incoming_ior / ior.x, incoming_ior / ior.y, incoming_ior / ior.z);
 
-    float3 dist = make_float3(0.0f, 0.0f, 0.0f);
+    const color_sample incoming_ior = process_incoming_ior(data, state);
+    const color_sample eta = incoming_ior / ior;
+
+    color_sample dist = make<color_sample>(0.0f);
+
+#ifdef MDL_DF_SPECTRAL_ENABLE
+
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+    {
+        if (i > 0 && (eta.values[i] == eta.values[i - 1]))
+            dist.values[i] = dist.values[i - 1];
+        else if (eta.values[i] > 0.0f && eta.values[i] <= 1.0f) {
+            const float nk1_r = refraction_cosine(nk1, eta.values[i]);
+            const float nk2_r = refraction_cosine(nk2, eta.values[i]);
+            dist.values[i] = 1.0f / nk1_r + 1.0f / nk2_r;
+        }
+    }
+
+    if (math::dot(k2, geometry_normal) < 0.0f)
+        dist *= 0.5f; // transmission, assume only half distance is travelled
+
+    color_sample ret;
+
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i) {
+        ret.values[i] =
+            dist.values[i] > 0.0f ? math::exp(-optical_depth.values[i] * dist.values[i]) : 1.0f;
+    }
+
+    return ret;
+
+#else
+
     if (eta.x > 0.0f && eta.x <= 1.0f) {
         const float nk1_r = refraction_cosine(nk1, eta.x);
         const float nk2_r = refraction_cosine(nk2, eta.x);
@@ -1675,12 +1913,12 @@ BSDF_INLINE float3 coat_absorption(
 
     if (eta.y == eta.x)
         dist.y = dist.x;
-    else if (eta.y > 0.0f && eta.y <= 1.0f) {       
+    else if (eta.y > 0.0f && eta.y <= 1.0f) {
         const float nk1_r = refraction_cosine(nk1, eta.y);
         const float nk2_r = refraction_cosine(nk2, eta.y);
         dist.y = 1.0f / nk1_r + 1.0f / nk2_r;
     }
-    
+
     if (eta.z == eta.x)
         dist.z = dist.x;
     else if (eta.z == eta.y)
@@ -1698,6 +1936,9 @@ BSDF_INLINE float3 coat_absorption(
         dist.x > 0.0f ? math::exp(-optical_depth.x * dist.x) : 1.0f,
         dist.y > 0.0f ? math::exp(-optical_depth.y * dist.y) : 1.0f,
         dist.z > 0.0f ? math::exp(-optical_depth.z * dist.z) : 1.0f);
-}   
+
+#endif
+
+}
 
 #endif // MDL_LIBBSDF_UTILITIES_H

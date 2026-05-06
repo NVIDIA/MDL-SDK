@@ -428,15 +428,14 @@ public:
                 mi::base::Handle<MDL::IExpression_call const> call(
                     expr->get_interface<MDL::IExpression_call>());
                 DB::Tag tag = call->get_call();
-                SERIAL::Class_id class_id = m_trans->get_class_id(tag);
-                if (class_id != MDL::ID_MDL_FUNCTION_CALL) {
+                DB::Access<MDL::Mdl_function_call> fcall(tag, m_trans);
+                if (!fcall) {
                     set_error(EC_NON_FUNCTION_CALL);
                     return m_value_fact.create_bad();
                 }
 
-                DB::Access<MDL::Mdl_function_call> fcall(tag, m_trans);
                 DB::Tag def_tag = fcall->get_function_definition(m_trans);
-                if (!def_tag.is_valid()) {
+                if (!def_tag) {
                     set_error(EC_INVALID_CALL);
                     return m_value_fact.create_bad();
                 }
@@ -465,21 +464,19 @@ public:
                 mi::base::Handle<MDL::IExpression_direct_call const> dcall(
                     expr->get_interface<MDL::IExpression_direct_call>());
                 DB::Tag tag = dcall->get_definition(m_trans);
-                if (!tag.is_valid()) {
+                if (!tag) {
                     set_error(EC_INVALID_CALL);
                     return m_value_fact.create_bad();
                 }
 
-                SERIAL::Class_id class_id = m_trans->get_class_id(tag);
-                if (class_id != MDL::ID_MDL_FUNCTION_DEFINITION) {
+                DB::Access<MDL::Mdl_function_definition> def(tag, m_trans);
+                if (!def) {
                     set_error(EC_NON_FUNCTION_CALL);
                     return m_value_fact.create_bad();
                 }
 
-                DB::Access<MDL::Mdl_function_definition> def(tag, m_trans);
                 mi::base::Handle<MDL::IExpression_list const> args(
                     dcall->get_arguments());
-
                 return evaluate_call(def.get_ptr(), args.get());
             }
         case MDL::IExpression::EK_TEMPORARY:
@@ -711,7 +708,7 @@ public:
 
                 if (tex_type != nullptr) {
                     DB::Tag resource_tag = tex->get_value();
-                    if (resource_tag.is_valid()) {
+                    if (resource_tag) {
                         // treat this as a valid resource
                         return m_value_fact.create_texture(
                             tex_type,
@@ -738,7 +735,7 @@ public:
 
                 if (lp_type != nullptr) {
                     DB::Tag resource_tag = lp->get_value();
-                    if (resource_tag.is_valid()) {
+                    if (resource_tag) {
                         // treat this as a valid resource
                         return m_value_fact.create_light_profile(
                             lp_type, "", resource_tag.get_uint(), 0);
@@ -760,7 +757,7 @@ public:
 
                 if (bm_type != nullptr) {
                     DB::Tag resource_tag = bm->get_value();
-                    if (resource_tag.is_valid()) {
+                    if (resource_tag) {
                         // treat this as a valid resource
                         return m_value_fact.create_bsdf_measurement(
                             bm_type, "", resource_tag.get_uint(), 0);

@@ -701,13 +701,6 @@ public:
     virtual mi::neuraylib::ICanvas* create_miplevel(
         const mi::neuraylib::ICanvas* prev_canvas, float gamma_override) const = 0;
 
-    /// Converts the legacy export options into a map.
-    ///
-    /// This methods maps \p quality to \c "jpg:quality" and \c "exr:data_type", and
-    /// \p force_default_gamma to \c "force_default_gamma".
-    virtual mi::IMap* convert_legacy_options(
-        mi::Uint32 quality, bool force_default_gamma) const = 0;
-
     // Methods for testing
     // ===================
 

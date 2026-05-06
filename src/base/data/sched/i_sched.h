@@ -48,9 +48,9 @@ namespace SCHED {
 /// the job scheduler on access. Users can derive their job classes from this base class, but it is
 /// recommended to derive from the mixin class below.
 ///
-/// Database jobs do, unlike regular database elements, reference the tags of their inputs. It is
-/// the user's responsibility to ensure that those inputs are valid as long as the job might get
-/// executed, in particular for non-shared jobs.
+/// Database jobs do \em not reference the tags of their inputs (unlike regular database elements).
+/// It is the user's responsibility to ensure that those inputs are valid as long as the job might
+/// get executed, in particular for non-shared jobs.
 ///
 /// Note that there is no dependency tracking between job result and job inputs (typically database
 /// elements). Is is up to the user to invalidate stale job results via

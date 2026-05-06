@@ -302,21 +302,6 @@ public:
     /// \c false for less details.
     static std::string get_dump_type_name( const IType* type, bool include_aliased_type);
 
-    /// Acquires the mutex.
-    void lock() const { m_mutex.lock(); }
-
-    /// Releases the mutex.
-    void unlock() const { m_mutex.unlock(); }
-
-    /// Caller needs to hold the mutex.
-    void unregister_struct_category( const IStruct_category* struct_category);
-
-    /// Caller needs to hold the mutex.
-    void unregister_enum_type( const IType_enum* type);
-
-    /// Caller needs to hold the mutex.
-    void unregister_struct_type( const IType_struct* type);
-
 private:
 
     static std::string get_mdl_type_name_static( const IType* type);
@@ -340,29 +325,114 @@ private:
 
 
     /// Performs the checks for create_struct_category() that need to happen under the lock.
+    ///
+    /// \param unregister_dead   Indicates whether dead struct categories are supposed to be
+    ///                          unregistered (which needs the exclusive lock).
     const IStruct_category* lookup_struct_category(
         const char* symbol,
         IStruct_category::Predefined_id id,
-        mi::Sint32* errors);
+        mi::Sint32* errors,
+        bool unregister_dead);
 
     /// Performs the checks for create_enum() that need to happen under the lock.
+    ///
+    /// \param unregister_dead   Indicates whether dead enum types are supposed to be
+    ///                          unregistered (which needs the exclusive lock).
     const IType_enum* lookup_enum(
         const char* symbol,
         IType_enum::Predefined_id id,
         const IType_enum::Values& values,
-        mi::Sint32* errors);
+        mi::Sint32* errors,
+        bool unregister_dead);
 
     /// Performs the checks for create_struct() that need to happen under the lock.
+    ///
+    /// \param unregister_dead   Indicates whether dead struct types are supposed to be
+    ///                          unregistered (which needs the exclusive lock).
     const IType_struct* lookup_struct(
         const char* symbol,
         IType_struct::Predefined_id id,
         const IType_struct::Fields& fields,
         bool is_declarative,
         const IStruct_category* struct_category,
-        mi::Sint32* errors);
+        mi::Sint32* errors,
+        bool unregister_dead);
 
 
-    /// Checks whether \p struct_cateory and \p id are equivalent types (ignoring annotations).
+    using Struct_category_symbol_map
+        = ankerl::unordered_dense::map<std::string, mi::base::Handle<const IStruct_category>>;
+
+    using Enum_symbol_map
+        = ankerl::unordered_dense::map<std::string, mi::base::Handle<const IType_enum>>;
+
+    using Struct_symbol_map
+        = ankerl::unordered_dense::map<std::string, mi::base::Handle<const IType_struct>>;
+
+
+    using Weak_struct_category_id_map
+        = ankerl::unordered_dense::map<IStruct_category::Predefined_id, const IStruct_category*>;
+
+    using Weak_enum_id_map
+        = ankerl::unordered_dense::map<IType_enum::Predefined_id, const IType_enum*>;
+
+    using Struct_id_map
+        = ankerl::unordered_dense::map<IType_struct::Predefined_id, const IType_struct*>;
+
+
+    /// Unregisters the referenced struct category.
+    ///
+    /// Caller needs to hold the mutex exclusively.
+    void unregister_struct_category( Struct_category_symbol_map::iterator it);
+
+    /// Unregisters the referenced enum type.
+    ///
+    /// Caller needs to hold the mutex exclusively.
+    void unregister_enum_type( Enum_symbol_map::iterator it);
+
+    /// Unregisters the referenced struct type.
+    ///
+    /// Caller needs to hold the mutex exclusively.
+    void unregister_struct_type( Struct_symbol_map::iterator it);
+
+
+    /// Indicates whether there is an alive struct category for that symbol and unregisters dead
+    /// ones.
+    ///
+    /// Caller needs to hold the mutex exclusively.
+    bool is_alive_struct_category_and_unregister_dead_ones( const char* symbol);
+
+    /// Indicates whether there is an alive enum type for that symbol and unregisters dead ones.
+    ///
+    /// Caller needs to hold the mutex exclusively.
+    bool is_alive_enum_type_and_unregister_dead_ones( const char* symbol);
+
+    /// Indicates whether there is an alive struct type for that symbol and unregisters dead ones.
+    ///
+    /// Caller needs to hold the mutex exclusively.
+    bool is_alive_struct_type_and_unregister_dead_ones( const char* symbol);
+
+
+    /// Indicates whether a struct category is alive, i.e., has a reference count larger than 1.
+    ///
+    /// Note that struct categories identified as alive can become dead at anytime, but the other
+    /// way round is not possible.
+    static bool is_alive( const IStruct_category* struct_category);
+
+    /// Indicates whether a enum type is alive, i.e., has a reference count larger than 1.
+    ///
+    /// Note that enum types identified as alive can become dead at anytime, but the other
+    /// way round is not possible.
+    static bool is_alive( const IType_enum* type);
+
+    /// Indicates whether a struct type is alive, i.e., has a reference count larger than 1.
+    ///
+    /// Note that struct types identified as alive can become dead at anytime, but the other
+    /// way round is not possible.
+    static bool is_alive( const IType_struct* type);
+
+
+    /// Checks whether \p struct_category and \p id are equivalent struct categories (ignoring
+    /// annotations).
     static bool equivalent_struct_categories(
         const IStruct_category* struct_category,
         IStruct_category::Predefined_id id);
@@ -382,45 +452,33 @@ private:
         const IStruct_category* struct_category);
 
 
-    using Weak_struct_category_symbol_map
-        = ankerl::unordered_dense::map<std::string, const IStruct_category*>;
-
-    using Weak_struct_category_id_map
-        = ankerl::unordered_dense::map<IStruct_category::Predefined_id, const IStruct_category*>;
-
-    using Weak_enum_symbol_map
-        = ankerl::unordered_dense::map<std::string, const IType_enum*>;
-
-    using Weak_enum_id_map
-        = ankerl::unordered_dense::map<IType_enum::Predefined_id, const IType_enum*>;
-
-    using Weak_struct_symbol_map
-        = ankerl::unordered_dense::map<std::string, const IType_struct*>;
-
-    using Weak_struct_id_map
-        = ankerl::unordered_dense::map<IType_struct::Predefined_id, const IType_struct*>;
-
-
-    /// Mutex for the four weak map members below.
+    /// Mutex for the six weak map members below.
     mutable std::shared_mutex m_mutex;
 
     /// All registered struct categories by symbol. Needs #m_mutex.
-    Weak_struct_category_symbol_map m_struct_category_symbols;
-
-    /// All registered struct categories by ID. Needs #m_mutex.
-    Weak_struct_category_id_map m_struct_category_ids;
+    Struct_category_symbol_map m_struct_category_symbols;
 
     /// All registered enum types by symbol. Needs #m_mutex.
-    Weak_enum_symbol_map m_enum_symbols;
-
-    /// All registered enum types by ID. Needs #m_mutex.
-    Weak_enum_id_map m_enum_ids;
+    Enum_symbol_map m_enum_symbols;
 
     /// All registered struct types by symbol. Needs #m_mutex.
-    Weak_struct_symbol_map m_struct_symbols;
+    Struct_symbol_map m_struct_symbols;
 
-    /// All registered struct types by ID. Needs #m_mutex.
-    Weak_struct_id_map m_struct_ids;
+    /// The three ID maps below use plain pointers instead of handles as in the three symbol maps
+    /// above. All entities (struct categories, enum types, struct types) are contained in the
+    /// corresponding symbol map, but only those with an ID different from the generic user ID are
+    /// contained in the corresponding ID map. The plain pointers in the ID maps ensure that a
+    /// reference count of 1 implies that the entity is only referenced by the type factory,
+    /// independent of the entity being contained in the corresponding ID map or not.
+
+    /// Registered struct categories with ID different from CID_USER, by ID. Needs #m_mutex.
+    Weak_struct_category_id_map m_struct_category_ids;
+
+    /// Registered enum types with ID different from EID_USER, by ID. Needs #m_mutex.
+    Weak_enum_id_map m_enum_ids;
+
+    /// Registered struct types with ID different from SID_USER, by ID. Needs #m_mutex.
+    Struct_id_map m_struct_ids;
 };
 
 } // namespace MDL

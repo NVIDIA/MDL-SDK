@@ -1153,6 +1153,16 @@ bool Mdl_material_target::generate()
     m_hlsl_source_code += "\n";
     if (m_app->get_options()->automatic_derivatives) m_hlsl_source_code += "#define USE_DERIVS\n";
     if (m_app->get_options()->enable_auxiliary) m_hlsl_source_code += "#define ENABLE_AUXILIARY\n";
+    if (m_app->get_options()->enable_spectral)
+    {
+        m_hlsl_source_code += "#define MDL_SPECTRAL_RENDERING\n";
+        // Propagate the C++ value of MDL_DF_SPECTRAL_SAMPLES (which can be configured
+        // via the CMake option MDL_DF_SPECTRAL_SAMPLES_OVERRIDE) to the HLSL compiler so
+        // that the generated MDL code, the renderer payload, and the runtime helpers all
+        // agree on the spectral sample count.
+        m_hlsl_source_code += "#define MDL_DF_SPECTRAL_SAMPLES " +
+            std::to_string(MDL_DF_SPECTRAL_SAMPLES) + "\n";
+    }
 
     // To illustrate the usage of the slot handles we just take maximum handle count.
     // With LPE support (see example df_cuda) it would make sense to limit the loop size per df.
@@ -1212,6 +1222,11 @@ bool Mdl_material_target::generate()
     m_hlsl_source_code += "#include \"content/mdl_renderer_runtime.hlsl\"\n\n";
     m_hlsl_source_code += m_target_code ? m_target_code->get_code() : "/* NO CODE GENERATED */\n";
 
+    std::string color_sample_type(
+        m_app->get_options()->enable_spectral ? "Spectral_sample" : "float3");
+    std::string color_sample_zero(
+        m_app->get_options()->enable_spectral ? "(Spectral_sample) 0" : "float3(0, 0, 0)");
+
     // add default implementations for all optional functions if not generated
     if (!interface_data.has_code_feature(Material_code_feature::HAS_INIT))
         m_hlsl_source_code += "void mdl_init(const Shading_state_material) {}\n";
@@ -1224,8 +1239,8 @@ bool Mdl_material_target::generate()
         m_hlsl_source_code +=
         "void mdl_surface_emission_evaluate(inout Edf_evaluate_data, const Shading_state_material) {}\n"
         "void mdl_surface_emission_sample(inout Edf_sample_data, const Shading_state_material) {}\n"
-        "void mdl_surface_emission_auxiliary(inout Edf_auxiliary_data, const Shading_state_material) {}\n"
-        "float3 mdl_surface_emission_intensity(const Shading_state_material) { return float3(0, 0, 0); }\n";
+        "void mdl_surface_emission_auxiliary(inout Edf_auxiliary_data, const Shading_state_material) {}\n" +
+        color_sample_type + " mdl_surface_emission_intensity(const Shading_state_material) { return " + color_sample_zero + "; }\n";
     if (!interface_data.has_code_feature(Material_code_feature::BACKFACE_SCATTERING))
         m_hlsl_source_code +=
         "void mdl_backface_scattering_evaluate(inout Bsdf_evaluate_data, const Shading_state_material) {}\n"
@@ -1235,14 +1250,14 @@ bool Mdl_material_target::generate()
         m_hlsl_source_code +=
         "void mdl_backface_emission_evaluate(inout Edf_evaluate_data, const Shading_state_material) {}\n"
         "void mdl_backface_emission_sample(inout Edf_sample_data, const Shading_state_material) {}\n"
-        "void mdl_backface_emission_auxiliary(inout Edf_auxiliary_data, const Shading_state_material) {}\n"
-        "float3 mdl_backface_emission_intensity(const Shading_state_material) { return float3(0, 0, 0); }\n";
+        "void mdl_backface_emission_auxiliary(inout Edf_auxiliary_data, const Shading_state_material) {}\n" +
+        color_sample_type + " mdl_backface_emission_intensity(const Shading_state_material) { return " + color_sample_zero + "; }\n";
     if (!interface_data.has_code_feature(Material_code_feature::VOLUME_ABSORPTION))
         m_hlsl_source_code +=
-        "float3 mdl_volume_absorption_coefficient(const Shading_state_material) { return float3(0, 0, 0); }\n";
+        color_sample_type + " mdl_volume_absorption_coefficient(const Shading_state_material) { return " + color_sample_zero + "; }\n";
     if (!interface_data.has_code_feature(Material_code_feature::VOLUME_SCATTERING))
         m_hlsl_source_code +=
-        "float3 mdl_volume_scattering_coefficient(const Shading_state_material) { return float3(0, 0, 0); }\n";
+        color_sample_type + " mdl_volume_scattering_coefficient(const Shading_state_material) { return " + color_sample_zero + "; }\n";
     if (!interface_data.has_code_feature(Material_code_feature::VOLUME_SCATTERING_DIR_BIAS))
         m_hlsl_source_code +=
         "float mdl_volume_scattering_directional_bias(const Shading_state_material) { return 0.0f; }\n";

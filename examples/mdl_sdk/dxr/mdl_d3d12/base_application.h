@@ -174,6 +174,8 @@ namespace mi { namespace examples { namespace mdl_d3d12
             , aov_to_render("")
             , enable_bsdf_flags(false)
             , allowed_scatter_mode(DF_FLAGS_ALLOW_REFLECT_AND_TRANSMIT)
+            , init_loop(true)
+            , enable_spectral(false)
 #if MDL_ENABLE_SLANG
             , use_slang(false)
 #endif
@@ -227,6 +229,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
         std::string shader_opt;
         std::string distill_target;
         bool distill_debug;
+        std::vector<std::string> plugins;
         Slot_mode slot_mode;
 
         // with MDL 1.9, custom material types are supported
@@ -236,6 +239,8 @@ namespace mi { namespace examples { namespace mdl_d3d12
 
         bool enable_bsdf_flags;
         Df_flags allowed_scatter_mode;
+        bool init_loop;
+        bool enable_spectral;
 
 #if MDL_ENABLE_SLANG
         bool use_slang;

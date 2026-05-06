@@ -129,7 +129,7 @@ public:
     /// Write an MDL section tag.
     ///
     /// \param tag  the MDL section tag to write.
-    virtual void write_section_tag(Serializer::Serializer_tags tag) = 0;
+    virtual void write_section_tag(unsigned tag) = 0;
 
     /// Write a (general) tag, assuming small values.
     ///

@@ -131,9 +131,10 @@ mi::neuraylib::Element_type Function_call_impl::get_element_type() const
 const char* Function_call_impl::get_function_definition() const
 {
     DB::Transaction* db_transaction = get_db_transaction();
-    DB::Tag tag = get_db_element()->get_function_definition(db_transaction);
-    if (!tag.is_valid())
+    DB::Tag tag = get_db_element()->get_function_definition( db_transaction);
+    if( !tag)
         return nullptr;
+
     return db_transaction->tag_to_name( tag);
 }
 

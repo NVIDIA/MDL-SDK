@@ -1,38 +1,41 @@
 Count of all scopes: 3
-ID 0: name = (null), pin count = 3, level = 0, parent ID = (null), removed = 0, lowest open transaction ID = 1
-ID 1: name = (null), pin count = 1, level = 1, parent ID = 0, removed = 0, lowest open transaction ID = 3
-ID 2: name = (null), pin count = 2, level = 1, parent ID = 0, removed = 0, lowest open transaction ID = 1
+Index 0: name = (null), pin count = 3, level = 0, parent ID = (null), removed = 0, lowest open transaction ID = 1
+Index 1: name = (null), pin count = 1, level = 1, parent ID = 0, removed = 0, lowest open transaction ID = 3
+Index 2: name = (null), pin count = 2, level = 1, parent ID = 0, removed = 0, lowest open transaction ID = 1
 
 Count of all transactions: 1
-ID 1: scope ID = 2, pin count = 2, state = OPEN, next sequence number = 0, visibility ID = 4294967295
+Index 1: scope ID = 2, pin count = 2, state = OPEN, next sequence number = 0, visibility ID = 4294967295
 
 Count of infos by distinct names: 1
 Index 0: name = "foo", count = 1
-    Index 0: scope ID = 1, transaction ID = 2 (cleared), version = 0, pin count = 0, tag = 1, privacy level = 1, removal = 0, references = { }
+    Index 0/0: scope ID = 1, creator transaction ID = 2, version = 0, creator transaction state = COMMITTED, visibility ID = (globally visible), pin count = 0, tag = 1, privacy level = 1, removal = 0, references = { }
 
 Count of infos by distinct tags: 1
 Index 0: tag = 1, count = 1, pin count = 1, removed = 0
-    Index 0: scope ID = 1, transaction ID = 2 (cleared), version = 0, pin count = 0, tag = 1, privacy level = 1, removal = 0, name = "foo", references = { }
+    Index 1/0: scope ID = 1, creator transaction ID = 2, version = 0, creator transaction state = COMMITTED, visibility ID = (globally visible), pin count = 0, tag = 1, privacy level = 1, removal = 0, name = "foo", references = { }
 
 Count of all infos: 1
 Count of infos by class IDs:
-     1 0x4d79656c "Myel"
+    1   0x4d79656c "Myel"
+
 
 Count of all scopes: 3
-ID 0: name = (null), pin count = 3, level = 0, parent ID = (null), removed = 0, lowest open transaction ID = 3
-ID 1: name = (null), pin count = 1, level = 1, parent ID = 0, removed = 0, lowest open transaction ID = 3
-ID 2: name = (null), pin count = 1, level = 1, parent ID = 0, removed = 0, lowest open transaction ID = 3
+Index 0: name = (null), pin count = 3, level = 0, parent ID = (null), removed = 0, lowest open transaction ID = 3
+Index 1: name = (null), pin count = 1, level = 1, parent ID = 0, removed = 0, lowest open transaction ID = 3
+Index 2: name = (null), pin count = 1, level = 1, parent ID = 0, removed = 0, lowest open transaction ID = 3
 
 Count of all transactions: 0
+
 Count of infos by distinct names: 1
 Index 0: name = "foo", count = 1
-    Index 0: scope ID = 1, transaction ID = 2 (cleared), version = 0, pin count = 0, tag = 1, privacy level = 1, removal = 0, references = { }
+    Index 0/0: scope ID = 1, creator transaction ID = 2, version = 0, creator transaction state = COMMITTED, visibility ID = (globally visible), pin count = 0, tag = 1, privacy level = 1, removal = 0, references = { }
 
 Count of infos by distinct tags: 1
 Index 0: tag = 1, count = 1, pin count = 1, removed = 0
-    Index 0: scope ID = 1, transaction ID = 2 (cleared), version = 0, pin count = 0, tag = 1, privacy level = 1, removal = 0, name = "foo", references = { }
+    Index 1/0: scope ID = 1, creator transaction ID = 2, version = 0, creator transaction state = COMMITTED, visibility ID = (globally visible), pin count = 0, tag = 1, privacy level = 1, removal = 0, name = "foo", references = { }
 
 Count of all infos: 1
 Count of infos by class IDs:
-     1 0x4d79656c "Myel"
+    1   0x4d79656c "Myel"
+
 

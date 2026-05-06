@@ -52,6 +52,7 @@ namespace THREAD_POOL { class Thread_pool; }
 
 namespace DBLIGHT {
 
+class Admin_server;
 class Info_manager;
 class Scope_impl;
 class Scope_manager;
@@ -89,8 +90,8 @@ public:
 /// The database class manages the whole database.
 ///
 /// Limits:
-/// - Tags: at most 2^32-1 tags. If exceeded, wraps around to the invalid tag, and subsequently
-///   allocates tags possibly still in use as new tags.
+/// - Tags: at most 2^32-1 tags. If exceeded, wraps around (skipping the invalid tag), and
+///   subsequently allocates tags possibly still in use as new tags.
 /// - Transaction IDs: wrap around at 2^32-1 is supported. At any time there must be at least a
 ///   range of 2^31 unused transaction IDs for proper ordering. Elements created more that 2^31
 ///   transactions ago will become invisible due to ordering problems.
@@ -123,51 +124,54 @@ public:
 
     // methods of DB::Database
 
-    DB::Scope* get_global_scope() override;
-    DB::Scope* lookup_scope( DB::Scope_id id) override;
-    DB::Scope* lookup_scope( const std::string& name) override;
-    bool remove_scope( DB::Scope_id id) override;
+    DB::Scope* get_global_scope() final;
+    DB::Scope* lookup_scope( DB::Scope_id id) final;
+    DB::Scope* lookup_scope( const std::string& name) final;
+    bool remove_scope( DB::Scope_id id) final;
 
-    void prepare_close() override { }
-    void close() override { delete this; }
+    void prepare_close() final { }
+    void close() final { delete this; }
 
-    void garbage_collection( int priority) override;
+    void garbage_collection( int priority) final;
 
     /// Note that the flexibility of lock IDs comes with a non-negligible overhead compared to
     /// a global mutex, in particular in case of lock contention.
-    void lock( mi::Uint32 lock_id) override;
-    bool unlock( mi::Uint32 lock_id) override;
-    void check_is_locked( mi::Uint32 lock_id) override;
+    void lock( mi::Uint32 lock_id) final;
+    bool unlock( mi::Uint32 lock_id) final;
+    void check_is_locked( mi::Uint32 lock_id) final;
 
     /// Note that the configured limits are simply ignored.
-    mi::Sint32 set_memory_limits( size_t low_water, size_t high_water) override;
-    void get_memory_limits( size_t& low_water, size_t& high_water) const override;
+    mi::Sint32 set_memory_limits( size_t low_water, size_t high_water) final;
+    void get_memory_limits( size_t& low_water, size_t& high_water) const final;
 
     /// Note that status listeners are never invoked since the status of the DBLIGHT database
     /// never changes (always DB_OK).
-    void register_status_listener( DB::IStatus_listener* listener) override;
+    void register_status_listener( DB::IStatus_listener* listener) final;
 
     /// Note that status listeners are never invoked since the status of the DBLIGHT database
     /// never changes (always DB_OK).
-    void unregister_status_listener( DB::IStatus_listener* listener) override;
+    void unregister_status_listener( DB::IStatus_listener* listener) final;
 
-    void register_transaction_listener( DB::ITransaction_listener* listener) override;
-    void unregister_transaction_listener( DB::ITransaction_listener* listener) override;
-    void register_scope_listener( DB::IScope_listener* listener) override;
-    void unregister_scope_listener( DB::IScope_listener* listener) override;
+    void register_transaction_listener( DB::ITransaction_listener* listener) final;
+    void unregister_transaction_listener( DB::ITransaction_listener* listener) final;
+    void register_scope_listener( DB::IScope_listener* listener) final;
+    void unregister_scope_listener( DB::IScope_listener* listener) final;
 
-    mi::Sint32 execute_fragmented( DB::Fragmented_job* job, size_t count) override;
+    mi::Sint32 execute_fragmented( DB::Fragmented_job* job, size_t count) final;
     mi::Sint32 execute_fragmented_async(
-        DB::Fragmented_job* job, size_t count, DB::IExecution_listener* listener) override;
+        DB::Fragmented_job* job, size_t count, DB::IExecution_listener* listener) final;
 
-    void suspend_current_job() override;
-    void resume_current_job() override;
-    void yield() override;
+    void suspend_current_job() final;
+    void resume_current_job() final;
+    void yield() final;
 
     // internal methods
 
+    /// \name Access to the cental database lock, managers and the thread pool
+    //@{
+
     /// Returns the central database lock.
-    THREAD::Shared_lock& get_lock() { return m_lock; }
+    Flexible_lock& get_lock() { return m_lock; }
 
     /// Returns the info manager.
     Info_manager* get_info_manager() { return m_info_manager.get(); }
@@ -188,6 +192,10 @@ public:
     /// Transaction_impl::construct_empty_element() is called or if the debug options for
     /// serializer checks are enabled.
     SERIAL::Deserialization_manager* get_deserialization_manager();
+
+    //@}
+    /// \name Debug configuration settings
+    //@{
 
     /// Indicates whether serialization should be tested in Transaction::store().
     bool get_check_serialization_store() const { return m_check_serialization_store; }
@@ -214,6 +222,10 @@ public:
     /// Indicates whether the maximum journal size.
     size_t get_journal_max_size() const { return m_journal_max_size; }
 
+    //@}
+    /// \name Listeners
+    //@{
+
     /// Notifies all status listeners.
     void notify_status_listeners( DB::Db_status argument);
 
@@ -233,15 +245,31 @@ public:
     void notify_scope_listeners(
         Scope_listener_method method, DB::Scope* argument);
 
+    //@}
+    /// \name Allocation of tags
+    //@{
+
     /// Used by transactions to allocate new tags.
     DB::Tag allocate_tag();
+
+    //@}
+    /// \name Dump support
+    //@{
 
     /// Dumps the state of the database to the stream.
     void dump( std::ostream& s, bool verbose = false, bool mask_pointer_values = false);
 
+    /// Dumps the state of the database to the stream (as HTML).
+    void dump_html( std::ostream& s, const Html_context& context);
+
+    //@}
+
 private:
     /// The central database lock.
-    THREAD::Shared_lock m_lock;
+    Flexible_lock m_lock;
+
+    /// \name Managers
+    //@{
 
     /// The info manager.
     std::unique_ptr<Info_manager> m_info_manager;
@@ -252,14 +280,15 @@ private:
     /// The transaction manager.
     std::unique_ptr<Transaction_manager> m_transaction_manager;
 
+    //@}
+    /// \name Constructor options
+    //@{
+
     /// The thread pool.
     THREAD_POOL::Thread_pool* m_thread_pool = nullptr;
 
     /// Indicates whether the thread pool is independent (or shared).
     bool m_independent_thread_pool = true;
-
-    /// The next tag to allocate.
-    std::atomic_uint32_t m_next_tag;
 
     /// The deserialization manager.
     SERIAL::Deserialization_manager* m_deserialization_manager = nullptr;
@@ -267,17 +296,12 @@ private:
     /// Indicates whether the deserialization manager is independent (or shared).
     bool m_independent_deserialization_manager = true;
 
-    /// The status listeners.
-    std::vector<mi::base::Handle<DB::IStatus_listener> > m_status_listeners;
+    /// Indicates whether the journal is enabled.
+    const bool m_journal_enabled;
 
-    /// The scope listeners.
-    std::vector<mi::base::Handle<DB::IScope_listener> > m_scope_listeners;
-
-    /// The transaction listeners.
-    std::vector<mi::base::Handle<DB::ITransaction_listener> > m_transaction_listeners;
-
-    /// All currently acquired DB locks.
-    std::map<mi::Uint32, Db_lock> m_db_locks;
+    //@}
+    /// \name Debug options
+    //@{
 
     /// Indicates whether serialization should be tested in Transaction::store().
     bool m_check_serialization_store = false;
@@ -305,17 +329,44 @@ private:
     /// Indicates whether the unsafe implementation of Transaction::name_to_tag() is enabled.
     bool m_unsafe_name_to_tag = false;
 
-    /// Indicates whether the journal is enabled.
-    const bool m_journal_enabled;
-
     /// The maximum journal size.
     size_t m_journal_max_size = 10'000'000;
+
+    //@}
+    /// \name Listeners and water marks
+    //@{
+
+    /// The status listeners.
+    std::vector<mi::base::Handle<DB::IStatus_listener> > m_status_listeners;
+
+    /// The scope listeners.
+    std::vector<mi::base::Handle<DB::IScope_listener> > m_scope_listeners;
+
+    /// The transaction listeners.
+    std::vector<mi::base::Handle<DB::ITransaction_listener> > m_transaction_listeners;
 
     /// The low water mark for the memory limits (ignored).
     size_t m_low_water = 0;
 
     /// The high water mark for the memory limits (ignored).
     size_t m_high_water = 0;
+
+    //@}
+    /// \name State
+    //@{
+
+    /// The next tag to allocate.
+    std::atomic_uint32_t m_next_tag;
+
+    /// All currently acquired DB locks.
+    std::map<mi::Uint32, Db_lock> m_db_locks;
+
+    //@}
+
+#ifdef DBLIGHT_ENABLE_ADMIN_SERVER
+    /// HTTP server to inspect the state of the database.
+    std::unique_ptr<Admin_server> m_admin_server;
+#endif // DBLIGHT_ENABLE_ADMIN_SERVER
 };
 
 } // namespace DBLIGHT

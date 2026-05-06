@@ -61,40 +61,6 @@ void toggle_flag(inout RadianceHitInfoFlags flags, RadianceHitInfoFlags to_toggl
 void remove_flag(inout RadianceHitInfoFlags flags, RadianceHitInfoFlags to_remove) { flags &= ~to_remove; }
 bool has_flag(RadianceHitInfoFlags flags, RadianceHitInfoFlags to_check) { return (flags & to_check) != 0; }
 
-// payload for RAY_TYPE_RADIANCE
-struct RadianceHitInfo
-{
-    float3 contribution;
-    float3 weight;
-
-    float3 ray_origin_next;
-    float3 ray_direction_next;
-
-    uint seed;
-    float last_bsdf_pdf;
-    uint flags;
-};
-
-// payload for RAY_TYPE_SHADOW
-struct ShadowHitInfo
-{
-    bool isHit;
-    uint seed;
-};
-
-// Attributes output by the ray tracing when hitting a surface
-struct Attributes
-{
-    float2 bary;
-};
-
-// Helper to make NaN and INF values visible in the output image.
-float3 encode_errors(float3 color)
-{
-    return any(isnan(color) | isinf(color)) ? float3(0.0f, 0.0f, 1.0e+30f) : color;
-}
-
-
 // renderer state object that is passed to mdl runtime functions
 struct DXRRendererState
 {
@@ -117,6 +83,10 @@ struct DXRRendererState
 #define RENDERER_STATE_TYPE DXRRendererState
 
 
+// include the target types here, as it depends on RENDERER_STATE_TYPE
+#include "content/mdl_target_code_types.hlsl"
+
+
 // Positions, normals, and tangents are mandatory for this renderer. The vertex buffer always
 // contains this data at the beginning of the (interleaved) per vertex data.
 #define VertexByteOffset uint
@@ -125,8 +95,74 @@ struct DXRRendererState
 #define VERT_BYTEOFFSET_TANGENT     24
 
 
-// include the target types here, as it depends on RENDERER_STATE_TYPE
-#include "content/mdl_target_code_types.hlsl"
+// payload for RAY_TYPE_RADIANCE
+struct RadianceHitInfo
+{
+    Color_sample weight;
+    float3 contribution;
+
+    float3 ray_origin_next;
+    float3 ray_direction_next;
+
+    uint seed;
+    float last_bsdf_pdf;
+    uint flags;
+
+#if defined(MDL_SPECTRAL_RENDERING)
+    // Active wavelengths (in nm) for spectral rendering.
+    Spectral_sample spectral_wavelengths;
+    float spectral_pdf_ratios[MDL_DF_SPECTRAL_SAMPLES - 1];
+
+    float update_spectral_pdf_ratios(Spectral_sample pdfs, bool specular, bool specular_dispersion)
+    {
+        // main wavelength has been used for sampling, so MIS weight is
+        // w = p[0] / sum(p) = 1 / (sum(p) / p[0])
+        // for pdf p up to this point in the path
+
+        // here we:
+        // - update the pdf ratios
+        // - compute the new weight
+        // - return factor that changes from old to new weight
+
+        if (specular && !specular_dispersion) // specular without dispersion: nothing to do
+            return 1.0f;
+
+        if (!specular_dispersion && pdfs.values[0] <= 0.0f) // this really has zero probablity
+            return 0.0f;
+
+        float inv_w_old = 1.0f;
+        float inv_w_new = 1.0f;
+        const float inv_p0 = specular_dispersion ? 0.0f : (1.0f / pdfs.values[0]);
+        [unroll] for (int i = 1; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        {
+            inv_w_old += spectral_pdf_ratios[i - 1];
+            spectral_pdf_ratios[i - 1] *= pdfs.values[i] * inv_p0;
+            inv_w_new += spectral_pdf_ratios[i - 1];
+        }
+
+        return inv_w_old / inv_w_new;
+    }
+#endif
+};
+
+// payload for RAY_TYPE_SHADOW
+struct ShadowHitInfo
+{
+    bool isHit;
+    uint seed;
+};
+
+// Attributes output by the ray tracing when hitting a surface
+struct Attributes
+{
+    float2 bary;
+};
+
+// Helper to make NaN and INF values visible in the output image.
+float3 encode_errors(float3 color)
+{
+    return any(isnan(color) | isinf(color)) ? float3(0.0f, 0.0f, 1.0e+30f) : color;
+}
 
 
 //-------------------------------------------------------------------------------------------------
@@ -194,6 +230,10 @@ struct SceneConstants
 
     // for counting SSS steps separate from 'max_ray_depth'
     uint max_sss_depth;
+
+    // spectral wavelength range [nm]
+    float spectral_min_wavelength;
+    float spectral_max_wavelength;
 };
 
 //-------------------------------------------------------------------------------------------------
@@ -509,6 +549,12 @@ struct SceneDataInfo
 
 
 //-------------------------------------------------------------------------------------------------
+// make all global resources available to all shaders
+//-------------------------------------------------------------------------------------------------
+#include "content/resource_bindings.hlsl"
+
+
+//-------------------------------------------------------------------------------------------------
 // random number generator based on the Optix SDK
 //-------------------------------------------------------------------------------------------------
 uint tea(uint N, uint val0, uint val1)
@@ -605,8 +651,120 @@ float3 offset_ray(const float3 p, const float3 n)
 }
 
 //-------------------------------------------------------------------------------------------------
-// make all global resources available to all shaders
+// Spectral rendering helpers
 //-------------------------------------------------------------------------------------------------
-#include "content/resource_bindings.hlsl"
+
+#if defined(MDL_SPECTRAL_RENDERING)
+
+// D65 standard illuminant spectral power distribution, 360-830 nm in 5 nm steps (95 entries).
+// Scaled so that the luminance integral (Y channel) equals 1.
+static const float s_cie_d65[95] = {
+    6.462114e-06f, 6.839740e-06f, 7.217367e-06f, 7.070938e-06f,
+    6.924510e-06f, 7.248223e-06f, 7.571951e-06f, 9.519149e-06f,
+    1.146636e-05f, 1.207124e-05f, 1.267613e-05f, 1.281093e-05f,
+    1.294573e-05f, 1.247813e-05f, 1.201053e-05f, 1.327021e-05f,
+    1.452989e-05f, 1.537108e-05f, 1.621241e-05f, 1.626811e-05f,
+    1.632381e-05f, 1.611929e-05f, 1.591492e-05f, 1.598850e-05f,
+    1.606207e-05f, 1.556936e-05f, 1.507664e-05f, 1.511419e-05f,
+    1.515188e-05f, 1.504436e-05f, 1.493684e-05f, 1.472817e-05f,
+    1.451950e-05f, 1.472027e-05f, 1.492118e-05f, 1.469367e-05f,
+    1.446616e-05f, 1.444122e-05f, 1.441642e-05f, 1.413611e-05f,
+    1.385581e-05f, 1.360185e-05f, 1.334788e-05f, 1.331004e-05f,
+    1.327220e-05f, 1.278016e-05f, 1.228811e-05f, 1.237960e-05f,
+    1.247109e-05f, 1.244288e-05f, 1.241468e-05f, 1.228302e-05f,
+    1.215136e-05f, 1.184583e-05f, 1.154031e-05f, 1.156876e-05f,
+    1.159720e-05f, 1.134278e-05f, 1.108836e-05f, 1.110137e-05f,
+    1.111438e-05f, 1.125732e-05f, 1.140026e-05f, 1.112358e-05f,
+    1.084691e-05f, 1.025367e-05f, 9.660451e-06f, 9.791236e-06f,
+    9.922021e-06f, 1.011183e-05f, 1.030166e-05f, 9.418694e-06f,
+    8.535733e-06f, 9.109474e-06f, 9.683216e-06f, 1.004356e-05f,
+    1.040391e-05f, 9.607591e-06f, 8.811283e-06f, 7.621443e-06f,
+    6.431617e-06f, 7.844023e-06f, 9.256429e-06f, 9.019315e-06f,
+    8.782200e-06f, 8.846020e-06f, 8.909840e-06f, 8.573684e-06f,
+    8.237542e-06f, 7.718434e-06f, 7.199340e-06f, 7.579100e-06f,
+    7.958860e-06f, 8.157816e-06f, 8.356785e-06f
+};
+
+static float lookup_d65(float lambda)
+{
+    float f = (lambda - 360.0f) / (830.0f - 360.0f);
+    if (f < 0.0f || f > 1.0f)
+        return 0.0f;
+    f *= float(95 - 1);
+    uint b0 = min((uint)f, 95u - 1u);
+    uint b1 = (b0 < (95u - 1u)) ? (b0 + 1u) : b0;
+    float w1 = f - float(b0);
+    return s_cie_d65[b0] * (1.0f - w1) + s_cie_d65[b1] * w1;
+}
+
+// RGB-to-spectral conversion.
+// Uses Jendersie - "Fast Spectral Upsampling of Volume Attenuation Coefficients".
+Spectral_sample rgb_to_spectral(float3 rgb, Spectral_sample lambdas, bool is_emission)
+{
+    Spectral_sample s;
+    [unroll] for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+    {
+        float lambda = lambdas.values[i];
+        s.values[i] = (lambda < 485.0f) ? rgb.b : ((lambda < 595.9f) ? rgb.g : rgb.r);
+
+        // for emission, apply spectral illuminant
+        if (is_emission)
+            s.values[i] *= lookup_d65(lambda);
+    }
+    return s;
+}
+
+// Convert a spectral radiance array to CIE XYZ and then to linear sRGB.
+// Uses Wyman et al. - "Simple Analytic Approximations to the CIE XYZ Color Matching Functions".
+float3 spectral_to_rgb(Spectral_sample values, Spectral_sample lambdas, bool is_reflectivity)
+{
+    float3 xyz = float3(0.0f, 0.0f, 0.0f);
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+    {
+        float lambda = lambdas.values[i];
+        if (lambda < 360.0f || lambda > 830.0f)
+            continue;
+
+        // for reflectivity values we need to multiply by the spectral whitepoint of the RGB color space (normalized to luminance 1)
+        const float factor = is_reflectivity ? lookup_d65(lambda) : 1.0f;
+        {
+            const float p1 = (lambda - 442.0f) * ((lambda < 442.0f) ? 0.0624f : 0.0374f);
+            const float p2 = (lambda - 599.8f) * ((lambda < 599.8f) ? 0.0264f : 0.0323f);
+            const float p3 = (lambda - 501.1f) * ((lambda < 501.1f) ? 0.0490f : 0.0382f);
+            xyz.x += (0.362f * exp(-0.5f * p1 * p1)
+                    + 1.056f * exp(-0.5f * p2 * p2)
+                    - 0.065f * exp(-0.5f * p3 * p3)) * values.values[i] * factor;
+        }
+        {
+            const float p1 = (lambda - 568.8f) * ((lambda < 568.8f) ? 0.0213f : 0.0247f);
+            const float p2 = (lambda - 530.9f) * ((lambda < 530.9f) ? 0.0613f : 0.0322f);
+            xyz.y += (0.821f * exp(-0.5f * p1 * p1)
+                    + 0.286f * exp(-0.5f * p2 * p2)) * values.values[i] * factor;
+        }
+        {
+            const float p1 = (lambda - 437.0f) * ((lambda < 437.0f) ? 0.0845f : 0.0278f);
+            const float p2 = (lambda - 459.0f) * ((lambda < 459.0f) ? 0.0385f : 0.0725f);
+            xyz.z += (1.217f * exp(-0.5f * p1 * p1)
+                    + 0.681f * exp(-0.5f * p2 * p2)) * values.values[i] * factor;
+        }
+    }
+
+    // apply scaling from radiometric to photometric units
+    xyz *= 683.002f;
+
+    // MDL_DF_SPECTRAL_SAMPLES samples uniformly on wavelength range
+    if (scene_constants.spectral_max_wavelength != scene_constants.spectral_min_wavelength) {
+        xyz *= (scene_constants.spectral_max_wavelength - scene_constants.spectral_min_wavelength)
+            / float(MDL_DF_SPECTRAL_SAMPLES);
+    }
+
+    // XYZ -> linear sRGB
+    return float3(
+        dot(xyz, float3( 3.240600f, -1.537200f, -0.498600f)),
+        dot(xyz, float3(-0.968900f,  1.875800f,  0.041500f)),
+        dot(xyz, float3( 0.055700f, -0.204000f,  1.057000f)));
+}
+
+#endif // MDL_SPECTRAL_RENDERING
 
 #endif

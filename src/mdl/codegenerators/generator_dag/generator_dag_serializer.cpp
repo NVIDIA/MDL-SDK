@@ -487,8 +487,7 @@ void DAG_deserializer::read_dags(DAG_node_factory_impl &node_factory)
                 IValue const *value   = read_encoded<IValue const *>();
                 DAG_DbgInfo  dbg_info = read_encoded<DAG_DbgInfo>();
 
-                (void)dbg_info; // unused yet
-                DAG_node const *n = node_factory.create_constant(value);
+                DAG_node const *n = node_factory.create_constant(value, dbg_info);
 
                 register_ir_node(t, n);
             }

@@ -107,6 +107,9 @@ using mi::mdl::as_or_null;
 using mi::mdl::is;
 using mi::mdl::cast;
 
+// the neuray representation does not support debug info, hence there is none in translation
+#define NO_DBG mi::mdl::DAG_DbgInfo()
+
 // ********** Conversion from mi::mdl to mi::neuraylib *********************************************
 
 mi::neuraylib::IFunction_definition::Semantics core_semantics_to_ext_semantics(
@@ -422,9 +425,13 @@ mi::neuraylib::IFunction_definition::Semantics core_semantics_to_ext_semantics(
         case mi::mdl::IDefinition::DS_BAKING_BAKE_TO_TEXTURE_ANNOTATION:
         case mi::mdl::IDefinition::DS_INTRINSIC_DAG_SET_OBJECT_ID:
         case mi::mdl::IDefinition::DS_INTRINSIC_DAG_SET_TRANSFORMS:
-        case mi::mdl::IDefinition::DS_INTRINSIC_DAG_CALL_LAMBDA:
         case mi::mdl::IDefinition::DS_INTRINSIC_DAG_MAKE_DERIV:
+        case mi::mdl::IDefinition::DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_IOR:
+        case mi::mdl::IDefinition::DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_REFLECTANCE:
+        case mi::mdl::IDefinition::DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_LUMINANCE:
+        case mi::mdl::IDefinition::DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_VOLUME_COEFFICIENT:
         case mi::mdl::IDefinition::DS_INTRINSIC_JIT_LOOKUP:
+        case mi::mdl::IDefinition::DS_INTRINSIC_DIST_BSDF_MARKER:
             ASSERT( M_SCENE, false);
             return mi::neuraylib::IFunction_definition::DS_UNKNOWN;
     }
@@ -765,7 +772,7 @@ mi::neuraylib::Material_opacity core_opacity_to_ext_opacity(
     return mi::neuraylib::OPACITY_UNKNOWN;
 }
 
-mi::mdl::IMaterial_instance::Slot ext_slot_to_core_lost(
+mi::mdl::IMaterial_instance::Slot ext_slot_to_core_slot(
     mi::neuraylib::Material_slot slot)
 {
     using Core_material_instance = mi::mdl::IMaterial_instance;
@@ -2426,17 +2433,16 @@ Mdl_compiled_material* get_default_compiled_material( DB::Transaction* transacti
     DB::Tag tag = transaction->name_to_tag( name.c_str());
     DB::Access<Mdl_function_definition> md( tag, transaction);
 
-    Mdl_function_call* fc = md->create_function_call( transaction, /*arguments*/ nullptr);
+    std::unique_ptr<Mdl_function_call> fc(
+        md->create_function_call( transaction, /*arguments*/ nullptr));
     // TODO Move to the calling code and adjust the interface documentation.
     if( !fc)
         LOG::mod_log->fatal( M_SCENE, LOG::Mod_log::C_DATABASE,
             "Failed to compile default material.");
 
     Execution_context context;
-    Mdl_compiled_material* cm = fc->create_compiled_material(
+    return fc->create_compiled_material(
         transaction, /*class_compilation*/ false, /*target_type*/ nullptr, &context);
-    delete fc;
-    return cm;
 }
 
 std::string get_mdl_module_name( const IType* type)
@@ -2621,13 +2627,14 @@ void get_texture_attributes(
     first_frame = 0;
     last_frame  = 0;
 
-    if( !tag || transaction->get_class_id( tag) != TEXTURE::ID_TEXTURE)
-        return;
     DB::Access<TEXTURE::Texture> db_texture( tag, transaction);
-    tag = db_texture->get_image();
-    if( !tag || transaction->get_class_id( tag) != DBIMAGE::ID_IMAGE)
+    if( !db_texture)
         return;
-    DB::Access<DBIMAGE::Image> db_image( tag, transaction);
+
+    DB::Tag image_tag = db_texture->get_image();
+    DB::Access<DBIMAGE::Image> db_image( image_tag, transaction);
+    if( !db_image)
+        return;
     if( !db_image->is_valid())
         return;
 
@@ -2658,13 +2665,14 @@ void get_texture_attributes(
     first_frame = 0;
     last_frame  = 0;
 
-    if( !tag || transaction->get_class_id( tag) != TEXTURE::ID_TEXTURE)
-        return;
     DB::Access<TEXTURE::Texture> db_texture( tag, transaction);
-    tag = db_texture->get_image();
-    if( !tag || transaction->get_class_id( tag) != DBIMAGE::ID_IMAGE)
+    if( !db_texture)
         return;
-    DB::Access<DBIMAGE::Image> db_image( tag, transaction);
+
+    DB::Tag image_tag = db_texture->get_image();
+    DB::Access<DBIMAGE::Image> db_image( image_tag, transaction);
+    if( !db_image)
+        return;
     if( !db_image->is_valid())
         return;
 
@@ -2703,10 +2711,9 @@ void get_light_profile_attributes(
     power   = 0.0f;
     maximum = 0.0f;
 
-    if( !tag || transaction->get_class_id( tag) != LIGHTPROFILE::ID_LIGHTPROFILE)
-        return;
-
     DB::Access<LIGHTPROFILE::Lightprofile> db_lightprofile( tag, transaction);
+    if( !db_lightprofile)
+        return;
     if( !db_lightprofile->is_valid())
         return;
 
@@ -2722,10 +2729,9 @@ void get_bsdf_measurement_attributes(
 {
     valid = false;
 
-    if( !tag || transaction->get_class_id( tag) != BSDFM::ID_BSDF_MEASUREMENT)
-        return;
-
     DB::Access<BSDFM::Bsdf_measurement> db_bsdf_measurement( tag, transaction);
+    if( !db_bsdf_measurement)
+        return;
     if( !db_bsdf_measurement->is_valid())
         return;
 
@@ -2752,7 +2758,7 @@ const mi::mdl::DAG_node* Dag_importer::import( const mi::mdl::DAG_node* node)
             const auto* constant = cast<mi::mdl::DAG_constant>( node);
             const mi::mdl::IValue* value = constant->get_value();
             const mi::mdl::IValue* cloned_value = m_value_factory->import( value);
-            return m_dag_builder->create_constant( cloned_value);
+            return m_dag_builder->create_constant( cloned_value, import( constant->get_dbg_info()));
         }
         case mi::mdl::DAG_node::EK_CALL: {
             const auto* call = cast<mi::mdl::DAG_call>( node);
@@ -2771,7 +2777,7 @@ const mi::mdl::DAG_node* Dag_importer::import( const mi::mdl::DAG_node* node)
                 cloned_args.data(),
                 n,
                 cloned_return_type,
-                call->get_dbg_info());
+                import( call->get_dbg_info()));
         }
         case mi::mdl::DAG_node::EK_PARAMETER: {
             const auto* parameter = cast<mi::mdl::DAG_parameter>( node);
@@ -2779,7 +2785,7 @@ const mi::mdl::DAG_node* Dag_importer::import( const mi::mdl::DAG_node* node)
             return m_dag_builder->create_parameter(
                 cloned_type,
                 parameter->get_index(),
-                parameter->get_dbg_info());
+                import( parameter->get_dbg_info()));
         }
         case mi::mdl::DAG_node::EK_TEMPORARY: {
             const auto* temporary = cast<mi::mdl::DAG_temporary>( node);
@@ -2811,6 +2817,12 @@ const mi::mdl::IValue* Dag_importer::import( const mi::mdl::IValue* value)
 const mi::mdl::IType* Dag_importer::import( const mi::mdl::IType* type)
 {
     return m_type_factory->import( type);
+}
+
+mi::mdl::DAG_DbgInfo Dag_importer::import( mi::mdl::DAG_DbgInfo dbg)
+{
+    // FIXME: This is wrong, as two different DAG_units might have different file tables.
+    return dbg;
 }
 
 const mi::mdl::DAG_node* Dag_importer::error_node()
@@ -2892,7 +2904,7 @@ const mi::mdl::DAG_node* Mdl_dag_builder::int_expr_constant_to_core_dag_node(
         m_transaction, m_value_factory, core_type, value.get());
     if( !core_value)
         return error_node();
-    return m_dag_builder->create_constant( core_value);
+    return m_dag_builder->create_constant( core_value, NO_DBG);
 }
 
 const mi::mdl::DAG_node* Mdl_dag_builder::int_expr_call_to_core_dag_node(
@@ -2907,8 +2919,8 @@ const mi::mdl::DAG_node* Mdl_dag_builder::int_expr_call_to_core_dag_node(
     if( it != m_converted_call_expressions.end())
         return it->second;
 
-    SERIAL::Class_id class_id = m_transaction->get_class_id( tag);
-    if( class_id != ID_MDL_FUNCTION_CALL) {
+    DB::Access<Mdl_function_call> call( tag, m_transaction);
+    if( !call) {
         const char* name = m_transaction->tag_to_name( tag);
         ASSERT( M_SCENE, name);
         LOG::mod_log->error( M_SCENE, LOG::Mod_log::C_DATABASE,
@@ -2916,12 +2928,11 @@ const mi::mdl::DAG_node* Mdl_dag_builder::int_expr_call_to_core_dag_node(
         return add_cache_entry( tag, error_node());
     }
 
-    DB::Access<Mdl_function_call> call( tag, m_transaction);
     DB::Tag module_tag = call->get_module( m_transaction);
     ASSERT( M_SCENE, module_tag);
     if( !module_tag)
         return add_cache_entry(
-            tag, m_dag_builder->create_constant( m_value_factory->create_bad()));
+            tag, m_dag_builder->create_constant( m_value_factory->create_bad(), NO_DBG));
 
     DB::Access<Mdl_module> module( module_tag, m_transaction);
     mi::base::Handle<const IExpression_list> arguments( call->get_arguments());
@@ -2946,13 +2957,13 @@ const mi::mdl::DAG_node* Mdl_dag_builder::int_expr_direct_call_to_core_dag_node(
 {
     DB::Tag tag = expr->get_definition( m_transaction);
     if( !tag)
-        return m_dag_builder->create_constant( m_value_factory->create_bad());
+        return m_dag_builder->create_constant( m_value_factory->create_bad(), NO_DBG);
 
     DB::Access<Mdl_function_definition> definition( tag, m_transaction);
     const char* module_db_name = definition->get_module_db_name();
     DB::Access<Mdl_module> module( module_db_name, m_transaction);
     if( !module)
-        return m_dag_builder->create_constant( m_value_factory->create_bad());
+        return m_dag_builder->create_constant( m_value_factory->create_bad(), NO_DBG);
 
     bool is_material = definition->is_material();
     const char* definition_db_name = m_transaction->tag_to_name( tag);
@@ -2985,7 +2996,7 @@ const mi::mdl::DAG_node* Mdl_dag_builder::int_expr_parameter_to_core_dag_node(
     mi::Size index = expr->get_index();
 
     if( index >= m_parameter_types.size() || !m_parameter_types[index]) {
-        // Dynamic adjustment of m_paramter_types should only be necessary if no compiled material/
+        // Dynamic adjustment of m_parameter_types should only be necessary if no compiled material/
         // core material instance is available, e.g., for functions. Note that unused parameters
         // remain uninitialized then. TODO Use Mdl_function_call/definition to obtain that
         // information.
@@ -2997,7 +3008,7 @@ const mi::mdl::DAG_node* Mdl_dag_builder::int_expr_parameter_to_core_dag_node(
 
     ASSERT( M_SCENE, index < m_parameter_types.size() && m_parameter_types[index]);
     ASSERT( M_SCENE, m_parameter_types[index] == core_type);
-    return m_dag_builder->create_parameter( core_type, int( index), mi::mdl::DAG_DbgInfo());
+    return m_dag_builder->create_parameter( core_type, int( index), NO_DBG);
 }
 
 const mi::mdl::DAG_node* Mdl_dag_builder::int_expr_temporary_to_core_dag_node(
@@ -3147,7 +3158,7 @@ const mi::mdl::DAG_node* Mdl_dag_builder::int_expr_call_to_core_dag_node_shared(
         core_arguments.data(),
         core_arguments.size(),
         return_type,
-        mi::mdl::DAG_DbgInfo());
+        NO_DBG);
 }
 
 const mi::mdl::DAG_node* Mdl_dag_builder::add_cache_entry(
@@ -3216,17 +3227,16 @@ const mi::mdl::IGenerated_code_dag* Mdl_call_resolver::get_owner_dag( const char
     return module->get_code_dag();
 }
 
-// Constructor.
 Mdl_call_resolver_ext::Mdl_call_resolver_ext(
     DB::Transaction* transaction,
-    mi::mdl::IModule const *module)
-    : Base(transaction)
-    , m_module(module)
-    , m_module_core_name(module->get_name())
+    const mi::mdl::IModule* module)
+  : Base( transaction),
+    m_module( module),
+    m_module_core_name( module->get_name())
 {
 }
 
-const mi::mdl::IModule* Mdl_call_resolver_ext::get_owner_module(const char* name) const
+const mi::mdl::IModule* Mdl_call_resolver_ext::get_owner_module( const char* name) const
 {
     if( !is_in_module( name, m_module_core_name))
         return Base::get_owner_module( name);
@@ -3235,7 +3245,7 @@ const mi::mdl::IModule* Mdl_call_resolver_ext::get_owner_module(const char* name
     const mi::mdl::Module* module = mi::mdl::impl_cast<mi::mdl::Module>( m_module);
     const auto* result = module->find_signature(
         name + m_module_core_name.size() + 2, /*only_exported*/ false);
-    if( result != nullptr) {
+    if( result) {
         m_module->retain();
         return m_module;
     }
@@ -3568,6 +3578,10 @@ const IType* core_type_to_int_type(
             return tf->create_texture( shape_int);
         }
 
+        case mi::mdl::IType::TK_SPECTRAL_SAMPLE:
+        case mi::mdl::IType::TK_SPECTRUM:
+            ASSERT( M_SCENE, false && "NYI"); return nullptr;
+
         case mi::mdl::IType::TK_FUNCTION:
             ASSERT( M_SCENE, false); return nullptr;
         case mi::mdl::IType::TK_PTR:
@@ -3746,6 +3760,11 @@ IValue* Mdl_dag_converter::core_value_to_int_value(
             mi::Float32 blue  = value_rgb_color->get_value( 2)->get_value();
             return m_vf->create_color( red, green, blue);
         }
+        case mi::mdl::IValue::VK_SPECTRUM:
+        case mi::mdl::IValue::VK_SPECTRAL_SAMPLE: {
+            ASSERT( M_SCENE, !"NYI no spectrum support in Neuray");
+            return nullptr;
+        }
         case mi::mdl::IValue::VK_STRUCT: {
             const auto* value_struct = cast<mi::mdl::IValue_struct>( value);
             mi::base::Handle<const IType_struct> type_struct_int;
@@ -3813,8 +3832,8 @@ IValue* Mdl_dag_converter::core_value_to_int_value(
 
                 // take data from DB element
                 tag = find_resource_tag( value_texture);
-                if( tag && m_transaction->get_class_id( tag) == TEXTURE::ID_TEXTURE) {
-                    DB::Access<TEXTURE::Texture> texture( tag, m_transaction);
+                DB::Access<TEXTURE::Texture> texture( tag, m_transaction);
+                if( texture) {
                     // TODO add uvtile/animated texture support
                     gamma = texture->get_effective_gamma( m_transaction, 0, 0);
                     selector_buf = texture->get_selector( m_transaction);
@@ -4348,12 +4367,14 @@ void Mdl_dag_converter_light::process_value( const mi::mdl::IValue* value)
         case mi::mdl::IValue::VK_DOUBLE:
         case mi::mdl::IValue::VK_STRING:
         case mi::mdl::IValue::VK_INVALID_REF:
-            break;
-
         case mi::mdl::IValue::VK_VECTOR:
         case mi::mdl::IValue::VK_MATRIX:
-        case mi::mdl::IValue::VK_ARRAY:
         case mi::mdl::IValue::VK_RGB_COLOR:
+        case mi::mdl::IValue::VK_SPECTRUM:
+        case mi::mdl::IValue::VK_SPECTRAL_SAMPLE:
+            break;
+
+        case mi::mdl::IValue::VK_ARRAY:
         case mi::mdl::IValue::VK_STRUCT: {
             const auto* value_compound = cast<mi::mdl::IValue_compound>( value);
             int n = value_compound->get_component_count();
@@ -4673,26 +4694,22 @@ const mi::mdl::IValue* int_value_texture_to_core_value(
     DB::Tag tag = texture->get_value();
     if( tag) {
 
-        SERIAL::Class_id class_id = transaction->get_class_id( tag);
-        if( class_id != TEXTURE::Texture::id) {
+        DB::Access<TEXTURE::Texture> db_texture( tag, transaction);
+        if( !db_texture) {
             const char* name = transaction->tag_to_name( tag);
             LOG::mod_log->error( M_SCENE, LOG::Mod_log::C_DATABASE,
                 "Incorrect type for texture resource \"%s\".", name ? name : "");
             return vf->create_invalid_ref( core_type);
         }
-
-        DB::Access<TEXTURE::Texture> db_texture( tag, transaction);
         DB::Tag image_tag = db_texture->get_image();
         if( image_tag) {
-            class_id = transaction->get_class_id( image_tag);
-            if( class_id != DBIMAGE::Image::id) {
+            DB::Access<DBIMAGE::Image> image( image_tag, transaction);
+            if( !image) {
                 const char* name = transaction->tag_to_name( image_tag);
                 LOG::mod_log->error( M_SCENE, LOG::Mod_log::C_DATABASE,
                     "Incorrect type for image resource \"%s\".", name ? name : "");
                 return vf->create_invalid_ref( core_type);
             }
-
-            DB::Access<DBIMAGE::Image> image( image_tag, transaction);
             resource_name = image->get_mdl_file_path();
             tag_version = transaction->get_tag_version( tag);
             image_volume_tag_version = transaction->get_tag_version( image_tag);
@@ -4740,15 +4757,13 @@ const mi::mdl::IValue* int_value_light_profile_to_core_value(
     DB::Tag tag = light_profile->get_value();
     if( tag) {
 
-        SERIAL::Class_id class_id = transaction->get_class_id( tag);
-        if( class_id != LIGHTPROFILE::Lightprofile::id) {
+        DB::Access<LIGHTPROFILE::Lightprofile> db_lightprofile( tag, transaction);
+        if( !db_lightprofile) {
             const char* name = transaction->tag_to_name( tag);
             LOG::mod_log->error( M_SCENE, LOG::Mod_log::C_DATABASE,
                 "Incorrect type for light profile resource \"%s\".", name ? name : "");
             return vf->create_invalid_ref( core_type);
         }
-
-        DB::Access<LIGHTPROFILE::Lightprofile> db_lightprofile( tag, transaction);
         resource_name = db_lightprofile->get_mdl_file_path();
         tag_version = transaction->get_tag_version( tag);
 
@@ -4785,15 +4800,13 @@ const mi::mdl::IValue* int_value_bsdf_measurement_to_core_value(
     DB::Tag tag = bsdf_measurement->get_value();
     if( tag) {
 
-        SERIAL::Class_id class_id = transaction->get_class_id( tag);
-        if( class_id != BSDFM::Bsdf_measurement::id) {
+        DB::Access<BSDFM::Bsdf_measurement> db_bsdf_measurement( tag, transaction);
+        if( !db_bsdf_measurement) {
             const char* name = transaction->tag_to_name( tag);
             LOG::mod_log->error( M_SCENE, LOG::Mod_log::C_DATABASE,
                 "Incorrect type for BSDF measurement resource \"%s\".", name ? name : "");
             return vf->create_invalid_ref( core_type);
         }
-
-        DB::Access<BSDFM::Bsdf_measurement> db_bsdf_measurement( tag, transaction);
         resource_name = db_bsdf_measurement->get_mdl_file_path();
         tag_version = transaction->get_tag_version( tag);
 
@@ -5182,14 +5195,12 @@ IExpression* int_expr_call_to_int_expr_direct_call(
                 expr->get_interface<IExpression_call>());
             mi::base::Handle<const IType> type( call->get_type());
             DB::Tag tag = call->get_call();
-            SERIAL::Class_id class_id = transaction->get_class_id( tag);
-            if( class_id != ID_MDL_FUNCTION_CALL) {
+            DB::Access<Mdl_function_call> function_call( tag, transaction);
+            if( !function_call) {
                add_error_message(
                    context, "The call expression refers to an unsupported type.", -1);
                return nullptr;
             }
-
-            DB::Access<Mdl_function_call> function_call( tag, transaction);
             return int_expr_call_to_int_expr_direct_call(
                 transaction, ef, type.get(), function_call.get_ptr(), call_context, context);
         }
@@ -5332,10 +5343,9 @@ bool return_type_is_varying( DB::Transaction* transaction, const IExpression* ex
             mi::base::Handle<const IExpression_call> expr_call(
                 expr->get_interface<IExpression_call>());
             DB::Tag tag = expr_call->get_call();
-            if( transaction->get_class_id( tag) != ID_MDL_FUNCTION_CALL)
-                return false;
-
             DB::Access<Mdl_function_call> fc( tag, transaction);
+            if( !fc)
+                return false;
             mi::base::Handle<const IType> return_type( fc->get_return_type());
             mi::Uint32 return_type_modifiers = return_type->get_all_type_modifiers();
             bool return_type_uniform = (return_type_modifiers & IType::MK_UNIFORM) != 0;
@@ -5400,11 +5410,9 @@ bool is_declarative_call( DB::Transaction* transaction, const IExpression* expr)
             mi::base::Handle<const IExpression_call> expr_call(
                 expr->get_interface<IExpression_call>());
             DB::Tag tag = expr_call->get_call();
-            if( transaction->get_class_id( tag) != ID_MDL_FUNCTION_CALL)
-                return false;
 
             DB::Access<Mdl_function_call> fc( tag, transaction);
-            return fc->is_declarative();
+            return fc ? fc->is_declarative() : false;
         }
 
         case IExpression::EK_DIRECT_CALL: {
@@ -5461,13 +5469,11 @@ IExpression* deep_copy(
             mi::base::Handle<const IExpression_call> expr_call(
                 expr->get_interface<IExpression_call>());
             DB::Tag tag = expr_call->get_call();
-            SERIAL::Class_id class_id = transaction->get_class_id( tag);
-            if( class_id != ID_MDL_FUNCTION_CALL) {
+            DB::Access<Mdl_function_call> original( tag, transaction);
+            if( !original) {
                 ASSERT( M_SCENE, false);
                 return nullptr;
             }
-
-            DB::Access<Mdl_function_call> original( tag, transaction);
             std::unique_ptr<Mdl_function_call> copy(
                 static_cast<Mdl_function_call*>( original->copy()));
             copy->make_mutable( transaction);
@@ -5662,8 +5668,8 @@ mi::neuraylib::Mdl_version get_min_required_mdl_version(
             mi::base::Handle<const IValue_texture> texture(
                 value->get_interface<IValue_texture>());
             DB::Tag tag = texture->get_value();
-            if( tag && transaction->get_class_id( tag) == TEXTURE::ID_TEXTURE) {
-                DB::Access<TEXTURE::Texture> db_texture( tag, transaction);
+            DB::Access<TEXTURE::Texture> db_texture( tag, transaction);
+            if( db_texture) {
                 std::string selector = db_texture->get_selector( transaction);
                 if( !selector.empty()) {
                     mi::neuraylib::Mdl_version v = mi::neuraylib::MDL_VERSION_1_7;
@@ -5720,13 +5726,12 @@ mi::neuraylib::Mdl_version get_min_required_mdl_version(
             if( !call_tag)
                 return mi::neuraylib::MDL_VERSION_INVALID;
 
-            SERIAL::Class_id class_id = transaction->get_class_id( call_tag);
-            if( class_id != ID_MDL_FUNCTION_CALL) {
+            DB::Access<Mdl_function_call> fcall( call_tag, transaction);
+            if( !fcall) {
                 ASSERT( M_SCENE, !"call to unknown entity class");
                 return mi::neuraylib::MDL_VERSION_INVALID;
             }
 
-            DB::Access<Mdl_function_call> fcall( call_tag, transaction);
             DB::Tag def_tag = fcall->get_function_definition( transaction);
             if( !def_tag)
                 return mi::neuraylib::MDL_VERSION_INVALID;
@@ -5771,8 +5776,6 @@ mi::neuraylib::Mdl_version get_min_required_mdl_version(
     if( !type)
         return version;
 
-    // argh, the right way to do it would eb to check the core type definition,
-    // but the module buildes is anyway BBR
     switch( type->get_kind()) {
         case IType::TK_ALIAS: {
             mi::base::Handle<const IType_alias> alias_type(
@@ -5797,6 +5800,15 @@ mi::neuraylib::Mdl_version get_min_required_mdl_version(
                     v = mi::neuraylib::MDL_VERSION_1_1;
                     break;
                 case IType_enum::EID_USER:
+                    {
+                        // FIXME: a right implementation would check the version flags on the type
+                        // itself. For that, we would need the core type.
+                        // For now, we just use "implicit knowledge" and check for the type name, sigh.
+                        const char* name = enum_type->get_symbol();
+                        if( strcmp(name, "::df::backscatter_modifier") == 0) {
+                            v = mi::neuraylib::MDL_VERSION_1_11;
+                        }
+                    }
                     break;
             }
             if( v > version)
@@ -8159,7 +8171,6 @@ Execution_context::Execution_context( bool add_defaults)
     ADD3( MDL_CTX_OPTION_METERS_PER_SCENE_UNIT, 1.0f, false);
     ADD3( MDL_CTX_OPTION_WAVELENGTH_MIN, 380.f, false);
     ADD3( MDL_CTX_OPTION_WAVELENGTH_MAX, 780.f, false);
-    ADD3( MDL_CTX_OPTION_INCLUDE_GEO_NORMAL, true, false);
     ADD3( MDL_CTX_OPTION_BUNDLE_RESOURCES, false, false);
     ADD3( MDL_CTX_OPTION_EXPORT_RESOURCES_WITH_MODULE_PREFIX, true, false);
     ADD4( MDL_CTX_OPTION_HANDLE_FILENAME_CONFLICTS,
@@ -8393,6 +8404,7 @@ mi::neuraylib::Mdl_version convert_mdl_version( mi::mdl::IMDL::MDL_version versi
         case mi::mdl::IMDL::MDL_VERSION_1_8:  return mi::neuraylib::MDL_VERSION_1_8;
         case mi::mdl::IMDL::MDL_VERSION_1_9:  return mi::neuraylib::MDL_VERSION_1_9;
         case mi::mdl::IMDL::MDL_VERSION_1_10: return mi::neuraylib::MDL_VERSION_1_10;
+        case mi::mdl::IMDL::MDL_VERSION_1_11: return mi::neuraylib::MDL_VERSION_1_11;
         case mi::mdl::IMDL::MDL_VERSION_EXP:  return mi::neuraylib::MDL_VERSION_EXP;
             // Adapt check in strip_deprecated_suffix() when new versions are added.
     }
@@ -8423,6 +8435,7 @@ mi::mdl::IMDL::MDL_version convert_mdl_version( mi::neuraylib::Mdl_version versi
         case mi::neuraylib::MDL_VERSION_1_8:     return mi::mdl::IMDL::MDL_VERSION_1_8;
         case mi::neuraylib::MDL_VERSION_1_9:     return mi::mdl::IMDL::MDL_VERSION_1_9;
         case mi::neuraylib::MDL_VERSION_1_10:    return mi::mdl::IMDL::MDL_VERSION_1_10;
+        case mi::neuraylib::MDL_VERSION_1_11:    return mi::mdl::IMDL::MDL_VERSION_1_11;
         case mi::neuraylib::MDL_VERSION_EXP:     return mi::mdl::IMDL::MDL_VERSION_EXP;
         case mi::neuraylib::MDL_VERSION_INVALID: ASSERT( M_SCENE, false);
                                                  return mi_mdl_IMDL_MDL_VERSION_INVALID;
@@ -8446,6 +8459,7 @@ const char* stringify_mdl_version( mi::mdl::IMDL::MDL_version version)
         case mi::mdl::IMDL::MDL_VERSION_1_8:  return "1.8";
         case mi::mdl::IMDL::MDL_VERSION_1_9:  return "1.9";
         case mi::mdl::IMDL::MDL_VERSION_1_10: return "1.10";
+        case mi::mdl::IMDL::MDL_VERSION_1_11: return "1.11";
         case mi::mdl::IMDL::MDL_VERSION_EXP:  return "99.99";
     }
 
@@ -8479,6 +8493,7 @@ mi::mdl::IMDL::MDL_version combine_mdl_version( int major, int minor)
         case  8: return mi::mdl::IMDL::MDL_VERSION_1_8;
         case  9: return mi::mdl::IMDL::MDL_VERSION_1_9;
         case 10: return mi::mdl::IMDL::MDL_VERSION_1_10;
+        case 11: return mi::mdl::IMDL::MDL_VERSION_1_11;
         default:
             ASSERT( M_SCENE, false);
             return mi_mdl_IMDL_MDL_VERSION_INVALID;

@@ -163,6 +163,28 @@ enum Distiller_extended_node_semantics {
 ///
 class IRule_matcher_event {
 public:
+    /// Detailed trace events are tagged with this enumeration type.
+    enum Detailed_trace_event_kind {
+        Rule_match,              ///< Rule match completed
+        Call_pattern_match,      ///< A call pattern being tested matched
+        Call_pattern_mismatch,   ///< A call pattern being tested did not match
+        Attribute_missing,       ///< An attribute being tested did not exist
+        Attribute_match,         ///< An attribute being tested matched
+        Attribute_mismatch,      ///< An attribute being tested did not match
+        No_match                 ///< No rule of current rule set has matched
+    };
+
+    /// A detailed trace event for reporting the operation of the distiller. This is a more
+    /// general method of the other event reporting, but it does not cover all cases that the
+    /// other hooks below cover.
+    /// The intention is to use these events for detailed analysis of distiller operation.
+    struct Detailed_trace_event {
+        ///  Kind of event.
+        Detailed_trace_event_kind kind;
+        /// Event message. Content depends on the event type.
+        char const *message;
+    };
+
     /// A DAG path is checked against a rule set.
     ///
     /// \param rule_set_name   the name of the rule set
@@ -219,6 +241,23 @@ public:
         unsigned   line_number,
         char const *var_name,
         DAG_node const *value) = 0;
+
+    /// A detailed trace event has occurred. The kind and message of the event are
+    /// passed in via the `trace_event` parameter.
+    ///
+    /// \param rule_set_name   the name of the rule set
+    /// \param rule_id         the rule id
+    /// \param rule_name       the name of the rule that matched
+    /// \param file_name       if non-NULL, the file name where the rule was declared
+    /// \param line_number     if non-zero, the line number where the rule was declared
+    /// \param trace_event     the traced event
+    virtual void detailed_trace_event(
+        char const *rule_set_name,
+        unsigned   rule_id,
+        char const *rule_name,
+        char const *file_name,
+        unsigned   line_number,
+        Detailed_trace_event trace_event) = 0;
 
 };
 

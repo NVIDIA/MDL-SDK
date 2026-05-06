@@ -45,6 +45,8 @@
 
 #extension GL_EXT_nonuniform_qualifier : require
 
+#include "mdl_target_code_types.glsl"
+
 // The arrays of material textures used in the texturing functions
 layout(set = MDL_SET_MATERIAL_TEXTURES_2D, binding = MDL_BINDING_MATERIAL_TEXTURES_2D)
 uniform sampler2D uMaterialTextures2D[];
@@ -67,149 +69,6 @@ readonly restrict buffer RODataSegmentBuffer
     uint uMaterialRODataSegment[];
 };
 #endif // USE_RO_DATA_SEGMENT
-
-
-//-----------------------------------------------------------------------------
-// MDL data types and constants
-//-----------------------------------------------------------------------------
-#define Tex_wrap_mode            int
-#define TEX_WRAP_CLAMP           0
-#define TEX_WRAP_REPEAT          1
-#define TEX_WRAP_MIRRORED_REPEAT 2
-#define TEX_WRAP_CLIP            3
-
-#define Bsdf_event_type          int
-#define BSDF_EVENT_ABSORB        0
-#define BSDF_EVENT_DIFFUSE       1
-#define BSDF_EVENT_GLOSSY       (1 << 1)
-#define BSDF_EVENT_SPECULAR     (1 << 2)
-#define BSDF_EVENT_REFLECTION   (1 << 3)
-#define BSDF_EVENT_TRANSMISSION (1 << 4)
-
-#define BSDF_EVENT_DIFFUSE_REFLECTION    (BSDF_EVENT_DIFFUSE  | BSDF_EVENT_REFLECTION)
-#define BSDF_EVENT_DIFFUSE_TRANSMISSION  (BSDF_EVENT_DIFFUSE  | BSDF_EVENT_TRANSMISSION)
-#define BSDF_EVENT_GLOSSY_REFLECTION     (BSDF_EVENT_GLOSSY   | BSDF_EVENT_REFLECTION)
-#define BSDF_EVENT_GLOSSY_TRANSMISSION   (BSDF_EVENT_GLOSSY   | BSDF_EVENT_TRANSMISSION)
-#define BSDF_EVENT_SPECULAR_REFLECTION   (BSDF_EVENT_SPECULAR | BSDF_EVENT_REFLECTION)
-#define BSDF_EVENT_SPECULAR_TRANSMISSION (BSDF_EVENT_SPECULAR | BSDF_EVENT_TRANSMISSION)
-
-#define Edf_event_type         int
-#define EDF_EVENT_NONE         0
-#define EDF_EVENT_EMISSION     1
-
-#define BSDF_USE_MATERIAL_IOR (-1.0)
-
-/// Flags controlling the calculation of DF results.
-/// This cannot be represented as a real enum, because the MDL SDK GLSL backend only sees enums
-/// as ints on LLVM level and would create wrong types for temporary variables
-#define Df_flags                             int
-#define DF_FLAGS_NONE                        0               ///< allows nothing -> black
-#define DF_FLAGS_ALLOW_REFLECT               1
-#define DF_FLAGS_ALLOW_TRANSMIT              2
-#define DF_FLAGS_ALLOW_REFLECT_AND_TRANSMIT  (DF_FLAGS_ALLOW_REFLECT | DF_FLAGS_ALLOW_TRANSMIT)
-#define DF_FLAGS_ALLOWED_SCATTER_MODE_MASK   (DF_FLAGS_ALLOW_REFLECT_AND_TRANSMIT)
-
-
-struct State
-{
-    vec3   normal;
-    vec3   geom_normal;
-    vec3   position;
-    float  animation_time;
-    vec3   text_coords[1];
-    vec3   tangent_u[1];
-    vec3   tangent_v[1];
-#ifdef NUM_TEX_RESULTS
-    vec4   text_results[NUM_TEX_RESULTS];
-#endif
-    int    ro_data_segment_offset;
-    mat4   world_to_object;
-    mat4   object_to_world;
-    int    object_id;
-    float  meters_per_scene_unit;
-    int    arg_block_offset;
-};
-
-struct Bsdf_sample_data
-{
-    /*Input*/  vec3      ior1;            // IOR current med
-    /*Input*/  vec3      ior2;            // IOR other side
-    /*Input*/  vec3      k1;              // outgoing direction
-    /*Output*/ vec3      k2;              // incoming direction
-    /*Input*/  vec4      xi;              // pseudo-random sample numbers in range [0, 1)
-    /*Output*/ float     pdf;             // pdf (non-projected hemisphere)
-    /*Output*/ vec3      bsdf_over_pdf;   // bsdf * dot(normal, k2) / pdf
-    /*Output*/ int       event_type;      // the type of event for the generated sample
-    /*Output*/ int       handle;          // handle of the sampled elemental BSDF (lobe)
-    /*Input*/  Df_flags  flags;           // flags controlling calculation of result
-                                          // (optional depending on backend options)
-};
-
-struct Bsdf_evaluate_data
-{
-    /*Input*/  vec3      ior1;            // IOR current medium
-    /*Input*/  vec3      ior2;            // IOR other side
-    /*Input*/  vec3      k1;              // outgoing direction
-    /*Input*/  vec3      k2;              // incoming direction
-    /*Output*/ vec3      bsdf_diffuse;    // bsdf_diffuse * dot(normal, k2)
-    /*Output*/ vec3      bsdf_glossy;     // bsdf_glossy * dot(normal, k2)
-    /*Output*/ float     pdf;             // pdf (non-projected hemisphere)
-    /*Input*/  Df_flags  flags;           // flags controlling calculation of result
-                                          // (optional depending on backend options)
-};
-
-struct Bsdf_pdf_data
-{
-    /*Input*/  vec3      ior1;            // IOR current medium
-    /*Input*/  vec3      ior2;            // IOR other side
-    /*Input*/  vec3      k1;              // outgoing direction
-    /*Input*/  vec3      k2;              // incoming direction
-    /*Output*/ float     pdf;             // pdf (non-projected hemisphere)
-    /*Input*/  Df_flags  flags;           // flags controlling calculation of result
-                                          // (optional depending on backend options)
-};
-
-struct Bsdf_auxiliary_data
-{
-    /*Input*/  vec3      ior1;            // IOR current medium
-    /*Input*/  vec3      ior2;            // IOR other side
-    /*Input*/  vec3      k1;              // outgoing direction
-    /*Output*/ vec3      albedo_diffuse;  // (diffuse part of the) albedo
-    /*Output*/ vec3      albedo_glossy;   // (glossy part of the) albedo
-    /*Output*/ vec3      normal;          // normal
-    /*Output*/ vec3      roughness;       // glossy roughness_u, glossy roughness_v, bsdf_weight
-    /*Input*/  Df_flags  flags;           // flags controlling calculation of result
-                                          // (optional depending on backend options)
-};
-
-struct Edf_sample_data
-{
-    /*Input*/  vec4   xi;                 // pseudo-random sample numbers in range [0, 1)
-    /*Output*/ vec3   k1;                 // outgoing direction
-    /*Output*/ float  pdf;                // pdf (non-projected hemisphere)
-    /*Output*/ vec3   edf_over_pdf;       // edf * dot(normal,k1) / pdf
-    /*Output*/ int    event_type;         // the type of event for the generated sample
-    /*Output*/ int    handle;             // handle of the sampled elemental EDF (lobe)
-};
-
-struct Edf_evaluate_data
-{
-    /*Input*/  vec3   k1;                 // outgoing direction
-    /*Output*/ float  cos;                // dot(normal, k1)
-    /*Output*/ vec3   edf;                // edf
-    /*Output*/ float  pdf;                // pdf (non-projected hemisphere)
-};
-
-struct Edf_pdf_data
-{
-    /*Input*/  vec3   k1;                 // outgoing direction
-    /*Output*/ float  pdf;                // pdf (non-projected hemisphere)
-};
-
-struct Edf_auxiliary_data
-{
-    /*Input*/  vec3   k1;                 // outgoing direction
-};
 
 
 // ------------------------------------------------------------------------------------------------
@@ -748,5 +607,115 @@ mat4 scene_data_lookup_float4x4(State state, int scene_data_id, mat4 default_val
 {
     return default_value;
 }
+
+
+// ------------------------------------------------------------------------------------------------
+// Spectral rendering runtime functions
+// Called by MDL-generated GLSL code when libbsdf_enable_spectral is active.
+// ------------------------------------------------------------------------------------------------
+
+#ifdef MDL_SPECTRAL_RENDERING
+
+// D65 standard illuminant spectral power distribution, 360-830 nm in 5 nm steps (95 entries).
+// Scaled so that the luminance integral (Y channel) equals 1.
+const float s_cie_d65[95] = float[](
+    6.462114e-06, 6.839740e-06, 7.217367e-06, 7.070938e-06,
+    6.924510e-06, 7.248223e-06, 7.571951e-06, 9.519149e-06,
+    1.146636e-05, 1.207124e-05, 1.267613e-05, 1.281093e-05,
+    1.294573e-05, 1.247813e-05, 1.201053e-05, 1.327021e-05,
+    1.452989e-05, 1.537108e-05, 1.621241e-05, 1.626811e-05,
+    1.632381e-05, 1.611929e-05, 1.591492e-05, 1.598850e-05,
+    1.606207e-05, 1.556936e-05, 1.507664e-05, 1.511419e-05,
+    1.515188e-05, 1.504436e-05, 1.493684e-05, 1.472817e-05,
+    1.451950e-05, 1.472027e-05, 1.492118e-05, 1.469367e-05,
+    1.446616e-05, 1.444122e-05, 1.441642e-05, 1.413611e-05,
+    1.385581e-05, 1.360185e-05, 1.334788e-05, 1.331004e-05,
+    1.327220e-05, 1.278016e-05, 1.228811e-05, 1.237960e-05,
+    1.247109e-05, 1.244288e-05, 1.241468e-05, 1.228302e-05,
+    1.215136e-05, 1.184583e-05, 1.154031e-05, 1.156876e-05,
+    1.159720e-05, 1.134278e-05, 1.108836e-05, 1.110137e-05,
+    1.111438e-05, 1.125732e-05, 1.140026e-05, 1.112358e-05,
+    1.084691e-05, 1.025367e-05, 9.660451e-06, 9.791236e-06,
+    9.922021e-06, 1.011183e-05, 1.030166e-05, 9.418694e-06,
+    8.535733e-06, 9.109474e-06, 9.683216e-06, 1.004356e-05,
+    1.040391e-05, 9.607591e-06, 8.811283e-06, 7.621443e-06,
+    6.431617e-06, 7.844023e-06, 9.256429e-06, 9.019315e-06,
+    8.782200e-06, 8.846020e-06, 8.909840e-06, 8.573684e-06,
+    8.237542e-06, 7.718434e-06, 7.199340e-06, 7.579100e-06,
+    7.958860e-06, 8.157816e-06, 8.356785e-06
+);
+
+float lookup_d65(float lambda)
+{
+    float f = (lambda - 360.0) / (830.0 - 360.0);
+    if (f < 0.0 || f > 1.0)
+        return 0.0;
+    f *= float(95 - 1);
+    int b0 = min(int(f), 95 - 1);
+    int b1 = (b0 < (95 - 1)) ? (b0 + 1) : b0;
+    float w1 = f - float(b0);
+    return s_cie_d65[b0] * (1.0 - w1) + s_cie_d65[b1] * w1;
+}
+
+// RGB-to-spectral conversion.
+// Uses Jendersie - "Fast Spectral Upsampling of Volume Attenuation Coefficients".
+Spectral_sample rgb_to_spectral(vec3 rgb, Spectral_sample lambdas, bool is_emission)
+{
+    Spectral_sample s;
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+    {
+        float lambda = lambdas.values[i];
+        s.values[i] = (lambda < 485.0) ? rgb.b : ((lambda < 595.9) ? rgb.g : rgb.r);
+
+        // for emission, apply spectral illuminant
+        if (is_emission)
+            s.values[i] *= lookup_d65(lambda);
+    }
+    return s;
+}
+
+// Piecewise-linear IOR spectrum: point samples at 435 nm (blue), 546 nm (green), 700 nm (red).
+Spectral_sample mdl_rgb_to_spectral_ior(inout State state, vec3 rgb)
+{
+    Spectral_sample s;
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+    {
+        float lambda = state.spectral_wavelengths.values[i];
+        if (lambda > 546.0) {
+            float t = min((lambda - 546.0) * (1.0 / (700.0 - 546.0)), 1.0);
+            s.values[i] = t * rgb.r + (1.0 - t) * rgb.g;
+        } else {
+            float t = max((lambda - 435.0) * (1.0 / (546.0 - 435.0)), 0.0);
+            s.values[i] = t * rgb.g + (1.0 - t) * rgb.b;
+        }
+    }
+    return s;
+}
+
+// RGB-to-spectral conversion for reflectance.
+Spectral_sample mdl_rgb_to_spectral_reflectance(inout State state, vec3 rgb)
+{
+    return rgb_to_spectral(rgb, state.spectral_wavelengths, false);
+}
+
+// RGB-to-spectral conversion weighted by the D65 illuminant (for emission/luminance).
+Spectral_sample mdl_rgb_to_spectral_luminance(inout State state, vec3 rgb)
+{
+    return rgb_to_spectral(rgb, state.spectral_wavelengths, true);
+}
+
+// Volume attenuation coefficients use the same reflectance mapping as non-emission.
+Spectral_sample mdl_rgb_to_spectral_volume_coefficient(inout State state, vec3 rgb)
+{
+    return mdl_rgb_to_spectral_reflectance(state, rgb);
+}
+
+// Return the active wavelengths stored in the shading state.
+Spectral_sample mdl_get_wavelengths(inout State state)
+{
+    return state.spectral_wavelengths;
+}
+
+#endif // MDL_SPECTRAL_RENDERING
 
 #endif // MDL_RUNTIME_GLSL

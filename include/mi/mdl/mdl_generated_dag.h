@@ -347,6 +347,36 @@ public:
     virtual int get_index() const = 0;
 };
 
+/// An interface to visit DAG IR nodes.
+class IDAG_ir_visitor {
+public:
+    /// Post-visit a Constant.
+    ///
+    /// \param cnst  the constant that is visited
+    virtual void visit(DAG_constant *cnst) = 0;
+
+    /// Post-visit a Temporary.
+    ///
+    /// \param tmp  the temporary that is visited
+    virtual void visit(DAG_temporary *tmp) = 0;
+
+    /// Post-visit a call.
+    ///
+    /// \param call  the call that is visited
+    virtual void visit(DAG_call *call) = 0;
+
+    /// Post-visit a Parameter.
+    ///
+    /// \param param  the parameter that is visited
+    virtual void visit(DAG_parameter *param) = 0;
+
+    /// Post-visit a temporary initializer.
+    ///
+    /// \param index  the index of the temporary
+    /// \param init   the initializer expression of this temporary
+    virtual void visit(int index, DAG_node *init) = 0;
+};
+
 /// An interface to interrogate tag values for resource values.
 class IResource_tagger : public Interface_owned {
 public:
@@ -380,10 +410,12 @@ public:
     /// Create a constant.
     ///
     /// \param value       The value of the constant.
+    /// \param dbg_info    The debug info for this constant if any.
     ///
     /// \returns           The created constant.
     virtual DAG_constant const *create_constant(
-        IValue const *value) = 0;
+        IValue const *value,
+        DAG_DbgInfo  dbg_info) = 0;
 
     /// Create a call.
     ///
@@ -516,10 +548,12 @@ public:
         /// Create a constant.
         ///
         /// \param value        The value of the constant.
+        /// \param dbg_info     The debug info for this node if any.
         ///
         /// \returns            The created constant.
         virtual DAG_constant const *create_constant(
-            IValue const *value) = 0;
+            IValue const *value,
+            DAG_DbgInfo  dbg_info) = 0;
 
         /// Create a temporary reference.
         ///
@@ -1475,6 +1509,12 @@ public:
 
     /// Get the resource tagger for this code DAG.
     virtual IResource_tagger *get_resource_tagger() const = 0;
+
+    /// Get the DAG_unit of this code DAG.
+    virtual DAG_unit &get_dag_unit() = 0;
+
+    /// Get the DAG_unit of this code DAG.
+    virtual DAG_unit const &get_dag_unit() const = 0;
 };
 
 
@@ -1593,11 +1633,13 @@ public:
     /// Create a constant node.
     ///
     /// \param value       The value of the constant.
+    /// \param dbg_info    The debug info for this constant if any.
     /// \returns           The created constant.
     ///
     /// \note Use this method to create arguments of the instance.
     virtual DAG_constant const *create_constant(
-        IValue const *value) = 0;
+        IValue const *value,
+        DAG_DbgInfo  dbg_info) = 0;
 
     /// Create a call node.
     ///
@@ -1664,8 +1706,8 @@ public:
     /// \param fold_params                Names of parameters to be folded in class-compilation
     ///                                   mode (in addition to flags).
     /// \param num_fold_params            The number of parameter names to be folded.
-    /// \param target_type                Requested type of the material return type, or 
-    ///                                   \c NULL for the return type of the material call 
+    /// \param target_type                Requested type of the material return type, or
+    ///                                   \c NULL for the return type of the material call
     ///                                   itself.
     ///
     /// \returns                The error code of the initialization.
@@ -1715,11 +1757,11 @@ public:
 
     /// Return the node determined by the path, starting from the root expression of the
     /// material instance.
-    /// 
+    ///
     /// If the path is invalid, both result parameters will contain NULL on return.
     /// Note that constants can be return as constant nodes, or as values, depending on
     /// how they are nested within other nodes or values.
-    /// 
+    ///
     /// \param path         Path of the sub expression to return.
     /// \param node_result  If the path names a node that is not nested within a constant,
     ///                     its value is stored here on return. Otherwise, NULL is stored.
@@ -1730,15 +1772,31 @@ public:
         DAG_node const *&node_result,
         IValue const *&value_result) const = 0;
 
-    /// Calculate the hash for the node determined by the path, starting from the root 
+    /// Determine the spectral conversion intrinsic to apply to the sub-expression at the
+    /// given path when the backend is in spectral mode.
+    ///
+    /// Applies the same rules as the internal spectral conversion pass: known struct fields
+    /// and BSDF/EDF parameters are mapped to their physically correct conversion; unknown
+    /// paths or non-color expressions return DS_UNKNOWN.
+    ///
+    /// \param path  dot-separated path to the sub-expression (e.g. "surface.scattering.tint")
+    ///
+    /// \returns one of DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_REFLECTANCE,
+    ///          DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_LUMINANCE,
+    ///          DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_VOLUME_COEFFICIENT,
+    ///          DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_IOR, or DS_UNKNOWN if no conversion
+    ///          should be applied.
+    virtual IDefinition::Semantics get_spectral_conversion(char const *path) const = 0;
+
+    /// Calculate the hash for the node determined by the path, starting from the root
     /// expression of the material instance.
-    /// 
+    ///
     /// When the path is empty, the result is equivalent to get_hash().
     /// When the path corresponds to one of the predefined slots (see #Slot),
     /// the result is equivalent to get_slot_hash().
-    /// 
+    ///
     /// \param path    Path of the sub expression to calculate the hash for.
-    /// 
+    ///
     /// \return the hash of the subexpression, or the null hash if the path is invalid.
     virtual DAG_hash get_sub_expression_hash(char const *path) const = 0;
 
@@ -1746,7 +1804,7 @@ public:
     ///
     /// This is equivalent to the call get_sub_expression_hash() with the
     /// empty path \c "".
-    /// 
+    ///
     /// This returns the hash-value of the body expression of this material instance.
     virtual DAG_hash const *get_hash() const = 0;
 
@@ -1754,7 +1812,7 @@ public:
     ///
     /// This is equivalent to a call to get_sub_expression_path() with the
     /// path that corresponds to \c slot.
-    /// 
+    ///
     /// \param slot  the material slot
     ///
     /// This returns the hash value of a sub expression of the material instance.

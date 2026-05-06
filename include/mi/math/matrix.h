@@ -104,10 +104,10 @@ namespace math {
 
     \note
     The matrix interpretation as a transformation is done by
-    #mi::math::transform_point(const Matrix<T,4,4>&,const Vector<U,4>&) and related functions. The
-    convention if vectors are row vectors and multiplied from the left with matrices, or column
-    vectors and multiplied from the right with matrices, determines where the different parameters
-    of a transformation are actually stored in the matrix.
+    #mi::math::transform_point(const mi::math::Matrix<T,4,4>&,const mi::math::Vector<U,4>&) and
+    related functions. The convention if vectors are row vectors and multiplied from the left with
+    matrices, or column vectors and multiplied from the right with matrices, determines where the
+    different parameters of a transformation are actually stored in the matrix.
 */
 template <typename T, Size ROW, Size COL>
 struct Matrix_struct
@@ -370,10 +370,10 @@ inline const T* matrix_base_ptr( const Matrix_struct<T,ROW,COL>& mat)
 
     \note
     The matrix interpretation as a transformation is done by
-    #mi::math::transform_point(const Matrix<T,4,4>&,const Vector<U,4>&) and related functions. The
-    convention if vectors are row vectors and multiplied from the left with matrices, or column
-    vectors and multiplied from the right with matrices, determines where the different parameters
-    of a transformation are actually stored in the matrix.
+    #mi::math::transform_point(const mi::math::Matrix<T,4,4>&,const mi::math::Vector<U,4>&) and
+    related functions. The convention if vectors are row vectors and multiplied from the left with
+    matrices, or column vectors and multiplied from the right with matrices, determines where the
+    different parameters of a transformation are actually stored in the matrix.
 
     \note
     The matrix iterators access the matrix elements, however, the access \c operator[] accesses row

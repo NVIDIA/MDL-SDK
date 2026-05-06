@@ -300,19 +300,19 @@ public:
     /// Returns the number of frames of this image. Never zero.
     virtual Size get_length() const = 0;
 
-    /// Returns the frame number for a give frame ID.
+    /// Returns the frame number for a given frame ID.
     ///
     /// This function is strictly monotonically increasing. Frame numbers are not necessarily
     /// consecutive, there can be missing frame numbers.
     ///
     /// \param frame_id    The frame ID of the frame.
-    /// \return            The frame number, or -1 if \p frame_id is out of bounds.
+    /// \return            The frame number, or ~0U if \p frame_id is out of bounds.
     virtual Size get_frame_number( Size frame_id) const = 0;
 
     /// Returns the frame ID for a given frame number.
     ///
     /// \param frame_number   The frame number of the frame.
-    /// \return               The frame ID, or -1 if \p frame_number is not a valid frame number.
+    /// \return               The frame ID, or ~0U if \p frame_number is not a valid frame number.
     virtual Size get_frame_id( Size frame_number) const = 0;
 
     //@}
@@ -342,7 +342,7 @@ public:
     /// \param frame_id    The frame ID of the frame.
     /// \param u           The u-coordinate of the uv-tile.
     /// \param v           The v-coordinate of the uv-tile..
-    /// \return            The uv-tile ID, or -1 of there is no uv-tile with the given coordinates.
+    /// \return            The uv-tile ID, or ~0U if there is no uv-tile with the given coordinates.
     virtual Size get_uvtile_id( Size frame_id, Sint32 u, Sint32 v) const = 0;
 
     /// Returns the ranges of u- and v-coordinates.
@@ -410,7 +410,7 @@ public:
     ///
     /// \param frame_id    The frame ID of the mipmap.
     /// \param uvtile_id   The uv-tile ID of the mipmap to get the number of levels for.
-    /// \return            The number of levels, or -1 in case of an invalid frame ID or uv-tile ID.
+    /// \return            The number of levels, or ~0U in case of an invalid frame ID or uv-tile ID.
     virtual Uint32 get_levels( Size frame_id, Size uvtile_id) const = 0;
 
     /// Returns the horizontal resolution of a canvas.
@@ -418,7 +418,7 @@ public:
     /// \param frame_id    The frame ID of the canvas.
     /// \param uvtile_id   The uv-tile ID of the canvas to get the resolution for.
     /// \param level       The desired mipmap level. Level 0 is the highest resolution.
-    /// \return            The horizontal resolution, or -1 in case of an invalid frame ID,
+    /// \return            The horizontal resolution, or ~0U in case of an invalid frame ID,
     ///                    uv-tile ID, or level.
     virtual Uint32 resolution_x( Size frame_id, Size uvtile_id, Uint32 level) const = 0;
 
@@ -427,7 +427,7 @@ public:
     /// \param frame_id    The frame ID of the canvas.
     /// \param uvtile_id   The uv-tile ID of the canvas to get the resolution for.
     /// \param level       The desired mipmap level. Level 0 is the highest resolution.
-    /// \return            The vertical resolution, or -1 in case of an invalid frame ID,
+    /// \return            The vertical resolution, or ~0U in case of an invalid frame ID,
     ///                    uv-tile ID, or level.
     virtual Uint32 resolution_y( Size frame_id, Size uvtile_id, Uint32 level) const = 0;
 
@@ -436,7 +436,7 @@ public:
     /// \param frame_id    The frame ID of the canvas.
     /// \param uvtile_id   The uv-tile ID of the canvas to get the resolution for.
     /// \param level       The desired mipmap level. Level 0 is the highest resolution.
-    /// \return            The number of layers, or -1 in case of an invalid frame ID,
+    /// \return            The number of layers, or ~0U in case of an invalid frame ID,
     ///                    uv-tile ID, or level.
     virtual Uint32 resolution_z( Size frame_id, Size uvtile_id, Uint32 level) const = 0;
 

@@ -45,7 +45,7 @@ class ICall_name_resolver;
 /// A plugin is only accepted if it is compiled against the same API version
 /// than the SDK. This version needs to be incremented whenever something in
 /// this API changes.
-#define MI_MDL_DISTILLER_PLUGIN_API_VERSION 7
+#define MI_MDL_DISTILLER_PLUGIN_API_VERSION 9
 
 ///
 /// The rule engine handles the transformation of a compiled material by a rule set.
@@ -196,10 +196,12 @@ public:
     /// Create a constant.
     ///
     /// \param  value       The value of the constant.
+    /// \param dbg_info     The debug info for this constant if any.
     ///
     /// \returns            The created constant.
     virtual DAG_constant const *create_constant(
-        IValue const *value) = 0;
+        IValue const *value,
+        DAG_DbgInfo  dbg_info) = 0;
 
     /// Create a temporary reference.
     ///
@@ -432,6 +434,12 @@ public:
     virtual DAG_constant const *create_scatter_enum_constant(
         int i) = 0;
 
+    /// Creates a constant of the df::backscatter_modifier enum.
+    ///
+    /// \param i  the index of the enum value
+    virtual DAG_constant const *create_backscatter_enum_constant(
+        int i) = 0;
+
     /// Creates a constant of the tex::wrap_mode enum.
     ///
     /// \param i  the index of the enum value
@@ -583,10 +591,10 @@ public:
         IOutput_stream *outs,
         DAG_node const *node) = 0;
 
-    // This structs collects the node properties that are required for matching on a node in 
+    // This structs collects the node properties that are required for matching on a node in
     // the Distiller. The following properties are relevant.
     // 1. Semantics
-    // 2. Type kind (if the semantics is not enough, e.g. DS_UNKOWN or DS_ELEM_CONSTRUCTOR or 
+    // 2. Type kind (if the semantics is not enough, e.g. DS_UNKOWN or DS_ELEM_CONSTRUCTOR or
     //    ternaries)
     // 3. Predefined struct Id (if the Type kind is also not enough, e.g. for materials)
     // 4. Arity (number of arguments for mixers and tint())

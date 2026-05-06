@@ -263,7 +263,7 @@ void Option_set::output_usage(std::ostream & ostr, bool commands, unsigned int i
 {
     size_t longuest = 0;
     size_t extra = 2;
-    //<- indent -><--------- longuest --------------><- extra -> 
+    //<- indent -><--------- longuest --------------><- extra ->
     //            [[--search - path | -p] <arg>][...]           Add path to MDL search path
     //            [--verbose | -v] <arg>                        Set verbosity level
     Option_set::const_iterator it;
@@ -379,7 +379,6 @@ void Option_parser::output_usage(ostream & ostr) const
 
     Line line(maxline);
     line.add_text(str.str());
-    Option_set::const_iterator it;
     ostr << line.str();
     line.reset();
 
@@ -387,8 +386,8 @@ void Option_parser::output_usage(ostream & ostr) const
     ostr << endl;
 
     //Indent = 2 spaces
-    // 
-    //  I18N 
+    //
+    //  I18N
     //
     size_t indent = 2;
     string application_help("MDL Internationalization Tool");
@@ -594,7 +593,7 @@ Option Option_parser::next_option(
                     found_option = opt;
                 }
             }
-            Util::log_error("Resolved ambiguous command line option to: " 
+            Util::log_error("Resolved ambiguous command line option to: "
                 + found_option.get_command_string());
         }
     }

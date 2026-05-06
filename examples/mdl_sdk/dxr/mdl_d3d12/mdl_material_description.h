@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
- // examples/mdl_sdk/dxr/mdl_d3d12/mdl_material_description.h
+// examples/mdl_sdk/dxr/mdl_d3d12/mdl_material_description.h
 
 #ifndef MDL_D3D12_MDL_MATERIAL_DESCRIPTION_H
 #define MDL_D3D12_MDL_MATERIAL_DESCRIPTION_H

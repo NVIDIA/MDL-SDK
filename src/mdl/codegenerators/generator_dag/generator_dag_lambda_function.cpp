@@ -211,7 +211,7 @@ Lambda_function::Import_helper::Import_helper(
     m_has_dbg_info = true;
 
     for (unsigned i = 0; i < n; ++i) {
-        m_fname_tbl[dest.get_fname(i)] = i;
+        m_fname_tbl[dest.get_fname(i)] = i + 1;
     }
 
     m_translate.reserve(nn);
@@ -276,7 +276,6 @@ Lambda_function::Lambda_function(
 , m_uses_varying_state(false)
 , m_has_dead_code(false)
 , m_is_modified(false)
-, m_uses_lambda_results(false)
 , m_serial_is_valid(false)
 , m_hash_is_valid(false)
 , m_deriv_infos_calculated(false)
@@ -352,9 +351,10 @@ Value_factory *Lambda_function::get_value_factory()
 
 // Create a constant.
 DAG_constant const *Lambda_function::create_constant(
-    IValue const *value)
+    IValue const *value,
+    DAG_DbgInfo  dbg_info)
 {
-    return m_node_factory.create_constant(value);
+    return m_node_factory.create_constant(value, dbg_info);
 }
 
 // Create a call.
@@ -368,9 +368,6 @@ DAG_node const *Lambda_function::create_call(
 {
     if (is_varying_state_semantic(sema)) {
         m_uses_varying_state = true;
-    } else if (sema == IDefinition::DS_INTRINSIC_DAG_CALL_LAMBDA) {
-        // expression lambda calls require an available lambda_results parameter
-        m_uses_lambda_results = true;
     }
     return m_node_factory.create_call(name, sema, call_args, num_call_args, ret_type, dbg_info);
 }
@@ -471,7 +468,7 @@ DAG_node const *Lambda_function::do_import_expr(
                 DAG_constant const *c = cast<DAG_constant>(expr);
                 mi::mdl::IValue const *v = c->get_value();
                 v = m_dag_unit.import(v);
-                DAG_node const *res = create_constant(v);
+                DAG_node const *res = create_constant(v, import_helper.import(c->get_dbg_info()));
 
                 import_helper[expr] = res;
                 return res;
@@ -1630,7 +1627,7 @@ void Lambda_function::optimize(
         m_node_factory,
         *name_resolver);
 
-    DAG_ir_checker checker(get_allocator(), const_cast<ICall_name_resolver *>(name_resolver));
+    DAG_ir_checker checker(get_allocator(), name_resolver, /*allow_distiller_marker=*/false);
 
     checker.check_lambda(this);
 
@@ -1757,7 +1754,7 @@ DAG_node const *Lambda_function::set_uniform_context(
     if (visitor.uses_object_id()) {
         Value_factory    &vf       = m_dag_unit.get_value_factory();
         IValue_int const *v        = vf.create_int(object_id);
-        DAG_node const   *c        = create_constant(v);
+        DAG_node const   *c        = create_constant(v, DAG_DbgInfo::generated);
         IType const      *res_type = expr->get_type();
 
         DAG_call::Call_argument args[2];
@@ -1816,10 +1813,10 @@ DAG_node const *Lambda_function::set_uniform_context(
         IType const         *res_type = expr->get_type();
 
         IValue_matrix const *m_w2o = vf.create_matrix(m_type, v_w2o, 4);
-        DAG_node const      *c_w2o = create_constant(m_w2o);
+        DAG_node const      *c_w2o = create_constant(m_w2o, DAG_DbgInfo::generated);
 
         IValue_matrix const *m_o2w = vf.create_matrix(m_type, v_o2w, 4);
-        DAG_node const      *c_o2w = create_constant(m_o2w);
+        DAG_node const      *c_o2w = create_constant(m_o2w, DAG_DbgInfo::generated);
 
         DAG_call::Call_argument args[3];
 
@@ -2496,7 +2493,8 @@ void Lambda_function::initialize_derivative_infos(ICall_name_resolver const *res
     // collect information and rebuild DAG with derivative types
     m_deriv_infos.set_call_name_resolver(resolver);
 
-    Deriv_DAG_builder deriv_builder(get_allocator(), *this, m_deriv_infos);
+    DAG_rebuilder deriv_builder(
+        get_allocator(), *this, &m_deriv_infos, /*enable_spectral_conversions=*/ false);
 
     if (!m_roots.empty()) {
         for (size_t i = 0, n = m_roots.size(); i < n; ++i) {
@@ -2742,7 +2740,7 @@ void Lambda_function::serialize(ISerializer *is) const
 
     dag_serializer.write_dags(roots, dimension_of(roots));
 
-    m_dag_unit.serialize_attributes(dag_serializer);
+    m_dag_unit.serialize_name_map(dag_serializer);
 
     // serialize m_roots
     size_t n_roots = m_roots.size();
@@ -2843,7 +2841,6 @@ void Lambda_function::serialize(ISerializer *is) const
     dag_serializer.write_bool(m_has_resource_attributes);
     dag_serializer.write_bool(m_uses_varying_state);
     dag_serializer.write_bool(m_has_dead_code);
-    dag_serializer.write_bool(m_uses_lambda_results);
 
     // The serial number is not serialized, but a new one is drawn:
     // Otherwise it is not possible to keep them in sync over the network ...
@@ -2893,7 +2890,7 @@ Lambda_function *Lambda_function::deserialize(
     // deserialize the node factory m_node_factory by deserializing all reachable DAGs
     dag_deserializer.read_dags(res->m_node_factory);
 
-    res->m_dag_unit.deserialize_attributes(dag_deserializer);
+    res->m_dag_unit.deserialize_name_map(dag_deserializer);
 
     // deserialize m_roots
     size_t n_roots = dag_deserializer.read_encoded_tag();
@@ -2991,7 +2988,6 @@ Lambda_function *Lambda_function::deserialize(
     res->m_has_resource_attributes = dag_deserializer.read_bool();
     res->m_uses_varying_state      = dag_deserializer.read_bool();
     res->m_has_dead_code           = dag_deserializer.read_bool();
-    res->m_uses_lambda_results     = dag_deserializer.read_bool();
 
     // The serial number is not serialized, but a new one is drawn:
     // Otherwise it is not possible to keep them in sync over the network ...
@@ -3134,7 +3130,7 @@ private:
 
                     IValue_factory *vf = m_dag_builder->get_value_factory();
                     v = vf->import(v);
-                    return m_dag_builder->create_constant(v);
+                    return m_dag_builder->create_constant(v, clone_dbg_info(c->get_dbg_info()));
                 }
             case DAG_node::EK_TEMPORARY:
                 {
@@ -3231,7 +3227,7 @@ private:
                         // if we are inside a compound constant, retrieve the part of
                         // the compound regarding to the current path part and follow it
                         if (IValue const *subval = vc->get_value(m_path[m_depth])) {
-                            node = m_dag_builder->create_constant(subval);
+                            node = m_dag_builder->create_constant(subval, c->get_dbg_info());
                             // no calls anymore
                             ++m_depth;
                             continue;
@@ -3311,6 +3307,7 @@ private:
     size_t                        m_depth;
 };
 
+
 /// RAII-like helper class to handle optimization flags.
 template <typename T>
 class Optimization_scope {
@@ -3336,99 +3333,6 @@ private:
     bool m_flag;
 };
 
-namespace {
-
-///
-/// Helper class to dump a material instance as a DAG with a set of requested nodes as a dot file.
-///
-class Material_instance_with_requests_dumper : public DAG_dumper {
-    typedef DAG_dumper Base;
-public:
-    typedef ptr_hash_map<DAG_node const, char const *>::Type Node_color_map;
-
-    /// Constructor.
-    ///
-    /// \param alloc           the allocator
-    /// \param out             an output stream, the dot file is written to
-    /// \param node_color_map  a map from DAG nodes to Graphviz color strings
-    Material_instance_with_requests_dumper(
-        IAllocator     *alloc,
-        IOutput_stream *out,
-        Node_color_map &node_color_map);
-
-    /// Dump the lambda expression DAG to the output stream.
-    ///
-    /// \param lambda  the lambda function that owns the root expression
-    /// \param root    the root expression
-    void dump(
-        Lambda_function const &lambda,
-        DAG_node const        *root);
-
-    /// Get the parameter name for the given index if any.
-    ///
-    /// \param index  the index of the parameter
-    char const *get_parameter_name(int index) MDL_FINAL;
-
-    /// Get a color for the given node or nullptr for default
-    ///
-    /// \param node  the node
-    virtual char const *get_node_color(DAG_node const *node)
-    {
-        Node_color_map::const_iterator it = m_node_color_map.find(node);
-        if (it == m_node_color_map.cend()) {
-            return nullptr;
-        } else {
-            return it->second;
-        }
-    }
-
-private:
-    /// Currently processed lambda function.
-    Lambda_function const *m_lambda;
-
-    /// Buffer used for converting numbers to strings.
-    char m_name_buf[40];
-
-    /// Map from DAG nodes to Graphviz color strings.
-    Node_color_map &m_node_color_map;
-};
-
-// Constructor.
-Material_instance_with_requests_dumper::Material_instance_with_requests_dumper(
-    IAllocator     *alloc,
-    IOutput_stream *out,
-    Node_color_map &node_color_map)
-: Base(alloc, out)
-, m_lambda(nullptr)
-, m_node_color_map(node_color_map)
-{
-}
-
-// Dump the lambda expression DAG to the output stream.
-void Material_instance_with_requests_dumper::dump(
-    Lambda_function const &lambda,
-    DAG_node const        *root)
-{
-    set_dag_unit(&lambda.get_dag_unit());
-
-    m_printer->print("digraph \"matinstance\" {\n"
-        "  node [fillcolor=\"#E0E0A8\"]\n");
-
-    m_walker.walk_node(const_cast<DAG_node *>(root), this);
-    m_printer->print("}\n");
-}
-
-// Get the parameter name for the given index if any.
-const char *Material_instance_with_requests_dumper::get_parameter_name(int index)
-{
-    if (m_lambda == NULL) {
-        snprintf(m_name_buf, sizeof(m_name_buf), "param %d", index);
-        return m_name_buf;
-    }
-    return m_lambda->get_parameter_name(index);
-}
-
-}  // anonymous
 
 /// Helper class for building distribution functions.
 /// Creates expression lambda functions for all non-DF DAG nodes.
@@ -3438,14 +3342,6 @@ class Distribution_function_builder
     typedef ptr_hash_set<DAG_node const>::Type                   Node_set;
 
 public:
-    enum Eval_state {
-        ES_BEGIN_STATE = 0,           ///< The node is evaluated before the end of the evaluation
-                                      ///  of geometry.normal.
-        ES_AFTER_GEOMETRY_NORMAL = 1, ///< The node is evaluated after geometry.normal has been
-                                      ///  evaluated.
-        ES_LAST = ES_AFTER_GEOMETRY_NORMAL
-    };
-
     enum Flag {
         FL_NONE                             = 0,        ///< No flags.
         FL_NEEDS_MATERIAL_IOR               = 1 << 0,   ///< Material needs material.ior.
@@ -3457,32 +3353,6 @@ public:
 
     typedef unsigned Flags;
 
-private:
-    /// Helper struct to temporarily remember a request to create a lambda function.
-    struct Request {
-        /// Constructor.
-        ///
-        /// \param reqfunc_index   the function index of the requested function
-        /// \param node            the node in the root lambda that computes the function
-        /// \param eval_state      the evaluation state of the function to create
-        /// \param lec             the execution context
-        Request(
-            size_t                                      reqfunc_index,
-            DAG_node const                             *node,
-            Distribution_function_builder::Eval_state   eval_state,
-            ILambda_function::Lambda_execution_context  lec)
-        : reqfunc_index(reqfunc_index)
-        , node(node)
-        , eval_state(eval_state)
-        , lec(lec)
-        {}
-
-        size_t reqfunc_index;
-        DAG_node const *node;
-        Distribution_function_builder::Eval_state eval_state;
-        ILambda_function::Lambda_execution_context lec;
-    };
-
 public:
     /// Builds a distribution function.
     ///
@@ -3492,27 +3362,25 @@ public:
     /// \param resolver             the call name resolver
     /// \param mat_instance         the material instance we build the distribution function for
     /// \param requested_functions  the list of requested functions to be built from the material
-    /// \param num_functions        the number of functions
-    /// \param include_geom_normal  if true, include special function for geometry_normal
+    /// \param num_req_functions    the number of requested functions
     /// \param calc_derivative_infos
     ///                             if true, derivative infos will be computed
-    /// \param allow_double_expr_lambdas
-    ///                             if true, expression lambdas may be created for double values
+    /// \param enable_spectral_conversions
+    ///                             if true, color parameters will be wrapped with spectral conversions
     static IDistribution_function::Error_code build(
         Distribution_function                      *dist_func,
         IAllocator                                 *alloc,
         IMDL                                       *compiler,
         ICall_name_resolver const                  *resolver,
         IMaterial_instance const                   *mat_instance,
-        IDistribution_function::Requested_function  requested_functions[],
-        size_t                                      num_functions,
-        bool                                        include_geom_normal,
+        IDistribution_function::Requested_function *requested_functions,
+        size_t                                      num_req_functions,
         bool                                        calc_derivative_infos,
-        bool                                        allow_double_expr_lambdas)
+        bool                                        enable_spectral_conversions)
     {
         if (mat_instance == NULL ||
             mat_instance->get_constructor() == NULL ||
-            num_functions == 0 ||
+            num_req_functions == 0 ||
             requested_functions == NULL)
         {
             return IDistribution_function::EC_INVALID_PARAMETERS;
@@ -3526,16 +3394,25 @@ public:
         mi::mdl::DAG_node const *root_node = root_lambda->import_expr(
             mat_instance->get_dag_unit(), mat_instance->get_constructor());
 
-        if (calc_derivative_infos) {
-            // calculate derivative information and rebuild DAG with derivative types
-            Derivative_infos *deriv_infos = dist_func->get_writable_derivative_infos();
-            deriv_infos->set_call_name_resolver(resolver);
+        if (calc_derivative_infos || enable_spectral_conversions) {
+            // calculate derivative information and/or rebuild DAG with spectral conversions
+            Derivative_infos *deriv_infos = NULL;
+            if (calc_derivative_infos) {
+                deriv_infos = dist_func->get_writable_derivative_infos();
+                deriv_infos->set_call_name_resolver(resolver);
+            }
 
-            Deriv_DAG_builder deriv_builder(alloc, *root_lambda.get(), *deriv_infos);
-            root_node = deriv_builder.rebuild(root_node, /*want_derivatives=*/ false);
+            DAG_rebuilder dag_rebuilder(
+                alloc, *root_lambda.get(), deriv_infos, enable_spectral_conversions);
+            root_node = dag_rebuilder.rebuild(root_node, /*want_derivatives=*/ false);
 
-            deriv_infos->set_call_name_resolver(NULL);
+            if (deriv_infos != NULL) {
+                deriv_infos->set_call_name_resolver(NULL);
+            }
         }
+
+        // set the body to the material constructor (can be the derivative version)
+        root_lambda->set_body(root_node);
 
         // translate all non-df nodes to call_lambda nodes
         Distribution_function_builder fct_builder(
@@ -3544,16 +3421,32 @@ public:
             root_node,
             compiler,
             resolver,
-            calc_derivative_infos,
-            allow_double_expr_lambdas);
+            calc_derivative_infos);
         unsigned walk_id = 0;
-
-        vector<Request>::Type requests(alloc);
-        requests.reserve(num_functions);
 
         IDistribution_function::Error_code last_error = IDistribution_function::EC_NONE;
 
-        for (size_t fkt_idx = 0; fkt_idx < num_functions; ++fkt_idx) {
+        // get the geometry.normal node
+        // Note: we pass a resolver here, so we can "inline" target material model calls
+        static char const * const normal_path[] = {"geometry", "normal"};
+        DAG_node const *normal =
+            Dag_path_follower(alloc, normal_path, root_lambda.get(), resolver)
+            .get_dag_arg(root_node);
+
+        // check whether geometry.normal is not state::normal()
+        bool has_non_default_normal = false;
+        if (normal != NULL) {
+            if (DAG_call const *normal_call = as<DAG_call>(normal)) {
+                if (normal_call->get_semantic() != IDefinition::DS_INTRINSIC_STATE_NORMAL) {
+                    has_non_default_normal = true;
+                }
+            } else {
+                has_non_default_normal = true;
+            }
+        }
+
+        // process all requested functions
+        for (size_t fkt_idx = 0; fkt_idx < num_req_functions; ++fkt_idx) {
             char const *path = requested_functions[fkt_idx].path;
 
             if (path == NULL) {
@@ -3562,12 +3455,6 @@ public:
                 continue;
             }
             string path_copy(path, alloc);
-
-            ILambda_function::Lambda_execution_context lec = ILambda_function::LEC_CORE;
-            if (strcmp(path, "geometry.displacement") == 0) {
-                // only this is the displacement function
-                lec = ILambda_function::LEC_DISPLACEMENT;
-            }
 
             // split path at '.'
             vector<char const *>::Type path_parts(alloc);
@@ -3608,6 +3495,8 @@ public:
             case IType::TK_MATRIX:
             case IType::TK_ARRAY:   // TODO: hmmm, does this work?
             case IType::TK_COLOR:
+            case IType::TK_SPECTRAL_SAMPLE:
+            case IType::TK_SPECTRUM:
                 break;
 
             case IType::TK_STRUCT:
@@ -3651,14 +3540,13 @@ public:
 
             // According to MDL Spec 1.6 13.3, the geometry fields are evaluated before all surface
             // fields and the normal evaluation happens last within the geometry fields.
-            Distribution_function_builder::Eval_state eval_state;
-            if (path_parts.size() > 0 && strcmp(path_parts[0], "geometry") == 0) {
-                eval_state = Distribution_function_builder::ES_BEGIN_STATE;
+            Distribution_function::Eval_state eval_state;
+            Distribution_function::Special_kind special_kind = Distribution_function::SK_INVALID;
+            if (path_parts.size() == 2 && strcmp(path_parts[0], "geometry") == 0) {
+                eval_state = Distribution_function::ES_BEGIN_STATE;
 
-                // remap the "geometry.normal" path to a state::normal() call if it will be included
-                if (include_geom_normal &&
-                    path_parts.size() == 2 &&
-                    strcmp(path_parts[1], "normal") == 0)
+                // remap the "geometry.normal" path to a state::normal() call
+                if (strcmp(path_parts[1], "normal") == 0)
                 {
                     IType const *float3_type = fct_builder.m_type_factory.create_vector(
                         fct_builder.m_type_factory.create_float(), 3);
@@ -3670,14 +3558,35 @@ public:
                         0,
                         float3_type,
                         DAG_DbgInfo::builtin);
+
+                    // this will actually be evaluated after state normal has been updated
+                    eval_state = Distribution_function::ES_AFTER_GEOMETRY_NORMAL;
+                } else if (strcmp(path_parts[1], "displacement") == 0) {
+                    special_kind = Distribution_function::SK_MATERIAL_GEOMETRY_DISPLACEMENT;
+                } else if (strcmp(path_parts[1], "cutout_opacity") == 0) {
+                    special_kind = Distribution_function::SK_MATERIAL_GEOMETRY_CUTOUT_OPACITY;
                 }
             } else {
                 // not in geometry
-                eval_state = Distribution_function_builder::ES_AFTER_GEOMETRY_NORMAL;
+                eval_state = Distribution_function::ES_AFTER_GEOMETRY_NORMAL;
             }
-            fct_builder.collect_flags_and_used_nodes(node, eval_state, ++walk_id);
+            bool is_eval_state_dependent =
+                fct_builder.collect_flags_and_df_handles(node, ++walk_id);
 
-            requests.push_back(Request(fkt_idx, node, eval_state, lec));
+            size_t req_node_index = dist_func->add_requested_node(
+                node,
+                path,
+                requested_functions[fkt_idx].base_fname,
+                eval_state);
+
+            // only register the displacement / cutout_opacity special nodes,
+            // if they depend on state::normal() and geometry.normal would change the normal.
+            // Then, special care must be taken to evaluate those nodes before geometry.normal.
+            if (special_kind != Distribution_function::SK_INVALID &&
+                    is_eval_state_dependent &&
+                    has_non_default_normal) {
+                dist_func->set_special_node(special_kind, req_node_index);
+            }
         }
 
         // bail out if at least one path generated an error
@@ -3685,159 +3594,41 @@ public:
             return last_error;
         }
 
-        // handle "geometry.normal" if requested
-        if (include_geom_normal) {
-            static char const * const normal_path[] = {"geometry", "normal"};
+        // All requested nodes added until now have been explicitly requested by the application.
+        dist_func->set_explicit_requested_node_count(dist_func->get_total_requested_node_count());
 
-            // Note: we pass a resolver here, so we can "inline" target material model calls
-            DAG_node const *normal =
-                Dag_path_follower(alloc, normal_path, root_lambda.get(), resolver)
-                    .get_dag_arg(root_node);
-
-            bool handle_normal = false;
-
-            if (normal != NULL) {
-                // handle it, if geometry.normal is not state::normal()
-                if (DAG_call const *normal_call = as<DAG_call>(normal)) {
-                    if (normal_call->get_semantic() != IDefinition::DS_INTRINSIC_STATE_NORMAL) {
-                        handle_normal = true;
-                    }
-                } else {
-                    handle_normal = true;
-                }
-
-                if (handle_normal) {
-                    fct_builder.register_special_lambda(
-                        normal,
-                        IDistribution_function::SK_MATERIAL_GEOMETRY_NORMAL,
-                        ++walk_id);
-                }
-            } else {
-                // FIXME: no normal node but user requested it explicitly, should we
-                // generate an error here?
-            }
+        // The DF handles used by all requests have been processed now, so m_handle_name_set
+        // can be reused to collect per-request DF handles, now.
+        for (size_t i = 0, n = dist_func->get_total_requested_node_count(); i < n; ++i) {
+            // collect DF handles used by this requested node
+            Distribution_function::Requested_node *req_node = dist_func->get_requested_node(i);
+            fct_builder.m_handle_name_set.clear();
+            fct_builder.collect_req_node_df_handles(req_node->node, req_node, ++walk_id);
         }
 
-        // register all special lambdas required by the material
+        // Now implicitly requested nodes may be added
+
         Distribution_function_builder::Flags mat_flags = fct_builder.get_flags();
         if ((mat_flags & Distribution_function_builder::FL_CONTAINS_UNSUPPORTED_DF) != 0) {
             return IDistribution_function::EC_UNSUPPORTED_BSDF;
         }
+
+        // Register all special nodes required by the material
+
+        if (has_non_default_normal) {
+            fct_builder.register_special_node(
+                normal, "geometry.normal", Distribution_function::SK_MATERIAL_GEOMETRY_NORMAL);
+        }
         if ((mat_flags & Distribution_function_builder::FL_NEEDS_MATERIAL_IOR) != 0) {
-            fct_builder.register_special_lambda(
-                "ior", IDistribution_function::SK_MATERIAL_IOR, ++walk_id);
+            fct_builder.register_special_node(
+                { "ior" }, "ior", Distribution_function::SK_MATERIAL_IOR);
         }
         if ((mat_flags & Distribution_function_builder::FL_NEEDS_MATERIAL_THIN_WALLED) != 0) {
-            fct_builder.register_special_lambda(
-                "thin_walled", IDistribution_function::SK_MATERIAL_THIN_WALLED, ++walk_id);
+            fct_builder.register_special_node(
+                { "thin_walled" }, "thin_walled", Distribution_function::SK_MATERIAL_THIN_WALLED);
         }
-        if ((mat_flags & Distribution_function_builder::FL_NEEDS_MATERIAL_VOLUME_ABSORPTION) != 0) {
-            static char const * const absorp_coeff_path[] = { "volume", "absorption_coefficient" };
-            fct_builder.register_special_lambda(
-                absorp_coeff_path,
-                IDistribution_function::SK_MATERIAL_VOLUME_ABSORPTION, ++walk_id);
-        }
-
-        // first create all expression lambdas for special lambdas.
-        // this makes sure that geometry normal and all its dependencies will be available
-        fct_builder.create_special_lambdas();
-
-        // create expression lambdas for multiply used expressions, after geometry.normal
-        // has been calculated
-        for (Request const &request : requests) {
-            if (request.eval_state == Distribution_function_builder::ES_AFTER_GEOMETRY_NORMAL) {
-                fct_builder.prepare_expr_lambda_calls(
-                    request.node, request.eval_state, request.lec);
-            }
-        }
-
-#if 0
-        static int dumpid = 0;
-        std::string dumpname("matinst");
-        dumpname += std::to_string(dumpid++);
-
-        fct_builder.dump_material_instance_with_requests(
-            root_lambda.get(),
-            root_node,
-            requests,
-            dumpname.c_str());
-#endif
-
-        // construct the new DAG containing calls to expression lambdas
-        for (Request const &request : requests) {
-            DAG_node const *new_expr =
-                fct_builder.transform_material_graph(request.node, request.lec);
-            mi::base::Handle<ILambda_function> expr_lambda(
-                fct_builder.create_expr_lambda(
-                    new_expr, request.eval_state, request.lec));
-            if (requested_functions[request.reqfunc_index].base_fname != NULL)
-                expr_lambda->set_name(requested_functions[request.reqfunc_index].base_fname);
-
-            size_t main_func_index = dist_func->add_main_function(expr_lambda.get());
-
-            // collect DF handles used by this main function
-            ++walk_id;
-            fct_builder.m_handle_name_map.clear();
-            fct_builder.collect_main_df_handles(new_expr, main_func_index, walk_id);
-        }
-
-#if 0
-        fct_builder.dump_everything();
-#endif
 
         return IDistribution_function::EC_NONE;
-    }
-
-    /// Dump a lambda expression to a .gv file.
-    void dump_material_instance_with_requests(
-        mi::mdl::Lambda_function *root_lambda,
-        DAG_node const *root_node,
-        vector<Request>::Type &requests,
-        char const *name)
-    {
-        string fname(name, m_alloc);
-        fname += "_full_with_requests.gv";
-
-        Allocator_builder builder(m_alloc);
-
-        if (FILE *f = fopen(fname.c_str(), "w")) {
-            mi::base::Handle<File_Output_stream> out(
-                builder.create<File_Output_stream>(m_alloc, f, /*close_at_destroy=*/true));
-
-            Material_instance_with_requests_dumper::Node_color_map node_color_map(m_alloc);
-            for (Request const &req : requests) {
-                node_color_map[req.node] = "\"#E29245\"";
-            }
-
-            for (Special_lambda_descr const &specials : m_special_lambdas) {
-                // only mark special lambdas, if they were not requested specifically
-                if (node_color_map.find(specials.node) == node_color_map.end()) {
-                    node_color_map[specials.node] = "\"#92E245\"";
-                }
-            }
-
-            // mark all node for which expression lambdas will be created
-            for (auto const &it : m_node_info_map) {
-                // skip nodes which are already marked
-                if (node_color_map.find(it.first) != node_color_map.end()) {
-                    continue;
-                }
-                for (unsigned i = 0; i <= ES_LAST; ++i) {
-                    if (it.second.repl_node[i] != nullptr) {
-                        if (DAG_call const* repl_call = as<DAG_call>(it.second.repl_node[i])) {
-                            if (repl_call->get_semantic() ==
-                                    IDefinition::DS_INTRINSIC_DAG_CALL_LAMBDA) {
-                                node_color_map[it.first] = "\"#E23785\"";
-                            }
-                        }
-                    }
-                }
-            }
-
-            Material_instance_with_requests_dumper dumper(m_alloc, out.get(), node_color_map);
-
-            dumper.dump(*root_lambda, root_node);
-        }
     }
 
     /// Constructor.
@@ -3847,8 +3638,7 @@ public:
         DAG_node const            *mat_root_node,
         IMDL                      *compiler,
         ICall_name_resolver const *resolver,
-        bool                      calc_derivative_infos,
-        bool                      allow_double_expr_lambdas)
+        bool                      calc_derivative_infos)
     : m_alloc(alloc)
     , m_compiler(compiler, mi::base::DUP_INTERFACE)
     , m_dist_func(dist_func)
@@ -3859,8 +3649,7 @@ public:
     , m_resolver(resolver)
     , m_node_info_map(0, Node_info_map::hasher(), Node_info_map::key_equal(), alloc)
     , m_flags(FL_NONE)
-    , m_allow_double_expr_lambdas(allow_double_expr_lambdas)
-    , m_handle_name_map(0, Handle_name_map::hasher(), Handle_name_map::key_equal(), alloc)
+    , m_handle_name_set(0, Handle_name_set::hasher(), Handle_name_set::key_equal(), alloc)
     {
     }
 
@@ -3891,80 +3680,18 @@ public:
         return handle_str->get_value();
     }
 
-    /// Collect the DF handles for a main function.
-    void collect_main_df_handles(
-        DAG_node const *expr,
-        size_t         main_func_index,
-        unsigned       walk_id)
-    {
-        Node_info &info = m_node_info_map[expr];
-        if (info.already_visited(walk_id)) {
-            return;
-        }
-        info.mark_visited(walk_id);
-
-        switch (expr->get_kind()) {
-        case DAG_node::EK_TEMPORARY:
-            {
-                // should not happen, but we can handle it
-                DAG_temporary const *t = cast<DAG_temporary>(expr);
-                expr = t->get_expr();
-                collect_main_df_handles(expr, main_func_index, walk_id);
-                break;
-            }
-        case DAG_node::EK_CONSTANT:
-        case DAG_node::EK_PARAMETER:
-            break;
-        case DAG_node::EK_CALL:
-            {
-                DAG_call const *call = cast<DAG_call>(expr);
-                // stop at non-DFs
-                if (!contains_df_type(call->get_type())) {
-                    break;
-                }
-
-                if (char const *handle_name = get_elemental_handle(call)) {
-                    Handle_name_map::const_iterator it = m_handle_name_map.find(handle_name);
-                    if (it == m_handle_name_map.end()) {
-                        // the handle is not known, yet -> register it for the main function
-                        m_handle_name_map[handle_name] =
-                            m_dist_func.add_main_func_df_handle(main_func_index, handle_name);
-                    }
-                }
-
-                int n_args = call->get_argument_count();
-                for (int i = 0; i < n_args; ++i) {
-                    DAG_node const *arg = call->get_argument(i);
-                    collect_main_df_handles(arg, main_func_index, walk_id);
-                }
-                break;
-            }
-        }
-    }
-
-    /// Walk the expression to collect the flags and the used nodes (as in collect_used_nodes)
+    /// Walk the expression to collect the flags and the used df handles
     /// and determine, whether the expression is evaluation state dependent.
     /// If so, the function returns true.
-    /// The eval_state is only relevant for the used nodes part, not for the flags.
-    bool collect_flags_and_used_nodes(
+    bool collect_flags_and_df_handles(
         DAG_node const *expr,
-        Eval_state     eval_state,
         unsigned       &walk_id)
     {
         Node_info &info = m_node_info_map[expr];
-
-        // Stop when already visited in this walk
         if (info.already_visited(walk_id)) {
             return info.is_eval_state_dependent;
         }
-
-        // Stop if the node was already seen in at least two walks
-        if (info.get_count(eval_state) > 0) {
-            info.inc_count(eval_state, walk_id);
-            return info.is_eval_state_dependent;
-        }
-
-        unsigned node_walk_id = walk_id;
+        info.mark_visited(walk_id);
 
         bool res = false;
         switch (expr->get_kind()) {
@@ -3973,7 +3700,7 @@ public:
                 // should not happen, but we can handle it
                 DAG_temporary const *t = cast<DAG_temporary>(expr);
                 expr = t->get_expr();
-                res = collect_flags_and_used_nodes(expr, eval_state, walk_id);
+                res = collect_flags_and_df_handles(expr, walk_id);
                 break;
             }
         case DAG_node::EK_CONSTANT:
@@ -3998,36 +3725,82 @@ public:
                     }
 
                     if (char const *handle_name = get_elemental_handle(call)) {
-                        Handle_name_map::const_iterator it = m_handle_name_map.find(handle_name);
-                        if (it == m_handle_name_map.end()) {
+                        if (m_handle_name_set.count(handle_name) == 0) {
                             // the handle is not known yet -> register it
-                            m_handle_name_map[handle_name] = m_dist_func.add_df_handle(handle_name);
+                            m_dist_func.add_df_handle(handle_name);
+                            m_handle_name_set.insert(handle_name);
                         }
                     }
                 }
 
-                res = is_eval_state_dependent_direct(call);
-
                 int n_args = call->get_argument_count();
                 for (int i = 0; i < n_args; ++i) {
                     DAG_node const *arg = call->get_argument(i);
-
-                    // new walks start at all non-DFish arguments of DFs
-                    if (is_df_sema && !contains_df_type(arg->get_type())) {
-                        ++walk_id;
-                    }
-
-                    res |= collect_flags_and_used_nodes(arg, eval_state, walk_id);
+                    res |= collect_flags_and_df_handles(arg, walk_id);
                 }
+
+                // only check this call, if we haven't found a state dependent call, yet
+                if (!res) {
+                    res = is_eval_state_dependent_direct(call);
+                }
+
+                break;
             }
         }
 
         info.is_eval_state_dependent = res;
 
-        // update counter now, that evaluation state dependence is known
-        info.inc_count(eval_state, node_walk_id);
-
         return res;
+    }
+
+    /// Collect the DF handles for a requested node function.
+    void collect_req_node_df_handles(
+        DAG_node const                        *expr,
+        Distribution_function::Requested_node *req_node,
+        unsigned                               walk_id)
+    {
+        Node_info &info = m_node_info_map[expr];
+        if (info.already_visited(walk_id)) {
+            return;
+        }
+        info.mark_visited(walk_id);
+
+        switch (expr->get_kind()) {
+        case DAG_node::EK_TEMPORARY:
+            {
+                // should not happen, but we can handle it
+                DAG_temporary const *t = cast<DAG_temporary>(expr);
+                expr = t->get_expr();
+                collect_req_node_df_handles(expr, req_node, walk_id);
+                break;
+            }
+        case DAG_node::EK_CONSTANT:
+        case DAG_node::EK_PARAMETER:
+            break;
+        case DAG_node::EK_CALL:
+            {
+                DAG_call const *call = cast<DAG_call>(expr);
+                // stop at non-DFs
+                if (!contains_df_type(call->get_type())) {
+                    break;
+                }
+
+                if (char const *handle_name = get_elemental_handle(call)) {
+                    if (m_handle_name_set.count(handle_name) == 0) {
+                        // the handle is not known, yet -> register it in the requested node
+                        req_node->df_handles.push_back(handle_name);
+                        m_handle_name_set.insert(handle_name);
+                    }
+                }
+
+                int n_args = call->get_argument_count();
+                for (int i = 0; i < n_args; ++i) {
+                    DAG_node const *arg = call->get_argument(i);
+                    collect_req_node_df_handles(arg, req_node, walk_id);
+                }
+                break;
+            }
+        }
     }
 
     /// Checks whether the type is a DF type or contains a DF type.
@@ -4059,342 +3832,38 @@ public:
         }
     }
 
-    /// Checks whether an expression lambda may be created for the given DAG node.
-    /// They shouldn't be created for matrices node and cannot be created for DF nodes,
-    /// or any types containing DF types.
-    ///
-    /// \param expr  the root node of the DAG to check
-    bool may_create_expr_lambda(DAG_node const *expr)
-    {
-        IType const *type = expr->get_type()->skip_type_alias();
-
-        // don't allow expression lambdas returning matrices,
-        // as matrices are float 16 vectors which need to be aligned to 64 byte
-        // and they take up far too much memory space
-        if (is<IType_matrix>(type)) {
-            return false;
-        }
-
-        // no DF types or types containing DF types
-        if (contains_df_type(type)) {
-            return false;
-        }
-
-        if (!m_allow_double_expr_lambdas && is<IType_double>(type)) {
-            return false;
-        }
-        return true;
-    }
-
-    /// Collect nodes which will be used for the distribution function.
-    /// Counts the nodes to find nodes used by multiple paths.
-    /// The provided node should have been generated by the builder.
-    ///
-    /// \param expr        the root of the DAG to analyze
-    /// \param eval_state  the evaluation state
-    /// \param walk_id     the current walk id
-    void collect_used_nodes(
-        DAG_node const *expr,
-        Eval_state     eval_state,
-        unsigned       walk_id)
-    {
-        // Stop when already visited in this walk.
-        // Otherwise stop, if the node was already seen in at least two walks
-        Node_info &info = m_node_info_map[expr];
-        if (info.already_visited(walk_id) || info.inc_count(eval_state, walk_id) > 1) {
-            return;
-        }
-
-        switch (expr->get_kind()) {
-        case DAG_node::EK_TEMPORARY:
-            {
-                // should not happen, but we can handle it
-                DAG_temporary const *t = cast<DAG_temporary>(expr);
-                expr = t->get_expr();
-                collect_used_nodes(expr, eval_state, walk_id);
-                return;
-            }
-        case DAG_node::EK_CONSTANT:
-        case DAG_node::EK_PARAMETER:
-            return;
-        case DAG_node::EK_CALL:
-            {
-                DAG_call const *call = cast<DAG_call>(expr);
-                int n_args = call->get_argument_count();
-                for (int i = 0; i < n_args; ++i) {
-                    collect_used_nodes(call->get_argument(i), eval_state, walk_id);
-                }
-                return;
-            }
-        }
-        MDL_ASSERT(!"Unsupported DAG node kind");
-    }
-
-    /// Prepare calls to expression lambda functions for nodes which are used
-    /// multiple times. Do this in post-order to make sure, that all required
-    /// expression lambda function calls used in sub-expressions already exist.
-    void prepare_expr_lambda_calls(
-        DAG_node const                             *expr,
-        Eval_state                                 eval_state,
-        ILambda_function::Lambda_execution_context lec)
-    {
-        Node_set visited_nodes(0, Node_set::hasher(), Node_set::key_equal(), m_alloc);
-        do_prepare_expr_lambda_calls(expr, eval_state, lec, visited_nodes);
-    }
-
-    /// Prepare calls to expression lambda functions for nodes which are used
-    /// multiple times. Do this in post-order to make sure, that all required
-    /// expression lambda function calls used in sub-expressions already exist.
-    void do_prepare_expr_lambda_calls(
-        DAG_node const                             *expr,
-        Eval_state                                 eval_state,
-        ILambda_function::Lambda_execution_context lec,
-        Node_set                                   &visited_nodes)
-    {
-        if (visited_nodes.count(expr)) {
-            return;
-        }
-        visited_nodes.insert(expr);
-
-        switch (expr->get_kind()) {
-        case DAG_node::EK_TEMPORARY:
-            {
-                // should not happen, but we can handle it
-                DAG_temporary const *t = cast<DAG_temporary>(expr);
-                expr = t->get_expr();
-                do_prepare_expr_lambda_calls(expr, eval_state, lec, visited_nodes);
-                return;
-            }
-        case DAG_node::EK_CONSTANT:
-        case DAG_node::EK_PARAMETER:
-            return;
-        case DAG_node::EK_CALL:
-            {
-                DAG_call const *call = cast<DAG_call>(expr);
-
-                int n_args = call->get_argument_count();
-                for (int i = 0; i < n_args; ++i) {
-                    do_prepare_expr_lambda_calls(
-                        call->get_argument(i), eval_state, lec, visited_nodes);
-                }
-
-                Node_info &info = m_node_info_map[call];
-
-                // call result used multiple times and not processed, yet,
-                // and an expression lambda may be created?
-                if (info.get_count(eval_state) > 1 &&
-                    info.get_node(eval_state) == NULL &&
-                    may_create_expr_lambda(call))
-                {
-                    build_expr_lambda_call(call, eval_state, lec);
-                }
-                return;
-            }
-        }
-        MDL_ASSERT(!"Unsupported DAG node kind");
-        return;
-    }
-
-    /// Get the result node from the node cache.
-    ///
-    /// \param expr        The original node.
-    /// \param eval_state  The evaluation state for which the node should be retrieved.
-    DAG_node const *get_result_node(
-        DAG_node const *expr,
-        Eval_state     eval_state)
-    {
-        return m_node_info_map[expr].get_node(eval_state);
-    }
-
-    /// Set the result node in the node cache.
-    ///
-    /// \param expr        The original node (always from the root lambda).
-    /// \param res_node    The result node (always from the root lambda).
-    /// \param eval_state  The evaluation state for which the node should be set.
-    void set_result_node(
-        DAG_node const *expr,
-        DAG_node const *res_node,
-        Eval_state     eval_state)
-    {
-        MDL_ASSERT(m_root_lambda->is_owner(expr) && m_root_lambda->is_owner(res_node));
-
-        m_node_info_map[expr].set_node(res_node, eval_state);
-        if (m_deriv_infos && m_deriv_infos->should_calc_derivatives(expr)) {
-            m_deriv_infos->mark_calc_derivatives(res_node);
-        }
-    }
-
-    /// Check if a call represents a ternary operator of BSDF's or EDF's.
-    ///
-    /// \param sema      the semantics of the call
-    /// \param ret_type  the return type of the call
-    static bool is_ternary_on_df(
-        IDefinition::Semantics sema,
-        IType const            *ret_type)
-    {
-        if (sema != operator_to_semantic(IExpression::OK_TERNARY)) {
-            return false;
-        }
-        IType::Kind kind = ret_type->get_kind();
-        return kind == IType::TK_BSDF || kind == IType::TK_HAIR_BSDF || kind == IType::TK_EDF;
-    }
-
-    /// Walk the material DAG, cloning the DF DAG nodes into the root lambda
-    /// and creating expression lambdas from the non-DF DAG nodes.
-    /// Also collects information about required material information.
-    DAG_node const *transform_material_graph(
-        DAG_node const                             *expr,
-        ILambda_function::Lambda_execution_context lec)
-    {
-        for (;;) {
-            if (DAG_node const *cache_node = get_result_node(expr, ES_AFTER_GEOMETRY_NORMAL)) {
-                return cache_node;
-            }
-
-            switch (expr->get_kind()) {
-            case DAG_node::EK_TEMPORARY:
-                {
-                    // should not happen, but we can handle it
-                    DAG_temporary const *t = cast<DAG_temporary>(expr);
-                    expr = t->get_expr();
-                    continue;
-                }
-            case DAG_node::EK_CONSTANT:
-                {
-#if 0
-                    // this should be a no-op
-                    DAG_node const *res = m_root_lambda->import_expr(expr);
-#else
-                    MDL_ASSERT(m_root_lambda->get_dag_unit().is_owner(expr));
-                    DAG_node const *res = expr;
-#endif
-                    set_result_node(expr, res, ES_AFTER_GEOMETRY_NORMAL);
-                    return res;
-                }
-            case DAG_node::EK_CALL:
-            case DAG_node::EK_PARAMETER:
-                {
-                    DAG_node const *res;
-
-                    IType const *ret_type = expr->get_type();
-                    ret_type = m_type_factory.import(ret_type);
-
-                    if (DAG_call const *call = as<DAG_call>(expr)) {
-                        IType const *ret_type = call->get_type();
-
-                        if (contains_df_type(ret_type)) {
-                            // for df expressions continue copying into the root lambda,
-                            // recursively handle all arguments and create a call
-
-                            int n_args = call->get_argument_count();
-                            Small_VLA<DAG_call::Call_argument, 8> args(m_alloc, n_args);
-
-                            for (int i = 0; i < n_args; ++i) {
-                                DAG_call::Call_argument &arg = args[i];
-                                arg.arg        = transform_material_graph(
-                                    call->get_argument(i), lec);
-                                arg.param_name = call->get_parameter_name(i);
-                            }
-
-                            res = m_root_lambda->create_call(
-                                call->get_name(),
-                                call->get_semantic(),
-                                args.data(),
-                                args.size(),
-                                ret_type,
-                                DAG_DbgInfo::generated);
-
-                            set_result_node(expr, res, ES_AFTER_GEOMETRY_NORMAL);
-                            return res;
-                        }
-                    }
-
-                    // build a new lambda function for the non-df expression, call it via
-                    // a special intrinsic and put it into the node cache
-                    res = build_expr_lambda_call(
-                        expr, ES_AFTER_GEOMETRY_NORMAL, lec);
-                    return res;
-                }
-            }
-            MDL_ASSERT(!"Unsupported DAG node kind");
-        }
-    }
-
     /// Get the flags determined during walking the material.
     Flags get_flags() const { return m_flags; }
 
-    /// Register a special expression lambda and collect information about the needed nodes.
+    /// Register a special node.
     ///
     /// \param node     the node representing the body of the lambda
-    /// \param kind     the special kind of the lambda
-    /// \param walk_id  current walk id
-    void register_special_lambda(
-        DAG_node const                       *node,
-        IDistribution_function::Special_kind kind,
-        unsigned                             walk_id)
+    /// \param path     the path to the node in the material instance
+    /// \param kind     the special kind of the node
+    void register_special_node(
+        DAG_node const                      *node,
+        char const                          *path,
+        Distribution_function::Special_kind  kind)
     {
-        Eval_state eval_state = kind == IDistribution_function::SK_MATERIAL_GEOMETRY_NORMAL
-            ? ES_BEGIN_STATE : ES_AFTER_GEOMETRY_NORMAL;
-        collect_used_nodes(node, eval_state, walk_id);
-
-        m_special_lambdas.push_back(Special_lambda_descr(kind, eval_state, node));
+        m_dist_func.add_special_node(kind, node, path);
     }
 
-    /// Register a special expression lambda and collect information about the needed nodes.
+    /// Register a special node.
     ///
-    /// \param expr_path  the path from the material root to the node representing the lambda's body
-    /// \param kind       the special kind of the lambda
+    /// \param expr_path  the path from the material root to the special node
+    /// \param path       the original path string of expr_path
+    /// \param kind       the special kind of the node
     /// \param walk_id    current walk id
-    void register_special_lambda(
+    void register_special_node(
         Array_ref<char const *>              expr_path,
-        IDistribution_function::Special_kind kind,
-        unsigned                             walk_id)
+        char const                          *path,
+        Distribution_function::Special_kind  kind)
     {
         DAG_node const *node =
             Dag_path_follower(m_alloc, expr_path, m_root_lambda.get())
                 .get_dag_arg(m_mat_root_node);
 
-        register_special_lambda(node, kind, walk_id);
-    }
-
-    /// Create previously registered special expression lambdas.
-    void create_special_lambdas()
-    {
-        for (size_t i = 0, n = m_special_lambdas.size(); i < n; ++i) {
-            Special_lambda_descr &descr = m_special_lambdas[i];
-
-            prepare_expr_lambda_calls(descr.node, descr.eval_state, ILambda_function::LEC_CORE);
-
-            mi::base::Handle<ILambda_function> lambda(
-                create_expr_lambda(descr.node, descr.eval_state, ILambda_function::LEC_CORE));
-
-            m_dist_func.set_special_lambda_function(descr.kind, lambda.get());
-        }
-    }
-
-    /// Dumps the whole DAG including the special lambdas to disk for debugging.
-    void dump_everything()
-    {
-        size_t n_main_funcs = m_dist_func.get_main_function_count();
-        size_t n_args = n_main_funcs + m_special_lambdas.size();
-        Small_VLA<DAG_call::Call_argument, 8> args(m_alloc, n_args);
-        for (size_t i = 0, n = m_dist_func.get_main_function_count(); i < n; ++i) {
-            mi::base::Handle<ILambda_function> main_func(m_dist_func.get_main_function(i));
-            args[i].param_name = "main_func";
-            args[i].arg = main_func->get_body();
-        }
-        for (int i = 0, n = m_special_lambdas.size(); i < n; ++i) {
-            args[i + n_main_funcs].param_name = "special_lambda";
-            args[i + n_main_funcs].arg = m_special_lambdas[i].node;
-        }
-        DAG_node const *dump_root = m_root_lambda->create_call(
-            "root",
-            IDefinition::DS_HIDDEN_ANNOTATION,
-            args.data(), args.size(),
-            m_root_lambda->get_body()->get_type(),
-            DAG_DbgInfo::generated);
-
-        m_root_lambda->dump(dump_root, "mat-all-dumps");
+        register_special_node(node, path, kind);
     }
 
 private:
@@ -4428,168 +3897,6 @@ private:
         // as we divide only in "before state::normal()" and "after state::normal()", we
         // just check for this property here
         return def->get_property(IDefinition::DP_USES_NORMAL);
-    }
-
-    /// Build a new expression lambda function and call it via a special intrinsic.
-    /// Also adds it to the node cache.
-    DAG_node const *build_expr_lambda_call(
-        DAG_node const                             *expr,
-        Eval_state                                 eval_state,
-        ILambda_function::Lambda_execution_context lec)
-    {
-        mi::base::Handle<ILambda_function> expr_lambda(
-            create_expr_lambda(expr, eval_state, lec));
-
-        size_t lambda_id = m_dist_func.add_expr_lambda_function(expr_lambda.get());
-        char lambda_name[21];
-        snprintf(lambda_name, sizeof(lambda_name), "%u", unsigned(lambda_id));
-
-        IType const *ret_type = expr->get_type();
-        ret_type = m_type_factory.import(ret_type);
-
-        DAG_node const *res = m_root_lambda->create_call(
-            lambda_name,
-            IDefinition::DS_INTRINSIC_DAG_CALL_LAMBDA,
-            NULL,
-            /*num_call_args=*/0,
-            ret_type,
-            DAG_DbgInfo::generated);
-
-        set_result_node(expr, res, eval_state);
-        return res;
-    }
-
-    /// Create a lambda function which can be used as an expression lambda function.
-    /// Prepared expression lambda calls will be used while importing the given DAG.
-    ///
-    /// \param node        DAG node which will be imported as body.
-    /// \param eval_state  The evaluation state used for importing the DAG node.
-    /// \param lec         The lambda execution context.
-    mi::base::Handle<ILambda_function> create_expr_lambda(
-        DAG_node const                             *node,
-        Eval_state                                 eval_state,
-        ILambda_function::Lambda_execution_context lec)
-    {
-        // TODO: What if there already exists a lambda function for this node in this state?
-
-        mi::base::Handle<ILambda_function> lambda(m_compiler->create_lambda_function(lec));
-
-        // add all material parameters from the main lambda to the lambda function
-        IType_factory *tf = lambda->get_type_factory();
-        for (size_t i = 0, n = m_root_lambda->get_parameter_count(); i < n; ++i) {
-            IType const *p_type = tf->import(m_root_lambda->get_parameter_type(i));
-            char const  *p_name = m_root_lambda->get_parameter_name(i);
-
-            size_t idx = lambda->add_parameter(p_type, p_name);
-
-            // map the i'th material parameter to this new parameter
-            lambda->set_parameter_mapping(i, idx);
-        }
-
-        lambda->set_body(import_mat_expr(lambda.get(), node, eval_state));
-
-        // for now, copy the resource table to every lambda
-        mi::base::Handle<ILambda_function> root_lambda(m_dist_func.get_root_lambda());
-        for (size_t i = 0, n = root_lambda->get_resource_entries_count(); i < n; ++i) {
-            Resource_tag_tuple const *e = root_lambda->get_resource_entry(i);
-
-            lambda->set_resource_tag(e->m_kind, e->m_url, e->m_selector, e->m_tag);
-        }
-        return lambda;
-    }
-
-    /// Import an expression into a lambda function while using the node cache to
-    /// take expression lambda calls into account.
-    ///
-    /// \param lambda        the destination lambda function
-    /// \param expr          a DAG expression (from the root lambda) to import
-    /// \param eval_state    the eval state for the expression
-    DAG_node const *import_mat_expr(
-        ILambda_function *lambda,
-        DAG_node const   *expr,
-        Eval_state       eval_state)
-    {
-        Node_cache import_cache(0, Node_cache::hasher(), Node_cache::key_equal(), m_alloc);
-        return do_import_mat_expr(lambda, expr, eval_state, import_cache);
-    }
-
-    /// Import an expression into a lambda function while using the node cache to
-    /// take expression lambda calls into account.
-    ///
-    /// \param lambda        the destination lambda function
-    /// \param expr          a DAG expression (from the root lambda) to import
-    /// \param eval_state    the eval state for the expression
-    /// \param import_cache  cache of already imported nodes
-    DAG_node const *do_import_mat_expr(
-        ILambda_function *lambda,
-        DAG_node const   *expr,
-        Eval_state       eval_state,
-        Node_cache       &import_cache)
-    {
-        Node_cache::iterator it = import_cache.find(expr);
-        if (it != import_cache.end()) {
-            return it->second;
-        }
-
-        if (DAG_node const *cache_node = get_result_node(expr, eval_state)) {
-            DAG_node const *res = lambda->import_expr(m_root_lambda->get_dag_unit(), cache_node);
-            import_cache[expr] = res;
-            return res;
-        }
-
-        DAG_node const *res;
-        switch (expr->get_kind()) {
-        case DAG_node::EK_TEMPORARY:
-            {
-                // should not happen, but we can handle it
-                DAG_temporary const *t = cast<DAG_temporary>(expr);
-                expr = t->get_expr();
-                res = do_import_mat_expr(lambda, expr, eval_state, import_cache);
-            }
-            break;
-        case DAG_node::EK_CONSTANT:
-        case DAG_node::EK_PARAMETER:
-            res = lambda->import_expr(m_root_lambda->get_dag_unit(), expr);
-            break;
-        case DAG_node::EK_CALL:
-            {
-                DAG_call const *call = cast<DAG_call>(expr);
-                int n_args = call->get_argument_count();
-                Small_VLA<DAG_call::Call_argument, 8> args(m_alloc, n_args);
-
-                for (int i = 0; i < n_args; ++i) {
-                    DAG_call::Call_argument &arg = args[i];
-                    arg.arg = do_import_mat_expr(
-                        lambda,
-                        call->get_argument(i),
-                        eval_state,
-                        import_cache);
-                    arg.param_name = call->get_parameter_name(i);
-                }
-
-                IType const *ret_type = call->get_type();
-                ret_type = lambda->get_type_factory()->import(ret_type);
-
-                res = lambda->create_call(
-                    call->get_name(),
-                    call->get_semantic(),
-                    args.data(),
-                    args.size(),
-                    ret_type,
-                    call->get_dbg_info());
-            }
-            break;
-        default:
-            MDL_ASSERT(!"Unsupported DAG node kind");
-            return NULL;
-        }
-
-        if (m_deriv_infos && m_deriv_infos->should_calc_derivatives(expr)) {
-            m_deriv_infos->mark_calc_derivatives(res);
-        }
-
-        import_cache[expr] = res;
-        return res;
     }
 
     /// Checks whether the given BSDF semantic needs access to the material.thin_walled field.
@@ -4673,114 +3980,33 @@ private:
     /// The resolver for calls.
     ICall_name_resolver const *m_resolver;
 
-    /// Helper struct collecting information about special lambda functions to be created.
-    struct Special_lambda_descr {
-        Special_lambda_descr(
-            IDistribution_function::Special_kind kind,
-            Eval_state                           eval_state,
-            DAG_node const                       *node)
-        : kind(kind)
-        , eval_state(eval_state)
-        , node(node)
-        {}
-
-        IDistribution_function::Special_kind kind;
-        Eval_state eval_state;
-        DAG_node const *node;
-    };
-
-    /// The list of special lambda descriptions.
-    std::vector<Special_lambda_descr> m_special_lambdas;
-
-    /// Helper struct collecting information about DAG nodes in different evaluation states.
+    /// Helper struct collecting information about DAG nodes.
     struct Node_info {
-        // ---- will be calculated in first phase (collect_flags) ----
-
         /// True if the value of this node depends on the evaluation state.
         bool is_eval_state_dependent;
 
-        // ---- will be calculated in second phase (collect_used_nodes) ----
-
-        /// Visit counts depending on the evaluation state.
-        unsigned count[ES_LAST + 1];
-
-        // ---- will be calculated in third phase (post visit in prepare_expr_lambda_calls) ----
-
-        /// Replacement node depending on the evaluation state.
-        DAG_node const *repl_node[ES_LAST + 1];
-
-        unsigned last_walk_id;              // used to differentiate between walks
+        /// Graph walk ID used as visited marker for different walks.
+        unsigned last_walk_id;
 
         /// Default Constructor.
         Node_info()
         : is_eval_state_dependent(false)
         , last_walk_id(0)
         {
-            for (unsigned i = 0; i <= ES_LAST; ++i) {
-                count[i]     = 0;
-                repl_node[i] = NULL;
-            }
         }
 
-        /// Return true, if this node has already been visited during the given walk.
-        bool already_visited(unsigned walk_id) {
+        /// Return true, if this node has already been visited in this walk.
+        ///
+        /// \param walk_id  the ID of the current walk
+        bool already_visited(unsigned walk_id) const {
             return last_walk_id == walk_id;
         }
 
         /// Mark the node as visited in this walk.
+        ///
+        /// \param walk_id  the ID of the current walk
         void mark_visited(unsigned walk_id) {
             last_walk_id = walk_id;
-        }
-
-        /// Increment the counter for the according evaluation state, if the node has not been
-        /// visited in this walk, yet, mark as visited in this walk and return the new counter.
-        unsigned inc_count(
-            Eval_state eval_state,
-            unsigned   walk_id)
-        {
-            // only increment, if this node has not been seen in this walk, yet
-            unsigned inc_val = already_visited(walk_id) ? 0 : 1;
-            mark_visited(walk_id);
-
-            // If not state dependent, BEGIN_STATE count is always used.
-            if (!is_eval_state_dependent) {
-                eval_state = ES_BEGIN_STATE;
-            }
-
-            return count[eval_state] += inc_val;
-        }
-
-        /// Get the counter for an evaluation state.
-        unsigned get_count(Eval_state eval_state) const
-        {
-            // If not state dependent, BEGIN_STATE count is always used.
-            if (!is_eval_state_dependent) {
-                eval_state = ES_BEGIN_STATE;
-            }
-            return count[eval_state];
-        }
-
-        /// Set the replacement node for an evaluation state.
-        void set_node(
-            DAG_node const *node,
-            Eval_state     eval_state)
-        {
-            // If not state dependent, BEGIN_STATE replacement node is always used.
-            if (!is_eval_state_dependent) {
-                eval_state = ES_BEGIN_STATE;
-            }
-
-            repl_node[eval_state] = node;
-        }
-
-        /// Get the replacement node depending for an evaluation state.
-        DAG_node const *get_node(Eval_state eval_state) const
-        {
-            // If not state dependent, BEGIN_STATE replacement node is always used.
-            if (!is_eval_state_dependent) {
-                eval_state = ES_BEGIN_STATE;
-            }
-            return repl_node[eval_state];
         }
     };
 
@@ -4792,181 +4018,45 @@ private:
     /// Collected flags.
     Flags m_flags;
 
-    /// If true, expression lambdas may be created for double values.
-    bool m_allow_double_expr_lambdas;
-
-    typedef hash_map<
+    typedef hash_set<
         char const *,
-        size_t,
         cstring_hash,
         cstring_equal_to
-    >::Type Handle_name_map;
+    >::Type Handle_name_set;
 
-    /// Maps from handle names to DF local handle IDs.
-    Handle_name_map m_handle_name_map;
+    /// Set of already seen handle names. Will be used for the handles over all requests,
+    /// as well as request.
+    Handle_name_set m_handle_name_set;
 };
 
+}  // anonymous
 
-///
-/// Helper class to dump a distribution function as a dot file.
-///
-class Distribution_function_dumper : public DAG_dumper {
-    typedef DAG_dumper Base;
-public:
-    /// Constructor.
-    ///
-    /// \param alloc  the allocator
-    /// \param out    an output stream, the dot file is written to
-    Distribution_function_dumper(
-        IAllocator                  *alloc,
-        IOutput_stream              *out,
-        Distribution_function const *dist_func);
-
-    /// Dump the distribution function to the output stream.
-    void dump();
-
-    /// Get a name for a type.
-    ///
-    /// \param type  the type
-    char const *get_type_name(IType const *type);
-
-    /// Get the parameter name for the given index if any.
-    ///
-    /// \param index  the index of the parameter
-    char const *get_parameter_name(int index) MDL_FINAL;
-
-private:
-    /// The allocator;
-    IAllocator                  *m_alloc;
-
-    /// Currently processed distribution function.
-    Distribution_function const *m_dist_func;
-};
 
 // Constructor.
 Distribution_function_dumper::Distribution_function_dumper(
     IAllocator                  *alloc,
     IOutput_stream              *out,
-    Distribution_function const *dist_func)
+    Distribution_function const *dist_func,
+    Node_color_map              &node_color_map)
 : Base(alloc, out)
-, m_alloc(alloc)
 , m_dist_func(dist_func)
+, m_node_color_map(node_color_map)
 {
-}
+    m_name_buf[0] = 0;
 
-// Get a name for a type.
-char const *Distribution_function_dumper::get_type_name(
-    IType const *type)
-{
-    type = type->skip_type_alias();
-
-    switch (type->get_kind()) {
-    case IType::TK_BOOL:             return "bool";
-    case IType::TK_INT:              return "int";
-    case IType::TK_ENUM:             return "enum";
-    case IType::TK_FLOAT:            return "float";
-    case IType::TK_DOUBLE:           return "double";
-    case IType::TK_STRING:           return "string";
-    case IType::TK_COLOR:            return "color";
-    case IType::TK_TEXTURE:          return "texture";
-    case IType::TK_LIGHT_PROFILE:    return "light_profile";
-    case IType::TK_BSDF_MEASUREMENT: return "bsdf_measurement";
-    case IType::TK_BSDF:             return "bsdf";
-    case IType::TK_HAIR_BSDF:        return "hair_bsdf";
-    case IType::TK_EDF:              return "edf";
-    case IType::TK_VDF:              return "vdf";
-    case IType::TK_VECTOR:
-        {
-            IType_vector const *tv = cast<IType_vector>(type);
-            int size = tv->get_compound_size();
-            IType::Kind elem_kind = tv->get_element_type()->get_kind();
-            if (elem_kind == IType::TK_FLOAT) {
-                if (size == 2) return "float2";
-                if (size == 3) return "float3";
-                if (size == 4) return "float4";
-                return "floatN";
-            }
-            if (elem_kind == IType::TK_DOUBLE) {
-                if (size == 2) return "double2";
-                if (size == 3) return "double3";
-                if (size == 4) return "double4";
-                return "doubleN";
-            }
-            if (elem_kind == IType::TK_INT) {
-                if (size == 2) return "int2";
-                if (size == 3) return "int3";
-                if (size == 4) return "int4";
-                return "intN";
-            }
-            return "vector";
-        }
-    case IType::TK_MATRIX: return "matrix";
-    case IType::TK_ARRAY:  return "array";
-    case IType::TK_STRUCT:
-        {
-            IType_struct const *ts = cast<IType_struct>(type);
-            return ts->get_symbol()->get_name();
-        }
-
-    case IType::TK_ALIAS:
-    case IType::TK_PTR:
-    case IType::TK_REF:
-    case IType::TK_VOID:
-    case IType::TK_AUTO:
-    case IType::TK_ERROR:
-    case IType::TK_FUNCTION:
-        return "<unknown>";
-    }
-    return "<unexpected>";
+    mi::base::Handle<Lambda_function> root_lambda(m_dist_func->get_root_lambda());
+    set_dag_unit(&root_lambda->get_dag_unit());
 }
 
 // Dump the lambda expression DAG to the output stream.
 void Distribution_function_dumper::dump()
 {
-    m_printer->print("digraph \"distribution_function\" {\n");
+    m_printer->print("digraph \"distribution_function\" {\n"
+        "  node [fillcolor=\"#E0E0A8\"]\n");
 
-    for (size_t i = 0, n = m_dist_func->get_main_function_count(); i < n; ++i) {
-        char main_name[30];
-        snprintf(main_name, sizeof(main_name), "main_lambda_%u", (unsigned) i);
+    mi::base::Handle<Lambda_function> root_lambda(m_dist_func->get_root_lambda());
 
-        mi::base::Handle<Lambda_function> main_lambda(m_dist_func->get_main_function(i));
-
-        m_printer->print("  subgraph cluster_");
-        m_printer->print(main_name);
-        m_printer->print(" {\n"
-            "    bgcolor = goldenrod1;\n"
-            "    color = goldenrod;\n"
-            "    node [style=filled];\n"
-            "    label = \"DF\";\n");
-        m_walker.walk_node(const_cast<DAG_node *>(main_lambda->get_body()), this);
-        m_printer->print("  }\n");
-    }
-
-    for (size_t i = 0, n = m_dist_func->get_expr_lambda_count(); i < n; ++i) {
-        mi::base::Handle<mi::mdl::Lambda_function> expr_lambda(
-            m_dist_func->get_expr_lambda(i));
-        Lambda_function *lambda = expr_lambda.get();
-
-        char expr_name[30];
-        snprintf(expr_name, sizeof(expr_name), "expr_lambda_%u", (unsigned) i);
-
-        m_printer->print("  subgraph cluster_");
-        m_printer->print(expr_name);
-        m_printer->print(" {\n"
-            "    bgcolor = lightyellow;\n"
-            "    color = lightyellow3;\n"
-            "    node [style=filled];\n"
-            "    label = \"");
-        m_printer->print(expr_name);
-        IType const *ret_type = lambda->get_return_type();
-        if (ret_type != NULL) {
-            m_printer->print(" : ");
-            m_printer->print(get_type_name(ret_type));
-        }
-        m_printer->print("\";\n");
-        m_walker.walk_node(const_cast<DAG_node *>(lambda->get_body()), this);
-        m_printer->print("  }\n");
-    }
+    m_walker.walk_node(const_cast<DAG_node *>(root_lambda->get_body()), this);
     m_printer->print("}\n");
 }
 
@@ -4977,7 +4067,24 @@ const char *Distribution_function_dumper::get_parameter_name(int index)
     return root_lambda.get()->get_parameter_name(index);
 }
 
-}  // anonymous
+// Get a color for the given node or nullptr for default
+char const *Distribution_function_dumper::get_node_color(DAG_node const *node)
+{
+    Node_color_map::const_iterator it = m_node_color_map.find(node);
+    if (it == m_node_color_map.cend()) {
+        return nullptr;
+    } else {
+        return it->second;
+    }
+}
+
+// Get a prefix for the label for the given node or nullptr for no prefix.
+char const *Distribution_function_dumper::get_node_label_prefix(DAG_node const *node)
+{
+    snprintf(m_name_buf, sizeof(m_name_buf), "#%u | ", unsigned(node->get_id()));
+    return m_name_buf;
+}
+
 
 // Constructor.
 Distribution_function::Distribution_function(
@@ -4987,12 +4094,11 @@ Distribution_function::Distribution_function(
 , m_mdl(mi::base::make_handle_dup(compiler))
 , m_root_lambda(
     impl_cast<Lambda_function>(compiler->create_lambda_function(Lambda_function::LEC_CORE)))
-, m_main_functions(alloc)
-, m_expr_lambdas(alloc)
+, m_explicit_requested_node_count(0)
+, m_requested_nodes(alloc)
 , m_deriv_infos_calculated(false)
 , m_deriv_infos(alloc)
 , m_df_handles(alloc)
-, m_main_func_df_handles(alloc)
 , m_arena(alloc)
 , m_resource_tag_map(alloc)
 {
@@ -5001,8 +4107,8 @@ Distribution_function::Distribution_function(
     // force always using varying state
     root_lambda->set_uses_varying_state(true);
 
-    for (size_t i = 0, n = dimension_of(m_special_lambdas); i < n; ++i) {
-        m_special_lambdas[i] = ~0;
+    for (size_t i = 0, n = dimension_of(m_special_nodes); i < n; ++i) {
+        m_special_nodes[i] = ~0;
     }
 }
 
@@ -5012,10 +4118,9 @@ Distribution_function::Distribution_function(
 IDistribution_function::Error_code Distribution_function::initialize(
     IMaterial_instance const  *mat_instance,
     Requested_function        *requested_functions,
-    size_t                     num_functions,
-    bool                       include_geometry_normal,
+    size_t                     num_req_functions,
     bool                       calc_derivative_infos,
-    bool                       allow_double_expr_lambdas,
+    bool                       enable_spectral_conversions,
     ICall_name_resolver const *name_resolver)
 {
     m_deriv_infos_calculated = calc_derivative_infos;
@@ -5026,10 +4131,9 @@ IDistribution_function::Error_code Distribution_function::initialize(
         name_resolver,
         mat_instance,
         requested_functions,
-        num_functions,
-        include_geometry_normal,
+        num_req_functions,
         calc_derivative_infos,
-        allow_double_expr_lambdas);
+        enable_spectral_conversions);
 }
 
 // Get the root lambda function used to build nodes and manage parameters and resources.
@@ -5039,77 +4143,82 @@ Lambda_function *Distribution_function::get_root_lambda() const
     return m_root_lambda.get();
 }
 
-size_t Distribution_function::add_main_function(ILambda_function *ilambda)
+// Add a requested node.
+size_t Distribution_function::add_requested_node(
+    DAG_node const *node,
+    char const     *path,
+    char const     *function_name,
+    Eval_state      eval_state)
 {
-    Lambda_function *lambda = impl_cast<Lambda_function>(ilambda);
-    m_main_functions.push_back(mi::base::make_handle_dup(lambda));
-    m_main_func_df_handles.emplace_back(get_allocator());
-    return m_main_functions.size() - 1;
+    path = path != nullptr ? Arena_strdup(m_arena, path) : nullptr;
+    function_name = function_name != nullptr ? Arena_strdup(m_arena, function_name) : nullptr;
+    m_requested_nodes.emplace_back(get_allocator(), node, path, function_name, eval_state);
+    return m_requested_nodes.size() - 1;
 }
 
-Lambda_function *Distribution_function::get_main_function(size_t index) const
+// Get the requested node for the given index.
+Distribution_function::Requested_node *Distribution_function::get_requested_node(
+    size_t index)
 {
-    if (index >= m_main_functions.size()) {
-        return NULL;
+    if (index >= m_requested_nodes.size()) {
+        return nullptr;
     }
 
-    Lambda_function *lambda = m_main_functions[index].get();
-    if (lambda != NULL) {
-        lambda->retain();
-    }
-    return lambda;
+    return &m_requested_nodes[index];
 }
 
-size_t Distribution_function::get_main_function_count() const
+// Get the requested node for the given index.
+Distribution_function::Requested_node const *Distribution_function::get_requested_node(
+    size_t index) const
 {
-    return m_main_functions.size();
-}
-
-// Add the given expression lambda function to the distribution function.
-size_t Distribution_function::add_expr_lambda_function(ILambda_function *ilambda)
-{
-    Lambda_function *lambda = impl_cast<Lambda_function>(ilambda);
-    m_expr_lambdas.push_back(mi::base::make_handle_dup(lambda));
-    return m_expr_lambdas.size() - 1;
-}
-
-// Get the expression lambda function for the given index.
-Lambda_function *Distribution_function::get_expr_lambda(size_t index) const
-{
-    if (index >= m_expr_lambdas.size()) {
-        return NULL;
+    if (index >= m_requested_nodes.size()) {
+        return nullptr;
     }
 
-    Lambda_function *lambda = m_expr_lambdas[index].get();
-    if (lambda != NULL) {
-        lambda->retain();
+    return &m_requested_nodes[index];
+}
+
+// Set a special node for getting certain material properties.
+void Distribution_function::add_special_node(
+    Special_kind    kind,
+    DAG_node const *node,
+    char const     *path)
+{
+    if (kind <= SK_INVALID || kind >= SK_NUM_KINDS) {
+        MDL_ASSERT(!"Invalid special kind");
+        return;
     }
-    return lambda;
+
+    m_special_nodes[kind] = add_requested_node(
+        node,
+        path,
+        nullptr,
+        kind == Special_kind::SK_MATERIAL_GEOMETRY_NORMAL
+        ? Eval_state::ES_BEGIN_STATE : Eval_state::ES_AFTER_GEOMETRY_NORMAL);
 }
 
-// Get the number of expression lambda functions.
-size_t Distribution_function::get_expr_lambda_count() const
+// Set a special node for getting certain material properties.
+void Distribution_function::set_special_node(
+    Special_kind  kind,
+    size_t        requested_node_index)
 {
-    return m_expr_lambdas.size();
+    if (kind <= SK_INVALID || kind >= SK_NUM_KINDS) {
+        MDL_ASSERT(!"Invalid special kind");
+        return;
+    }
+
+    m_special_nodes[kind] = requested_node_index;
 }
 
-// Set a special lambda function for getting certain material properties.
-void Distribution_function::set_special_lambda_function(
-    Special_kind     kind,
-    ILambda_function *lambda)
+// Get the requested node index for the given special node kind.
+size_t Distribution_function::get_special_node_index(Special_kind kind) const
 {
-    MDL_ASSERT(kind != SK_INVALID && kind < SK_NUM_KINDS);
+    if (kind <= SK_INVALID || kind >= SK_NUM_KINDS) {
+        MDL_ASSERT(!"Invalid special kind");
+        return ~0;
+    }
 
-    // add as expression lambda to use the same workflow for resource enumeration
-    // and LLVM function construction. This will also increase the reference count.
-    m_special_lambdas[kind] = add_expr_lambda_function(lambda);
-}
-
-// Get the expression lambda index for the given special lambda function kind.
-size_t Distribution_function::get_special_lambda_function_index(Special_kind kind) const
-{
-    MDL_ASSERT(kind != SK_INVALID && kind < SK_NUM_KINDS);
-    return m_special_lambdas[kind];
+    return m_special_nodes[kind];
 }
 
 /// Get the resource attribute map of this distribution function.
@@ -5186,28 +4295,6 @@ char const *Distribution_function::get_df_handle(size_t index) const
     return m_df_handles[index];
 }
 
-// Returns the number of distribution function handles referenced by this distribution function.
-size_t Distribution_function::get_main_func_df_handle_count(size_t main_func_index) const
-{
-    if (main_func_index >= m_main_func_df_handles.size()) {
-        return ~size_t(0);
-    }
-    return m_main_func_df_handles[main_func_index].size();
-}
-
-// Returns a distribution function handle referenced by a given main function.
-char const *Distribution_function::get_main_func_df_handle(
-    size_t main_func_index,
-    size_t index) const
-{
-    if (main_func_index >= m_main_func_df_handles.size() ||
-        index >= m_main_func_df_handles[main_func_index].size())
-    {
-        return NULL;
-    }
-    return m_main_func_df_handles[main_func_index][index];
-}
-
 // Get the derivative information if they were requested during initialization.
 Derivative_infos const *Distribution_function::get_derivative_infos() const
 {
@@ -5226,7 +4313,30 @@ void Distribution_function::dump(char const *name) const
         mi::base::Handle<File_Output_stream> out(
             builder.create<File_Output_stream>(get_allocator(), f, /*close_at_destroy=*/true));
 
-        Distribution_function_dumper dumper(get_allocator(), out.get(), this);
+        Distribution_function_dumper::Node_color_map node_color_map(get_allocator());
+        for (size_t i = 0, n = get_total_requested_node_count(); i < n; ++i) {
+            Distribution_function::Requested_node const *req = get_requested_node(i);
+            node_color_map[req->node] = "\"#E29245\"";  // orange: requested node
+        }
+
+        for (int i = 0; i < Distribution_function::SK_NUM_KINDS; ++i) {
+            size_t special_node_index = get_special_node_index(
+                Distribution_function::Special_kind(i));
+            if (special_node_index == ~0) {
+                continue;
+            }
+
+            Distribution_function::Requested_node const *special_node =
+                get_requested_node(special_node_index);
+
+            // only mark special node, if they were not requested specifically
+            if (node_color_map.find(special_node->node) == node_color_map.end()) {
+                // green: special nodes, indirectly requested node
+                node_color_map[special_node->node] = "\"#92E245\"";
+            }
+        }
+
+        Distribution_function_dumper dumper(get_allocator(), out.get(), this, node_color_map);
         dumper.dump();
     }
 }

@@ -86,9 +86,11 @@ const char* Compound_impl<I, T, ROWS, COLUMNS>::get_type_name() const
 template <typename I, typename T, mi::Size ROWS, mi::Size COLUMNS>
 const char* Compound_impl<I, T, ROWS, COLUMNS>::get_key( mi::Size index) const
 {
-    if( !index_to_key( index, m_cached_key))
+    std::string key;
+    if( !index_to_key( index, key))
         return nullptr;
-    return m_cached_key.c_str();
+
+    return m_string_cache.add( key);
 }
 
 template <typename I, typename T, mi::Size ROWS, mi::Size COLUMNS>

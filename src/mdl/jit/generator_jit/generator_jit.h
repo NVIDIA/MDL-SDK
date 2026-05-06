@@ -85,12 +85,16 @@ public:
 
     /// Add a lambda function to this link unit.
     ///
+    /// All resources used by \p lambda must have been registered in \p lambda via
+    /// the map_*_resource functions of #mi::mdl::ILambda_function. It is also recommended
+    /// to already map the resources of the default arguments of the used material instance.
+    ///
     /// \param lambda               the lambda function to compile
     /// \param module_cache         the module cache if any
     /// \param name_resolver        the call name resolver
     /// \param kind                 the kind of the lambda function
-    /// \param arg_block_index      on success, this parameter will receive the index of the target
-    ///                             argument block used for added entity or ~0 if none is used
+    /// \param arg_block_index      variable receiving the index of the target argument block
+    ///                             used for this lambda function or ~0 if none is used
     /// \param function_index       the index of the callable function in the created target code.
     ///                             This parameter is option, provide NULL if not required.
     ///
@@ -107,27 +111,34 @@ public:
     ///
     /// The distribution function can contain BSDFs, hair BSDFs, EDFs and/or non-DF expressions.
     /// The first added function is always an init function.
-    /// For a BSDF it results in three functions, with their names built from the name of the
-    /// main DF function of \p dist_func suffixed with \c "_sample", \c "_evaluate"
+    /// For BSDFs it results in three functions, with their names built from the name of the
+    /// requested nodes of \p dist_func suffixed with \c "_sample", \c "_evaluate"
     /// and \c "_pdf", respectively.
+    ///
+    /// All resources used by the requested nodes of \p dist_func must have already been registered
+    /// in the root lambda of \p dist_func via the map_*_resource functions of
+    /// #mi::mdl::ILambda_function. It is also recommended to already map the resources of the
+    /// default arguments of the used material instance.
     ///
     /// \param dist_func                  the distribution function to compile
     /// \param module_cache               the module cache if any
     /// \param name_resolver              the call name resolver
     /// \param arg_block_index            variable receiving the index of the target argument block
     ///                                   used for this distribution function or ~0 if none is used
-    /// \param main_function_indices      array receiving the (first) indices of the main functions.
+    /// \param req_function_indices       array receiving the (first) indices of the requested
+    ///                                   functions from the distribution function.
     ///                                   The first index is the one of the init function.
     ///                                   This parameter is optional, provide NULL if not required.
-    /// \param num_main_function_indices  the size of \p main_function_indices in number of entries
+    /// \param num_req_function_indices   the size of \p req_function_indices in number of entries,
+    ///                                   must be number of requested function plus one for init
     /// \return true on success
     bool add(
         IDistribution_function const *dist_func,
         IModule_cache                *module_cache,
         ICall_name_resolver const    *name_resolver,
         size_t                       *arg_block_index,
-        size_t                       *main_function_indices,
-        size_t                        num_main_function_indices) MDL_FINAL;
+        size_t                       *req_function_indices,
+        size_t                        num_req_function_indices) MDL_FINAL;
 
     /// Get the number of functions in this link unit.
     size_t get_function_count() const MDL_FINAL;
@@ -612,7 +623,7 @@ public:
     /// \param llvm_ir_output       if true generate LLVM-IR (prepared for the target language)
     ///
     /// \return the compiled function or NULL on compilation errors
-    virtual IGenerated_code_executable *compile_into_source(
+    IGenerated_code_executable *compile_into_source(
         ICode_cache                    *code_cache,
         ILambda_function const         *lambda,
         IModule_cache                  *module_cache,
@@ -626,10 +637,16 @@ public:
 
     /// Compile a distribution function into native code using the JIT.
     ///
-    /// Currently only BSDFs are supported.
-    /// For a BSDF, it results in four functions, with their names built from the name of the
-    /// main DF function of \p dist_func suffixed with \c "_init", \c "_sample", \c "_evaluate"
+    /// The distribution function can contain BSDFs, hair BSDFs, EDFs and/or non-DF expressions.
+    /// The first added function is always an init function.
+    /// For BSDFs it results in three functions, with their names built from the name of the
+    /// requested nodes of \p dist_func suffixed with \c "_sample", \c "_evaluate"
     /// and \c "_pdf", respectively.
+    ///
+    /// All resources used by the requested nodes of \p dist_func must have already been registered
+    /// in the root lambda of \p dist_func via the map_*_resource functions of
+    /// #mi::mdl::ILambda_function. It is also recommended to already map the resources of the
+    /// default arguments of the used material instance.
     ///
     /// \param dist_func            the distribution function to compile
     /// \param module_cache         the module cache if any
@@ -649,10 +666,16 @@ public:
 
     /// Compile a distribution function into PTX or HLSL using the JIT.
     ///
-    /// Currently only BSDFs are supported.
-    /// For a BSDF, it results in four functions, with their names built from the name of the
-    /// main DF function of \p dist_func suffixed with \c "_init", \c "_sample", \c "_evaluate"
+    /// The distribution function can contain BSDFs, hair BSDFs, EDFs and/or non-DF expressions.
+    /// The first added function is always an init function.
+    /// For BSDFs it results in three functions, with their names built from the name of the
+    /// requested nodes of \p dist_func suffixed with \c "_sample", \c "_evaluate"
     /// and \c "_pdf", respectively.
+    ///
+    /// All resources used by the requested nodes of \p dist_func must have already been registered
+    /// in the root lambda of \p dist_func via the map_*_resource functions of
+    /// #mi::mdl::ILambda_function. It is also recommended to already map the resources of the
+    /// default arguments of the used material instance.
     ///
     /// \param dist_func            the distribution function to compile
     /// \param module_cache         the module cache if any

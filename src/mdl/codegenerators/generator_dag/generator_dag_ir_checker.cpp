@@ -45,7 +45,8 @@ namespace mdl {
 // Constructor.
 DAG_ir_checker::DAG_ir_checker(
     IAllocator                  *alloc,
-    ICall_name_resolver         *call_resolver)
+    ICall_name_resolver const   *call_resolver,
+    bool                        allow_distiller_marker)
 : m_alloc(alloc)
 , m_temporaries(alloc)
 , m_call_resolver(call_resolver)
@@ -56,6 +57,7 @@ DAG_ir_checker::DAG_ir_checker(
 , m_allow_temporary(false)
 , m_allow_parameters(false)
 , m_collect_temporary(false)
+, m_allow_distiller_marker(allow_distiller_marker)
 {
 }
 
@@ -211,12 +213,17 @@ size_t DAG_ir_checker::check_call(DAG_call const *call)
     bool has_def        = true;
     bool def_is_uniform = false;
 
+    Array_ref<char const *> p_names;
+
     switch (sema) {
     case IDefinition::DS_INTRINSIC_DAG_FIELD_ACCESS:
-        has_def        = false;
-        def_is_uniform = true;
-        n_params       = 1;
-//      names          = { "s" };
+        {
+            static char const * const names[] = { "s" };
+            p_names        = names;
+            has_def        = false;
+            def_is_uniform = true;
+            n_params       = p_names.size();
+        }
         break;
     case IDefinition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR:
         has_def        = false;
@@ -224,46 +231,71 @@ size_t DAG_ir_checker::check_call(DAG_call const *call)
         n_params       = call->get_argument_count();
         break;
     case IDefinition::DS_INTRINSIC_DAG_ARRAY_LENGTH:
-        has_def        = false;
-        def_is_uniform = true;
-        n_params       = 1;
-//      names          = { "a" };
+        {
+            static char const * const names[] = { "a" };
+            p_names        = names;
+            has_def        = false;
+            def_is_uniform = true;
+            n_params       = p_names.size();
+        }
         break;
     case IDefinition::DS_INTRINSIC_DAG_SET_OBJECT_ID:
-        has_def        = false;
-        def_is_uniform = true;
-        n_params       = 2;
-//      names          = { "object_id", "expr" };
+        {
+            static char const * const names[] = { "object_id", "expr" };
+            p_names        = names;
+            has_def        = false;
+            def_is_uniform = true;
+            n_params       = p_names.size();
+        }
         break;
     case IDefinition::DS_INTRINSIC_DAG_SET_TRANSFORMS:
-        has_def        = false;
-        def_is_uniform = true;
-        n_params       = 3;
-//      names          = { "world_to_object", "object_to_world", "expr" };
-        break;
-    case IDefinition::DS_INTRINSIC_DAG_CALL_LAMBDA:
-        has_def        = false;
-        def_is_uniform = false;
-        n_params       = 0;
+        {
+            static char const * const names[] = { "world_to_object", "object_to_world", "expr" };
+            p_names        = names;
+            has_def        = false;
+            def_is_uniform = true;
+            n_params       = p_names.size();
+        }
         break;
     case IDefinition::DS_INTRINSIC_DAG_DECL_CAST:
-        has_def        = false;
-        def_is_uniform = false;
-        n_params       = 1;
+        {
+            static char const * const names[] = { "cast" };
+            p_names        = names;
+            has_def        = false;
+            def_is_uniform = false;
+            n_params       = p_names.size();
+        }
+        break;
+    case IDefinition::DS_INTRINSIC_DIST_BSDF_MARKER:
+        // Distiller-internal node with no MDL definition; skip signature lookup.
+        {
+            static char const * const names[] = {
+                "tag", "wrapped_color", "wrapped_float", "wrapped_bsdf" };
+            p_names        = names;
+            has_def        = false;
+            def_is_uniform = false;
+            n_params       = p_names.size();
+
+            if (!m_allow_distiller_marker) {
+                error(call, EC_DISTILLER_MARKER_NOT_ALLOWED);
+            }
+        }
         break;
     default:
         if (sema == operator_to_semantic(IExpression::OK_TERNARY)) {
             // ternary operator has no def
+            static char const * const names[] = { "cond", "true_exp", "false_exp" };
+            p_names        = names;
             has_def        = false;
             def_is_uniform = true;
-            n_params       = 3;
-//          names          = { "cond", "true_exp", "false_exp" };
+            n_params       = p_names.size();
         } else if (sema == operator_to_semantic(IExpression::OK_ARRAY_INDEX)) {
             // array index operator has no def
-            has_def = false;
+            static char const * const names[] = { "a", "i" };
+            p_names        = names;
+            has_def        = false;
             def_is_uniform = true;
-            n_params = 2;
-//          names          = { "a", "i" };
+            n_params       = p_names.size();
         } else {
             MDL_ASSERT(!is_DAG_semantics(sema) && "DAG semantic not handled");
         }
@@ -301,6 +333,12 @@ size_t DAG_ir_checker::check_call(DAG_call const *call)
                 ftype->get_parameter(i, p_type, p_sym);
 
                 if (strcmp(p_sym->get_name(), call->get_parameter_name(i)) != 0) {
+                    error(call, EC_PARAM_NAME_MISMATCH);
+                }
+            } else {
+                if (sema == IDefinition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR) {
+                    // we do not check parameter names for array constructor
+                } else if (strcmp(p_names[i], call->get_parameter_name(i)) != 0) {
                     error(call, EC_PARAM_NAME_MISMATCH);
                 }
             }
@@ -518,6 +556,9 @@ void DAG_ir_checker::error(DAG_node const *node, Error_code code)
         break;
     case EC_TEMP_INDEX_TOO_HIGH:
         MDL_ASSERT(!"Temporary index to high");
+        break;
+    case EC_DISTILLER_MARKER_NOT_ALLOWED:
+        MDL_ASSERT(!"Distiller marker not allowed in this context");
         break;
     }
     if (code != EC_OK) {

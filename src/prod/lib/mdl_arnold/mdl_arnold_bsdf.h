@@ -46,10 +46,10 @@ namespace mi
 }
 
 // more convenient typedefs
-typedef mi::neuraylib::tct_float4                               float4;
+typedef mi::neuraylib::tct_float4_a16                           float4;
 typedef mi::neuraylib::tct_float3                               float3;
 typedef mi::neuraylib::tct_float2                               float2;
-typedef mi::neuraylib::tct_float4 const *                       float4x4;
+typedef mi::neuraylib::tct_float4_a16 const *                   float4x4;
 
 // node constants rendering data when rendering on CPU
 struct MdlShaderNodeDataCPU

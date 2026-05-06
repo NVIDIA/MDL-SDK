@@ -38,6 +38,7 @@
 #include <mi/base/interface_implement.h>
 #include <mi/neuraylib/itransaction.h>
 
+#include <base/data/idata/i_idata_string_cache.h>
 #include <base/lib/log/i_log_assert.h>
 #include <io/scene/mdl_elements/i_mdl_elements_value.h>
 
@@ -393,8 +394,7 @@ public:
 
 private:
     const mi::base::Handle<mi::neuraylib::ITransaction> m_transaction;
-    mutable std::string m_cached_file_path;
-    mutable std::string m_cached_selector;
+    mutable IDATA::String_cache m_string_cache;
 };
 
 
@@ -420,7 +420,7 @@ public:
 
 private:
     const mi::base::Handle<mi::neuraylib::ITransaction> m_transaction;
-    mutable std::string m_cached_file_path;
+    mutable IDATA::String_cache m_string_cache;
 };
 
 
@@ -446,7 +446,7 @@ public:
 
 private:
     const mi::base::Handle<mi::neuraylib::ITransaction> m_transaction;
-    mutable std::string m_cached_file_path;
+    mutable IDATA::String_cache m_string_cache;
 };
 
 

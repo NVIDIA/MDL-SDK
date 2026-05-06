@@ -138,14 +138,20 @@ mi::neuraylib::IValue_float* Value_color::get_value( mi::Size index)
 
 mi::Sint32 Value_color::set_value( mi::Size index, mi::neuraylib::IValue* value)
 {
+    if( !value)
+        return -1;
     mi::base::Handle<MDL::IValue> value_int( NEURAY::get_internal_value( value));
     mi::base::Handle<MDL::IValue_float> value_int_float(
         value_int->get_interface<MDL::IValue_float>());
+    if( !value_int_float)
+        return -3;
     return m_value->set_value( index, value_int_float.get());
 }
 
 mi::Sint32 Value_color::set_value( mi::Size index, mi::neuraylib::IValue_float* value)
 {
+    if( !value)
+        return -1;
     mi::base::Handle<MDL::IValue> value_int( NEURAY::get_internal_value( value));
     mi::base::Handle<MDL::IValue_float> value_int_float(
         value_int->get_interface<MDL::IValue_float>());
@@ -237,8 +243,8 @@ const char* Value_texture::get_file_path() const
 {
     auto* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
-    m_cached_file_path = m_value->get_file_path( db_transaction);
-    return !m_cached_file_path.empty() ? m_cached_file_path.c_str() : nullptr;
+    std::string result = m_value->get_file_path( db_transaction);
+    return !result.empty() ? m_string_cache.add( result) : nullptr;
 }
 
 mi::Float32 Value_texture::get_gamma() const
@@ -251,11 +257,9 @@ mi::Float32 Value_texture::get_gamma() const
         // was just not loaded.
         return m_value->get_unresolved_file_path()[0] != '\0' ? m_value->get_gamma() : 0.0f;
     }
-    if( db_transaction->get_class_id( texture_tag) != TEXTURE::ID_TEXTURE)
-       return m_value->get_gamma();
 
     DB::Access<TEXTURE::Texture> tex( texture_tag, db_transaction);
-    return tex->get_gamma();
+    return tex ? tex->get_gamma() : m_value->get_gamma();
 }
 
 const char* Value_texture::get_selector() const
@@ -268,12 +272,10 @@ const char* Value_texture::get_selector() const
         // was just not loaded.
         return m_value->get_unresolved_file_path()[0] != '\0' ? m_value->get_selector() : nullptr;
     }
-    if( db_transaction->get_class_id( texture_tag) != TEXTURE::ID_TEXTURE)
-       return nullptr;
 
     DB::Access<TEXTURE::Texture> tex( texture_tag, db_transaction);
-    m_cached_selector = tex->get_selector( db_transaction);
-    return !m_cached_selector.empty() ? m_cached_selector.c_str() : nullptr;
+    std::string result = tex ? tex->get_selector( db_transaction) : std::string();
+    return !result.empty() ? m_string_cache.add( result) : nullptr;
 }
 
 const char* Value_texture::get_owner_module() const
@@ -312,8 +314,8 @@ const char* Value_light_profile::get_file_path() const
 {
     auto* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
-    m_cached_file_path = m_value->get_file_path( db_transaction);
-    return !m_cached_file_path.empty() ? m_cached_file_path.c_str() : nullptr;
+    std::string result = m_value->get_file_path( db_transaction);
+    return !result.empty() ? m_string_cache.add( result) : nullptr;
 }
 
 const char* Value_light_profile::get_owner_module() const
@@ -352,8 +354,8 @@ const char* Value_bsdf_measurement::get_file_path() const
 {
     auto* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
-    m_cached_file_path = m_value->get_file_path( db_transaction);
-    return !m_cached_file_path.empty() ? m_cached_file_path.c_str() : nullptr;
+    std::string result = m_value->get_file_path( db_transaction);
+    return !result.empty() ? m_string_cache.add( result) : nullptr;
 }
 
 const char* Value_bsdf_measurement::get_owner_module() const

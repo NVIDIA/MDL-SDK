@@ -31,7 +31,7 @@
 #ifndef BASE_SYSTEM_MAIN_TYPES_H
 #define BASE_SYSTEM_MAIN_TYPES_H
 
-// Get MI_ARCH_ definitions (e.g. MI_ARCH_64BIT)
+// Get MI_ARCH_ definitions
 #include <mi/base/config.h>
 
 #include <mi/base/types.h>
@@ -61,11 +61,7 @@ typedef unsigned short          Ushort;  //< unsigned short
 typedef signed int              Sint;    //< signed integer
 
 #ifdef MI_PLATFORM_WINDOWS
-#ifdef MI_ARCH_64BIT
 typedef __int64                 ssize_t;
-#else
-typedef long                    ssize_t;
-#endif
 #endif
 
 static constexpr Uint null_index = (Uint)~0;  //< default index-1
@@ -105,17 +101,12 @@ typedef Pointer_as_sint_<(unsigned int)sizeof(void*)>::Type Pointer_as_sint;
 // ssize_t        value = ...; printf("Memory size is %" FMT_SSIZE_T       " bytes", value);
 // mi::Size       value = ...; printf("Memory size is %" MI_BASE_FMT_MI_SIZE       " bytes", value);
 // mi::Difference value = ...; printf("Memory size is %" MI_BASE_FMT_MI_DIFFERENCE " bytes", value);
-#if defined(MI_ARCH_64BIT) || defined(MI_PLATFORM_MACOSX)
 #ifdef MI_PLATFORM_WINDOWS
 #  define FMT_SIZE_T        "llu"
 #  define FMT_SSIZE_T       "lld"
 #else
 #  define FMT_SIZE_T        "zu"
 #  define FMT_SSIZE_T       "zd"
-#endif
-#else
-#  define FMT_SIZE_T        FMT_BIT32 "u"
-#  define FMT_SSIZE_T       FMT_BIT32 "d"
 #endif
 
 // For backward compatibility

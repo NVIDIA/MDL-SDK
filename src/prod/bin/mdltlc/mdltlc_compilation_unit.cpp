@@ -30,25 +30,25 @@
 
 #include <ios>
 #include <sstream>
+#include <string>
 
 #include <mdl/compiler/compilercore/compilercore_memory_arena.h>
-#include <mdl/compiler/compilercore/compilercore_streams.h>
 #include <mdl/compiler/compilercore/compilercore_tools.h>
 #include <mdl/compiler/compilercore/compilercore_file_utils.h>
-#include <mdl/compiler/compilercore/compilercore_wchar_support.h>
 #include <mdl/compiler/compilercore/compilercore_mdl.h>
 
 #include <mi/mdl/mdl_distiller_rules.h>
 
+#include <mi/base/handle.h>
 #include <mi/mdl/mdl_types.h>
 
 #include "mdltlc_compilation_unit.h"
 #include "mdltlc_expr_walker.h"
 #include "mdltlc_analysis.h"
 #include "mdltlc_codegen.h"
-
-#include "Scanner.h"
-#include "Parser.h"
+#include "mdltlc_ast_compare.h"
+#include "mdltlc_parser_coco.h"
+#include "mdltlc_parser_rd.h"
 
 /// Return a pointer to the filename portion of the given path, or the
 /// path itself if it does not have a directory component.
@@ -60,82 +60,66 @@ static char const *file_basename(char const *filename) {
         (backslash_ptr ? backslash_ptr + 1 : filename);
 }
 
-/// Basic implementation of the Errors interface in the Coco/R
-/// scanner.
-class Syntax_error : public Errors {
-private:
-    mi::mdl::Memory_arena *m_global_arena;
-
-    mi::mdl::vector<Message*>::Type &m_messages;
-
-    const char* m_filename;
-
-    unsigned m_error_count;
-    unsigned m_warning_count;
-
-public:
-    using Errors::Error;
-    using Errors::Warning;
-    
-    /// Report a syntax error at given line, column pair.
-    ///
-    /// \param la      the current look-ahead token
-    /// \param s       the human readable error message
-    void Error(Token const* la, wchar_t const* s) {
-        mi::mdl::string tmp(m_global_arena->get_allocator());
-        mi::mdl::utf16_to_utf8(tmp, s);
-
-        m_error_count++;
-
-        mi::mdl::Arena_builder builder(*m_global_arena);
-        Message *m = builder.create<Message>(m_global_arena, Message::Severity::SEV_ERROR,
-                                             m_filename, la->line, la->col, tmp.c_str());
-        m_messages.push_back(m);
+static bool extract_source_line(
+    std::string const &source,
+    unsigned           line_number,
+    std::string       &line)
+{
+    if (line_number == 0) {
+        return false;
     }
 
-    /// Report a syntax warning at given line, column pair.
-    ///
-    /// \param line  the start line of the syntax error
-    /// \param col   the start column of the syntax error
-    /// \param s     the human readable error message
-    void Warning(int line, int col, wchar_t const* s) {
-        mi::mdl::string tmp(m_global_arena->get_allocator());
-        mi::mdl::utf16_to_utf8(tmp, s);
+    size_t line_start = 0;
+    unsigned current_line = 1;
 
-        m_warning_count++;
-
-        mi::mdl::Arena_builder builder(*m_global_arena);
-        Message *m = builder.create<Message>(m_global_arena, Message::Severity::SEV_WARNING,
-                                             m_filename, line, col, tmp.c_str());
-        m_messages.push_back(m);
-    }
-
-    /// Construct a Syntax_error object.
-    ///
-    /// \param alloc    Allocator to use for temporary storage allocations.
-    /// \param filename Use this filename in generated error messages.
-    ///
-    explicit Syntax_error(//mi::mdl::IAllocator * alloc,
-                          mi::mdl::Memory_arena *global_arena,
-                          mi::mdl::vector<Message*>::Type &messages,
-                          const char* filename)
-        : Errors()
-        , m_global_arena(global_arena)
-        , m_messages(messages)
-        , m_filename(filename)
-        , m_error_count(0)
-        , m_warning_count(0)
-        {
+    for (;;) {
+        size_t line_end = line_start;
+        while (line_end < source.size() &&
+               source[line_end] != '\n' &&
+               source[line_end] != '\r') {
+            ++line_end;
         }
 
-    unsigned error_count() {
-        return m_error_count;
+        if (current_line == line_number) {
+            line.assign(source.data() + line_start, line_end - line_start);
+            return true;
+        }
+
+        if (line_end >= source.size()) {
+            return false;
+        }
+
+        if (source[line_end] == '\r' &&
+            line_end + 1 < source.size() &&
+            source[line_end + 1] == '\n') {
+            line_start = line_end + 2;
+        } else {
+            line_start = line_end + 1;
+        }
+        ++current_line;
+    }
+}
+
+static std::string make_source_underline(std::string const &line, unsigned column)
+{
+    if (column == 0) {
+        column = 1;
     }
 
-    unsigned warning_count() {
-        return m_warning_count;
+    std::string underline;
+    size_t caret_index = size_t(column - 1);
+    underline.reserve(caret_index + 1);
+
+    for (size_t i = 0; i < caret_index; ++i) {
+        if (i < line.size() && line[i] == '\t') {
+            underline.push_back('\t');
+        } else {
+            underline.push_back(' ');
+        }
     }
-};
+    underline.push_back('^');
+    return underline;
+}
 
 // Constructor.
 Compilation_unit::Compilation_unit(
@@ -157,6 +141,7 @@ Compilation_unit::Compilation_unit(
     , m_node_types(node_types)
     , m_filename(Arena_strdup(m_arena, file_name))
     , m_filename_only(Arena_strdup(m_arena, file_basename(m_filename)))
+    , m_source_text()
     , m_comp_options(comp_options)
     , m_symbol_table(symbol_table)
     , m_type_factory(type_factory)
@@ -206,6 +191,11 @@ Rule_factory &Compilation_unit::get_rule_factory()
     return m_rule_factory;
 }
 
+Ruleset_list const &Compilation_unit::get_rulesets() const
+{
+    return m_rulesets;
+}
+
 // Get the symbol table of this compilation unit.
 Symbol_table &Compilation_unit::get_symbol_table()
 {
@@ -225,21 +215,70 @@ int Compilation_unit::next_attr_counter() {
 /// Compile the mdltl file from `input_stream` according to the
 /// compiler options passed to the constructor.
 unsigned Compilation_unit::compile(mi::mdl::IInput_stream *input_stream) {
+    std::string source;
+    for (;;) {
+        int c = input_stream->read_char();
+        if (c < 0) {
+            break;
+        }
+        source.push_back(static_cast<char>(c));
+    }
+    m_source_text = source;
 
-    Syntax_error error(&m_global_arena, *m_messages, m_filename);
-
-    Scanner scanner(m_arena.get_allocator(), &error, input_stream);
-    Parser parser(&scanner, &error);
-
-    parser.set_compilation_unit(this);
-
-    parser.Parse();
-
-    if (error.error_count() > 0) {
-        return error.error_count();
+    std::string coco_error_message;
+    unsigned coco_error_line = 1;
+    unsigned coco_error_column = 1;
+    if (!mdltlc_parse_coco(
+            *this,
+            source.data(),
+            source.size(),
+            coco_error_message,
+            coco_error_line,
+            coco_error_column)) {
+        this->error(
+            Location(Location::OWNER_FILE_IDX, coco_error_line, coco_error_column),
+            coco_error_message.c_str());
+        return m_error_count;
     }
 
-    m_error_count += error.error_count();
+    mi::mdl::Allocator_builder builder(m_arena.get_allocator());
+    mi::base::Handle<Compilation_unit> comparison_unit(
+        builder.create<Compilation_unit>(
+            m_arena.get_allocator(),
+            &m_global_arena,
+            m_imdl,
+            m_node_types,
+            m_symbol_table,
+            m_type_factory,
+            m_filename,
+            m_comp_options,
+            m_messages,
+            m_def_table));
+
+    std::string rd_error_message;
+    unsigned rd_error_line = 1;
+    unsigned rd_error_column = 1;
+    if (!mdltlc_parse_rd(
+            *comparison_unit.get(),
+            source.data(),
+            source.size(),
+            rd_error_message,
+            rd_error_line,
+            rd_error_column)) {
+        std::string msg("hand-written MDLTL parser failed on input accepted by Coco/R: ");
+        msg += rd_error_message;
+        this->error(Location(Location::OWNER_FILE_IDX, rd_error_line, rd_error_column), msg.c_str());
+        return m_error_count;
+    }
+
+    Mdltlc_ast_compare_result compare_result;
+    if (!mdltlc_compare_asts(m_rulesets, comparison_unit->get_rulesets(), compare_result)) {
+        std::string msg = compare_result.message();
+        this->error(
+            Location(Location::OWNER_FILE_IDX, compare_result.line, compare_result.column),
+            msg.c_str());
+        return m_error_count;
+    }
 
     {
         Environment builtin_env(m_arena, Environment::Kind::ENV_BUILTIN, nullptr);
@@ -664,7 +703,7 @@ void Compilation_unit::process_imports(Environment &env) {
 
             if (!imp_mod) {
                 mi::mdl::Messages const &msgs = thread_ctx->access_messages();
-                size_t msg_count = msgs.get_message_count();
+                size_t msg_count = msgs.get_error_message_count();
                 for (size_t i = 0; i < msg_count; i++) {
                     mi::mdl::IMessage const *msg = msgs.get_error_message(i);
 
@@ -679,36 +718,49 @@ void Compilation_unit::process_imports(Environment &env) {
 }
 
 void Compilation_unit::error(Location const &location, const char *msg) {
-    mi::mdl::Arena_builder builder(m_global_arena);
-    Message *m = builder.create<Message>(
-        &m_global_arena, Message::Severity::SEV_ERROR,
-        m_filename, location.get_line(), location.get_column(), msg);
-    m_messages->push_back(m);
+    add_message(Message::Severity::SEV_ERROR, location, msg);
     m_error_count++;
 }
 
 void Compilation_unit::warning(Location const &location, const char *msg) {
-    mi::mdl::Arena_builder builder(m_global_arena);
-    Message *m = builder.create<Message>(
-        &m_global_arena, Message::Severity::SEV_WARNING,
-        m_filename, location.get_line(), location.get_column(), msg);
-    m_messages->push_back(m);
+    add_message(Message::Severity::SEV_WARNING, location, msg);
     m_warning_count++;
 }
 
 void Compilation_unit::hint(Location const &location, const char *msg) {
-    mi::mdl::Arena_builder builder(m_global_arena);
-    Message *m = builder.create<Message>(
-        &m_global_arena, Message::Severity::SEV_HINT,
-        m_filename, location.get_line(), location.get_column(), msg);
-    m_messages->push_back(m);
+    add_message(Message::Severity::SEV_HINT, location, msg);
 }
 
 void Compilation_unit::info(Location const &location, const char *msg) {
+    add_message(Message::Severity::SEV_INFO, location, msg);
+}
+
+void Compilation_unit::add_message(
+    Message::Severity severity,
+    Location const   &location,
+    char const       *msg)
+{
+    std::string source_line;
+    std::string source_underline;
+    char const *source_line_ptr = nullptr;
+    char const *source_underline_ptr = nullptr;
+
+    if (extract_source_line(m_source_text, location.get_line(), source_line)) {
+        source_underline = make_source_underline(source_line, location.get_column());
+        source_line_ptr = source_line.c_str();
+        source_underline_ptr = source_underline.c_str();
+    }
+
     mi::mdl::Arena_builder builder(m_global_arena);
     Message *m = builder.create<Message>(
-        &m_global_arena, Message::Severity::SEV_INFO,
-        m_filename, location.get_line(), location.get_column(), msg);
+        &m_global_arena,
+        severity,
+        m_filename,
+        location.get_line(),
+        location.get_column(),
+        msg,
+        source_line_ptr,
+        source_underline_ptr);
     m_messages->push_back(m);
 }
 
@@ -872,6 +924,8 @@ int Compilation_unit::get_node_selector(Expr *expr, Selector_kind &sel_kind) {
                     selector = mi::mdl::DS_DIST_VDF_CONDITIONAL_OPERATOR;
                 }
             }
+        } else if (selector == mi::mdl::IDefinition::DS_INTRINSIC_DIST_BSDF_MARKER) {
+            selector = mi::mdl::DS_DIST_BSDF_MARKER;
         } else if (selector == mi::mdl::IDefinition::DS_UNKNOWN) {
             if (callee->get_name() == m_symbol_table->get_symbol("::nvidia::distilling_support::local_normal") ||
                 callee->get_name() == m_symbol_table->get_symbol("local_normal")) {
@@ -1075,4 +1129,3 @@ Expr *Compilation_unit::normalize_mixer_pattern(Expr *expr) {
 
     return expr;
 }
-

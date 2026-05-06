@@ -248,13 +248,12 @@ std::string Resource_callback::handle_texture(
     bool supports_strict_relative_path,
     Buffer_callback* buffer_callback)
 {
-    SERIAL::Class_id class_id = m_transaction->get_class_id( texture_tag);
-    if( class_id != TEXTURE::Texture::id) {
+    DB::Access<TEXTURE::Texture> texture( texture_tag, m_transaction);
+    if( !texture) {
         add_error_resource_type( 6010, "texture", texture_tag);
         return {};
     }
 
-    DB::Access<TEXTURE::Texture> texture( texture_tag, m_transaction);
     DB::Tag image_tag( texture->get_image());
     DB::Tag volume_tag( texture->get_volume_data());
     ASSERT( M_SCENE, !image_tag || !volume_tag);
@@ -298,13 +297,11 @@ std::string Resource_callback::handle_texture_image(
     bool supports_strict_relative_path,
     Buffer_callback* buffer_callback)
 {
-    SERIAL::Class_id class_id = m_transaction->get_class_id( image_tag);
-    if( class_id != DBIMAGE::Image::id) {
+    DB::Access<DBIMAGE::Image> image( image_tag, m_transaction);
+    if( !image) {
         add_error_resource_type( 6010, "image", image_tag);
         return {};
     }
-
-    DB::Access<DBIMAGE::Image> image( image_tag, m_transaction);
 
     // File-based images
     if( image->is_file_based()) {
@@ -441,13 +438,11 @@ std::string Resource_callback::handle_light_profile(
     bool supports_strict_relative_path,
     Buffer_callback* buffer_callback)
 {
-    SERIAL::Class_id class_id = m_transaction->get_class_id( tag);
-    if( class_id != LIGHTPROFILE::Lightprofile::id) {
+    DB::Access<LIGHTPROFILE::Lightprofile> lp( tag, m_transaction);
+    if( !lp) {
         add_error_resource_type( 6010, "light profile", tag);
         return {};
     }
-
-    DB::Access<LIGHTPROFILE::Lightprofile> lp( tag, m_transaction);
 
     // File-based light profiles
     if( lp->is_file_based()) {
@@ -540,13 +535,11 @@ std::string Resource_callback::handle_bsdf_measurement(
     bool supports_strict_relative_path,
     Buffer_callback* buffer_callback)
 {
-    SERIAL::Class_id class_id = m_transaction->get_class_id( tag);
-    if( class_id != BSDFM::Bsdf_measurement::id) {
+    DB::Access<BSDFM::Bsdf_measurement> bsdfm( tag, m_transaction);
+    if( !bsdfm) {
         add_error_resource_type( 6010, "BSDF measurement", tag);
         return {};
     }
-
-    DB::Access<BSDFM::Bsdf_measurement> bsdfm( tag, m_transaction);
 
     // File-based BSDF measurements
     if( bsdfm->is_file_based()) {

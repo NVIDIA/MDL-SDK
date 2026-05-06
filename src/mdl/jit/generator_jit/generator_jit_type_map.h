@@ -98,6 +98,8 @@ public:
 
         TM_NO_DOUBLE          =  64,  ///< The target does not support double fp
 
+        TM_SPECTRAL_ENABLED   = 128,  ///< Spectral rendering is enabled
+
         /// The mode for native x86 compilation.
         TM_NATIVE_X86 = TM_SMALL_VECTORS | TM_BOOL1_SUPPORTED,
 
@@ -169,47 +171,52 @@ public:
 
     /// Texture handler vtable access index.
     enum Tex_handler_vtable_index {
-        THV_tex_lookup_float4_2d,           ///< tex_lookup_float4_2d()
-        THV_tex_lookup_float3_2d,           ///< tex_lookup_float3_2d()
-        THV_tex_texel_float4_2d,            ///< tex_texel_float4_2d()
-        THV_tex_lookup_float4_3d,           ///< tex_lookup_float4_3d()
-        THV_tex_lookup_float3_3d,           ///< tex_lookup_float3_3d()
-        THV_tex_texel_float4_3d,            ///< tex_texel_float4_3d()
-        THV_tex_lookup_float4_cube,         ///< tex_lookup_float4_cube()
-        THV_tex_lookup_float3_cube,         ///< tex_lookup_float3_cube()
-        THV_tex_resolution_2d,              ///< tex_resolution_2d()
-        THV_tex_resolution_3d,              ///< tex_resolution_3d()
-        THV_tex_texture_isvalid,            ///< tex_texture_isvalid()
-        THV_tex_frame,                      ///< tex_texture_frame()
-        THV_light_profile_power,            ///< df_light_profile_power()
-        THV_light_profile_maximum,          ///< df_light_profile_maximum()
-        THV_light_profile_isvalid,          ///< df_light_profile_isvalid()
-        THV_light_profile_evaluate,         ///< df_light_profile_evaluate()
-        THV_light_profile_sample,           ///< df_light_profile_sample()
-        THV_light_profile_pdf,              ///< df_light_profile_pdf()
-        THV_bsdf_measurement_isvalid,       ///< df_bsdf_measurement_isvalid()
-        THV_bsdf_measurement_resolution,    ///< df_bsdf_measurement_resolution()
-        THV_bsdf_measurement_evaluate,      ///< df_bsdf_measurement_evaluate()
-        THV_bsdf_measurement_sample,        ///< df_bsdf_measurement_sample()
-        THV_bsdf_measurement_pdf,           ///< df_bsdf_measurement_pdf()
-        THV_bsdf_measurement_albedos,       ///< df_bsdf_measurement_albedos()
-        THV_adapt_normal,                   ///< adapt_normal()
-        THV_scene_data_isvalid,             ///< scene_data_isvalid()
-        THV_scene_data_lookup_float,        ///< scene_data_lookup_float()
-        THV_scene_data_lookup_float2,       ///< scene_data_lookup_float2()
-        THV_scene_data_lookup_float3,       ///< scene_data_lookup_float3()
-        THV_scene_data_lookup_float4,       ///< scene_data_lookup_float4()
-        THV_scene_data_lookup_int,          ///< scene_data_lookup_int()
-        THV_scene_data_lookup_int2,         ///< scene_data_lookup_int2()
-        THV_scene_data_lookup_int3,         ///< scene_data_lookup_int3()
-        THV_scene_data_lookup_int4,         ///< scene_data_lookup_int4()
-        THV_scene_data_lookup_color,        ///< scene_data_lookup_color()
-        THV_scene_data_lookup_float4x4,     ///< scene_data_lookup_float4x4()
-        THV_scene_data_lookup_deriv_float,  ///< scene_data_lookup_deriv_float()
-        THV_scene_data_lookup_deriv_float2, ///< scene_data_lookup_deriv_float2()
-        THV_scene_data_lookup_deriv_float3, ///< scene_data_lookup_deriv_float3()
-        THV_scene_data_lookup_deriv_float4, ///< scene_data_lookup_deriv_float4()
-        THV_scene_data_lookup_deriv_color,  ///< scene_data_lookup_deriv_color()
+        THV_tex_lookup_float4_2d,               ///< tex_lookup_float4_2d()
+        THV_tex_lookup_float3_2d,               ///< tex_lookup_float3_2d()
+        THV_tex_texel_float4_2d,                ///< tex_texel_float4_2d()
+        THV_tex_lookup_float4_3d,               ///< tex_lookup_float4_3d()
+        THV_tex_lookup_float3_3d,               ///< tex_lookup_float3_3d()
+        THV_tex_texel_float4_3d,                ///< tex_texel_float4_3d()
+        THV_tex_lookup_float4_cube,             ///< tex_lookup_float4_cube()
+        THV_tex_lookup_float3_cube,             ///< tex_lookup_float3_cube()
+        THV_tex_resolution_2d,                  ///< tex_resolution_2d()
+        THV_tex_resolution_3d,                  ///< tex_resolution_3d()
+        THV_tex_texture_isvalid,                ///< tex_texture_isvalid()
+        THV_tex_frame,                          ///< tex_texture_frame()
+        THV_light_profile_power,                ///< df_light_profile_power()
+        THV_light_profile_maximum,              ///< df_light_profile_maximum()
+        THV_light_profile_isvalid,              ///< df_light_profile_isvalid()
+        THV_light_profile_evaluate,             ///< df_light_profile_evaluate()
+        THV_light_profile_sample,               ///< df_light_profile_sample()
+        THV_light_profile_pdf,                  ///< df_light_profile_pdf()
+        THV_bsdf_measurement_isvalid,           ///< df_bsdf_measurement_isvalid()
+        THV_bsdf_measurement_resolution,        ///< df_bsdf_measurement_resolution()
+        THV_bsdf_measurement_evaluate,          ///< df_bsdf_measurement_evaluate()
+        THV_bsdf_measurement_sample,            ///< df_bsdf_measurement_sample()
+        THV_bsdf_measurement_pdf,               ///< df_bsdf_measurement_pdf()
+        THV_bsdf_measurement_albedos,           ///< df_bsdf_measurement_albedos()
+        THV_adapt_normal,                       ///< adapt_normal()
+        THV_rgb_to_spectral_ior,                ///< rgb_to_spectral_ior()
+        THV_rgb_to_spectral_reflectance,        ///< rgb_to_spectral_reflectance()
+        THV_rgb_to_spectral_luminance,          ///< rgb_to_spectral_luminance()
+        THV_rgb_to_spectral_volume_coefficient, ///< rgb_to_spectral_volume_coefficient()
+        THV_get_wavelengths,                    ///< get_wavelengths()
+        THV_scene_data_isvalid,                 ///< scene_data_isvalid()
+        THV_scene_data_lookup_float,            ///< scene_data_lookup_float()
+        THV_scene_data_lookup_float2,           ///< scene_data_lookup_float2()
+        THV_scene_data_lookup_float3,           ///< scene_data_lookup_float3()
+        THV_scene_data_lookup_float4,           ///< scene_data_lookup_float4()
+        THV_scene_data_lookup_int,              ///< scene_data_lookup_int()
+        THV_scene_data_lookup_int2,             ///< scene_data_lookup_int2()
+        THV_scene_data_lookup_int3,             ///< scene_data_lookup_int3()
+        THV_scene_data_lookup_int4,             ///< scene_data_lookup_int4()
+        THV_scene_data_lookup_color,            ///< scene_data_lookup_color()
+        THV_scene_data_lookup_float4x4,         ///< scene_data_lookup_float4x4()
+        THV_scene_data_lookup_deriv_float,      ///< scene_data_lookup_deriv_float()
+        THV_scene_data_lookup_deriv_float2,     ///< scene_data_lookup_deriv_float2()
+        THV_scene_data_lookup_deriv_float3,     ///< scene_data_lookup_deriv_float3()
+        THV_scene_data_lookup_deriv_float4,     ///< scene_data_lookup_deriv_float4()
+        THV_scene_data_lookup_deriv_color,      ///< scene_data_lookup_deriv_color()
         THV_LAST
     };
 
@@ -293,6 +300,11 @@ public:
     /// Returns true if the double type is used.
     bool use_double_type() const {
         return (m_tm_mode & TM_NO_DOUBLE) == 0;
+    }
+
+    /// Returns true if spectral rendering is enabled.
+    bool is_spectral_enabled() const {
+        return (m_tm_mode & TM_SPECTRAL_ENABLED) != 0;
     }
 
     /// Get the index of a state field in the current state struct.
@@ -443,6 +455,14 @@ public:
 
     /// Get the LLVM color type.
     llvm::Type *get_color_type() const { return m_type_color; }
+
+    /// Get the LLVM spectral sample type.
+    llvm::StructType *get_spectral_sample_type() const { return m_type_spectral_sample; }
+
+    /// Get the LLVM spectral sample * type.
+    llvm::PointerType *get_spectral_sample_ptr_type() const {
+        return get_ptr(m_type_spectral_sample);
+    }
 
     /// Get the LLVM tag type.
     llvm::IntegerType *get_tag_type() const { return m_type_tag; }
@@ -773,6 +793,7 @@ private:
     llvm::Type        *m_type_double3;
     llvm::Type        *m_type_double4;
     llvm::Type        *m_type_color;
+    llvm::StructType  *m_type_spectral_sample;
 
     llvm::ArrayType   *m_type_arr_int_2;
     llvm::ArrayType   *m_type_arr_int_3;

@@ -67,7 +67,12 @@ DAG_node const* Complex_where::matcher(
     const mi::mdl::Distiller_options *options,
     Rule_result_code &result_code) const
 {
-    auto match_rule1 = [&] (DAG_node const *node, IDistiller_plugin_api::Match_properties &node_props) -> const DAG_node * { return node; };
+    auto match_rule1 = [&] (DAG_node const *node, IDistiller_plugin_api::Match_properties &node_props) -> const DAG_node * {
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0 ,{ mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::No_match, ""});
+        }
+        return node;
+        };
 
 // 007_complex_where.mdltl:10
 //RUID 385889
@@ -75,15 +80,27 @@ DAG_node const* Complex_where::matcher(
 
         // match for material(tw, material_surface(bsdf_mix_2(w2, custom_curve_layer(f0, f90, e, w, layer, diffuse_reflection_bsdf(tint2, r2), n), w1, microfacet_ggx_vcavities_bsdf(ru1, rv1, tint1, _, t1)), em), bf, ior, vol, material_geometry(d, cutout, ng))
         if (node_props0.sema != IDefinition::DS_ELEM_CONSTRUCTOR || node_props0.type_kind != IType::TK_STRUCT || node_props0.struct_id != IType_struct::SID_MATERIAL) {
+            if (event_handler != nullptr) {
+                fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_mismatch,
+                "material(tw, material_surface(bsdf_mix_2(w2, custom_curve_layer(f0, f90, e, w, layer, diffuse_reflection_bsdf(tint2, r2), n), w1, microfacet_ggx_vcavities_bsdf(ru1, rv1, tint1, _, t1)), em), bf, ior, vol, material_geometry(d, cutout, ng))"});
+            }
             return match_rule1(node0, node_props0);
         }
         DAG_node const *node2 = e.get_compound_argument(node0, 0);
         DAG_node const *v_tw = node2; (void)v_tw;
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "tw"});
+        }
         DAG_node const *node4 = e.get_compound_argument(node0, 1);
         IDistiller_plugin_api::Match_properties node_props4;
         e.get_match_properties(node4, node_props4); 
         // match for material_surface(bsdf_mix_2(w2, custom_curve_layer(f0, f90, e, w, layer, diffuse_reflection_bsdf(tint2, r2), n), w1, microfacet_ggx_vcavities_bsdf(ru1, rv1, tint1, _, t1)), em)
         if (node_props4.sema != IDefinition::DS_ELEM_CONSTRUCTOR || node_props4.type_kind != IType::TK_STRUCT || node_props4.struct_id != IType_struct::SID_MATERIAL_SURFACE) {
+            if (event_handler != nullptr) {
+                fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_mismatch,
+                "material_surface(bsdf_mix_2(w2, custom_curve_layer(f0, f90, e, w, layer, diffuse_reflection_bsdf(tint2, r2), n), w1, microfacet_ggx_vcavities_bsdf(ru1, rv1, tint1, _, t1)), em)"});
+            }
             return match_rule1(node0, node_props0);
         }
         DAG_node const *node5 = e.get_compound_argument(node4, 0);
@@ -92,78 +109,210 @@ DAG_node const* Complex_where::matcher(
         // match for bsdf_mix_2(w2, custom_curve_layer(f0, f90, e, w, layer, diffuse_reflection_bsdf(tint2, r2), n), w1, microfacet_ggx_vcavities_bsdf(ru1, rv1, tint1, _, t1))
         if (node_props5.sema != IDefinition::DS_INTRINSIC_DF_NORMALIZED_MIX || node_props5.arity != 2
          || node_props5.type_kind != IType::TK_BSDF) {
+            if (event_handler != nullptr) {
+                fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_mismatch,
+                "bsdf_mix_2(w2, custom_curve_layer(f0, f90, e, w, layer, diffuse_reflection_bsdf(tint2, r2), n), w1, microfacet_ggx_vcavities_bsdf(ru1, rv1, tint1, _, t1))"});
+            }
             return match_rule1(node0, node_props0);
         }
         DAG_node const *node6 = e.get_remapped_argument(node5, 0);
         DAG_node const *v_w2 = node6; (void)v_w2;
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "w2"});
+        }
         DAG_node const *node8 = e.get_remapped_argument(node5, 1);
         IDistiller_plugin_api::Match_properties node_props8;
         e.get_match_properties(node8, node_props8); 
         // match for custom_curve_layer(f0, f90, e, w, layer, diffuse_reflection_bsdf(tint2, r2), n)
         if (node_props8.sema != IDefinition::DS_INTRINSIC_DF_CUSTOM_CURVE_LAYER) {
+            if (event_handler != nullptr) {
+                fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_mismatch,
+                "custom_curve_layer(f0, f90, e, w, layer, diffuse_reflection_bsdf(tint2, r2), n)"});
+            }
             return match_rule1(node0, node_props0);
         }
         DAG_node const *node9 = e.get_compound_argument(node8, 0);
         DAG_node const *v_f0 = node9; (void)v_f0;
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "f0"});
+        }
         DAG_node const *node11 = e.get_compound_argument(node8, 1);
         DAG_node const *v_f90 = node11; (void)v_f90;
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "f90"});
+        }
         DAG_node const *node13 = e.get_compound_argument(node8, 2);
         DAG_node const *v_e = node13; (void)v_e;
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "e"});
+        }
         DAG_node const *node15 = e.get_compound_argument(node8, 3);
         DAG_node const *v_w = node15; (void)v_w;
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "w"});
+        }
         DAG_node const *node17 = e.get_compound_argument(node8, 4);
         DAG_node const *v_layer = node17; (void)v_layer;
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "layer"});
+        }
         DAG_node const *node19 = e.get_compound_argument(node8, 5);
         IDistiller_plugin_api::Match_properties node_props19;
         e.get_match_properties(node19, node_props19); 
         // match for diffuse_reflection_bsdf(tint2, r2)
         if (node_props19.sema != IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF) {
+            if (event_handler != nullptr) {
+                fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_mismatch,
+                "diffuse_reflection_bsdf(tint2, r2)"});
+            }
             return match_rule1(node0, node_props0);
         }
         DAG_node const *node20 = e.get_compound_argument(node19, 0);
         DAG_node const *v_tint2 = node20; (void)v_tint2;
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "tint2"});
+        }
         DAG_node const *node22 = e.get_compound_argument(node19, 1);
         DAG_node const *v_r2 = node22; (void)v_r2;
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "r2"});
+        }
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "diffuse_reflection_bsdf(tint2, r2)"});
+        }
         DAG_node const *node25 = e.get_compound_argument(node8, 6);
         DAG_node const *v_n = node25; (void)v_n;
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "n"});
+        }
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "custom_curve_layer(f0, f90, e, w, layer, diffuse_reflection_bsdf(tint2, r2), n)"});
+        }
         DAG_node const *node28 = e.get_remapped_argument(node5, 2);
         DAG_node const *v_w1 = node28; (void)v_w1;
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "w1"});
+        }
         DAG_node const *node30 = e.get_remapped_argument(node5, 3);
         IDistiller_plugin_api::Match_properties node_props30;
         e.get_match_properties(node30, node_props30); 
         // match for microfacet_ggx_vcavities_bsdf(ru1, rv1, tint1, _, t1)
         if (node_props30.sema != IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_VCAVITIES_BSDF) {
+            if (event_handler != nullptr) {
+                fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_mismatch,
+                "microfacet_ggx_vcavities_bsdf(ru1, rv1, tint1, _, t1)"});
+            }
             return match_rule1(node0, node_props0);
         }
         DAG_node const *node31 = e.get_compound_argument(node30, 0);
         DAG_node const *v_ru1 = node31; (void)v_ru1;
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "ru1"});
+        }
         DAG_node const *node33 = e.get_compound_argument(node30, 1);
         DAG_node const *v_rv1 = node33; (void)v_rv1;
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "rv1"});
+        }
         DAG_node const *node35 = e.get_compound_argument(node30, 2);
         DAG_node const *v_tint1 = node35; (void)v_tint1;
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "tint1"});
+        }
         DAG_node const *node37 = e.get_compound_argument(node30, 4);
         DAG_node const *v_t1 = node37; (void)v_t1;
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "t1"});
+        }
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "microfacet_ggx_vcavities_bsdf(ru1, rv1, tint1, _, t1)"});
+        }
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "bsdf_mix_2(w2, custom_curve_layer(f0, f90, e, w, layer, diffuse_reflection_bsdf(tint2, r2), n), w1, microfacet_ggx_vcavities_bsdf(ru1, rv1, tint1, _, t1))"});
+        }
         DAG_node const *node41 = e.get_compound_argument(node4, 1);
         DAG_node const *v_em = node41; (void)v_em;
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "em"});
+        }
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "material_surface(bsdf_mix_2(w2, custom_curve_layer(f0, f90, e, w, layer, diffuse_reflection_bsdf(tint2, r2), n), w1, microfacet_ggx_vcavities_bsdf(ru1, rv1, tint1, _, t1)), em)"});
+        }
         DAG_node const *node44 = e.get_compound_argument(node0, 2);
         DAG_node const *v_bf = node44; (void)v_bf;
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "bf"});
+        }
         DAG_node const *node46 = e.get_compound_argument(node0, 3);
         DAG_node const *v_ior = node46; (void)v_ior;
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "ior"});
+        }
         DAG_node const *node48 = e.get_compound_argument(node0, 4);
         DAG_node const *v_vol = node48; (void)v_vol;
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "vol"});
+        }
         DAG_node const *node50 = e.get_compound_argument(node0, 5);
         IDistiller_plugin_api::Match_properties node_props50;
         e.get_match_properties(node50, node_props50); 
         // match for material_geometry(d, cutout, ng)
         if (node_props50.sema != IDefinition::DS_ELEM_CONSTRUCTOR || node_props50.type_kind != IType::TK_STRUCT || node_props50.struct_id != IType_struct::SID_MATERIAL_GEOMETRY) {
+            if (event_handler != nullptr) {
+                fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_mismatch,
+                "material_geometry(d, cutout, ng)"});
+            }
             return match_rule1(node0, node_props0);
         }
         DAG_node const *node51 = e.get_compound_argument(node50, 0);
         DAG_node const *v_d = node51; (void)v_d;
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "d"});
+        }
         DAG_node const *node53 = e.get_compound_argument(node50, 1);
         DAG_node const *v_cutout = node53; (void)v_cutout;
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "cutout"});
+        }
         DAG_node const *node55 = e.get_compound_argument(node50, 2);
         DAG_node const *v_ng = node55; (void)v_ng;
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "ng"});
+        }
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "material_geometry(d, cutout, ng)"});
+        }
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "material(tw, material_surface(bsdf_mix_2(w2, custom_curve_layer(f0, f90, e, w, layer, diffuse_reflection_bsdf(tint2, r2), n), w1, microfacet_ggx_vcavities_bsdf(ru1, rv1, tint1, _, t1)), em), bf, ior, vol, material_geometry(d, cutout, ng))"});
+        }
         DAG_DbgInfo root_dbg_info = node0->get_dbg_info();
         (void) root_dbg_info;
         DAG_node const* v_w1a = e.create_binary(
@@ -209,28 +358,32 @@ DAG_node const* Complex_where::matcher(
                     e.create_float_constant(0.0f))))) {
             return match_rule1(node0, node_props0);
         }
-        if (event_handler != nullptr)
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Rule_match,
+            ""});
+
             fire_match_event(*event_handler, 0);
+        }
         result_code = RULE_SKIP_RECURSION;
         return e.create_call("material(bool,material_surface,material_surface,color,material_volume,material_geometry,hair_bsdf)",
             IDefinition::DS_ELEM_CONSTRUCTOR, Args_wrapper<7>::mk_args(e, m_node_types,
                 material, v_tw, e.create_call("material_surface(bsdf,material_emission)",
                     IDefinition::DS_ELEM_CONSTRUCTOR, Args_wrapper<2>::mk_args(e, m_node_types,
                         material_surface, e.create_mixer_call(Args_wrapper<4>::mk_args(e, m_node_types,
-                                node_null, v_w2b, e.create_call("::df::custom_curve_layer(float,float,float,float,bsdf,bsdf,float3)",
+                                node_null, v_w2b, e.create_call("::df::custom_curve_layer(float,float,float,float,bsdf,bsdf,float3,::df::backscatter_modifier)",
                                     IDefinition::DS_INTRINSIC_DF_CUSTOM_CURVE_LAYER,
-                                    Args_wrapper<7>::mk_args(e, m_node_types, custom_curve_layer,
+                                    Args_wrapper<8>::mk_args(e, m_node_types, custom_curve_layer,
                                         v_f0, v_f90, v_e, v_w, v_layer, e.create_call("::df::diffuse_reflection_bsdf(color,float,color,string)",
                                             IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF,
                                             Args_wrapper<4>::mk_args(e, m_node_types,
                                                 diffuse_reflection_bsdf, v_c4, v_r2).args,
                                             4, e.get_type_factory()->create_bsdf(), root_dbg_info),
-                                        v_n).args, 7, e.get_type_factory()->create_bsdf(), root_dbg_info),
-                                v_w1b, e.create_call("::df::microfacet_ggx_vcavities_bsdf(float,float,color,color,float3,::df::scatter_mode,string)",
+                                        v_n).args, 8, e.get_type_factory()->create_bsdf(), root_dbg_info),
+                                v_w1b, e.create_call("::df::microfacet_ggx_vcavities_bsdf(float,float,color,color,float3,::df::scatter_mode,::df::backscatter_modifier,string)",
                                     IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_VCAVITIES_BSDF,
-                                    Args_wrapper<7>::mk_args(e, m_node_types, microfacet_ggx_vcavities_bsdf,
+                                    Args_wrapper<8>::mk_args(e, m_node_types, microfacet_ggx_vcavities_bsdf,
                                         v_ru1, v_rv1, v_c4, e.create_color_constant(0,0,0),
-                                        v_t1).args, 7, e.get_type_factory()->create_bsdf(), root_dbg_info)).args,
+                                        v_t1).args, 8, e.get_type_factory()->create_bsdf(), root_dbg_info)).args,
                             4), v_em).args, 2, e.get_type_factory()->
                     get_predefined_struct(IType_struct::SID_MATERIAL_SURFACE), root_dbg_info),
                 v_bf, v_ior, v_vol, e.create_call("material_geometry(float3,float,float3)",
@@ -285,6 +438,16 @@ void Complex_where::fire_debug_print(
     Rule_info const &ri = g_rule_info[idx];
     event_handler.debug_print(plugin_api, "Complex_where", ri.ruid, ri.rname, ri.fname,
         ri.fline, var_name, value);
+}
+
+void Complex_where::fire_detailed_trace_event(
+    mi::mdl::IRule_matcher_event &event_handler,
+    std::size_t id,
+    mi::mdl::IRule_matcher_event::Detailed_trace_event trace_event)
+{
+    Rule_info const &ri = g_rule_info[id];
+    event_handler.detailed_trace_event("Complex_where", ri.ruid, ri.rname, ri.fname,
+        ri.fline, trace_event);
 }
 
 

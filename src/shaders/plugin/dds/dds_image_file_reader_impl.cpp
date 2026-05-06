@@ -52,7 +52,7 @@ Image_file_reader_impl::Image_file_reader_impl(
     m_reader( reader, mi::base::DUP_INTERFACE)
 {
     Dds_compress_fmt compress_format = DXTC_none; // avoid warning
-    m_image.load_header(
+    m_is_valid = m_image.load_header(
         m_reader.get(),
         m_header,
         m_header_dx10,
@@ -122,6 +122,8 @@ mi::neuraylib::ITile* Image_file_reader_impl::read(
 
     mi::base::Handle<mi::neuraylib::ITile> tile( m_image_api->create_tile(
         convert_pixel_type_enum_to_string( m_pixel_type), image_width, image_height));
+    if( !tile)
+        return nullptr;
 
     // Non compressed images
     if( !m_image.is_compressed()) {
@@ -164,6 +166,11 @@ bool Image_file_reader_impl::write(
     const mi::neuraylib::ITile* tile, mi::Uint32 z, mi::Uint32 level)
 {
     return false;
+}
+
+bool Image_file_reader_impl::is_valid() const
+{
+    return m_is_valid;
 }
 
 } // namespace DDS

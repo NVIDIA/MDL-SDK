@@ -43,9 +43,13 @@
 #include <filesystem>
 #include <fstream>
 #include <regex>
+#include <cstring>
 
 #include "mdltlc_compiler_options.h"
 #include "mdltlc_compiler.h"
+#include "mdltlc.h"
+#include "mdltlc_ast_compare.h"
+#include "mdltlc_parser_rd.h"
 
 #define DIR_PREFIX "test_output"
 
@@ -159,10 +163,6 @@ static Expected_failure_message failure_messages_5[] = {
     Expected_failure_message(0, "unknown name: x")
 };
 
-static Expected_failure_message failure_messages_6[] = {
-    Expected_failure_message(0, "call in pattern must have bsdf or material return type")
-};
-
 // This does not include all messages, only the ones related to unused
 // variables.
 static Expected_failure_message failure_messages_7[] = {
@@ -199,8 +199,6 @@ static Expected_failure failure_files[] = {
                      failure_messages_4, sizeof(failure_messages_4) / sizeof(failure_messages_4[0])),
     Expected_failure("019_undefined_vars.mdltl", 1, 0, 0, 0,
                      failure_messages_5, sizeof(failure_messages_5) / sizeof(failure_messages_5[0])),
-    Expected_failure("020_pattern_invalid.mdltl", 1, 0, 0, 0,
-                     failure_messages_6, sizeof(failure_messages_6) / sizeof(failure_messages_6[0])),
 
     // Note: the error and hint count includes messages about pattern
     // overlap, which we are not interested in for this test.
@@ -216,6 +214,152 @@ static Expected_failure failure_files[] = {
     Expected_failure("042_wrong_comparisons.mdltl", 1, 0, 0, 0,
                      failure_messages_10, sizeof(failure_messages_10) / sizeof(failure_messages_10[0]))
 };
+
+static bool parse_rd_for_test(
+    char const  *source,
+    std::string &error_message,
+    unsigned    &error_line,
+    unsigned    &error_column)
+{
+    mi::base::Handle<mi::mdl::IMDL> imdl(mi::mdl::initialize(true));
+    mi::mdl::IAllocator *allocator = imdl->get_mdl_allocator();
+    mi::mdl::Allocator_builder builder(allocator);
+
+    mi::base::Handle<Compiler> compiler(builder.create<Compiler>(imdl.get()));
+    mi::base::Handle<Compilation_unit> unit = compiler->create_unit("<rd-test>");
+
+    return mdltlc_parse_rd(
+        *unit.get(),
+        source,
+        strlen(source),
+        error_message,
+        error_line,
+        error_column);
+}
+
+MI_TEST_AUTO_FUNCTION( test_cli_unknown_option_fails )
+{
+    char program[] = "mdltlc";
+    char option[] = "--definitely-unknown";
+    char *argv[] = { program, option };
+
+    Mdltlc app(program);
+    MI_CHECK_EQUAL(app.run(2, argv), EXIT_FAILURE);
+}
+
+MI_TEST_AUTO_FUNCTION( test_generated_header_guard_sanitizes_file_stem )
+{
+    std::string output_dir("test_output_header_guard");
+    fs::remove_all(output_dir);
+    fs::create_directory(output_dir);
+
+    std::string input_file(output_dir + "/header-guard.mdltl");
+    {
+        std::ofstream f(input_file, std::ofstream::out);
+        f << "\n";
+    }
+
+    mi::base::Handle<mi::mdl::IMDL> imdl(mi::mdl::initialize(true));
+    mi::mdl::IAllocator *allocator = imdl->get_mdl_allocator();
+
+    mi::mdl::Allocator_builder builder(allocator);
+    mi::base::Handle<Compiler> compiler(builder.create<Compiler>(imdl.get()));
+
+    Compiler_options &comp_options = compiler->get_compiler_options();
+    comp_options.add_filename(input_file.c_str());
+    comp_options.set_generate(true);
+    comp_options.set_output_dir(output_dir.c_str());
+    comp_options.set_silent(true);
+
+    unsigned err_count = 0;
+    compiler->run(err_count);
+    MI_CHECK_EQUAL(err_count, 0);
+
+    std::ifstream h_file(output_dir + "/header-guard.h", std::ifstream::in);
+    MI_CHECK(h_file.good());
+
+    bool saw_ifndef = false;
+    bool saw_define = false;
+    std::string line;
+    while (std::getline(h_file, line)) {
+        if (line == "#ifndef MDL_DISTILLER_DIST_HEADER_GUARD_H") {
+            saw_ifndef = true;
+        }
+        if (line == "#define MDL_DISTILLER_DIST_HEADER_GUARD_H") {
+            saw_define = true;
+        }
+    }
+
+    MI_CHECK(saw_ifndef);
+    MI_CHECK(saw_define);
+}
+
+MI_TEST_AUTO_FUNCTION( test_recursive_descent_parser_focused_constructs )
+{
+    char const *source =
+        "rules Focus bottomup {\n"
+        "  import ::Custom::Module;\n"
+        "  /* outer /* nested */ comment */\n"
+        "  matched ~ bsdf_mix_2(_ [[ x ~ diffuse_reflection_bsdf(_, _) ]], _, _, bsdf())\n"
+        "    --> option(global_float_ior@float)\n"
+        "    repeat_rules if (a <= b) && (c >= d) || (e == f) || (g != h)\n"
+        "    where\n"
+        "      q = ((1 << 2) + (4 >> 1) + (8 >>> 1))\n"
+        "      r = (++pre + post-- + (+u) + (-v) + (~w) + (!flag))\n"
+        "      s = math::foo(0x10, 077, .5, 1., 2.0e+3, \"str\\n\")\n"
+        "    debug_name \"focused\"\n"
+        "    debug_print(matched, q, r)\n"
+        "    deadrule;\n"
+        "  bsdf() --> bsdf() [[ assigned = color(1.0), patterned ~ diffuse_reflection_bsdf(_, _) ]]\n"
+        "    skip_recursion maybe true; // line comment\n"
+        "  postcond nonode(bsdf) || match(diffuse_reflection_bsdf(_, _));\n"
+        "}\n";
+
+    std::string error_message;
+    unsigned error_line = 0;
+    unsigned error_column = 0;
+    bool parsed = parse_rd_for_test(source, error_message, error_line, error_column);
+    if (!parsed) {
+        std::cout << "recursive descent parser error at "
+                  << error_line << ":" << error_column << ": "
+                  << error_message << "\n";
+    }
+    MI_CHECK(parsed);
+}
+
+MI_TEST_AUTO_FUNCTION( test_ast_comparator_reports_path )
+{
+    mi::base::Handle<mi::mdl::IMDL> imdl(mi::mdl::initialize(true));
+    mi::mdl::IAllocator *allocator = imdl->get_mdl_allocator();
+    mi::mdl::Allocator_builder builder(allocator);
+
+    mi::base::Handle<Compiler> compiler(builder.create<Compiler>(imdl.get()));
+    mi::base::Handle<Compilation_unit> expected_unit = compiler->create_unit("<expected>");
+    mi::base::Handle<Compilation_unit> actual_unit = compiler->create_unit("<actual>");
+
+    Ruleset *expected_ruleset = expected_unit->get_rule_factory().create_ruleset(
+        Location(Location::OWNER_FILE_IDX, 1, 1),
+        expected_unit->get_symbol_table().get_symbol("Expected"),
+        Ruleset::STRAT_TOPDOWN);
+    Ruleset *actual_ruleset = actual_unit->get_rule_factory().create_ruleset(
+        Location(Location::OWNER_FILE_IDX, 1, 1),
+        actual_unit->get_symbol_table().get_symbol("Actual"),
+        Ruleset::STRAT_TOPDOWN);
+
+    expected_unit->add_ruleset(expected_ruleset);
+    actual_unit->add_ruleset(actual_ruleset);
+
+    Mdltlc_ast_compare_result result;
+    bool equal = mdltlc_compare_asts(
+        expected_unit->get_rulesets(),
+        actual_unit->get_rulesets(),
+        result);
+
+    MI_CHECK(!equal);
+    MI_CHECK_EQUAL(std::string(result.path), std::string("ruleset[0].name"));
+    MI_CHECK(result.message().find("Expected") != std::string::npos);
+    MI_CHECK(result.message().find("Actual") != std::string::npos);
+}
 
 // Test the Compiler_options class.
 MI_TEST_AUTO_FUNCTION( test_compiler_options )
@@ -590,8 +734,8 @@ MI_TEST_AUTO_FUNCTION( test_golden_files )
             MI_CHECK(result);
         }
         {
-            std::ifstream f_golden ((golden_stemname + ".cpp"), std::ifstream::in);
-            std::ifstream f_under_test ((under_test_stemname + ".cpp"), std::ifstream::in);
+            std::ifstream f_golden ((golden_stemname + ".h"), std::ifstream::in);
+            std::ifstream f_under_test ((under_test_stemname + ".h"), std::ifstream::in);
             bool result = compare_files(f_golden, f_under_test);
             if (!result) {
                 printf(".h file comparison failed:\n");

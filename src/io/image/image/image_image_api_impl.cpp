@@ -210,27 +210,6 @@ mi::neuraylib::IBuffer* Image_api_impl::create_buffer_from_canvas(
         canvas, image_format, pixel_type, export_options);
 }
 
-mi::neuraylib::IBuffer* Image_api_impl::deprecated_create_buffer_from_canvas(
-    const mi::neuraylib::ICanvas* canvas,
-    const char* image_format,
-    const char* pixel_type,
-    const char* quality,
-    bool force_default_gamma) const
-{
-    std::optional<mi::Uint32> quality_optional = STRING::lexicographic_cast_s<mi::Uint32>( quality);
-    if( !quality_optional.has_value())
-        return nullptr;
-
-    const mi::Uint32 quality_uint32 = quality_optional.value();
-    if( quality_uint32 > 100)
-        return nullptr;
-
-    mi::base::Handle<mi::IMap> export_options(
-         m_image_module->convert_legacy_options( quality_uint32, force_default_gamma));
-
-    return create_buffer_from_canvas( canvas, image_format, pixel_type, export_options.get());
-}
-
 mi::neuraylib::ICanvas* Image_api_impl::create_canvas_from_buffer(
     const mi::neuraylib::IBuffer* buffer,
     const char* image_format,

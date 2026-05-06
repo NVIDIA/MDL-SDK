@@ -26,9 +26,9 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
- // examples/mdl_sdk/modules/example_modules.cpp
- //
- // Loads an MDL module and scan for its imports, resource dependencies and more...
+// examples/mdl_sdk/modules/example_modules.cpp
+//
+// Loads an MDL module and scan for its imports, resource dependencies and more...
 
 #include <iostream>
 #include <string>

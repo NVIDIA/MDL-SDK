@@ -180,8 +180,6 @@ public:
 ///   this material. Only used if folding is enabled. Default: 1.0f.
 /// - #mi::Float32 "wavelength_min": The smallest supported wavelength. Default: 380.0f.
 /// - #mi::Float32 "wavelength_max": The largest supported wavelength. Default: 780.0f.
-/// - \c bool "include_geometry_normal": If \c true, the \c "geometry.normal" field will be applied
-///   to the MDL state prior to evaluation of the given DF. Default: \c true.
 class IMdl_execution_context: public
     base::Interface_declare<0x28eb1f99,0x138f,0x4fa2,0xb5,0x39,0x17,0xb4,0xae,0xfb,0x1b,0xca>
 {

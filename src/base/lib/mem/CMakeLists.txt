@@ -31,7 +31,6 @@ set(PROJECT_NAME base-lib-mem)
 
 # collect sources
 set(PROJECT_HEADERS
-    "i_mem_allocatable.h"
     "i_mem_consumption.h"
     "mem.h"
     "mem_debug_alloc.h"

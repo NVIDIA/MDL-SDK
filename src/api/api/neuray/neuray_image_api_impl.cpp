@@ -185,21 +185,6 @@ mi::neuraylib::IBuffer* Image_api_impl::create_buffer_from_canvas(
         export_options);
 }
 
-mi::neuraylib::IBuffer* Image_api_impl::deprecated_create_buffer_from_canvas(
-    const mi::neuraylib::ICanvas* canvas,
-    const char* image_format,
-    const char* pixel_type,
-    const char* quality,
-    bool force_default_gamma) const
-{
-    return m_impl.deprecated_create_buffer_from_canvas(
-        canvas,
-        image_format,
-        pixel_type,
-        quality,
-        force_default_gamma);
-}
-
 mi::neuraylib::ICanvas* Image_api_impl::create_canvas_from_buffer(
     const mi::neuraylib::IBuffer* buffer,
     const char* image_format,

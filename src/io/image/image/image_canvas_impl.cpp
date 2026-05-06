@@ -456,7 +456,7 @@ void Canvas_impl::do_init(
             LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
                     R"(The image plugin failed to import "%s" in "%s".)",
                     member_filename.c_str(), container_filename.c_str());
-            *errors = -5;
+            *errors = -7;
             set_default_pink_dummy_canvas();
             return;
         }
@@ -678,20 +678,20 @@ Canvas_impl::Canvas_impl(
 #endif
 }
 
-void Canvas_impl::reset(
-        const mi::Uint32 width,
-        const mi::Uint32 height,
-        const Pixel_type pt)
+void Canvas_impl::reset( mi::Uint32 width, mi::Uint32 height, Pixel_type pixel_type)
 {
-    for ( auto& tile : m_tiles) {
-        static_cast<Tile_impl*>(tile.get())->reset( width, height, pt);
-    }
+    ASSERT( M_IMAGE, pixel_type != PT_UNDEF);
+    ASSERT( M_IMAGE, width > 0 && height > 0);
 
-    m_pixel_type = pt;
-    m_width = width;
-    m_height = height;
+    mi::base::Lock::Block block( &m_lock);
+
+    for( auto& tile: m_tiles)
+        static_cast<Tile_impl*>( tile.get())->reset( width, height, pixel_type);
+
+    m_pixel_type = pixel_type;
+    m_width      = width;
+    m_height     = height;
 }
-
 
 const char* Canvas_impl::get_type() const
 {
@@ -923,7 +923,7 @@ mi::neuraylib::IReader* Canvas_impl::get_reader( std::string& log_identifier) co
     // container-based
     if( !m_container_filename.empty() && !m_member_filename.empty()) {
 
-        log_identifier = m_container_filename + "\" in \"" + m_member_filename;
+        log_identifier = m_member_filename + "\" in \"" + m_container_filename;
 
         SYSTEM::Access_module<Image_module> image_module( false);
         mi::base::Handle<IMdl_container_callback> callback(

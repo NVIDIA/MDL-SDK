@@ -37,6 +37,8 @@
 
 #include <string>
 
+#include <base/data/idata/i_idata_string_cache.h>
+
 #include "neuray_db_element_impl.h"
 #include "neuray_attribute_set_impl.h"
 
@@ -83,7 +85,8 @@ public:
     const mi::base::IInterface* get_transmission() const;
 
 private:
-    mutable std::string m_cached_filename;
+
+    mutable IDATA::String_cache m_string_cache;
 };
 
 } // namespace NEURAY

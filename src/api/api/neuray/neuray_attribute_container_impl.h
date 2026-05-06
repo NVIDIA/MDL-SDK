@@ -71,16 +71,6 @@ public:
     // IScene_element methods
 
     mi::neuraylib::Element_type get_element_type() const;
-
-    // internal methods
-
-    /// See Attribute_set_impl<T>::set_attribute_set().
-    void set_attribute_set(
-        ATTR::Attribute_set* attribute_set, const mi::base::IInterface* owner);
-
-    /// See Attribute_set_impl<T>::set_attribute_set().
-    void set_attribute_set(
-        const ATTR::Attribute_set* attribute_set, const mi::base::IInterface* owner) const;
 };
 
 constexpr SERIAL::Class_id ID_ATTRIBUTE_CONTAINER = 0x5F415443; // '_ATC'

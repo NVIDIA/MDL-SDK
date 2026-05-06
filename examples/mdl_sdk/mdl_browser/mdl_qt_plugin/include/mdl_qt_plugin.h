@@ -26,8 +26,8 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
- /// \file
- /// \brief external interface of the plug-in used by applications.
+/// \file
+/// \brief external interface of the plug-in used by applications.
 
 #ifndef MDL_SDK_EXAMPLES_MDL_QTPLUGIN_H
 #define MDL_SDK_EXAMPLES_MDL_QTPLUGIN_H

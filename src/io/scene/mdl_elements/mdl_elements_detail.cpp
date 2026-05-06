@@ -487,6 +487,9 @@ DB::Tag core_texture_to_tag(
         if( result == -3) {
             msg = std::string( "No image plugin found to handle \"") + file_path
                 + "\" in \"" + decoded_mdl_module_name + "\".";
+        } else if( result == -5) {
+            msg = std::string( "Failure to open the file \"") + file_path
+                + "\" in \"" + decoded_mdl_module_name + "\".";
         } else if( result == -7) {
             msg = std::string( "File format error in \"") + file_path
                 + "\" in \"" + decoded_mdl_module_name + "\".";

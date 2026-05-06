@@ -578,9 +578,9 @@ mi::Sint32 Target_code::execute_df_init_function(
 {
     if (!m_native_code.is_valid_interface()) return -2;
     if (index >= m_callable_function_infos.size()) return -2;
-    // in single-init mode, the dist kind of the init function is still set, if there was only
-    // one main function requested, so the dist kind must be ignored then
-    if (dist_kind != mi::neuraylib::ITarget_code::DK_NONE &&
+    // in single-init mode, the dist kind of the init function is still set to none,
+    // so also accept that
+    if (m_callable_function_infos[index].m_dist_kind != mi::neuraylib::ITarget_code::DK_NONE &&
         m_callable_function_infos[index].m_dist_kind != dist_kind) return -2;
     if (m_callable_function_infos[index].m_kind != mi::neuraylib::ITarget_code::FK_DF_INIT)
         return -2;
@@ -706,7 +706,7 @@ mi::Sint32 Target_code::execute_bsdf_init(
 
 mi::Sint32 Target_code::execute_bsdf_sample(
     mi::Size index,
-    mi::neuraylib::Bsdf_sample_data *data,
+    mi::neuraylib::Bsdf_sample_data_base *data,
     const mi::neuraylib::Shading_state_material& state,
     mi::neuraylib::Texture_handler_base* tex_handler,
     const mi::neuraylib::ITarget_argument_block *cap_args) const
@@ -734,7 +734,7 @@ mi::Sint32 Target_code::execute_bsdf_evaluate(
 
 mi::Sint32 Target_code::execute_bsdf_pdf(
     mi::Size index,
-    mi::neuraylib::Bsdf_pdf_data *data,
+    mi::neuraylib::Bsdf_pdf_data_base *data,
     const mi::neuraylib::Shading_state_material& state,
     mi::neuraylib::Texture_handler_base* tex_handler,
     const mi::neuraylib::ITarget_argument_block *cap_args) const
@@ -772,7 +772,7 @@ mi::Sint32 Target_code::execute_edf_init(
 
 mi::Sint32 Target_code::execute_edf_sample(
     mi::Size index,
-    mi::neuraylib::Edf_sample_data *data,
+    mi::neuraylib::Edf_sample_data_base *data,
     const mi::neuraylib::Shading_state_material& state,
     mi::neuraylib::Texture_handler_base* tex_handler,
     const mi::neuraylib::ITarget_argument_block *cap_args) const
@@ -1398,6 +1398,7 @@ SERIAL::Serializable* Target_code::Texture_info::deserialize(
 bool Target_code::supports_serialization() const
 {
     return m_backend_kind == mi::neuraylib::IMdl_backend_api::Mdl_backend_kind::MB_CUDA_PTX ||
+           m_backend_kind == mi::neuraylib::IMdl_backend_api::Mdl_backend_kind::MB_GLSL ||
            m_backend_kind == mi::neuraylib::IMdl_backend_api::Mdl_backend_kind::MB_HLSL;
 }
 
@@ -1689,4 +1690,3 @@ bool Target_code::deserialize(
 } // namespace BACKENDS
 
 } // namespace MI
-

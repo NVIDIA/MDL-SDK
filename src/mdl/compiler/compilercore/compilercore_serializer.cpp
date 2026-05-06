@@ -165,15 +165,13 @@ void Base_serializer::write_double(double v)
 }
 
 // Write an MDL section tag.
-void Base_serializer::write_section_tag(Serializer::Serializer_tags tag)
+void Base_serializer::write_section_tag(unsigned tag)
 {
     // Tags are written as 32bit LE
-    uint32_t v = tag;
-
-    write(byte(v)); v >>= 8;
-    write(byte(v)); v >>= 8;
-    write(byte(v)); v >>= 8;
-    write(byte(v)); v >>= 8;
+    write(byte(tag)); tag >>= 8;
+    write(byte(tag)); tag >>= 8;
+    write(byte(tag)); tag >>= 8;
+    write(byte(tag)); tag >>= 8;
 }
 
 // Write a (general) tag, assuming small values.
@@ -623,6 +621,8 @@ void Factory_serializer::dfs_type(IType const *type, bool is_child_type)
     case IType::TK_VECTOR:
     case IType::TK_MATRIX:
     case IType::TK_COLOR:
+    case IType::TK_SPECTRAL_SAMPLE:
+    case IType::TK_SPECTRUM:
     case IType::TK_TEXTURE:
     case IType::TK_BSDF_MEASUREMENT:
     case IType::TK_VOID:
@@ -764,6 +764,8 @@ void Factory_serializer::dfs_value(IValue const *v, bool is_child_value)
     case IValue::VK_MATRIX:
     case IValue::VK_ARRAY:
     case IValue::VK_RGB_COLOR:
+    case IValue::VK_SPECTRUM:
+    case IValue::VK_SPECTRAL_SAMPLE:
     case IValue::VK_STRUCT:
         {
             // these values are compound
@@ -811,6 +813,8 @@ struct IType_less {
             case IType::TK_EDF:
             case IType::TK_VDF:
             case IType::TK_COLOR:
+            case IType::TK_SPECTRAL_SAMPLE:
+            case IType::TK_SPECTRUM:
             case IType::TK_BSDF_MEASUREMENT:
             case IType::TK_VOID:
             case IType::TK_AUTO:
@@ -1140,6 +1144,8 @@ struct IValue_less {
             case IValue::VK_MATRIX:
             case IValue::VK_ARRAY:
             case IValue::VK_RGB_COLOR:
+            case IValue::VK_SPECTRUM:
+            case IValue::VK_SPECTRAL_SAMPLE:
             case IValue::VK_STRUCT:
                 {
                     IValue_compound const *c_v = cast<IValue_compound>(v);
@@ -1283,7 +1289,6 @@ void Factory_serializer::write_enqueued_types()
     DOUT(("#types %u\n", unsigned(n_types)));
     INC_SCOPE();
 
-    size_t i = 0;
     for (Type_queue::const_iterator it(m_type_queue.begin()), end(m_type_queue.end());
         it != end;
         ++it)
@@ -1291,7 +1296,6 @@ void Factory_serializer::write_enqueued_types()
         IType const *type = *it;
 
         write_type(type);
-        ++i;
     }
 
     // clear the queue and visit set
@@ -1523,6 +1527,7 @@ void Factory_serializer::write_value(IValue const *v)
     case IValue::VK_MATRIX:
     case IValue::VK_ARRAY:
     case IValue::VK_RGB_COLOR:
+    case IValue::VK_SPECTRUM:
     case IValue::VK_STRUCT:
         DOUT(("value COMPOUND\n"));
         INC_SCOPE();
@@ -1545,6 +1550,19 @@ void Factory_serializer::write_value(IValue const *v)
 
                 DOUT(("#subvalue %u\n", unsigned(e_tag)));
             }
+        }
+        DEC_SCOPE();
+        break;
+
+    case IValue::VK_SPECTRAL_SAMPLE:
+        DOUT(("value SPECTRAL_SAMPLE\n"));
+        INC_SCOPE();
+        {
+            // these values are builtin, no need to serialize them, just reference its tag
+            Tag_t value_tag = get_value_tag(v);
+            write_encoded_tag(value_tag);
+
+            DOUT(("value tag %u\n", unsigned(value_tag)));
         }
         DEC_SCOPE();
         break;
@@ -1592,6 +1610,8 @@ void Factory_serializer::write_type(IType const *type)
     case IType::TK_VECTOR:
     case IType::TK_MATRIX:
     case IType::TK_COLOR:
+    case IType::TK_SPECTRAL_SAMPLE:
+    case IType::TK_SPECTRUM:
     case IType::TK_TEXTURE:
     case IType::TK_BSDF_MEASUREMENT:
     case IType::TK_VOID:
@@ -2978,8 +2998,7 @@ Module_serializer::Module_serializer(
 
 // Constructor.
 Base_wait_queue::Base_wait_queue(IAllocator *alloc)
-: m_alloc(alloc)
-, m_builder(alloc)
+: m_builder(alloc)
 , m_free_list(NULL)
 , m_wait_list(Wait_lists::key_compare(), alloc)
 {
@@ -3137,6 +3156,8 @@ IType const *Factory_deserializer::read_type(Type_factory &tf)
     case IType::TK_VECTOR:
     case IType::TK_MATRIX:
     case IType::TK_COLOR:
+    case IType::TK_SPECTRAL_SAMPLE:
+    case IType::TK_SPECTRUM:
     case IType::TK_TEXTURE:
     case IType::TK_BSDF_MEASUREMENT:
     case IType::TK_VOID:
@@ -3626,6 +3647,7 @@ IValue const *Factory_deserializer::read_value(Value_factory &vf)
     case IValue::VK_MATRIX:
     case IValue::VK_ARRAY:
     case IValue::VK_RGB_COLOR:
+    case IValue::VK_SPECTRUM:
     case IValue::VK_STRUCT:
         {
             DOUT(("value COMPOUND\n"));
@@ -3653,6 +3675,20 @@ IValue const *Factory_deserializer::read_value(Value_factory &vf)
 
             IValue const *v = vf.create_compound(rt, values.data(), n);
             register_value(value_tag, v);
+            DEC_SCOPE();
+            return v;
+        }
+
+    case IValue::VK_SPECTRAL_SAMPLE:
+        // these values are builtin, no need to serialize them, just reference its tag
+        {
+            DOUT(("value SPECTRAL_SAMPLE\n"));
+            INC_SCOPE();
+            Tag_t value_tag = read_encoded_tag();
+
+            DOUT(("value tag %u\n", unsigned(value_tag)));
+
+            IValue const *v = get_value(value_tag);
             DEC_SCOPE();
             return v;
         }

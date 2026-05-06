@@ -288,7 +288,7 @@ MI_TEST_AUTO_FUNCTION( test_ilogging_configuration )
         MI_CHECK_EQUAL( 0, neuray->shutdown());
     }
 
-    neuray = nullptr;
+    neuray.reset();
     MI_CHECK( unload());
 }
 

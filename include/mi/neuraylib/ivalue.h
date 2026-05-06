@@ -611,7 +611,7 @@ public:
     /// Returns the number of elements.
     virtual Size get_size() const = 0;
 
-    /// Returns the index for the given name, or -1 if there is no such value.
+    /// Returns the index for the given name, or ~0U if there is no such value.
     virtual Size get_index( const char* name) const = 0;
 
     /// Returns the name for the given index, or \c nullptr if there is no such value.

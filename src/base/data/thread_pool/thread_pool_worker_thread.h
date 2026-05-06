@@ -157,7 +157,7 @@ private:
 
     /// If set, the thread will go into state THREAD_SHUTDOWN instead of THREAD_IDLE when woken
     /// up from state THREAD_SLEEPING.
-    bool m_shutdown;
+    std::atomic_bool m_shutdown;
 
     /// Used to wake up the thread when in state THREAD_SLEEPING.
     mi::base::Condition m_condition;
@@ -172,7 +172,7 @@ private:
     mi::Uint32 m_cpu_id;
 
     /// Indicates whether thread affinity is enabled.
-    bool m_thread_affinity_enabled;
+    std::atomic_bool m_thread_affinity_enabled;
 };
 
 } // namespace THREAD_POOL

@@ -56,9 +56,15 @@
 #if MDL_DIST_PLUG_DEBUG
 #include <thread>
 #include <atomic>
-#include <iostream>
 #include <fstream>
+#include <iostream>
+#include <functional>
 #endif
+
+#define PP_DEBUG 0
+
+ // FIXME: so far the distiller removes the DAG debug info.
+#define NO_DBG DAG_DbgInfo()
 
 namespace mi {
 namespace mdl {
@@ -66,276 +72,1212 @@ namespace mdl {
 extern Node_types s_node_types;
 
 #if MDL_DIST_PLUG_DEBUG_DUMP
+
+namespace {
+
+struct Pprint_state {
+    Distiller_plugin_api_impl::Attr_map *attribute_map;
+    bool unfold_temporaries;
+    bool print_attributes;
+    size_t max_depth;
+    size_t current_depth;
+};
+
+/// Queue with a maximum size and limited functionality.
+/// Just enough for the pretty-printer.
+template<typename T>
+class Fixed_stack {
+    /// Dynamically allocated array for stack data.
+    T *m_data;
+    /// Always points past the top of the stack. 0 when stack is empty.
+    size_t m_top;
+    /// Stack size. Used for error checking.
+    size_t m_size;
+    size_t m_max_used;
+public:
+    Fixed_stack(size_t size)
+        : m_data(new T[size])
+        , m_top(0)
+        , m_size(size)
+        , m_max_used(0) {
+        MDL_ASSERT(size > 0);
+    }
+
+    ~Fixed_stack() {
+#if PP_DEBUG
+        std::cerr << "*** Stack freed\n";
+#endif
+        delete[] m_data;
+    }
+
+    size_t size() {
+        return m_size;
+    }
+
+    size_t used() {
+        return m_top;
+    }
+
+    bool empty() {
+        return m_top == 0;
+    }
+
+    void push(T &&t) {
+        MDL_ASSERT(m_top < m_size);
+        m_data[m_top++] = t;
+        m_max_used = std::max(m_top, m_max_used);
+    }
+
+    T pop() {
+        MDL_ASSERT(!empty());
+        return m_data[--m_top];
+    }
+
+    T &top() {
+        MDL_ASSERT(!empty());
+        return m_data[m_top - 1];
+    }
+
+    T &at(size_t pos) {
+        return m_data[pos];
+    }
+
+#if PP_DEBUG
+    void dump() {
+        std::cerr << "  top: " << m_top << ", max used: " << m_max_used << "\n";
+    }
+#endif
+};
+
+/// Queue with a maximum size and limited functionality.
+/// Just enough for the pretty-printer.
+template<typename T>
+class Fixed_queue {
+    /// Dynamically allocated array for queue data.
+    T *m_data;
+    /// Always points at first entry in queue. Element at this position
+    /// is not valid when queue is empty.
+    size_t m_first;
+    /// Always points one after the last entry in queue. Element before
+    /// this is not valid when queue is empty.
+    size_t m_last;
+    /// Stack size. Used for error checking.
+    size_t m_size;
+
+    /// Slots currently in use.
+    size_t m_used;
+    /// Maximum number of slots that have been in use.
+    size_t m_max_used;
+public:
+    Fixed_queue(size_t size)
+        : m_data(new T[size])
+        , m_first(0)
+        , m_last(0)
+        , m_size(size)
+        , m_used(0)
+        , m_max_used(0) {
+        MDL_ASSERT(size > 0);
+    }
+
+    ~Fixed_queue() {
+#if PP_DEBUG
+        std::cerr << "*** Queue freed\n";
+#endif
+        delete[] m_data;
+    }
+
+    size_t size() {
+        return m_size;
+    }
+
+    bool empty() {
+        return m_first == m_last;
+    }
+
+    void push(T &&t) {
+        size_t next = (m_last + 1) % m_size;
+        MDL_ASSERT(next != m_first);
+        m_data[m_last] = t;
+        m_last = next;
+        ++m_used;
+        m_max_used = std::max(m_used, m_max_used);
+    }
+
+    T pop_first() {
+        MDL_ASSERT(!empty());
+        size_t next = (m_first + 1) % m_size;
+        T t = m_data[m_first];
+        m_first = next;
+        --m_used;
+        return t;
+    }
+
+    void remove_first() {
+        MDL_ASSERT(!empty());
+        size_t next = (m_first + 1) % m_size;
+        m_first = next;
+        --m_used;
+    }
+
+    T pop_last() {
+        MDL_ASSERT(!empty());
+        size_t prev = (m_last + m_size - 1) % m_size;
+        T t = m_data[prev];
+        m_last = prev;
+        --m_used;
+        return t;
+    }
+
+    T &first() {
+        MDL_ASSERT(!empty());
+        return m_data[m_first];
+    }
+
+    T &last() {
+        MDL_ASSERT(!empty());
+        size_t prev = (m_last + m_size - 1) % m_size;
+        return m_data[prev];
+    }
+
+    T &at(size_t pos) {
+        return m_data[pos];
+    }
+
+    size_t first_pos() {
+        return m_first;
+    }
+
+    size_t end_pos() {
+        return m_last;
+    }
+
+    size_t next_pos(size_t pos) {
+        return (pos + 1) % m_size;
+    }
+
+#if PP_DEBUG
+    void dump() {
+        std::cerr << "  first: " << m_first << ", last:  " << m_last << ", used: " << m_used << ", max used: " << m_max_used << "\n";
+    }
+#endif
+};
+} // Anonymous namespace
+
+/// Oppen-style low-level pretty-printer.
+/// Takes care of managing indentation and grouping in a streaming fashion.
+/// Required memory is bounded by the maximum line width used for printing.
+///
+/// This class is intended to be allocated on the stack or using the standard
+/// memory allocator because it relies on destructors to free internal buffers.
+///
+/// Based on the paper
+/// Derreck C Oppen: Prettyprinting, ACM Trans. Program. Lang. Syst. issue 4,
+/// 1980, pp. 465-483, URL: https://doi.org/10.1145/357114.357115
+template<typename E>
+class Pp {
+public:
+    /// These specify two options for breaking lines:
+    /// - For consistent groups, whenever a line break is required, all
+    ///   BRK tokens will break the line.
+    /// - For inconsistent groups, only required line breaks will be inserted
+    ///
+    /// For example, this is a consistent group:
+    ///   println(a,
+    ///     b,
+    ///     c)
+    /// where an inconsistent group might be formatted like this:
+    ///   println(a, b,
+    ///     c)
+    enum Break_type {
+        /// When breaking is required in a group, all breaks in that
+        /// group will be broken and indented.
+        CONSISTENT,
+        /// When breaking is required in a group, only required breaks in
+        /// that group will be broken.
+        INCONSISTENT,
+        /// Internal only: current block fits on line.
+        FITS,
+    };
+
+    /// Indentation offsets for groups can be specified in two ways:
+    /// - with a (positive or negative) offset relative to the indentation
+    ///   of an enclosing group (or relative to zero for the outermost
+    ///   group), or
+    /// - relative to the indentation at the group start.
+    /// The former will produce output like
+    ///   println(a, b,
+    ///     c, d)
+    /// for an offset of 2, and the latter
+    ///   println(a, b,
+    ///           c, d)
+    /// This can be combined with consistent or inconsistent like breaks
+    /// for more layout options.
+    enum Layout_style {
+        /// Indent relative to enclosing group's indentation.
+        OFFSET,
+        /// Indent to column where the group begins.
+        ALIGN
+    };
+
+private:
+    /// Different kinds of tokens handled by the pretty-printer.
+    enum Token_kind {
+        BEG,
+        END,
+        TXT,
+        BRK,
+    };
+
+    /// Entries in the token queue.
+    struct Token_entry {
+        /// Kind of token.
+        Token_kind kind;
+        union {
+            /// TXT tokens carry a (heap-allocated) string. Note
+            /// that strings are not freed, this is designed to
+            /// work with arena allocation.
+            struct {
+                char const *txt;
+            } txt;
+            /// BEG tokens carry their break type, layout style
+            /// and offset (the latter ignored for ALIGN layouts).
+            struct {
+                Break_type break_type;
+                Layout_style layout_style;
+                int offset;
+            } beg;
+            /// BRK tokens carry their indentation offset and the
+            /// number of spaces used when not breaking.
+            struct {
+                int offset;
+                int spaces;
+            } brk;
+        } u;
+        int width;
+    };
+
+    /// Frame of the print stack. Stores the current break type and
+    /// saves the indentation of the outer group.
+    struct Print_frame {
+        /// Break type currently in effect.
+        Break_type break_type;
+        /// Indentation of the outer group.
+        int indent;
+    };
+
+public:
+    Pp(IAllocator *alloc, std::ostream &outs, int line_width, E &&extra)
+        : m_alloc(alloc)
+        , m_outs(outs)
+        , m_line_width(line_width)
+        , m_extra(extra)
+        , m_buffer_lengths(line_width * 6)
+        , m_right_total(1)
+        , m_left_total(1)
+        , m_indent(0)
+        , m_remaining(line_width)
+        , m_left(0)
+        , m_right(0)
+        , m_print_stack(m_buffer_lengths)
+        , m_scan_stack(m_buffer_lengths)
+        , m_tokens(m_buffer_lengths)
+    {
+        // Open outermost group.
+        //beg(Pp::Break_type::CONSISTENT, Pp::Layout_style::OFFSET, 0);
+    }
+
+    E &extra() {
+        return m_extra;
+    }
+
+    void grp(
+        Break_type break_type,
+        Layout_style layout_style,
+        int offset,
+        std::function<void(Pp &)> f)
+    {
+        beg(break_type, layout_style, offset);
+        f(*this);
+        end();
+    }
+
+    void igrp(int offset, std::function<void(Pp &)> f) {
+        grp(INCONSISTENT, OFFSET, offset, f);
+    }
+
+    void cgrp(int offset, std::function<void(Pp &)> f) {
+        grp(CONSISTENT, OFFSET, offset, f);
+    }
+
+    void aigrp(std::function<void(Pp &)> f) {
+        grp(INCONSISTENT, ALIGN, 0, f);
+    }
+
+    void acgrp(std::function<void(Pp &)> f) {
+        grp(CONSISTENT, ALIGN, 0, f);
+    }
+
+    /// Drive forward printing as much a
+    /// s possible. When we know that the width
+    /// of all the tokens in the token queue exceeds the remaining available space
+    /// on the current line, set the width of the first entry pointed to by the
+    /// first scan stack item to a large number, effectively forcing it to print out.
+    /// This might (and will most probably) make more tokens available for printing,
+    /// so we run the test in a loop.
+    ///
+    /// The `end_of_input` flag tells the loop to print out everything that is
+    /// available, ignoring the available space. This is used when finishing
+    /// printing.
+    void trim_left(bool end_of_input) {
+        while (!m_scan_stack.empty() && (end_of_input || m_right_total - m_left_total > m_remaining)) {
+            size_t pos = m_scan_stack.pop_first();
+            size_t idx = pos % m_buffer_lengths;
+            Token_entry &entry = m_tokens.at(idx);
+            entry.width = 1000000;
+            advance_left();
+        }
+    }
+
+    /// Emit a TXT token.
+    void txt(char const *s) {
+#if PP_DEBUG
+        std::cerr << "\n[+] scan(txt, \"" << s << "\")\n";
+#endif
+        int len = static_cast<int>(strlen(s));
+        if (m_scan_stack.empty()) {
+            print_txt(s, len);
+        } else {
+            char *t = static_cast<char *>(m_alloc->malloc(len + 1));
+            strncpy_s(t, len + 1, s, len);
+            Token_entry entry{};
+            entry.kind = TXT;
+            entry.u.txt.txt = t;
+            entry.width = len;
+            m_tokens.push(std::move(entry));
+            m_right = (m_right + 1) % m_buffer_lengths;
+            m_right_total += len;
+            trim_left(false);
+
+        }
+#if PP_DEBUG
+        dump_state();
+#endif
+    }
+
+    /// Finish output. This will flush all pending output.
+    void eof() {
+#if PP_DEBUG
+        std::cerr << "\n[+] scan(eof)\n";
+#endif
+        trim_left(true);
+#if PP_DEBUG
+        dump_state();
+#endif
+    }
+
+    /// Emit an inconsistent group beginning with OFFSET layout style.
+    void ibeg(int offset = 0) {
+        beg(Break_type::INCONSISTENT, Layout_style::OFFSET, offset);
+    }
+
+    /// Emit an consistent group beginning with OFFSET layout style.
+    void cbeg(int offset = 0) {
+        beg(Break_type::CONSISTENT, Layout_style::OFFSET, offset);
+    }
+
+    /// Emit an inconsistent group beginning with ALIGN layout style.
+    void aibeg() {
+        beg(Break_type::INCONSISTENT, Layout_style::ALIGN);
+    }
+
+    /// Emit an consistent group beginning with ALIGN layout style.
+    void acbeg() {
+        beg(Break_type::CONSISTENT, Layout_style::ALIGN);
+    }
+
+    /// Emit a group beginning with specified break type and layout
+    /// style. `offset` has no effect when the layout style is ALIGN.
+    void beg(
+        Break_type break_type = CONSISTENT,
+        Layout_style layout_style = Layout_style::OFFSET,
+        int offset = 0)
+    {
+#if PP_DEBUG
+        std::cerr << "\n[+] scan(beg)\n";
+#endif
+        Token_entry entry{};
+        entry.kind = BEG;
+        entry.u.beg.break_type = break_type;
+        entry.u.beg.layout_style = layout_style;
+        entry.u.beg.offset = offset;
+        entry.width = -m_right_total;
+        m_tokens.push(std::move(entry));
+        m_scan_stack.push(m_right);
+        m_right = (m_right + 1) % m_buffer_lengths;
+#if PP_DEBUG
+        dump_state();
+#endif
+    }
+
+    /// Emit a group end token.
+    void end() {
+#if PP_DEBUG
+        std::cerr << "\n[+] scan(end)\n";
+#endif
+        if (m_scan_stack.empty()) {
+            print_end();
+        } else {
+            Token_entry entry{};
+            entry.kind = END;
+            entry.width = 0;
+            m_tokens.push(std::move(entry));
+            m_right = (m_right + 1) % m_buffer_lengths;
+            {
+                size_t pos = m_scan_stack.pop_last();
+                size_t idx = pos % m_buffer_lengths;
+                Token_entry &prv_entry = m_tokens.at(idx);
+                prv_entry.width += m_right_total;
+                if (entry.kind == BRK && !m_scan_stack.empty()) {
+                    pos = m_scan_stack.pop_last();
+                    idx = pos % m_buffer_lengths;
+                    Token_entry &beg_entry = m_tokens.at(idx);
+                    beg_entry.width += m_right_total;
+                }
+            }
+            if (m_scan_stack.empty()) {
+                advance_left();
+            }
+        }
+#if PP_DEBUG
+        dump_state();
+#endif
+    }
+
+    /// Emit a break that will always break the line.
+    void hard_brk() {
+        brk(1000000, 0);
+    }
+
+    /// Emit a breakable space token. `spaces` is the number of spaces
+    /// that will be printed when the break is not needed. When a break
+    /// is needed, `offset` will be added to the current group's indentation
+    /// to get the indentation for the next line.
+    void brk(int spaces = 1, int offset = 0) {
+#if PP_DEBUG
+        std::cerr << "\n[+] scan(brk)\n";
+#endif
+        if (!m_scan_stack.empty()) {
+            size_t pos = m_scan_stack.last();
+            size_t idx = pos % m_buffer_lengths;
+            Token_entry &entry = m_tokens.at(idx);
+            if (entry.kind == BRK) {
+                m_scan_stack.pop_last();
+                entry.width += m_right_total;
+            }
+        }
+        Token_entry entry{};
+        entry.kind = BRK;
+        entry.u.brk.spaces = spaces;
+        entry.u.brk.offset = offset;
+        entry.width = -m_right_total;
+        m_tokens.push(std::move(entry));
+        m_right_total += spaces;
+        m_scan_stack.push(m_right);
+        m_right = (m_right + 1) % m_buffer_lengths;
+        trim_left(false);
+#if PP_DEBUG
+        dump_state();
+#endif
+    }
+
+private:
+    void advance_left() {
+        while (!m_tokens.empty()) {
+            Token_entry &entry = m_tokens.first();
+            if (entry.width < 0) {
+                break;
+            }
+            print(entry);
+            m_tokens.remove_first();
+            m_left = (m_left + 1) % m_buffer_lengths;
+        }
+
+    }
+    void print_nl_and_indent(int offset) {
+#if PP_DEBUG
+        std::cerr << "[==] nl and indent\n";
+#endif
+        m_outs << "\n";
+        m_remaining = m_line_width;
+        int ind = m_indent + offset;
+        if (ind > 0) {
+            print_spaces(ind);
+        }
+    }
+
+    void print_spaces(int count) {
+        static char const *TEN_SPACES = "          ";
+
+        m_remaining -= count;
+
+        for (; count > 10; count -= 10) {
+            m_outs << TEN_SPACES;
+        }
+        for (; count > 0; --count) {
+            m_outs << " ";
+        }
+    }
+
+    void print_txt(char const *s, int width) {
+#if PP_DEBUG
+        std::cerr << "[-] print(txt:";
+        std::cerr << width << ")\n";
+#endif
+        m_outs << s;
+        m_left_total += width;
+        m_remaining -= width;
+    }
+
+    void print_beg(Break_type break_type, Layout_style layout_style, int offset, int width) {
+#if PP_DEBUG
+        std::cerr << "[-] print(beg:";
+        std::cerr << width << ")\n";
+#endif
+        Break_type bt;
+        if (width > m_remaining) {
+            if (break_type == CONSISTENT) {
+                bt = CONSISTENT;
+            } else {
+                bt = INCONSISTENT;
+            }
+        } else {
+            bt = FITS;
+        }
+        Print_frame frame{ break_type, m_indent };
+        m_print_stack.push(std::move(frame));
+        switch (layout_style) {
+        case OFFSET:
+            m_indent += offset;
+            break;
+        case ALIGN:
+#if PP_DEBUG
+            std::cerr << "*** lw: " << m_line_width << ", rem: " << m_remaining << " ***\n";
+#endif
+            if (m_remaining > 10) {
+                m_indent = m_line_width - m_remaining;
+            } else {
+                m_indent += 2;
+            }
+            break;
+        }
+    }
+
+    void print_end() {
+#if PP_DEBUG
+        std::cerr << "[-] print(end)\n";
+#endif
+        Print_frame frame = m_print_stack.pop();
+        m_indent = frame.indent;
+    }
+
+    void print_brk(int spaces, int offset, int width) {
+#if PP_DEBUG
+        std::cerr << "[-] print(brk:";
+        std::cerr << width << ")\n";
+#endif
+        if (m_print_stack.empty()) {
+            if (width > m_remaining) {
+                print_nl_and_indent(offset);
+            } else {
+                print_spaces(spaces);
+            }
+        } else {
+            Print_frame &frame = m_print_stack.top();
+            if (frame.break_type == CONSISTENT) {
+                print_nl_and_indent(offset);
+            } else if (frame.break_type == INCONSISTENT && width > m_remaining) {
+                print_nl_and_indent(offset);
+            } else {
+                print_spaces(spaces);
+            }
+        }
+        m_left_total += spaces;
+    }
+
+    void print(Token_entry &entry) {
+        switch (entry.kind) {
+        case TXT:
+            print_txt(entry.u.txt.txt, entry.width);
+            break;
+        case BEG:
+            print_beg(entry.u.beg.break_type, entry.u.beg.layout_style, entry.u.beg.offset, entry.width);
+            break;
+        case END:
+            print_end();
+            break;
+        case BRK:
+            print_brk(entry.u.brk.spaces, entry.u.brk.offset, entry.width);
+            break;
+        }
+    }
+
+#if PP_DEBUG
+    void dump_state() {
+        std::cerr << "left_total: " << m_left_total << ", right_total: " << m_right_total << ", left: " << m_left << ", right: " << m_right << "\n";
+        std::cerr << "remaining: " << m_remaining << ", indent: " << m_indent << ", line width: " << m_line_width << "\n";
+        std::cerr << "tokens:\n";
+        m_tokens.dump();
+        std::cerr << "  [ ";
+        for (size_t pos = m_tokens.first_pos(), end = m_tokens.end_pos(); pos != end; pos = m_tokens.next_pos(pos)) {
+            Token_entry &entry = m_tokens.at(pos);
+            std::cerr << token_kind_name(entry.kind);
+            switch (entry.kind) {
+            case TXT:
+                std::cerr << ":\"" << entry.u.txt.txt << "\"";
+                break;
+            case BEG:
+                std::cerr << ":" << break_type_name(entry.u.beg.break_type) << ":" << layout_style_name(entry.u.beg.layout_style);
+                break;
+            case BRK:
+                std::cerr << ":s=" << entry.u.brk.spaces << "o=" << entry.u.brk.offset;
+            default:
+                break;
+            }
+            std::cerr << ":w=" << entry.width;
+            std::cerr << " ";
+        }
+        std::cerr << "]\n";
+        std::cerr << "scan stack:\n";
+        m_scan_stack.dump();
+        std::cerr << "  [ ";
+        for (size_t pos = m_scan_stack.first_pos(), end = m_scan_stack.end_pos(); pos != end; pos = m_scan_stack.next_pos(pos)) {
+            size_t idx = m_scan_stack.at(pos);
+            std::cerr << idx;
+            std::cerr << " ";
+        }
+        std::cerr << "]\n";
+        std::cerr << "print_stack:\n";
+        m_print_stack.dump();
+        std::cerr << "  [ ";
+        for (size_t pos = 0; pos < m_print_stack.used(); ++pos) {
+            Print_frame &frame = m_print_stack.at(pos);
+            std::cerr << break_type_name(frame.break_type);
+            std::cerr << "/ind:" << frame.indent;
+            std::cerr << " ";
+        }
+        std::cerr << "]\n";
+    }
+
+    char const *break_type_name(Break_type break_type) {
+        switch (break_type) {
+        case CONSISTENT: return "CONSISTENT";
+        case INCONSISTENT: return "INCONSISTENT";
+        case FITS: return "FITS";
+        default: return "";
+        }
+    }
+
+    char const *layout_style_name(Layout_style layout_style) {
+        switch (layout_style) {
+        case OFFSET: return "OFFSET";
+        case ALIGN: return "ALIGN";
+        default: return "";
+        }
+    }
+    char const *token_kind_name(Token_kind token_kind) {
+        switch (token_kind) {
+        case BEG: return "BEG";
+        case END: return "END";
+        case TXT: return "TXT";
+        case BRK: return "BRK";
+        default: return "";
+        }
+    }
+
+#endif
+
+    IAllocator *m_alloc;
+    std::ostream &m_outs;
+    int m_line_width;
+    E m_extra;
+    int m_buffer_lengths;
+    int m_right_total;
+    int m_left_total;
+    int m_indent;
+    int m_remaining;
+    int m_left;
+    int m_right;
+    Fixed_stack<Print_frame> m_print_stack;
+    Fixed_queue<size_t> m_scan_stack;
+    Fixed_queue<Token_entry> m_tokens;
+};
+
+template<typename E>
+static void print_int(int i, Pp<E> &pp) {
+    char buf[84];
+    snprintf(buf, sizeof(buf), "%d", i);
+    buf[sizeof(buf) - 1] = '\0';
+    pp.txt(buf);
+}
+
+template<typename E>static void print_double(double d, Pp<E> &pp) {
+    char buf[64];
+    snprintf(buf, sizeof(buf), "%.g", d);
+    buf[sizeof(buf) - 1] = '\0';
+    if (strchr(buf, '.') == nullptr) {
+        strcat(buf, ".0");
+    }
+    pp.txt(buf);
+}
+
+template<typename E>
+static void print_float(float f, Pp<E> &pp) {
+    print_double(f, pp);
+}
+
 // Utility for debugging. Prints a value to stderr.
-void print_value(mi::mdl::IValue const *v, std::ostream & outs) {
+template<typename E>
+static void print_value(mi::mdl::IValue const *v, Pp<E> &pp) {
     switch (v->get_kind()) {
     case mi::mdl::IValue::Kind::VK_BAD:
-        outs << "<bad>";
+        pp.txt("<bad>");
         break;
 
     case mi::mdl::IValue::Kind::VK_BOOL:
-        outs << cast<IValue_bool>(v)->get_value();
+    {
+        bool val = cast<IValue_bool>(v)->get_value();
+        pp.txt(val ? "true" : "false");
         break;
+    }
 
     case mi::mdl::IValue::Kind::VK_INT:
-        outs << cast<IValue_int>(v)->get_value();
+        print_int(cast<IValue_int>(v)->get_value(), pp);
         break;
 
     case mi::mdl::IValue::Kind::VK_ENUM:
-        {
-            IType_enum const *t = cast<IType_enum>(v->get_type());
-            int value_idx = cast<IValue_enum>(v)->get_index();
-            IType_enum::Value const *v = t->get_value(value_idx);
-            outs << t->get_symbol()->get_name() << "::";
-            outs << v->get_symbol()->get_name();
-        }
-        break;
+    {
+        IType_enum const *t = cast<IType_enum>(v->get_type());
+        int value_idx = cast<IValue_enum>(v)->get_index();
+        IType_enum::Value const *v = t->get_value(value_idx);
+        pp.igrp(0, [&](auto &pp) {
+            pp.txt(t->get_symbol()->get_name());
+            pp.txt("::");
+            pp.brk(0, 0);
+            pp.txt(v->get_symbol()->get_name());
+            });
+    }
+    break;
 
     case mi::mdl::IValue::Kind::VK_FLOAT:
-        outs << cast<IValue_float>(v)->get_value();
+        print_float(cast<IValue_float>(v)->get_value(), pp);
         break;
 
     case mi::mdl::IValue::Kind::VK_DOUBLE:
-        outs << cast<IValue_double>(v)->get_value();
+        print_double(cast<IValue_double>(v)->get_value(), pp);
         break;
 
     case mi::mdl::IValue::Kind::VK_STRING:
-        outs << "\"" << cast<IValue_string>(v)->get_value() << "\"";
+        pp.txt("\"");
+        pp.txt(cast<IValue_string>(v)->get_value());
+        pp.txt("\"");
         break;
 
     case mi::mdl::IValue::Kind::VK_VECTOR:
-        {
-            IValue_vector const *vv = cast<IValue_vector>(v);
-            outs << "float"
-                      << vv->get_component_count()
-                      << "(";
-            for (int i = 0; i < vv->get_component_count(); ++i) {
-                if (IValue_float const *f = as<IValue_float>(vv->get_value(i))) {
-                    if (i > 0) {
-                        outs << ",";
-                    }
-                    outs << f->get_value();
-                } else if (IValue_int const *f = as<IValue_int>(vv->get_value(i))) {
-                    if (i > 0) {
-                        outs << ",";
-                    }
-                    outs << f->get_value();
-                } else {
-                    MDL_ASSERT(!"unreachable");
-                }
+    {
+        IValue_vector const *vv = cast<IValue_vector>(v);
+        pp.txt("float");
+        print_int(vv->get_component_count(), pp);
+        pp.txt("(");
+        for (int i = 0; i < vv->get_component_count(); ++i) {
+            if (i > 0) {
+                pp.txt(",");
+                pp.brk();
             }
-            outs << ")";
+            if (IValue_float const *f = as<IValue_float>(vv->get_value(i))) {
+                print_float(f->get_value(), pp);
+            } else if (IValue_int const *f = as<IValue_int>(vv->get_value(i))) {
+                print_int(f->get_value(), pp);
+            } else {
+                MDL_ASSERT(!"unreachable");
+            }
         }
-        break;
+        pp.txt(")");
+    }
+    break;
 
     case mi::mdl::IValue::Kind::VK_MATRIX:
-        outs << "<matrix>";
+        pp.txt("<matrix>");
         break;
 
     case mi::mdl::IValue::Kind::VK_ARRAY:
-        outs << "<array>";
+        pp.txt("<array>");
         break;
 
     case mi::mdl::IValue::Kind::VK_RGB_COLOR:
     {
-        outs << "color(";
-        for (int i = 0; i < 3; ++i) {
-            IValue_float const *f = cast<IValue_rgb_color>(v)->get_value(i);
-            if (i > 0) {
-                outs << ",";
+        pp.igrp(2, [&](auto &pp) {
+            IValue_rgb_color const *cv = cast<IValue_rgb_color>(v);
+            pp.txt("color(");
+            float first = cv->get_value(0)->get_value();
+            if (first == cv->get_value(1)->get_value() && first == cv->get_value(2)->get_value()) {
+                print_float(first, pp);
+            } else {
+                for (int i = 0; i < 3; ++i) {
+                    IValue_float const *f = cv->get_value(i);
+                    if (i > 0) {
+                        pp.txt(",");
+                        pp.brk();
+                    }
+                    print_float(f->get_value(), pp);
+                }
             }
-            outs << f->get_value();
-        }
-        outs << ")";
+            pp.txt(")");
+            });
         break;
     }
 
     case mi::mdl::IValue::Kind::VK_STRUCT:
-        outs << "<struct>";
+    {
+        IValue_struct const *sval = cast<IValue_struct>(v);
+        IType_struct const *sty = cast<IType_struct>(sval->get_type());
+        char const *sty_name = sty->get_symbol()->get_name();
+        pp.txt(sty_name);
+        pp.txt("(");
+        pp.igrp(2, [&](auto &pp) {
+            for (size_t i = 0, len = sty->get_field_count(); i < len; ++i) {
+                IType_struct::Field const *fld = sty->get_field(i);
+                ISymbol const *fld_sym = fld->get_symbol();
+                char const *fld_name = fld_sym->get_name();
+                pp.igrp(2, [&](auto &pp) {
+                    pp.txt(fld_name);
+                    //pp.brk(0);
+                    pp.txt(":");
+                    pp.brk();
+                    IValue const *fld_val = sval->get_field(fld_sym);
+                    print_value(fld_val, pp);
+                    if (i < len - 1) {
+                        pp.txt(",");
+                        pp.brk();
+                    }
+                    });
+            }
+            pp.txt(")");
+            });
         break;
+    }
 
     case mi::mdl::IValue::Kind::VK_INVALID_REF:
-        {
-            IType const *t = v->get_type();
-            switch (t->get_kind()) {
-            case IType::Kind::TK_BSDF:
-                outs << "bsdf()";
-                break;
-            case IType::Kind::TK_EDF:
-                outs << "edf()";
-                break;
-            case IType::Kind::TK_VDF:
-                outs << "vdf()";
-                break;
-            case IType::Kind::TK_HAIR_BSDF:
-                outs << "hair_bsdf()";
-                break;
-            default:
-                outs << "<invalid_ref>";
-                break;
-            }
+    {
+        IType const *t = v->get_type();
+        switch (t->get_kind()) {
+        case IType::Kind::TK_BSDF:
+            pp.txt("bsdf()");
+            break;
+        case IType::Kind::TK_EDF:
+            pp.txt("edf()");
+            break;
+        case IType::Kind::TK_VDF:
+            pp.txt("vdf()");
+            break;
+        case IType::Kind::TK_HAIR_BSDF:
+            pp.txt("hair_bsdf()");
+            break;
+        default:
+            pp.txt("<invalid_ref>");
+            break;
         }
-        break;
+    }
+    break;
 
     case mi::mdl::IValue::Kind::VK_TEXTURE:
-        {
-            IValue_texture const *vv = cast<IValue_texture>(v);
+    {
+        IValue_texture const *vv = cast<IValue_texture>(v);
 
-            outs << "<texture: "
-                << "url: \"" << vv->get_string_value()
-                << "\", sel: \"" 
-                << vv->get_selector() 
-                << "\", tag: " << vv->get_tag_value()
-                << ", ver: " << vv->get_tag_version()
-                << ">";
-        }
-        break;
+        pp.txt("<texture:");
+        pp.brk();
+        pp.txt("url:\"");
+        pp.brk();
+        pp.txt(vv->get_string_value());
+        pp.txt("\",");
+        pp.brk();
+        pp.txt("sel:\"");
+        pp.brk();
+        pp.txt(vv->get_selector());
+            pp.txt("\",");
+            pp.brk();
+        pp.txt("tag:");
+        pp.brk();
+        print_int(vv->get_tag_value(), pp);
+        pp.txt(",");
+        pp.brk();
+        pp.txt("ver: ");
+        print_int(vv->get_tag_version(), pp);
+        pp.txt(">");
+    }
+    break;
     case mi::mdl::IValue::Kind::VK_LIGHT_PROFILE:
-        outs << "<light_profile>";
+        pp.txt("<light_profile>");
         break;
 
     case mi::mdl::IValue::Kind::VK_BSDF_MEASUREMENT:
-        outs << "<bsdf_measurement>";
+        pp.txt("<bsdf_measurement>");
         break;
 
     default:
-        outs << "<unknown>";
+        pp.txt("<unknown>");
         break;
     }
 }
 
-// Utility for debugging. Prints i*2 spaces.
-void indent(int i, std::ostream &outs) {
-    for (int x = 0; x < i; ++x) {
-        outs << "  ";
-    }
-}
+template<typename E>
+static void print_attributes(
+    DAG_node const *node,
+    Pp<E> &pp);
 
-// Utility for debugging. Prints a node with indentation and some
-// colors. Only works properly on terminals with ANSI color code
-// emulation.
-void Distiller_plugin_api_impl::pprint_node(
-    IMaterial_instance const *inst,
-    DAG_node const           *node,
-    int                      level,
-    std::ostream             &outs)
+template<typename E>
+static void print_node(
+    DAG_node const *node,
+    Pp<E> &pp)
 {
-  restart:
+    Pprint_state const *state = pp.extra();
+    if (state->max_depth != 0 && state->current_depth > state->max_depth) {
+        pp.txt("...");
+        return;
+    }
+restart:
     switch (node->get_kind()) {
     case DAG_node::EK_CONSTANT:
-        {
-            DAG_constant const *c = cast<DAG_constant>(node);
-            IValue const *value = c->get_value();
-            print_value(value, outs);
-            pprint_attributes(inst, node, level, outs);
-        }
-        break;
+    {
+        DAG_constant const *c = cast<DAG_constant>(node);
+        IValue const *value = c->get_value();
+        pp.igrp(2, [&](auto &pp) {
+            print_value(value, pp);
+            pp.brk(0);
+            print_attributes(node, pp);
+            });
+    }
+    break;
     case DAG_node::EK_PARAMETER:
-        {
-            DAG_parameter const *p    = cast<DAG_parameter>(node);
-            int                 index = p->get_index();
-            outs << "p" << index;
-            pprint_attributes(inst, node, level, outs);
-        }
-        break;
+    {
+        DAG_parameter const *p = cast<DAG_parameter>(node);
+        int                 index = p->get_index();
+        pp.igrp(2, [&](auto &pp) {
+            pp.txt("p");
+            print_int(index, pp);
+            pp.brk(0);
+            print_attributes(node, pp);
+            });
+    }
+    break;
     case DAG_node::EK_TEMPORARY:
-        {
-            DAG_temporary const *t = cast<DAG_temporary>(node);
-            int index = t->get_index();
-            DAG_node const *val = t->get_expr();
-            switch (val->get_kind()) {
-            case DAG_node::EK_CONSTANT:
-            case DAG_node::EK_PARAMETER:
-                node = val;
-                goto restart;
-            default:
-                outs << "t" << index;
-                pprint_attributes(inst, node, level, outs);
-                break;
-            }
+    {
+        DAG_temporary const *t = cast<DAG_temporary>(node);
+        int index = t->get_index();
+        DAG_node const *val = t->get_expr();
+        if (val->get_kind() == DAG_node::EK_PARAMETER || pp.extra()->unfold_temporaries) {
+            node = val;
+            goto restart;
+        } else {
+            pp.igrp(2, [&](auto &pp) {
+                pp.txt("t");
+                print_int(index, pp);
+                pp.brk(0);
+                print_attributes(node, pp);
+                });
         }
-        break;
+    }
+    break;
     case DAG_node::EK_CALL:
-        {
-            DAG_call const         *call    = cast<DAG_call>(node);
-            int                    n_params = call->get_argument_count();
-//          IDefinition::Semantics sema     = call->get_semantic();
-            char const             *name    = call->get_name();
-            int np = std::string(name).find('(');
-            if (np == std::string::npos) {
-                np = strlen(name);
-            }
-            std::string n(name, 0, np);
-
-            outs << n.c_str() << "(";
-            for (int i = 0; i < n_params; ++i) {
-                if (i > 0) {
-                    outs << ",";
-                }
-                if (level > 4 || i > 3) {
-                    outs << "\n";
-                    indent(level, outs);
-                }
-                pprint_node(inst, call->get_argument(i), level + 1, outs);
-            }
-            outs << ")";
-            pprint_attributes(inst, node, level, outs);
+    {
+        DAG_call const *call = cast<DAG_call>(node);
+        int n_params = call->get_argument_count();
+        char const *name = call->get_name();
+        int np = std::string(name).find('(');
+        if (np == std::string::npos) {
+            np = strlen(name);
         }
-        break;
+        std::string n(name, 0, np);
+
+        pp.igrp(0, [&](auto &pp) {
+            pp.txt(n.c_str());
+            pp.txt("(");
+            pp.igrp(2, [&](auto &pp) {
+                pp.brk(0);
+                for (int i = 0; i < n_params; ++i) {
+                    //pp.cgrp(0, [&](auto &pp) {
+                        if (n_params > 2) {
+                            char const *arg_name = call->get_parameter_name(i);
+                            pp.igrp(2, [&](auto &pp) {
+                                pp.txt(arg_name);
+                                //pp.brk(0);
+                                pp.txt(":");
+                                pp.brk();
+                                print_node(call->get_argument(i), pp);
+                                });
+                        } else {
+                            print_node(call->get_argument(i), pp);
+                        }
+                        if (i + 1 < n_params) {
+                            pp.txt(",");
+                            pp.brk();
+                        }
+                        //});
+                }
+                pp.txt(")");
+                });
+            pp.brk(0);
+            print_attributes(node, pp);
+            });
+    }
+    break;
     default:
         MDL_ASSERT(!"unexpected case");
         break;
     }
 }
 
+template<typename E>
+void print_attributes(
+    DAG_node const *node,
+    Pp<E> &pp)
+{
+    Pprint_state const *pp_state = pp.extra();
+    if (!pp_state->print_attributes) {
+        return;
+    }
+    Distiller_plugin_api_impl::Attr_map *attribute_map = pp_state->attribute_map;
+    auto inner = attribute_map->find(node);
+    if (inner != attribute_map->end()) {
+        bool first = true;
+        pp.txt("[[");
+        pp.acgrp([&](auto &pp) {
+            pp.brk();
+            for (auto iit : inner->second) {
+                if (first) {
+                    first = false;
+                } else {
+                    pp.txt(",");
+                    pp.brk();
+                }
+                pp.igrp(2, [&](auto &pp) {
+                    pp.txt(iit.first);
+                    pp.brk();
+                    pp.txt("=");
+                    pp.brk();
+                    if (iit.second) {
+                        print_node(iit.second, pp);
+                    } else {
+                        pp.txt("NULL");
+                    }
+                    });
+            }
+            });
+        pp.brk(1, -2);
+        pp.txt("]]");
+    }
+}
+
+// Utility for debugging. Prints a node with indentation.
+void Distiller_plugin_api_impl::pprint_node(
+    //IMaterial_instance const *inst,
+    DAG_node const *node,
+    int level,
+    std::ostream &outs)
+{
+    Pprint_state ps = {
+        /*.attribute_map=*/&m_attribute_map,
+        /*.unfold_temoraries=*/false,
+        /*.print_attributes=*/true,
+        /*.max_level=*/0,
+        /*.current_level=*/0};
+    Pp pp(get_allocator(), outs, 120, &ps);
+    print_node(node, pp);
+    pp.eof();
+}
+
 
 void Distiller_plugin_api_impl::pprint_attributes(
-    IMaterial_instance const *inst,
-    DAG_node const           *node,
-    int                      level,
-    std::ostream             &outs)
+    //IMaterial_instance const *inst,
+    DAG_node const *node,
+    int level,
+    std::ostream &outs)
 {
-    auto inner = m_attribute_map.find(node);
-    if (inner != m_attribute_map.end()) {
-        bool first = true;
-        outs << "[[ ";
-        for (auto iit : inner->second) {
-            if (first) {
-                first = false;
-            } else {
-                outs << ", ";
-            }
-            outs << iit.first;
-            outs << " = ";
-            if (iit.second) {
-                pprint_node(inst, iit.second, level, outs);
-            } else {
-                outs << "NULL";
-            }
-        }
-        outs << " ]]";
-    }
+    Pprint_state ps = {
+        /*.attribute_map=*/&m_attribute_map,
+        /*.unfold_temoraries=*/false,
+        /*.print_attributes=*/true,
+        /*.max_level=*/0,
+        /*.current_level=*/0 };
+    Pp pp(get_allocator(), outs, 120, &ps);
+    print_attributes(node, pp);
+    pp.eof();
 }
 
 void Distiller_plugin_api_impl::pprint_material(
     IMaterial_instance const *inst,
-    std::ostream             &outs)
+    std::ostream &outs)
 {
-    for (size_t i = 0; i < inst->get_temporary_count(); ++i) {
-        DAG_node const *temp = inst->get_temporary_value(i);
-        outs << "t" << i << " = ";
-        pprint_node(inst, temp, 1, outs);
-        outs << "\n";
-    }
-    outs << "body = ";
-    pprint_node(inst, inst->get_constructor(), 1, outs);
-    outs << "\n: Resource map: \n";
-    for (size_t i = 0; i < inst->get_resource_tag_map_entries_count(); ++i) {
-        auto rt = inst->get_resource_tag_map_entry(i);
-        outs << "entry " << i << ": kind: " << rt->m_kind << " url: " << rt->m_url << " tag: " << rt->m_tag << "\n";
-    }
-}
+    Pprint_state ps = {
+        /*.attribute_map=*/&m_attribute_map,
+        /*.unfold_temoraries=*/false,
+        /*.print_attributes=*/true,
+        /*.max_level=*/0,
+        /*.current_level=*/0 };
+    Pp pp(get_allocator(), outs, 120, &ps);
+    pp.cgrp(0, [&](auto &pp) {
+        pp.igrp(0, [&](auto &pp) {
+            for (size_t i = 0; i < inst->get_temporary_count(); ++i) {
+                DAG_node const *temp = inst->get_temporary_value(i);
+                if (temp->get_kind() != DAG_node::EK_PARAMETER) {
+                    pp.igrp(2, [&](auto &pp) {
+                        pp.txt("t");
+                        print_int(i, pp);
+                        pp.brk();
+                        pp.txt("=");
+                        pp.brk();
+                        print_node(temp, pp);
+                        });
+                    pp.hard_brk();
+                }
+            }
+            });
 
+        pp.hard_brk();
+        pp.igrp(2, [&](auto &pp) {
+            pp.txt("body");
+            pp.brk();
+            pp.txt("=");
+            pp.brk();
+            print_node(inst->get_constructor(), pp);
+            });
+        pp.hard_brk();
+
+        pp.txt("Resource map:");
+        for (size_t i = 0; i < inst->get_resource_tag_map_entries_count(); ++i) {
+            auto rt = inst->get_resource_tag_map_entry(i);
+            pp.igrp(2, [&](auto &pp) {
+                pp.txt("entry");
+                pp.brk();
+                print_int(i, pp);
+                pp.txt(":");
+                pp.brk();
+                pp.txt("kind:");
+                pp.brk();
+                print_int(rt->m_kind, pp);
+                pp.brk();
+                pp.txt("url:");
+                pp.brk();
+                pp.txt(rt->m_url);
+                pp.brk();
+                pp.txt("tag:");
+                pp.brk();
+                print_int(rt->m_tag, pp);
+                });
+            pp.hard_brk();
+        }
+        });
+    pp.eof();
+}
 #endif
 
 /// Write an int to the output stream.
@@ -612,9 +1554,7 @@ public:
     mi::mdl::Rule_eval_strategy get_strategy() const MDL_FINAL;
 
     /// Return the number of imported MDL modules in this rule set.
-    size_t get_target_material_name_count() const MDL_FINAL {
-        return 0;
-    }
+    size_t get_target_material_name_count() const MDL_FINAL;
 
     /// Return the name of the imported MDL module with the given
     /// index for this rule set.
@@ -652,6 +1592,12 @@ private:
 mi::mdl::Rule_eval_strategy Normalize_mixers_rules::get_strategy() const
 {
     return mi::mdl::RULE_EVAL_BOTTOM_UP;
+}
+
+// Return the number of imported MDL modules in this rule set.
+size_t Normalize_mixers_rules::get_target_material_name_count() const
+{
+    return 0;
 }
 
 // Return the name of the rule set (for diagnostic messages)
@@ -896,16 +1842,20 @@ Distiller_plugin_api_impl::Distiller_plugin_api_impl(
 , m_event_handler(NULL)
 , m_options(NULL)
 , m_call_resolver(call_resolver)
-, m_checker(m_alloc, m_call_resolver)
+, m_checker(m_alloc, m_call_resolver, /*allow_distiller_marker=*/true)
 , m_normalize_mixers(false)
 , m_attribute_map(m_alloc)
+, m_changed_attributes(m_alloc)
 {
     m_global_ior[0] = 1.4f;
     m_global_ior[1] = 1.4f;
     m_global_ior[2] = 1.4f;
 }
 
-/// Immediately deletes this distiller plugin API
+Distiller_plugin_api_impl::~Distiller_plugin_api_impl() {
+}
+
+// Immediately deletes this distiller plugin API
 void Distiller_plugin_api_impl::release() const
 {
     Allocator_builder builder(get_allocator());
@@ -914,9 +1864,11 @@ void Distiller_plugin_api_impl::release() const
 
 // Create a constant.
 DAG_constant const *Distiller_plugin_api_impl::create_constant(
-    IValue const *value)
+    IValue const *value,
+    DAG_DbgInfo  dbg_info)
 {
-    DAG_constant const *res = m_node_factory->create_constant(m_value_factory->import(value));
+    DAG_constant const *res = m_node_factory->create_constant(
+        m_value_factory->import(value), dbg_info);
     m_checker.check_const(res);
     return res;
 }
@@ -931,7 +1883,7 @@ DAG_temporary const *Distiller_plugin_api_impl::create_temporary(
     return res;
 }
 
-/// Create a call.
+// Create a call.
 DAG_node const *Distiller_plugin_api_impl::create_call(
     char const                    *name,
     IDefinition::Semantics        sema,
@@ -946,8 +1898,8 @@ DAG_node const *Distiller_plugin_api_impl::create_call(
     return res;
 }
 
-/// Create a function call for a non-overloaded function. All parameter
-/// and return types are deduced from the function definition.
+// Create a function call for a non-overloaded function. All parameter
+// and return types are deduced from the function definition.
 DAG_node const *Distiller_plugin_api_impl::create_function_call(
     char const             *name,
     DAG_node const * const call_args[],
@@ -1140,7 +2092,7 @@ DAG_node const *Distiller_plugin_api_impl::create_mixer_call(
             mi::mdl::IDefinition::DS_ELEM_CONSTRUCTOR,
             args, 2,
             itp1,
-            DAG_DbgInfo());
+            NO_DBG);
     }
 
     // create bsdf_component's array and mixer
@@ -1149,14 +2101,14 @@ DAG_node const *Distiller_plugin_api_impl::create_mixer_call(
         mi::mdl::IDefinition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR,
         comp_args, n,
         itp2,
-        DAG_DbgInfo());
+        NO_DBG);
     DAG_call::Call_argument mix_arg = { array, "components"};
     return create_call(
         tp2,
         mi::mdl::IDefinition::DS_INTRINSIC_DF_NORMALIZED_MIX,
         &mix_arg, 1,
         arg_type,
-        DAG_DbgInfo());
+        NO_DBG);
 }
 
 // Create a 1-, 2-, or 3-color-mixer call, with 2, 4, 6, or 8 parameters respectively.
@@ -1257,7 +2209,7 @@ DAG_node const *Distiller_plugin_api_impl::create_color_mixer_call(
             mi::mdl::IDefinition::DS_ELEM_CONSTRUCTOR,
             args, 2,
             itp1,
-            DAG_DbgInfo());
+            NO_DBG);
     }
 
     // create color_..df_component's array and mixer
@@ -1266,14 +2218,14 @@ DAG_node const *Distiller_plugin_api_impl::create_color_mixer_call(
         mi::mdl::IDefinition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR,
         comp_args, n,
         itp2,
-        DAG_DbgInfo());
+        NO_DBG);
     DAG_call::Call_argument mix_arg = { array, "components"};
     DAG_node const *res = create_call(
         tp2,
         mi::mdl::IDefinition::DS_INTRINSIC_DF_COLOR_NORMALIZED_MIX,
         &mix_arg, 1,
         arg_type,
-        DAG_DbgInfo());
+        NO_DBG);
     MDL_ASSERT(
         (arg_type->get_kind() == mi::mdl::IType::TK_BSDF &&
           get_selector(res) == mi::mdl::DS_DIST_BSDF_COLOR_MIX_1 + num_call_args/2 - 1)
@@ -1478,7 +2430,7 @@ DAG_node const *Distiller_plugin_api_impl::create_unary(
     Option_store<DAG_node_factory_impl, bool> optimizations(
         *m_node_factory, &DAG_node_factory_impl::enable_opt, true);
 
-    return create_call(name.c_str(), sema, args, 1, ret_type, DAG_DbgInfo());
+    return create_call(name.c_str(), sema, args, 1, ret_type, NO_DBG);
 }
 
 // Creates an operator, handles types.
@@ -1519,7 +2471,7 @@ DAG_node const *Distiller_plugin_api_impl::create_binary(
 
         IDefinition::Semantics sema = operator_to_semantic(bin_op);
         return create_call(
-            name.c_str(), sema, args, 2, ret_type, DAG_DbgInfo());
+            name.c_str(), sema, args, 2, ret_type, NO_DBG);
     }
 
     DAG_node_factory_impl::normalize(bin_op, l, r);
@@ -1568,7 +2520,7 @@ DAG_node const *Distiller_plugin_api_impl::create_binary(
     Option_store<DAG_node_factory_impl, bool> optimizations(
         *m_node_factory, &DAG_node_factory_impl::enable_opt, true);
 
-    return create_call(name.c_str(), sema, args, 2, ret_type, DAG_DbgInfo());
+    return create_call(name.c_str(), sema, args, 2, ret_type, NO_DBG);
 }
 
 // Creates a ternary operator.
@@ -1611,7 +2563,7 @@ DAG_node const *Distiller_plugin_api_impl::create_ternary(
         args,
         dimension_of(args),
         ret_type,
-        DAG_DbgInfo());
+        NO_DBG);
 }
 
 // Creates a SELECT operator on a struct or vector.
@@ -1658,7 +2610,7 @@ DAG_node const *Distiller_plugin_api_impl::create_select(
             operator_to_semantic(IExpression_binary::OK_ARRAY_INDEX),
             call_args, 2,
             v_type->get_element_type(),
-            DAG_DbgInfo());
+            NO_DBG);
     }
 
     IType_struct const *s_type = as<IType_struct>(l_type);
@@ -1705,7 +2657,7 @@ DAG_node const *Distiller_plugin_api_impl::create_select(
         IDefinition::DS_INTRINSIC_DAG_FIELD_ACCESS,
         &arg, 1,
         ret_type,
-        DAG_DbgInfo());
+        NO_DBG);
 }
 
 // Creates an array constructor.
@@ -1749,21 +2701,21 @@ DAG_node const *Distiller_plugin_api_impl::create_array(
         args.data(),
         args.size(),
         ret_type,
-        DAG_DbgInfo());
+        NO_DBG);
 }
 
 // Creates a boolean constant.
 DAG_constant const *Distiller_plugin_api_impl::create_bool_constant(bool f)
 {
     IValue_bool const *val_f = m_value_factory->create_bool(f);
-    return create_constant(val_f);
+    return create_constant(val_f, NO_DBG);
 }
 
 // Creates an integer constant.
 DAG_constant const *Distiller_plugin_api_impl::create_int_constant(int i)
 {
     IValue_int const *val_i = m_value_factory->create_int(i);
-    return create_constant(val_i);
+    return create_constant(val_i, NO_DBG);
 }
 
 // Creates a constant of the predefined intensity_mode enum
@@ -1772,7 +2724,7 @@ DAG_constant const *Distiller_plugin_api_impl::create_emission_enum_constant(int
     IType_enum const *enum_type = m_type_factory->get_predefined_enum(
         IType_enum::EID_INTENSITY_MODE);
     IValue_enum const *val = m_value_factory->create_enum(enum_type, i);
-    return create_constant(val);
+    return create_constant(val, NO_DBG);
 }
 
 // Creates a constant of the df::scatter_mode enum.
@@ -1783,7 +2735,17 @@ DAG_constant const *Distiller_plugin_api_impl::create_scatter_enum_constant(int 
 
     IType_enum const *enum_type = cast<IType_enum>(m_type_factory->import(def->get_type()));
     IValue_enum const *val = m_value_factory->create_enum(enum_type, i);
-    return create_constant(val);
+    return create_constant(val, NO_DBG);
+}
+
+// Creates a constant of the df::backscatter_modifier enum.
+DAG_constant const *Distiller_plugin_api_impl::create_backscatter_enum_constant(int i)
+{
+    mi::base::Handle<Module const> df_mod(find_builtin_module("::df"));
+    Definition const *def = find_exported_def(df_mod.get(), "backscatter_modifier");
+    IType_enum const *enum_type = cast<IType_enum>(m_type_factory->import(def->get_type()));
+    IValue_enum const *val = m_value_factory->create_enum(enum_type, i);
+    return create_constant(val, NO_DBG);
 }
 
 // Creates a constant of the tex::wrap_mode enum.
@@ -1794,14 +2756,14 @@ DAG_constant const *Distiller_plugin_api_impl::create_wrap_mode_enum_constant(in
 
     IType_enum const *enum_type = cast<IType_enum>(m_type_factory->import(def->get_type()));
     IValue_enum const *val = m_value_factory->create_enum(enum_type, i);
-    return create_constant(val);
+    return create_constant(val, NO_DBG);
 }
 
 // Creates a floating point constant.
 DAG_constant const *Distiller_plugin_api_impl::create_float_constant(float f)
 {
     IValue_float const *val_f = m_value_factory->create_float(f);
-    return create_constant(val_f);
+    return create_constant(val_f, NO_DBG);
 }
 
 // Creates a float3 constant.
@@ -1816,7 +2778,7 @@ DAG_constant const *Distiller_plugin_api_impl::create_float3_constant(float x, f
     };
     IValue_vector const *v =
         m_value_factory->create_vector(float3_type, values, dimension_of(values));
-    return create_constant(v);
+    return create_constant(v, NO_DBG);
 }
 
 // Creates a RGB color constant.
@@ -1826,18 +2788,18 @@ DAG_constant const *Distiller_plugin_api_impl::create_color_constant(float r, fl
     IValue_float const *val_g = m_value_factory->create_float(g);
     IValue_float const *val_b = m_value_factory->create_float(b);
     IValue_rgb_color const *color  = m_value_factory->create_rgb_color(val_r, val_g, val_b);
-    return create_constant(color);
+    return create_constant(color, NO_DBG);
 }
 
 // Creates a RGB color constant of the global material IOR value.
 DAG_constant const *Distiller_plugin_api_impl::create_global_ior()
-{ 
+{
     return create_color_constant( m_global_ior[0], m_global_ior[1], m_global_ior[2]);
 }
 
 // Creates a float constant of the global material IOR green value.
 DAG_constant const *Distiller_plugin_api_impl::create_global_float_ior()
-{ 
+{
     return create_float_constant( m_global_ior[1]);
 }
 
@@ -1846,7 +2808,7 @@ DAG_constant const *Distiller_plugin_api_impl::create_global_float_ior()
 DAG_constant const *Distiller_plugin_api_impl::create_string_constant(char const *s)
 {
     IValue_string const *val_s = m_value_factory->create_string(s);
-    return create_constant(val_s);
+    return create_constant(val_s, NO_DBG);
 }
 
 // Creates an invalid bsdf.
@@ -1854,7 +2816,7 @@ DAG_constant const *Distiller_plugin_api_impl::create_bsdf_constant()
 {
     return create_constant(
         m_value_factory->create_invalid_ref(
-            m_type_factory->create_bsdf()));
+            m_type_factory->create_bsdf()), NO_DBG);
 }
 
 // Creates an invalid edf.
@@ -1862,7 +2824,7 @@ DAG_constant const *Distiller_plugin_api_impl::create_edf_constant()
 {
     return create_constant(
         m_value_factory->create_invalid_ref(
-            m_type_factory->create_edf()));
+            m_type_factory->create_edf()), NO_DBG);
 }
 
 // Creates an invalid vdf.
@@ -1870,7 +2832,7 @@ DAG_constant const *Distiller_plugin_api_impl::create_vdf_constant()
 {
     return create_constant(
         m_value_factory->create_invalid_ref(
-            m_type_factory->create_vdf()));
+            m_type_factory->create_vdf()), NO_DBG);
 }
 
 // Creates an invalid hair_bsdf.
@@ -1878,7 +2840,7 @@ DAG_constant const *Distiller_plugin_api_impl::create_hair_bsdf_constant()
 {
     return create_constant(
         m_value_factory->create_invalid_ref(
-            m_type_factory->create_hair_bsdf()));
+            m_type_factory->create_hair_bsdf()), NO_DBG);
 }
 
 // Create a bsdf_component for a mixer; can be a call or a constant.
@@ -1897,7 +2859,7 @@ DAG_node const *Distiller_plugin_api_impl::create_bsdf_component(
             cast<DAG_constant>(bsdf_arg)->get_value()
         };
         IValue_struct const *val = m_value_factory->create_struct(struct_type, values, 2);
-        return create_constant(val);
+        return create_constant(val, NO_DBG);
     }
     DAG_call::Call_argument args[2];
     args[0].param_name = "weight";
@@ -1909,7 +2871,7 @@ DAG_node const *Distiller_plugin_api_impl::create_bsdf_component(
         IDefinition::DS_ELEM_CONSTRUCTOR,
         args, 2,
         get_bsdf_component_type(),
-        DAG_DbgInfo());
+        NO_DBG);
 }
 
 // Create a edf_component for a mixer; can be a call or a constant.
@@ -1928,7 +2890,7 @@ DAG_node const *Distiller_plugin_api_impl::create_edf_component(
             cast<DAG_constant>(edf_arg)->get_value()
         };
         IValue_struct const *val = m_value_factory->create_struct(struct_type, values, 2);
-        return create_constant(val);
+        return create_constant(val, NO_DBG);
     }
     DAG_call::Call_argument args[2];
     args[0].param_name = "weight";
@@ -1940,7 +2902,7 @@ DAG_node const *Distiller_plugin_api_impl::create_edf_component(
         IDefinition::DS_ELEM_CONSTRUCTOR,
         args, 2,
         get_edf_component_type(),
-        DAG_DbgInfo());
+        NO_DBG);
 }
 
 // Create a vdf_component for a mixer; can be a call or a constant.
@@ -1959,7 +2921,7 @@ DAG_node const *Distiller_plugin_api_impl::create_vdf_component(
             cast<DAG_constant>(vdf_arg)->get_value()
         };
         IValue_struct const *val = m_value_factory->create_struct(struct_type, values, 2);
-        return create_constant(val);
+        return create_constant(val, NO_DBG);
     }
     DAG_call::Call_argument args[2];
     args[0].param_name = "weight";
@@ -1971,7 +2933,7 @@ DAG_node const *Distiller_plugin_api_impl::create_vdf_component(
         IDefinition::DS_ELEM_CONSTRUCTOR,
         args, 2,
         get_vdf_component_type(),
-        DAG_DbgInfo());
+        NO_DBG);
 }
 
 // Create a color_bsdf_component for a mixer; can be a call or a constant.
@@ -1990,7 +2952,7 @@ DAG_node const *Distiller_plugin_api_impl::create_color_bsdf_component(
             cast<DAG_constant>(bsdf_arg)->get_value()
         };
         IValue_struct const *val = m_value_factory->create_struct(struct_type, values, 2);
-        return create_constant(val);
+        return create_constant(val, NO_DBG);
     }
     DAG_call::Call_argument args[2];
     args[0].param_name = "weight";
@@ -2002,7 +2964,7 @@ DAG_node const *Distiller_plugin_api_impl::create_color_bsdf_component(
         IDefinition::DS_ELEM_CONSTRUCTOR,
         args, 2,
         get_color_bsdf_component_type(),
-        DAG_DbgInfo());
+        NO_DBG);
 }
 
 // Create a color_edf_component for a mixer; can be a call or a constant.
@@ -2021,7 +2983,7 @@ DAG_node const *Distiller_plugin_api_impl::create_color_edf_component(
             cast<DAG_constant>(edf_arg)->get_value()
         };
         IValue_struct const *val = m_value_factory->create_struct(struct_type, values, 2);
-        return create_constant(val);
+        return create_constant(val, NO_DBG);
     }
     DAG_call::Call_argument args[2];
     args[0].param_name = "weight";
@@ -2033,7 +2995,7 @@ DAG_node const *Distiller_plugin_api_impl::create_color_edf_component(
         IDefinition::DS_ELEM_CONSTRUCTOR,
         args, 2,
         get_color_edf_component_type(),
-        DAG_DbgInfo());
+        NO_DBG);
 }
 
 // Create a color_vdf_component for a mixer; can be a call or a constant.
@@ -2052,7 +3014,7 @@ DAG_node const *Distiller_plugin_api_impl::create_color_vdf_component(
             cast<DAG_constant>(vdf_arg)->get_value()
         };
         IValue_struct const *val = m_value_factory->create_struct(struct_type, values, 2);
-        return create_constant(val);
+        return create_constant(val, NO_DBG);
     }
     DAG_call::Call_argument args[2];
     args[0].param_name = "weight";
@@ -2064,7 +3026,7 @@ DAG_node const *Distiller_plugin_api_impl::create_color_vdf_component(
         IDefinition::DS_ELEM_CONSTRUCTOR,
         args, 2,
         get_color_vdf_component_type(),
-        DAG_DbgInfo());
+        NO_DBG);
 }
 
 // Create a constant node for a given type and value.
@@ -2107,6 +3069,14 @@ DAG_constant const *Distiller_plugin_api_impl::mk_constant(
         if (0 == strcmp(value, "::df::scatter_transmit"))
             return create_scatter_enum_constant(1);
         return create_scatter_enum_constant(2);
+    } else if (0 == strcmp(const_type, "::df::backscatter_modifier")) {
+        if (0 == strcmp(value, "::df::backscatter_none"))
+            return create_backscatter_enum_constant(0);
+        if (0 == strcmp(value, "::df::backscatter_reflect"))
+            return create_backscatter_enum_constant(1);
+        if (0 == strcmp(value, "::df::backscatter_transmit"))
+            return create_backscatter_enum_constant(2);
+        return create_backscatter_enum_constant(3);
     } else if (0 == strcmp(const_type, "material_emission")) {
         IValue const *values[3];
         values[0] = m_value_factory->create_invalid_ref(m_type_factory->create_edf());
@@ -2117,7 +3087,8 @@ DAG_constant const *Distiller_plugin_api_impl::mk_constant(
         return create_constant(
             m_value_factory->create_struct(
                 m_type_factory->get_predefined_struct(IType_struct::SID_MATERIAL_EMISSION),
-                values, 3));
+                values, 3),
+            NO_DBG);
     }
     MDL_ASSERT(!"Unknown type or value to build constant");
     return 0;
@@ -2135,7 +3106,7 @@ DAG_node const *Distiller_plugin_api_impl::mk_default(
             return create_function_call(
                 "::state::normal",
                 0, 0,
-                DAG_DbgInfo());
+                NO_DBG);
         if (0 == strcmp(param_default, "::state::texture_tangent_u(0)")) {
             DAG_node const *args[1] = {
                 create_int_constant(0)
@@ -2143,7 +3114,7 @@ DAG_node const *Distiller_plugin_api_impl::mk_default(
             return create_function_call(
                 "::state::texture_tangent_u",
                 args, dimension_of(args),
-                DAG_DbgInfo());
+                NO_DBG);
         }
     }
     return mk_constant(param_type, param_default);
@@ -2188,7 +3159,7 @@ DAG_node const *Distiller_plugin_api_impl::get_compound_argument(
             MDL_ASSERT(i < s->get_component_count());
             IValue const *arg = s->get_value(i);
             if (i < s->get_component_count()) {
-                return create_constant(arg);
+                return create_constant(arg, NO_DBG);
             }
             return NULL;
         }
@@ -2291,36 +3262,21 @@ bool Distiller_plugin_api_impl::eval_maybe_if(DAG_node const *node)
 void Distiller_plugin_api_impl::dump_attributes(
     IMaterial_instance const *inst)
 {
-    dump_attributes(inst, std::cerr);
+    // Method kept for compatibility, can be removed on next major release.
 }
 
 void Distiller_plugin_api_impl::dump_attributes(
     IMaterial_instance const *inst,
     DAG_node const           *node)
 {
-    dump_attributes(inst, node, std::cerr);
+    // Method kept for compatibility, can be removed on next major release.
 }
 
 void Distiller_plugin_api_impl::dump_attributes(
     IMaterial_instance const *inst,
     std::ostream             &outs)
 {
-#if MDL_DIST_PLUG_DEBUG_DUMP
-    for (auto oit : m_attribute_map) {
-        outs << "[>>] node: " << oit.first << "\n";
-        auto &inner = oit.second;
-        for (auto iit : inner) {
-            if (iit.second) {
-                outs << "  [=] " << iit.first << " (" << ((void*) iit.first) << ") "
-                          << ": attr: " << iit.second << "\n";
-                outs << "    node:\n";
-                pprint_node(inst,iit.second, 3, outs);
-            } else {
-                outs << "  [=] " << iit.first << ": attr: null\n";
-            }
-        }
-    }
-#endif
+    // Method kept for compatibility, can be removed on next major release.
 }
 
 void Distiller_plugin_api_impl::dump_attributes(
@@ -2328,21 +3284,7 @@ void Distiller_plugin_api_impl::dump_attributes(
     DAG_node const           *node,
     std::ostream             &outs)
 {
-#if MDL_DIST_PLUG_DEBUG_DUMP
-    auto inner = m_attribute_map.find(node);
-    if (inner != m_attribute_map.end()) {
-        for (auto iit : inner->second) {
-            if (iit.second) {
-                outs << "  [=] " << iit.first << " (" << ((void*) iit.first) << ") "
-                          << ": attr: " << iit.second << "\n";
-                outs << "    node:\n";
-                pprint_node(inst, iit.second, 3, outs);
-            } else {
-                outs << "  [=] " << iit.first << ": attr: null\n";
-            }
-        }
-    }
-#endif
+    // Method kept for compatibility, can be removed on next major release.
 }
 
 void Distiller_plugin_api_impl::set_attribute(
@@ -2356,6 +3298,7 @@ void Distiller_plugin_api_impl::set_attribute(
         inner = m_attribute_map.insert({node, new_map}).first;
     }
     inner->second.insert({name, value});
+    m_changed_attributes.insert(node);
 }
 
 void Distiller_plugin_api_impl::set_attribute(
@@ -2401,6 +3344,7 @@ void Distiller_plugin_api_impl::remove_attributes(DAG_node const *node) {
     if (inner != m_attribute_map.end()) {
         m_attribute_map.erase(inner);
     }
+    m_changed_attributes.insert(node);
 }
 
 DAG_node const *Distiller_plugin_api_impl::get_attribute(
@@ -2481,27 +3425,17 @@ IMaterial_instance *Distiller_plugin_api_impl::apply_rules(
     Generated_code_dag::Material_instance const *inst =
         impl_cast<Generated_code_dag::Material_instance>(i_inst);
 
+    bool class_compiled =
+        (inst->get_properties() & Generated_code_dag::Material_instance::IP_CLASS_COMPILED) != 0;
+
     Store<IRule_matcher *>         s_matcher(m_matcher, &matcher);
 
 #if MDL_DIST_PLUG_DEBUG
     int this_thread_hash = int(std::hash<std::thread::id>{}(std::this_thread::get_id())) & 0xff;
+#endif
+    std::atomic<unsigned> replacement_counter = 0;
     static std::atomic<unsigned> idx = 0;
     unsigned my_idx = idx++;
-    {
-        char buffer[64];
-        snprintf(buffer, sizeof(buffer), "_%03u_%02u_%s_0", this_thread_hash, my_idx, m_matcher->get_rule_set_name());
-#if MDL_DIST_PLUG_DEBUG_GRAPH
-        inst->dump_instance_dag(buffer);
-#endif
-
-#if MDL_DIST_PLUG_DEBUG_DUMP
-        strcat(buffer, ".matdmp");
-        std::ofstream outf(buffer);
-        outf << "[-=+=-] Input of rule set " << m_matcher->get_rule_set_name() << ":\n";
-        pprint_material(inst, outf);
-#endif
-    }
-#endif
 
     m_checker.enable_temporaries(false);
     m_checker.enable_parameters(inst->get_parameter_count() > 0);
@@ -2528,7 +3462,7 @@ IMaterial_instance *Distiller_plugin_api_impl::apply_rules(
     }
 
     {
-        // Look up function from ::nvidia::distilling_support to verify that the module 
+        // Look up function from ::nvidia::distilling_support to verify that the module
         // has been loaded before applying distilling rules. The distiller user is responsible
         // to load this module beforehand (the MDL SDK does it, but core users have to do
         // it themselves).
@@ -2539,17 +3473,6 @@ IMaterial_instance *Distiller_plugin_api_impl::apply_rules(
             error = -3;
             return curr;
         }
-    }
-
-    // mark that we modify the material by distilling
-    curr->set_property(Generated_code_dag::Material_instance::IP_DISTILLED, true);
-
-    // [TMM note 1] If target material model mode is requested in the
-    // distiller options, we mark the result material accordingly.
-    // Note that this is not the only way the material will be marked
-    // as such (see below at [TMM note 2]).
-    if (options->target_material_model_mode) {
-        curr->set_property(Generated_code_dag::Material_instance::IP_TARGET_MATERIAL_MODEL, true);
     }
 
     Store<IType_factory *>         s_type_factory(m_type_factory,   curr->get_type_factory());
@@ -2589,9 +3512,15 @@ IMaterial_instance *Distiller_plugin_api_impl::apply_rules(
     m_checker.enable_temporaries(false);
     m_checker.set_owner(curr->get_node_factory());
 
+    import_attributes(curr);
+
+    Visited_node_map attr_marker_map(
+        0, Visited_node_map::hasher(), Visited_node_map::key_equal(), m_alloc);
+    move_attributes_deep(root, original_root, attr_marker_map, 0, false);
+
 #if MDL_DIST_PLUG_DEBUG
     {
-        char buffer[64];
+        char buffer[128];
         snprintf(buffer, sizeof(buffer), "_%03u_%02u_%s_a", this_thread_hash, my_idx, m_matcher->get_rule_set_name());
 #if MDL_DIST_PLUG_DEBUG_GRAPH
         curr->dump_instance_dag(buffer);
@@ -2606,35 +3535,57 @@ IMaterial_instance *Distiller_plugin_api_impl::apply_rules(
     }
 #endif
 
-    import_attributes(curr);
-
-    Visited_node_map attr_marker_map(
-        0, Visited_node_map::hasher(), Visited_node_map::key_equal(), m_alloc);
-    move_attributes_deep(root, original_root, attr_marker_map, 0, false);
-
-#if 0
-    std::cerr << "{{=}} root attributes on entry (" << root << "):\n";
-    dump_attributes(root, std::cerr);
-#endif
-
     string root_name("material", m_alloc);
 
     Visited_node_map replace_marker_map(
         0, Visited_node_map::hasher(), Visited_node_map::key_equal(), m_alloc);
-    DAG_node const *new_root = replace(root, root_name, replace_marker_map);
+    m_changed_attributes.clear();
+    DAG_node const *new_root = replace(root, root_name, replace_marker_map, my_idx, &replacement_counter);
 
     bool postcond_result = m_matcher->postcond(event_handler, *this, new_root, m_options);
     if (!postcond_result) {
        error = -3;
     } else {
+        DAG_call const *constr = cast<DAG_call>(new_root);
+        curr->set_constructor(constr);
+
+        // rebuild the attributes
+        using Instance_analyzer = Generated_code_dag::Material_instance::Instance_analyzer;
+
+        Instance_analyzer analyzer(*m_call_resolver, m_alloc);
+        analyzer.analyze_instance(curr);
+
+        if (constr->get_semantic() != IDefinition::DS_ELEM_CONSTRUCTOR ||
+            !is_material_type(constr->get_type()))
+        {
+            // the constructor is not the material elemental constructor: we are in target
+            // material model mode
+            analyzer.add_property(
+                Generated_code_dag::Material_instance::IP_TARGET_MATERIAL_MODEL, true);
+        }
+
+        curr->set_properties(analyzer.get_properties());
+        curr->set_property(
+            Generated_code_dag::Material_instance::IP_CLASS_COMPILED, class_compiled);
+
+        // mark that we modify the material by distilling
+        curr->set_property(Generated_code_dag::Material_instance::IP_DISTILLED, true);
+
+        // [TMM note 1] If target material model mode is requested in the
+        // distiller options, we mark the result material accordingly.
+        // Note that this is not the only way the material will be marked
+        // as such (see below at [TMM note 2]).
+        if (options->target_material_model_mode) {
+            curr->set_property(
+                Generated_code_dag::Material_instance::IP_TARGET_MATERIAL_MODEL, true);
+        }
+
         // [TMM note 2] We check the distilling result. If the call at
         // the root is not a BSDF call, the result must be a target
         // material model mode, so we have to set the corresponding
         // property on the output compiled material, or it will break
         // other phases (like hash calculation).
-
-        DAG_call const *call = cast<DAG_call>(new_root);
-        IDefinition::Semantics sema = call->get_semantic();
+        IDefinition::Semantics sema = constr->get_semantic();
         if (sema == IDefinition::DS_UNKNOWN &&
             (curr->get_properties() &
                 Generated_code_dag::Material_instance::IP_TARGET_MATERIAL_MODEL) == 0)
@@ -2643,7 +3594,13 @@ IMaterial_instance *Distiller_plugin_api_impl::apply_rules(
                 Generated_code_dag::Material_instance::IP_TARGET_MATERIAL_MODEL, true);
         }
 
-        curr->set_constructor(cast<DAG_call>(new_root));
+        if (analyzer.uses_non_const_scene_data()) {
+            // could not determine the set referenced scene data, add all strings
+            curr->set_referenced_scene_data(analyzer.get_referenced_strings());
+        } else {
+            // could track
+            curr->set_referenced_scene_data(analyzer.get_referenced_scene_data());
+        }
 
         // rebuild the temporaries
         curr->build_temporaries();
@@ -2656,7 +3613,7 @@ IMaterial_instance *Distiller_plugin_api_impl::apply_rules(
 
 #if MDL_DIST_PLUG_DEBUG
     {
-        char buffer[64];
+        char buffer[128];
         snprintf(buffer, sizeof(buffer), "_%03u_%02u_%s_z", this_thread_hash, my_idx++, m_matcher->get_rule_set_name());
 #if MDL_DIST_PLUG_DEBUG_GRAPH
         curr->dump_instance_dag(buffer);
@@ -2803,7 +3760,7 @@ IMaterial_instance *Distiller_plugin_api_impl::merge_materials(
         geom0->get_semantic(),
         g_args, dimension_of(g_args),
         geom0->get_type(),
-        DAG_DbgInfo());
+        NO_DBG);
 
     // create new backface
     DAG_call::Call_argument b_args[2];
@@ -2826,7 +3783,7 @@ IMaterial_instance *Distiller_plugin_api_impl::merge_materials(
         backface0->get_semantic(),
         b_args, dimension_of(b_args),
         backface0->get_type(),
-        DAG_DbgInfo());
+        NO_DBG);
 
     // create new material root
     DAG_call::Call_argument args[7];
@@ -2850,7 +3807,7 @@ IMaterial_instance *Distiller_plugin_api_impl::merge_materials(
         root0->get_semantic(),
         args, dimension_of(args),
         root0->get_type(),
-        DAG_DbgInfo());
+        NO_DBG);
 
     Visited_node_map attr_marker_map(
         0, Visited_node_map::hasher(), Visited_node_map::key_equal(), m_alloc);
@@ -2882,12 +3839,13 @@ restart:
 
     DAG_node const *original_node = node;
 
+    // FIXME: the debug info is completely lost here
     switch (node->get_kind()) {
     case DAG_node::EK_CONSTANT:
         {
             DAG_constant const *c     = cast<DAG_constant>(node);
             IValue const       *value = c->get_value();
-            node = m_node_factory->create_constant(m_value_factory->import(value));
+            node = m_node_factory->create_constant(m_value_factory->import(value), NO_DBG);
         }
         break;
     case DAG_node::EK_PARAMETER:
@@ -2896,7 +3854,7 @@ restart:
             IType const         *type = p->get_type();
             int                 index = p->get_index();
             node = m_node_factory->create_parameter(
-                m_type_factory->import(type), index, DAG_DbgInfo());
+                m_type_factory->import(type), index, NO_DBG);
         }
         break;
     case DAG_node::EK_TEMPORARY:
@@ -2921,7 +3879,7 @@ restart:
             }
 
             node = m_node_factory->create_call(
-                name, sema, args.data(), args.size(), type, DAG_DbgInfo());
+                name, sema, args.data(), args.size(), type, NO_DBG);
         }
         break;
     }
@@ -3130,7 +4088,6 @@ void Distiller_plugin_api_impl::get_match_properties(
                 mprops.type_kind = IType::TK_VDF;
             }
         }
-        // TODO: Store distiller semantic for bsdf_marker() into mprops.sema
     }
     break;
     case DAG_node::EK_TEMPORARY:
@@ -3297,11 +4254,11 @@ int Distiller_plugin_api_impl::get_selector(DAG_node const *node) const {
                     const IType::Kind k = c->get_argument(3)->get_type()->get_kind();
                     switch (k) {
                     case mi::mdl::IType::TK_BSDF:
-                        selector = DS_DIST_BSDF_DIRECTIONAL_FACTOR; 
+                        selector = DS_DIST_BSDF_DIRECTIONAL_FACTOR;
                         break;
 
                     case mi::mdl::IType::TK_EDF:
-                        selector = DS_DIST_EDF_DIRECTIONAL_FACTOR; 
+                        selector = DS_DIST_EDF_DIRECTIONAL_FACTOR;
                         break;
 
                     case mi::mdl::IType::TK_COLOR:
@@ -3309,21 +4266,21 @@ int Distiller_plugin_api_impl::get_selector(DAG_node const *node) const {
                         // calculated, where BSDFs can be replaced by
                         // color values.
 
-                        selector = DS_DIST_BSDF_DIRECTIONAL_FACTOR; 
+                        selector = DS_DIST_BSDF_DIRECTIONAL_FACTOR;
                         break;
 
                     default:
                         MDL_ASSERT(!"Unsupported directional_factor modifier");
                     }
-                } else if (c->get_argument_count() == 5) {
+                } else if (c->get_argument_count() == 5 || c->get_argument_count() == 6) {
                     const IType::Kind k = c->get_argument(4)->get_type()->get_kind();
                     switch (k) {
                     case mi::mdl::IType::TK_BSDF:
-                        selector = DS_DIST_BSDF_DIRECTIONAL_FACTOR; 
+                        selector = DS_DIST_BSDF_DIRECTIONAL_FACTOR;
                         break;
 
                     case mi::mdl::IType::TK_EDF:
-                        selector = DS_DIST_EDF_DIRECTIONAL_FACTOR; 
+                        selector = DS_DIST_EDF_DIRECTIONAL_FACTOR;
                         break;
 
                     case mi::mdl::IType::TK_COLOR:
@@ -3331,7 +4288,7 @@ int Distiller_plugin_api_impl::get_selector(DAG_node const *node) const {
                         // calculated, where BSDFs can be replaced by
                         // color values.
 
-                        selector = DS_DIST_BSDF_DIRECTIONAL_FACTOR; 
+                        selector = DS_DIST_BSDF_DIRECTIONAL_FACTOR;
                         break;
 
                     default:
@@ -3356,15 +4313,13 @@ int Distiller_plugin_api_impl::get_selector(DAG_node const *node) const {
                 } else if (c->get_argument(1)->get_type()->get_kind() == mi::mdl::IType::TK_VDF) {
                     selector = DS_DIST_VDF_CONDITIONAL_OPERATOR;
                 }
+            } else if (selector == IDefinition::DS_INTRINSIC_DIST_BSDF_MARKER) {
+                selector = DS_DIST_BSDF_MARKER;
             } else if (selector == IDefinition::DS_UNKNOWN) {
                 if (strcmp(
                     c->get_name(),
                     "::nvidia::distilling_support::local_normal(float,float3)") == 0) {
                     selector = DS_DIST_LOCAL_NORMAL;
-                } else  if (strcmp(
-                    c->get_name(),
-                    "bsdf_marker(int,float,color,bsdf") == 0) {
-                    selector = DS_DIST_BSDF_MARKER;
                 }
             }
         }
@@ -3412,7 +4367,7 @@ DAG_node const *Distiller_plugin_api_impl::convert_enum_to_int(DAG_node const *n
         args,
         1,
         m_type_factory->create_int(),
-        DAG_DbgInfo());
+        NO_DBG);
 }
 
 // Convert a material emission value into a constructor as a call.
@@ -3421,17 +4376,17 @@ DAG_node const *Distiller_plugin_api_impl::conv_material_emission_value(
 {
     DAG_call::Call_argument e_args[3];
     e_args[0].param_name = "emission";
-    e_args[0].arg        = create_constant(emission_value->get_value(0));
+    e_args[0].arg        = create_constant(emission_value->get_value(0), NO_DBG);
     e_args[1].param_name = "intensity";
-    e_args[1].arg        = create_constant(emission_value->get_value(1));
+    e_args[1].arg        = create_constant(emission_value->get_value(1), NO_DBG);
     e_args[2].param_name = "mode";
-    e_args[2].arg        = create_constant(emission_value->get_value(2));
+    e_args[2].arg        = create_constant(emission_value->get_value(2), NO_DBG);
     return create_call(
         "material_emission(edf,color,intensity_mode)",
         IDefinition::DS_ELEM_CONSTRUCTOR,
         e_args, 3,
         get_type_factory()->get_predefined_struct(IType_struct::SID_MATERIAL_EMISSION),
-        DAG_DbgInfo());
+        NO_DBG);
 }
 
 // Convert a material surface value into a constructor as a call.
@@ -3440,7 +4395,7 @@ DAG_node const *Distiller_plugin_api_impl::conv_material_surface_value(
 {
     DAG_call::Call_argument args[2];
     args[0].param_name = "scattering";
-    args[0].arg        = create_constant(surface_value->get_value(0));
+    args[0].arg        = create_constant(surface_value->get_value(0), NO_DBG);
     args[1].param_name = "emission";
     args[1].arg        = conv_material_emission_value(
         cast<IValue_struct>(surface_value->get_value(1)));
@@ -3449,7 +4404,7 @@ DAG_node const *Distiller_plugin_api_impl::conv_material_surface_value(
         IDefinition::DS_ELEM_CONSTRUCTOR,
         args, 2,
         get_type_factory()->get_predefined_struct(IType_struct::SID_MATERIAL_SURFACE),
-        DAG_DbgInfo());
+        NO_DBG);
 }
 
 // Convert a material volume value into a constructor as a call.
@@ -3458,19 +4413,19 @@ DAG_node const *Distiller_plugin_api_impl::conv_material_volume_value(
 {
     DAG_call::Call_argument args[4];
     args[0].param_name = "scattering";
-    args[0].arg        = create_constant(volume_value->get_value(0));
+    args[0].arg        = create_constant(volume_value->get_value(0), NO_DBG);
     args[1].param_name = "absorption_coefficient";
-    args[1].arg        = create_constant(volume_value->get_value(1));
+    args[1].arg        = create_constant(volume_value->get_value(1), NO_DBG);
     args[2].param_name = "scattering_coefficient";
-    args[2].arg        = create_constant(volume_value->get_value(2));
+    args[2].arg        = create_constant(volume_value->get_value(2), NO_DBG);
     args[3].param_name = "emission_intensity";
-    args[3].arg        = create_constant(volume_value->get_value(3));
+    args[3].arg        = create_constant(volume_value->get_value(3), NO_DBG);
     return create_call(
         "material_volume(vdf,color,color,color)",
         IDefinition::DS_ELEM_CONSTRUCTOR,
         args, 4,
         get_type_factory()->get_predefined_struct(IType_struct::SID_MATERIAL_VOLUME),
-        DAG_DbgInfo());
+        NO_DBG);
 }
 
 // Convert a material geometry value into a constructor as a call.
@@ -3479,17 +4434,17 @@ DAG_node const *Distiller_plugin_api_impl::conv_material_geometry_value(
 {
     DAG_call::Call_argument args[3];
     args[0].param_name = "displacement";
-    args[0].arg        = create_constant(geom_value->get_value(0));
+    args[0].arg        = create_constant(geom_value->get_value(0), NO_DBG);
     args[1].param_name = "cutout_opacity";
-    args[1].arg        = create_constant(geom_value->get_value(1));
+    args[1].arg        = create_constant(geom_value->get_value(1), NO_DBG);
     args[2].param_name = "normal";
-    args[2].arg        = create_constant(geom_value->get_value(2));
+    args[2].arg        = create_constant(geom_value->get_value(2), NO_DBG);
     return create_call(
         "material_geometry(float3,float,float3)",
         IDefinition::DS_ELEM_CONSTRUCTOR,
         args, 3,
         get_type_factory()->get_predefined_struct(IType_struct::SID_MATERIAL_GEOMETRY),
-        DAG_DbgInfo());
+        NO_DBG);
 }
 
 // Convert a material value into a constructor as a call.
@@ -3498,26 +4453,26 @@ DAG_node const *Distiller_plugin_api_impl::conv_material_value(
 {
     DAG_call::Call_argument args[7];
     args[0].param_name = "thin_walled";
-    args[0].arg        = create_constant(mat_value->get_value(0));
+    args[0].arg        = create_constant(mat_value->get_value(0), NO_DBG);
     args[1].param_name = "surface";
     args[1].arg        = conv_material_surface_value(cast<IValue_struct>(mat_value->get_value(1)));
     args[2].param_name = "backface";
     args[2].arg        = conv_material_surface_value(cast<IValue_struct>(mat_value->get_value(2)));
     args[3].param_name = "ior";
-    args[3].arg        = create_constant(mat_value->get_value(3));
+    args[3].arg        = create_constant(mat_value->get_value(3), NO_DBG);
     args[4].param_name = "volume";
     args[4].arg        = conv_material_volume_value(cast<IValue_struct>(mat_value->get_value(4)));
     args[5].param_name = "geometry";
     args[5].arg        = conv_material_geometry_value(cast<IValue_struct>(mat_value->get_value(5)));
     args[6].param_name = "hair";
-    args[6].arg        = create_constant(mat_value->get_value(6));
+    args[6].arg        = create_constant(mat_value->get_value(6), NO_DBG);
     return create_call(
         "material(bool,material_surface,material_surface,color,material_volume,material_geometry,"
         "hair_bsdf)",
         IDefinition::DS_ELEM_CONSTRUCTOR,
         args, 7,
         get_type_factory()->get_predefined_struct(IType_struct::SID_MATERIAL),
-        DAG_DbgInfo());
+        NO_DBG);
 }
 
 // Replace standard material structures with a DAG_call if they happen to be constants.
@@ -3541,15 +4496,15 @@ DAG_node const *Distiller_plugin_api_impl::replace_constant_by_call(DAG_node con
                 if (0 == strcmp("::df::bsdf_component", s->get_type()->get_symbol()->get_name())) {
                     DAG_call::Call_argument args[2];
                     args[0].param_name = "weight";
-                    args[0].arg        = create_constant(s->get_value(0));
+                    args[0].arg        = create_constant(s->get_value(0), NO_DBG);
                     args[1].param_name = "component";
-                    args[1].arg        = create_constant(s->get_value(1));
+                    args[1].arg        = create_constant(s->get_value(1), NO_DBG);
                     return create_call(
                         "::df::bsdf_component(float,bsdf)",
                         IDefinition::DS_ELEM_CONSTRUCTOR,
                         args, 2,
                         get_bsdf_component_type(),
-                        DAG_DbgInfo());
+                        NO_DBG);
                 }
                 break;
             }
@@ -3594,8 +4549,50 @@ DAG_node const *Distiller_plugin_api_impl::replace_constant_by_call(DAG_node con
 DAG_node const *Distiller_plugin_api_impl::replace(
     DAG_node const *node,
     string const   &path,
-    Visited_node_map &marker_map)
+    Visited_node_map &marker_map,
+    unsigned replacement_index,
+    std::atomic<unsigned> *replace_counter)
 {
+#if MDL_DIST_PLUG_DEBUG
+#if MDL_DIST_PLUG_DEBUG_DUMP > 1
+    int this_thread_hash = int(std::hash<std::thread::id>{}(std::this_thread::get_id())) & 0xff;
+    auto log_replacement = [&](DAG_node const *prev_node, DAG_node const *new_node)
+        {
+            char buffer[128];
+            unsigned counter = *replace_counter;
+            (*replace_counter)++;
+            snprintf(buffer, sizeof(buffer), "_%03u_%02u_%s_i%04u", this_thread_hash, replacement_index, m_matcher->get_rule_set_name(), counter);
+
+            strcat(buffer, ".matdmp");
+            std::ofstream outf(buffer);
+            outf << "[-=+=-] " << m_matcher->get_rule_set_name() << ": Old node:\n";
+            {
+                Pprint_state ps = {
+                    /*.attribute_map=*/&m_attribute_map,
+                    /*.unfold_temoraries=*/true,
+                    /*.print_attributes=*/false,
+                    /*.max_level=*/3,
+                    /*.current_level=*/0 };
+                Pp pp(get_allocator(), outf, 120, &ps);
+                print_node(prev_node, pp);
+                pp.eof();
+            }
+            outf << "\n\n[-=+=-] " << m_matcher->get_rule_set_name() << ": New node::\n";
+            {
+                Pprint_state ps = {
+                    /*.attribute_map=*/&m_attribute_map,
+                    /*.unfold_temoraries=*/true,
+                    /*.print_attributes=*/true,
+                    /*.max_level=*/3,
+                    /*.current_level=*/0 };
+                Pp pp(get_allocator(), outf, 120, &ps);
+                print_node(new_node, pp);
+                pp.eof();
+            }
+        };
+#endif
+#endif
+
     Visited_node_map::const_iterator it = marker_map.find(node);
     if (it != marker_map.end()) {
         // already processed
@@ -3621,7 +4618,7 @@ DAG_node const *Distiller_plugin_api_impl::replace(
                 path2 = path + "." + c->get_parameter_name(i);
             }
 
-            n_args[i].arg        = replace(arg, path2, marker_map);
+            n_args[i].arg        = replace(arg, path2, marker_map, replacement_index, replace_counter);
             n_args[i].param_name = c->get_parameter_name(i);
         }
 
@@ -3631,7 +4628,7 @@ DAG_node const *Distiller_plugin_api_impl::replace(
             c->get_semantic(),
             n_args.data(), n,
             c->get_type(),
-            DAG_DbgInfo());
+            NO_DBG);
         move_attributes(node, old_node);
 
         // mixer nodes might need a renormalization here
@@ -3668,8 +4665,20 @@ DAG_node const *Distiller_plugin_api_impl::replace(
         // After this call, the returned node will have the relevant
         // attributes. Either new ones, or if there was no match, the
         // original ones.
+#if MDL_DIST_PLUG_DEBUG_DUMP > 1
+        DAG_node const *prev_node = node;
+#endif
         node = m_matcher->matcher(
             m_event_handler, *this, node, m_options, result_code);
+#if MDL_DIST_PLUG_DEBUG_DUMP > 1
+        if (prev_node != node) {
+            m_changed_attributes.insert(node);
+        }
+        if (m_changed_attributes.count(node) > 0) {
+            log_replacement(prev_node, node);
+            m_changed_attributes.clear();
+        }
+#endif
     } while (result_code == RULE_REPEAT_RULES);
 
     if (m_strategy == RULE_EVAL_TOP_DOWN && is<DAG_call>(node)) {
@@ -3688,7 +4697,7 @@ DAG_node const *Distiller_plugin_api_impl::replace(
                     path2 = path + "." + n_c->get_parameter_name(i);
                 }
 
-                n_args[i].arg        = replace(arg, path2, marker_map);
+                n_args[i].arg        = replace(arg, path2, marker_map, replacement_index, replace_counter);
                 n_args[i].param_name = n_c->get_parameter_name(i);
             }
 
@@ -3698,7 +4707,7 @@ DAG_node const *Distiller_plugin_api_impl::replace(
                 n_c->get_semantic(),
                 n_args.data(), n,
                 n_c->get_type(),
-                DAG_DbgInfo());
+                NO_DBG);
             move_attributes(node, old_node);
         }
 

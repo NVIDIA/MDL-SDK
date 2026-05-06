@@ -39,6 +39,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstring>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -61,7 +62,7 @@
 #include <base/data/db/i_db_scope.h>
 #include <base/data/db/i_db_tag.h>
 #include <base/data/db/i_db_transaction.h>
-#include <base/data/db/i_db_transaction_ptr.h>
+#include <base/data/db/i_db_intrusive_ptr.h>
 #include <base/data/sched/i_sched.h>
 
 #include <base/data/serial/i_serializer.h>
@@ -69,6 +70,7 @@
 #include <base/hal/thread/i_thread_condition.h>
 #include <base/lib/config/config.h>
 #include <base/lib/log/i_log_module.h>
+#include <base/lib/log/i_log_target.h>
 #include <base/system/main/access_module.h>
 #include <base/system/main/i_assert.h>
 #include <base/util/registry/i_config_registry.h>
@@ -166,6 +168,30 @@ private:
     bool m_shared = false;
     int m_value   = 0;
     DB::Tag m_tag;
+};
+
+/// Log target that counts invalid reference privacy errors.
+class Invalid_reference_log_target : public LOG::ILog_target
+{
+public:
+    bool message(
+        const char*,
+        LOG::ILogger::Category cat,
+        LOG::ILogger::Severity sev,
+        const mi::base::Message_details&,
+        const char*,
+        const char* msg) final
+    {
+        if(    cat == LOG::ILogger::C_DATABASE
+            && (sev & LOG::ILogger::S_ERROR) != 0
+            && msg
+            && std::strstr( msg, "contains an invalid reference"))
+            ++m_count;
+
+        return false;
+    }
+
+    mi::Uint32 m_count = 0;
 };
 
 /// A DB job that creates and executes an instance of My_job as child job.
@@ -316,6 +342,12 @@ private:
 class Cancel_job : public DB::Fragmented_job
 {
 public:
+    Cancel_job( Scheduling_mode scheduling_mode, mi::Sint8 priority)
+      : m_scheduling_mode( scheduling_mode),
+        m_priority( priority) { }
+
+    // interface implementation
+
     void execute_fragment(
         DB::Transaction* transaction,
         size_t index,
@@ -332,15 +364,7 @@ public:
 
     void cancel() final { m_condition.signal(); }
 
-    Cancel_job( DB::Database* db, Scheduling_mode scheduling_mode, mi::Sint8 priority)
-      : m_db( db),
-        m_scheduling_mode( scheduling_mode),
-        m_priority( priority) { }
-
-    std::atomic_uint32_t m_fragments_done = 0;
-
 private:
-    DB::Database* m_db;
     Scheduling_mode m_scheduling_mode;
     mi::Sint8 m_priority = 0;
     THREAD::Condition m_condition;
@@ -445,7 +469,8 @@ public:
     ///
     /// \param test_name        Used for progress messages and dump file names.
     /// \param compare          Indicates whether to compare the dumps with a reference dump. Allows
-    ///                         to the comparison if the dump is basically empty or not meaningful.
+    ///                         to skip the comparison if the dump is basically empty or not
+    //                          meaningful.
     /// \param enable_journal   Indicates whether to enable the journal which is not needed by most
     ///                         of the tests.
     Test_db( const char* test_name, bool compare = true, bool enable_journal = false);
@@ -514,6 +539,7 @@ void Test_db::dump( bool mask_pointer_values)
 {
     size_t pos = m_dump.str().size();
     m_db_impl->dump( m_dump, /*verbose*/ true, mask_pointer_values);
+    m_dump << std::endl;
     std::cerr << m_dump.str().substr( pos);
 }
 
@@ -1659,6 +1685,42 @@ void test_transaction_get_tag_is_removed()
     db.dump();
 }
 
+void test_transaction_get_tag_is_removed_after_abort()
+{
+    Test_db db( __func__);
+    DB::Transaction_ptr transaction = db.m_global_scope->start_transaction();
+
+    auto* element = new My_element( 42);
+    DB::Tag tag = transaction->store( element, "foo");
+    db.dump();
+    transaction->commit();
+
+    transaction = db.m_global_scope->start_transaction();
+    MI_CHECK( transaction->remove( tag, /*remove_local_copy*/ false));
+    db.dump();
+
+    transaction->abort();
+    db.dump();
+
+    transaction = db.m_global_scope->start_transaction();
+
+    MI_CHECK( !transaction->get_tag_is_removed( tag));
+
+    DB::Tag tag1 = transaction->name_to_tag( "foo");
+    MI_CHECK_EQUAL( tag1, tag);
+
+    DB::Tag tag2 = transaction->name_to_tag( "foo", DB::Transaction::STORE_CONTEXT);
+    MI_CHECK_EQUAL( tag2, tag);
+
+    {
+        DB::Access<My_element> access( tag, transaction.get());
+        MI_CHECK( access);
+        MI_CHECK_EQUAL( access->get_value(), 42);
+    }
+
+    transaction->commit();
+}
+
 void test_transaction_access_after_remove()
 {
     Test_db db( __func__);
@@ -1857,6 +1919,53 @@ void test_gc_pin_count_zero()
     db.dump();
 }
 
+void test_gc_delayed()
+{
+    // Check that a tag is not removed prematurely from m_gc_candidates_general if some progress
+    // was made, but other progress was temporarily skipped.
+    Test_db db( __func__);
+
+    // Store some element under name "foo".
+    DB::Transaction_ptr transaction0 = db.m_global_scope->start_transaction();
+    My_element* element0 = new My_element();
+    element0->set_value( 42);
+    DB::Tag tag = transaction0->store( element0, "foo");
+    transaction0->commit();
+    db.dump();
+
+    // Start long-running transaction.
+    DB::Transaction_ptr transaction1 = db.m_global_scope->start_transaction();
+
+    // Edit element. Old version not garbage collected because of transaction 1.
+    DB::Transaction_ptr transaction2 = db.m_global_scope->start_transaction();
+    DB::Edit<My_element> element2( tag, transaction2.get());
+    element2->set_value( 43);
+    element2.reset();
+    transaction2->commit();
+    db.dump();
+
+    // Start another long-running transaction.
+    DB::Transaction_ptr transaction3 = db.m_global_scope->start_transaction();
+
+    // Edit element again. Old version not garbage collected because of transactions 1 and 3.
+    DB::Transaction_ptr transaction4 = db.m_global_scope->start_transaction();
+    DB::Edit<My_element> element4( tag, transaction4.get());
+    element4->set_value( 44);
+    element4.reset();
+    transaction4->commit();
+    db.dump();
+
+    // Commit transaction 1. Version from transaction 0 is garbage collected. This progress should
+    // not remove the tag from m_gc_candidates_general since the version from transaction 2 is not
+    // garbage collected because of transaction 3.
+    transaction1->commit();
+    db.dump();
+
+    // Commit transaction 3. Version from transaction 2 is garbage collected.
+    transaction3->commit();
+    db.dump();
+}
+
 void test_use_of_closed_transaction()
 {
     Test_db db( __func__, /*compare*/ false); // Empty dump
@@ -1867,7 +1976,7 @@ void test_use_of_closed_transaction()
 
     auto* element = new My_element( 42);
     DB::Tag tag = transaction->store( element, "foo");
-    DB::Info* open_edit_info = transaction->edit_element( tag);
+    DB::Info_ptr open_edit_info = DBLIGHT::make_ptr_no_add_ref( transaction->edit_element( tag));
     MI_CHECK( open_edit_info);
     // Keeping open_edit_info while the transaction is committed is wrong, but we want to test
     // exactly that scenario with finish_edit() below.
@@ -1882,7 +1991,7 @@ void test_use_of_closed_transaction()
     MI_CHECK( !info);
     info = transaction->edit_element( "foo");
     MI_CHECK( !info);
-    transaction->finish_edit( open_edit_info, DB::Journal_type());
+    transaction->finish_edit( open_edit_info.get(), DB::Journal_type());
     auto* element2 = new My_element( 43);
     transaction->store(
         tag,
@@ -1897,8 +2006,8 @@ void test_use_of_closed_transaction()
         job2,
         /*name*/ nullptr,
         /*privacy_level*/ {},
-        DB::JOURNAL_NONE,
         /*store_level*/ {});
+    transaction->localize( tag, /*privacy_level*/ {}, DB::JOURNAL_NONE);
     bool result = transaction->remove( tag);
     MI_CHECK( !result);
     const char* name = transaction->tag_to_name( tag);
@@ -1926,7 +2035,7 @@ void test_use_of_closed_transaction()
 
     // Explicitly run the garbage collection to clean up the transaction that was pinned by the
     // info. Otherwise, it will trigger an assertion on shutdown.
-    open_edit_info->unpin();
+    open_edit_info.reset();
     db.m_db->garbage_collection( /*priority*/ 0);
 }
 
@@ -2608,6 +2717,41 @@ void test_scope_delayed_gc()
     db.dump();
 }
 
+void test_scope_destructor_gc()
+{
+    Test_db db( __func__);
+
+    // The scope destructor needs to lock the database. Check that the GC (which holds the lock)
+    // does not trigger the scope destructor. An earlier implementation, where the
+    // State_and_visibility struct was part of Transaction_impl and Info_impl referenced the
+    // creator transaction, did no meet this requirement. See MDL-1790.
+
+    DB::Transaction_ptr transaction0 = db.m_global_scope->start_transaction();
+
+    DB::Scope* scope1 = db.m_global_scope->create_child( 1);
+    DB::Scope_id scope1_id = scope1->get_id();
+
+    DB::Transaction_ptr transaction1 = scope1->start_transaction();
+    auto* element = new My_element( 42);
+    transaction1->store( element, "foo", 0, 0);
+    transaction1->commit();
+    transaction1.reset();
+    db.dump();
+
+    db.m_db->remove_scope( scope1_id);
+    db.dump();
+
+    // This commit changes the lowest open transaction ID of the global scope to 2. In the earlier
+    // implementation this triggered the destruction of transaction 1 and scope 1. In the current
+    // implementation these actions have already happened before.
+
+    transaction0->commit();
+    db.dump();
+
+    transaction0.reset();
+    db.dump();
+}
+
 void test_fragmented_jobs_without_transaction()
 {
     Test_db db( __func__, /*compare*/ false); // Empty dump
@@ -2628,6 +2772,13 @@ void test_fragmented_jobs_without_transaction()
         My_fragmented_job job( db.m_db, DB::Fragmented_job::LOCAL, 0);
         mi::Sint32 result = db.m_db->execute_fragmented( &job, 0);
         MI_CHECK_EQUAL( result, -1);
+        MI_CHECK_EQUAL( job.m_fragments_done, 0);
+    }
+
+    {
+        My_fragmented_job job( db.m_db, DB::Fragmented_job::ONCE_PER_HOST, 0);
+        mi::Sint32 result = db.m_db->execute_fragmented( &job, 0);
+        MI_CHECK_EQUAL( result, -2);
         MI_CHECK_EQUAL( job.m_fragments_done, 0);
     }
 
@@ -2686,6 +2837,15 @@ void test_fragmented_jobs_without_transaction_async()
         My_execution_listener listener;
         mi::Sint32 result = db.m_db->execute_fragmented_async( &job, 0, &listener);
         MI_CHECK_EQUAL( result, -1);
+        MI_CHECK( !listener.m_finished);
+        MI_CHECK_EQUAL( job.m_fragments_done, 0);
+    }
+
+    {
+        My_fragmented_job job( db.m_db, DB::Fragmented_job::ONCE_PER_HOST, 0);
+        My_execution_listener listener;
+        mi::Sint32 result = db.m_db->execute_fragmented_async( &job, 0, &listener);
+        MI_CHECK_EQUAL( result, -2);
         MI_CHECK( !listener.m_finished);
         MI_CHECK_EQUAL( job.m_fragments_done, 0);
     }
@@ -2750,6 +2910,13 @@ void test_fragmented_jobs_with_transaction()
         mi::Sint32 result = transaction->execute_fragmented( &job, 0);
         MI_CHECK_EQUAL( result, -1);
         MI_CHECK_EQUAL( job.m_fragments_done, 0);
+    }
+
+    {
+        My_fragmented_job job( db.m_db, DB::Fragmented_job::ONCE_PER_HOST, 0);
+        mi::Sint32 result = transaction->execute_fragmented( &job, 0);
+        MI_CHECK_EQUAL( result, 0);
+        MI_CHECK_EQUAL( job.m_fragments_done, 1);
     }
 
     {
@@ -2823,6 +2990,15 @@ void test_fragmented_jobs_with_transaction_async()
     }
 
     {
+        My_fragmented_job job( db.m_db, DB::Fragmented_job::ONCE_PER_HOST, 0);
+        My_execution_listener listener;
+        mi::Sint32 result = transaction->execute_fragmented_async( &job, 0, &listener);
+        MI_CHECK_EQUAL( result, -2);
+        MI_CHECK( !listener.m_finished);
+        MI_CHECK_EQUAL( job.m_fragments_done, 0);
+    }
+
+    {
         My_fragmented_job job( db.m_db, DB::Fragmented_job::CLUSTER, 0);
         My_execution_listener listener;
         mi::Sint32 result = transaction->execute_fragmented_async( &job, 10, &listener);
@@ -2877,7 +3053,7 @@ void test_fragmented_jobs_cancelling()
     {
         // Explicit cancelling.
         DB::Transaction_ptr transaction = db.m_global_scope->start_transaction();
-        Cancel_job job( db.m_db, DB::Fragmented_job::LOCAL, 0);
+        Cancel_job job( DB::Fragmented_job::LOCAL, 0);
         My_execution_listener listener;
         mi::Sint32 result = transaction->execute_fragmented_async( &job, 10, &listener);
         MI_CHECK_EQUAL( result, 0);
@@ -2889,7 +3065,7 @@ void test_fragmented_jobs_cancelling()
     {
         // Implicit cancelling via committing the transaction.
         DB::Transaction_ptr transaction = db.m_global_scope->start_transaction();
-        Cancel_job job( db.m_db, DB::Fragmented_job::LOCAL, 0);
+        Cancel_job job( DB::Fragmented_job::LOCAL, 0);
         My_execution_listener listener;
         mi::Sint32 result = transaction->execute_fragmented_async( &job, 10, &listener);
         MI_CHECK_EQUAL( result, 0);
@@ -2904,7 +3080,7 @@ void test_fragmented_jobs_cancelling()
         // Implicit cancelling via aborting the transaction.
         DB::Transaction_ptr transaction = db.m_global_scope->start_transaction();
         My_execution_listener listener;
-        Cancel_job job( db.m_db, DB::Fragmented_job::LOCAL, 0);
+        Cancel_job job( DB::Fragmented_job::LOCAL, 0);
         mi::Sint32 result = transaction->execute_fragmented_async( &job, 10, &listener);
         MI_CHECK_EQUAL( result, 0);
         transaction->abort();
@@ -4087,6 +4263,47 @@ void test_db_jobs_result_with_references()
     transaction->commit();
 }
 
+void test_db_jobs_result_privacy_checked_against_store_scope()
+{
+    Test_db db( __func__, /*compare*/ false); // Empty dump
+
+    DB::Scope* scope1 = db.m_global_scope->create_child( 10);
+    DB::Transaction_ptr transaction = scope1->start_transaction();
+
+    // The store and privacy levels of the DB elements match the child scope. The store level of
+    // the job matches global scope. The privacy level of the jobs does not matter.
+
+    auto* referenced_element = new My_element( 41);
+    DB::Tag referenced_tag = transaction->store( referenced_element, "referenced", 10, 10);
+
+    auto* referencing_element = new My_element( 42, {referenced_tag});
+    DB::Tag referencing_tag = transaction->store( referencing_element, "referencing", 10, 10);
+
+    auto* job = new My_job( /*shared*/ true, referencing_tag);
+    DB::Tag job_tag = transaction->reserve_tag();
+    transaction->store( job_tag, job, "job", 10, 0);
+
+    SYSTEM::Access_module<LOG::Log_module> log_module( false);
+    Invalid_reference_log_target log_target;
+    log_module->add_log_target( &log_target);
+
+    {
+        DB::Access<My_element> access( job_tag, transaction.get());
+        MI_CHECK( access);
+        MI_CHECK_EQUAL( access->get_value(), 42);
+
+        const DB::Tag_set& tag_set = access->get_tag_set();
+        MI_CHECK_EQUAL( tag_set.size(), 1);
+        MI_CHECK_EQUAL( *tag_set.begin(), referenced_tag);
+    }
+
+    MI_CHECK_EQUAL( log_target.m_count, 1);
+
+    log_module->remove_log_target( &log_target);
+
+    transaction->commit();
+}
+
 void test_db_jobs_parallel_execution()
 {
     Test_db db( __func__, /*compare*/ false); // Empty dump
@@ -4474,13 +4691,14 @@ void test_reference_cycles3()
     // Reference cycles via edits only tested with 2 elements.
 }
 
-void test( const char* explicit_gc_method)
+void test( const char* gc_method, const char* lock_implementation)
 {
-    if( explicit_gc_method) {
-        SYSTEM::Access_module<CONFIG::Config_module> config_module( false);
-        CONFIG::Config_registry& registry = config_module->get_configuration();
-        registry.overwrite_value( "dblight_gc_method", std::string( explicit_gc_method));
-    }
+    SYSTEM::Access_module<CONFIG::Config_module> config_module( false);
+    CONFIG::Config_registry& registry = config_module->get_configuration();
+    if( gc_method)
+        registry.overwrite_value( "dblight_gc_method", std::string( gc_method));
+    if( lock_implementation)
+        registry.overwrite_value( "dblight_lock_implementation", std::string( lock_implementation));
 
     test_empty_db();
 
@@ -4525,6 +4743,7 @@ void test( const char* explicit_gc_method)
 
     test_transaction_remove();
     test_transaction_get_tag_is_removed();
+    test_transaction_get_tag_is_removed_after_abort();
 
     test_transaction_access_after_remove();
     test_transaction_access_after_abort();
@@ -4534,6 +4753,7 @@ void test( const char* explicit_gc_method)
     test_gc_multiple_references();
     test_gc_explicit_call();
     test_gc_pin_count_zero();
+    test_gc_delayed();
 
     test_use_of_closed_transaction();
 
@@ -4549,6 +4769,7 @@ void test( const char* explicit_gc_method)
     test_transaction_remove_with_scopes();
     test_scope_removal_possibly_delayed();
     test_scope_delayed_gc();
+    test_scope_destructor_gc();
 
     test_fragmented_jobs_without_transaction();
     test_fragmented_jobs_without_transaction_async();
@@ -4587,6 +4808,7 @@ void test( const char* explicit_gc_method)
     test_db_jobs_transaction_get_class_id();
     test_db_jobs_execution_without_db_lock();
     test_db_jobs_result_with_references();
+    test_db_jobs_result_privacy_checked_against_store_scope();
     test_db_jobs_parallel_execution();
     test_db_jobs_failing();
     test_transaction_get_tag_is_job();
@@ -4618,13 +4840,25 @@ MI_TEST_AUTO_FUNCTION( test_dblight )
 
     test_info_base();
 
-    // Note that the reference files are independent of the GC method. Each run below overwrites
-    // the output files of the previous run.
-    test( /*use the default*/ nullptr);
-    test( "full_sweeps_only");
-    test( "full_sweep_then_pin_count_zero");
-    test( "general_candidates_then_pin_count_zero");
-    test( "invalid_method");
+    // Note that the reference files are independent of the GC method and lock implementation.
+    // Each run below overwrites the output files of the previous run.
+    test( /*gc_method*/ nullptr, /*lock_implementation*/ nullptr);
+
+    const char* gc_methods[] = {
+        "full_sweeps_only",
+        "full_sweep_then_pin_count_zero",
+        "general_candidates_then_pin_count_zero",
+        "invalid_method"
+    };
+    const char* lock_implementations[] = {
+        "shared_lock",
+        "shared_lock_but_used_exclusively",
+        "exclusive_lock",
+        "invalid_implementation"
+    };
+    for( auto gc_method: gc_methods)
+        for( auto lock_impl: lock_implementations)
+            test( gc_method, lock_impl);
 }
 
 MI_TEST_MAIN_CALLING_TEST_MAIN();

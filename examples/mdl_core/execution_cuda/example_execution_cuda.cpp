@@ -245,11 +245,19 @@ int MAIN_UTF8(int argc, char* argv[])
         // according to the requested material pattern
         for (unsigned i = 0, n = unsigned(options.material_names.size()); i < n; ++i) {
             if ((options.material_pattern & (1 << i)) != 0) {
-                if (!mc.add_material_subexpr(
-                        options.material_names[i].c_str(),
-                        "surface.scattering.tint",
-                        ("tint_" + to_string(i)).c_str(),
-                        options.use_class_compilation)) {
+                Material_instance mat_instance(
+                    mc.create_and_init_material_instance(
+                        options.material_names[i], options.use_class_compilation));
+                if (!mat_instance) {
+                    success = false;
+                    std::cout << "Failed creating material instance for \""
+                        << options.material_names[i].c_str() << "\"." << std::endl;
+                    continue;
+                }
+
+                Target_function_description function_desc(
+                    "surface.scattering.tint", ("tint_" + to_string(i)).c_str());
+                if (!mc.add_material(mat_instance, &function_desc, 1)) {
                     success = false;
                     if (!mc.has_errors()) {
                         std::cout << "Failed compiling \"surface.scattering.tint\" of material \""

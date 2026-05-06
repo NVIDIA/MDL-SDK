@@ -135,10 +135,8 @@ void check_topdown_attrs(Compilation_unit *unit, Expr const *expr);
 // A visitor to calculate variables used in calls to target materials.
 class Used_target_material_visitor : public Const_expr_visitor {
 public:
-    Used_target_material_visitor(mi::mdl::Memory_arena &arena,
-                                 Var_set &used_vars)
-        : m_arena(arena)
-        , m_used_vars(used_vars) {}
+    Used_target_material_visitor(Var_set &used_vars)
+        : m_used_vars(used_vars) {}
 
     virtual void visit(Expr_call const *e) {
         Expr_ref const * ref = cast<Expr_ref>(e->get_callee());
@@ -169,13 +167,11 @@ public:
     }
 
 private:
-    mi::mdl::Memory_arena &m_arena;
     Var_set &m_used_vars;
 };
 
 /// Add all function names with unknown semantics to the variable
 /// set. These are custom target material functions.
-void used_target_materials(mi::mdl::Memory_arena &arena,
-                           Expr const *expr, Var_set &u_vars);
+void used_target_materials(Expr const *expr, Var_set &u_vars);
 
 #endif

@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
- // examples/mdl_sdk/shared/example_materialx_shared.cpp
+// examples/mdl_sdk/shared/example_materialx_shared.cpp
 
 #include "example_materialx_shared.h"
 
@@ -45,6 +45,17 @@
 namespace mi {namespace examples { namespace materialx {
 
 namespace mx = MaterialX;
+
+bool is_materialx_resource(const std::string& s)
+{
+    if (mi::examples::strings::ends_with(s, ".mtlx"))
+        return true;
+    if( s.find( ".mtlx?") != std::string::npos)
+        return true;
+    return false;
+}
+
+// ------------------------------------------------------------------------------------------------
 
 class Mdl_string_resolver;
 using Mdl_string_resolver_ptr = std::shared_ptr<Mdl_string_resolver>;
@@ -314,7 +325,6 @@ bool Mdl_generator::generate(
                 generator_context.registerSourceCodeSearchPath(path / folder);
         }
     }
-
     // Initialize color management.
     mx::DefaultColorManagementSystemPtr cms = mx::DefaultColorManagementSystem::create(
         generator_context.getShaderGenerator().getTarget());
@@ -494,6 +504,9 @@ bool Mdl_generator::generate(
     mx::ShaderPtr shader = nullptr;
     try
     {
+#if MATERIALX_VERSION >= 13903
+        generator_context.getShaderGenerator().registerTypeDefs(material_document);
+#endif // 13903
         shader = generator_context.getShaderGenerator().generate(
             material_name, element_to_generate_code_for, generator_context);
     }

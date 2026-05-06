@@ -26,8 +26,8 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  **************************************************************************************************/
 
- /// \file
- /// \brief The .axf importer options.
+/// \file
+/// \brief The .axf importer options.
 
 #ifndef EXAMPLE_AXF_TO_MDL_AXF_IMPORTER_OPTIONS_H
 #define EXAMPLE_AXF_TO_MDL_AXF_IMPORTER_OPTIONS_H

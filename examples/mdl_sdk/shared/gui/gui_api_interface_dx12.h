@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
- // examples/mdl_sdk/shared/gui.h
+// examples/mdl_sdk/shared/gui.h
 
 #ifndef EXAMPLE_SHARED_GUI_API_INTERFACE_DX12_H
 #define EXAMPLE_SHARED_GUI_API_INTERFACE_DX12_H

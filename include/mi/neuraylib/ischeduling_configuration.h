@@ -92,6 +92,34 @@ public:
     /// \see #set_gpu_load_limit()
     virtual Float32 get_gpu_load_limit() const = 0;
 
+    /// Sets the CPU affinity for threads.
+    ///
+    /// If thread affinity is enabled for a thread then this thread is bound to the CPU it is
+    /// currently running on. If thread affinity is disabled (the default) the operating system is
+    /// free to migrate the thread between CPUs as it sees fit (which might suffer from cache
+    /// misses).
+    ///
+    /// This thread affinity setting only affects internal threads that are used to execute jobs.
+    /// Application threads are not affected by this setting.
+    ///
+    /// Note that changing this value does not affect a job that is currently being executed, it
+    /// only affects subsequently started jobs (or fragments thereof).
+    ///
+    /// This method can only be used while \neurayProductName is running.
+    ///
+    /// \param value
+    /// \return
+    ///                -  0: Success.
+    ///                - -1: Setting the thread affinity is not supported on this operating system
+    ///                      (Linux with glibc older than 2.6 and MacOS X).
+    ///                - -2: The method cannot be called at this point of time.
+    virtual Sint32 set_thread_affinity_enabled( bool value) = 0;
+
+    /// Returns the CPU affinity for threads.
+    ///
+    /// \see #set_thread_affinity_enabled()
+    virtual bool get_thread_affinity_enabled() const = 0;
+
     /// \if MDL_SDK_API
     /// Not supported.
     /// \else
@@ -178,34 +206,6 @@ public:
     /// \return                        The currently configured value.
     /// \endif
     virtual bool get_gpu_work_delegation_enabled() const = 0;
-
-    /// Sets the CPU affinity for threads.
-    ///
-    /// If thread affinity is enabled for a thread then this thread is bound to the CPU it is
-    /// currently running on. If thread affinity is disabled (the default) the operating system is
-    /// free to migrate the thread between CPUs as it sees fit (which might suffer from cache
-    /// misses).
-    ///
-    /// This thread affinity setting only affects internal threads that are used to execute jobs.
-    /// Application threads are not affected by this setting.
-    ///
-    /// Note that changing this value does not affect a job that is currently being executed, it
-    /// only affects subsequently started jobs (or fragments thereof).
-    ///
-    /// This method can only be used while \neurayProductName is running.
-    ///
-    /// \param value
-    /// \return
-    ///                -  0: Success.
-    ///                - -1: Setting the thread affinity is not supported on this operating system
-    ///                      (Linux with glibc older than 2.6 and MacOS X).
-    ///                - -2: The method cannot be called at this point of time.
-    virtual Sint32 set_thread_affinity_enabled( bool value) = 0;
-
-    /// Returns the CPU affinity for threads.
-    ///
-    /// \see #set_thread_affinity_enabled()
-    virtual bool get_thread_affinity_enabled() const = 0;
 };
 
 /**@}*/ // end group mi_neuray_configuration

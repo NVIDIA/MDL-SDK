@@ -663,6 +663,8 @@ Mdl_texture_set* Mdl_material_library::access_texture_resource(
         num_tiles += image->get_frame_length(f);
     }
 
+    Mdl_texture_set* set = nullptr;
+
     // create empty textures for all tiles
     {
         std::lock_guard<std::mutex> lock(m_textures_mtx);
@@ -671,12 +673,12 @@ Mdl_texture_set* Mdl_material_library::access_texture_resource(
             return &found->second; // return the other
 
         // add the created texture to the library
-        m_textures[db_name] = Mdl_texture_set();
-        Mdl_texture_set& set = m_textures[db_name];
+        auto inserted = m_textures.emplace(db_name, Mdl_texture_set());
+        set = &inserted.first->second;
         bool has_tiles_or_frames = image->is_uvtile() || image->is_animated();
 
         // create the resources
-        set.entries = std::vector<Mdl_texture_set::Entry>(
+        set->entries = std::vector<Mdl_texture_set::Entry>(
             num_tiles, Mdl_texture_set::Entry());
 
         mi::Size global_tile_id = 0;
@@ -691,7 +693,7 @@ Mdl_texture_set* Mdl_material_library::access_texture_resource(
                 switch (dimension)
                 {
                 case Texture_dimension::Texture_2D:
-                    set.entries[global_tile_id].resource = Texture::create_texture_2d(
+                    set->entries[global_tile_id].resource = Texture::create_texture_2d(
                         m_app, GPU_access::shader_resource,
                         canvas->get_resolution_x(),
                         canvas->get_resolution_y(),
@@ -721,7 +723,7 @@ Mdl_texture_set* Mdl_material_library::access_texture_resource(
                             "' support not implemented: " + db_name, SRC);
                         continue;
                     }
-                    set.entries[global_tile_id].resource = Texture::create_texture_3d(
+                    set->entries[global_tile_id].resource = Texture::create_texture_3d(
                         m_app, GPU_access::shader_resource,
                         canvas->get_resolution_x(),
                         canvas->get_resolution_y(),
@@ -741,9 +743,9 @@ Mdl_texture_set* Mdl_material_library::access_texture_resource(
 
                 mi::Sint32 u, v;
                 image->get_uvtile_uv(f, tile_id, u, v);
-                set.entries[global_tile_id].frame = int32_t(image->get_frame_number(f));
-                set.entries[global_tile_id].uvtile_u = u;
-                set.entries[global_tile_id].uvtile_v = v;
+                set->entries[global_tile_id].frame = int32_t(image->get_frame_number(f));
+                set->entries[global_tile_id].uvtile_u = u;
+                set->entries[global_tile_id].uvtile_v = v;
                 u_min = std::min(u_min, u);
                 u_max = std::max(u_max, u);
                 v_min = std::min(v_min, v);
@@ -753,12 +755,12 @@ Mdl_texture_set* Mdl_material_library::access_texture_resource(
         }
 
         // resource set data
-        set.frame_first = int32_t(image->get_frame_number(0));
-        set.frame_last = int32_t(image->get_frame_number(num_frames - 1));
-        set.uvtile_u_min = u_min;
-        set.uvtile_u_max = u_max;
-        set.uvtile_v_min = v_min;
-        set.uvtile_v_max = v_max;
+        set->frame_first = int32_t(image->get_frame_number(0));
+        set->frame_last = int32_t(image->get_frame_number(num_frames - 1));
+        set->uvtile_u_min = u_min;
+        set->uvtile_u_max = u_max;
+        set->uvtile_v_min = v_min;
+        set->uvtile_v_max = v_max;
 
         // release the lock so other threads can reference the texture even when the
         // actual data is not loaded yet. So when loading in parallel, wait if the data
@@ -767,7 +769,6 @@ Mdl_texture_set* Mdl_material_library::access_texture_resource(
 
     // load the actual texture data and copy it to GPU
     bool success = true;
-    Mdl_texture_set& set = m_textures[db_name];
     uint8_t* buffer = nullptr;
     size_t buffer_size = 0;
     mi::Size global_tile_id = 0;
@@ -800,13 +801,13 @@ Mdl_texture_set* Mdl_material_library::access_texture_resource(
                 canvas = m_sdk->get_image_api().convert(canvas.get(), "Color");
             }
 
-            if (set.entries.size() <= global_tile_id)
+            if (set->entries.size() <= global_tile_id)
             {
                 log_error("Exceeded texture set: " + db_name, SRC);
                 return nullptr;
             }
 
-            Texture* texture_resource = static_cast<Texture*>(set.entries[global_tile_id].resource);
+            Texture* texture_resource = static_cast<Texture*>(set->entries[global_tile_id].resource);
 
             size_t tex_width = texture_resource->get_width();
             size_t tex_height = texture_resource->get_height();
@@ -865,7 +866,7 @@ Mdl_texture_set* Mdl_material_library::access_texture_resource(
             if (!success)
             {
                 std::lock_guard<std::mutex> lock(m_textures_mtx);
-                for (auto& entry : set.entries)
+                for (auto& entry : set->entries)
                     delete entry.resource;
 
                 m_textures.erase(db_name);
@@ -877,7 +878,7 @@ Mdl_texture_set* Mdl_material_library::access_texture_resource(
     }
 
     delete[] buffer;
-    return &m_textures[db_name];
+    return set;
 }
 
 Light_profile* Mdl_material_library::access_light_profile_resource(

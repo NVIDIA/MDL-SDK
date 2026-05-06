@@ -298,6 +298,51 @@ class Rule_matcher_event : public mi::mdl::IRule_matcher_event
         outs.flush();
     }
 
+    virtual void detailed_trace_event(
+        char const *rule_set_name,
+        unsigned   rule_id,
+        char const *rule_name,
+        char const *file_name,
+        unsigned   line_number,
+        Detailed_trace_event trace_event)
+    {
+        if (m_options->trace >= 1) {
+            if (file_name == nullptr)
+                file_name = "<unknown>";
+            char const *kind_str = "";
+            switch (trace_event.kind) {
+            case mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Rule_match:
+                kind_str = "rule match";
+                break;
+            case mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match:
+                kind_str = "pattern match";
+                break;
+            case mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_mismatch:
+                kind_str = "pattern mismatch";
+                break;
+            case mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Attribute_missing:
+                kind_str = "attribute missing";
+                break;
+            case mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Attribute_match:
+                kind_str = "attribute match";
+                break;
+            case mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Attribute_mismatch:
+                kind_str = "attribute mismatch";
+                break;
+            case mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::No_match:
+                kind_str = "no match";
+                break;
+            }
+            LOG::mod_log->info(
+                SYSTEM::M_DIST,
+                LOG::ILogger::C_COMPILER,
+                "trace:%s:%u: ruleset: %s, rule: %s (%u): %s%s%s",
+                file_name, line_number, rule_set_name, rule_name, rule_id, kind_str,
+                (trace_event.message && trace_event.message[0]) ? ": " : "",
+                trace_event.message);
+        }
+    }
+
 public:
     /// Initialize match event handler with options to control trace level.
     Rule_matcher_event( const mi::mdl::Distiller_options* options) : m_options(options) {}

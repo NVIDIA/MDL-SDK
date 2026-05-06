@@ -67,7 +67,12 @@ DAG_node const* Conditionals::matcher(
     const mi::mdl::Distiller_options *options,
     Rule_result_code &result_code) const
 {
-    auto match_rule1 = [&] (DAG_node const *node, IDistiller_plugin_api::Match_properties &node_props) -> const DAG_node * { return node; };
+    auto match_rule1 = [&] (DAG_node const *node, IDistiller_plugin_api::Match_properties &node_props) -> const DAG_node * {
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0 ,{ mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::No_match, ""});
+        }
+        return node;
+        };
 
 // 046_conditionals.mdltl:8
 //RUID 117358
@@ -75,29 +80,65 @@ DAG_node const* Conditionals::matcher(
 
         // match for bsdf_tint(c, bsdf_conditional_operator(cond, bsdf1, bsdf2))
         if (node_props0.sema != IDefinition::DS_INTRINSIC_DF_TINT || node_props0.arity != 2 || node_props0.type_kind != IType::TK_BSDF) {
+            if (event_handler != nullptr) {
+                fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_mismatch,
+                "bsdf_tint(c, bsdf_conditional_operator(cond, bsdf1, bsdf2))"});
+            }
             return match_rule1(node0, node_props0);
         }
         DAG_node const *node2 = e.get_compound_argument(node0, 0);
         DAG_node const *v_c = node2; (void)v_c;
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "c"});
+        }
         DAG_node const *node4 = e.get_compound_argument(node0, 1);
         IDistiller_plugin_api::Match_properties node_props4;
         e.get_match_properties(node4, node_props4); 
         // match for bsdf_conditional_operator(cond, bsdf1, bsdf2)
         if (node_props4.sema != (IDefinition::DS_OP_BASE + IExpression::OK_TERNARY)
          || node_props4.type_kind != IType::TK_BSDF) {
+            if (event_handler != nullptr) {
+                fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_mismatch,
+                "bsdf_conditional_operator(cond, bsdf1, bsdf2)"});
+            }
             return match_rule1(node0, node_props0);
         }
         DAG_node const *node5 = e.get_compound_argument(node4, 0);
         DAG_node const *v_cond = node5; (void)v_cond;
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "cond"});
+        }
         DAG_node const *node7 = e.get_compound_argument(node4, 1);
         DAG_node const *v_bsdf1 = node7; (void)v_bsdf1;
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "bsdf1"});
+        }
         DAG_node const *node9 = e.get_compound_argument(node4, 2);
         DAG_node const *v_bsdf2 = node9; (void)v_bsdf2;
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "bsdf2"});
+        }
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "bsdf_conditional_operator(cond, bsdf1, bsdf2)"});
+        }
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "bsdf_tint(c, bsdf_conditional_operator(cond, bsdf1, bsdf2))"});
+        }
         DAG_DbgInfo root_dbg_info = node0->get_dbg_info();
         (void) root_dbg_info;
 
-        if (event_handler != nullptr)
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Rule_match,
+            ""});
+
             fire_match_event(*event_handler, 0);
+        }
         result_code = RULE_REPEAT_RULES;
         return e.create_call("operator?(bool,<0>,<0>)(bool,bsdf,bsdf)", static_cast<mi::mdl::IDefinition::Semantics>(555),
             Args_wrapper<3>::mk_args(e, m_node_types, bsdf_conditional_operator,
@@ -153,6 +194,16 @@ void Conditionals::fire_debug_print(
     Rule_info const &ri = g_rule_info[idx];
     event_handler.debug_print(plugin_api, "Conditionals", ri.ruid, ri.rname, ri.fname,
         ri.fline, var_name, value);
+}
+
+void Conditionals::fire_detailed_trace_event(
+    mi::mdl::IRule_matcher_event &event_handler,
+    std::size_t id,
+    mi::mdl::IRule_matcher_event::Detailed_trace_event trace_event)
+{
+    Rule_info const &ri = g_rule_info[id];
+    event_handler.detailed_trace_event("Conditionals", ri.ruid, ri.rname, ri.fname,
+        ri.fline, trace_event);
 }
 
 

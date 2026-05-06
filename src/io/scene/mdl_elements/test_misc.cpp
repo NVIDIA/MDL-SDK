@@ -1885,19 +1885,19 @@ void test_unresolved_resources_load( DB::Transaction* transaction, MDL::Executio
 
     check_texture_def( transaction, // strict-relative file path, gamma_srgb
         "mdl::mdl_elements::test_resolver_success::fd_texture_gamma_srgb(texture_2d)",
-        "t", true, false, "/mdl_elements/resources/test.png");
+        "t", true, false, "./resources/test.png");
 
     check_texture_def( transaction, // strict-relative file path, gamma_linear
         "mdl::mdl_elements::test_resolver_success::fd_texture_gamma_linear(texture_2d)",
-        "t", true, false, "/mdl_elements/resources/test.png");
+        "t", true, false, "./resources/test.png");
 
     check_texture_def( transaction, // strict-relative file path, body
         "mdl::mdl_elements::test_resolver_success::fd_texture_body()",
-        {0, 0}, true, false, "/mdl_elements/resources/test.png");
+        {0, 0}, true, false, "./resources/test.png");
 
     check_light_profile_def( transaction, // strict-relative file path
         "mdl::mdl_elements::test_resolver_success::fd_light_profile(light_profile)",
-        "l", true, false, "/mdl_elements/resources/test.ies");
+        "l", true, false, "../mdl_elements/resources/test.ies");
 
     check_bsdf_measurement_def( transaction, // absolute path
         "mdl::mdl_elements::test_resolver_success::fd_bsdf_measurement(bsdf_measurement)",
@@ -1978,7 +1978,7 @@ void test_direct_call_creation(
     mi::base::Handle<MDL::IExpression_factory> ef( MDL::get_expression_factory());
 
     DB::Tag tag = transaction->name_to_tag(
-        "mdl::df::simple_glossy_bsdf(float,float,color,color,float3,::df::scatter_mode,string)");
+        "mdl::df::simple_glossy_bsdf(float,float,color,color,float3,::df::scatter_mode,::df::backscatter_modifier,string)");
     MI_CHECK( tag);
     DB::Access<MDL::Mdl_function_definition> fd( tag, transaction);
 
@@ -2234,17 +2234,29 @@ std::set<std::string> expected[2] = {
     },
     {
         // resolve_resources=false
-        "/mdl_elements/resources/test1001.png",
-        "/mdl_elements/resources/test1002.png",
-        "/mdl_elements/resources/test1011.png",
+        "::mdl_elements::test_resource_maps::./resources/test1001.png",
+        "::mdl_elements::test_resource_maps::./resources/test1002.png",
+        "::mdl_elements::test_resource_maps::./resources/test1011.png",
         "::mdl_elements::test_resource_maps::resources/test1001.png",
         "::mdl_elements::test_resource_maps::resources/test1002.png",
-        "::mdl_elements::test_resource_maps::resources/test1011.png",
+        "::mdl_elements::test_resource_maps::resources/test1011.png"
+    }
+};
+
+std::set<std::string> expected2[2] = {
+    {
+        // resolve_resources=true
+        "/mdl_elements/resources/test1011.png"
+    },
+    {
+        // resolve_resources=false
+        "::mdl_elements::test_resource_maps::./resources/test1011.png",
+        "::mdl_elements::test_resource_maps::resources/test1011.png"
     }
 };
 
 template <class T>
-void check_resource_map( const T* object, bool resolve_resources)
+void check_resource_map( const T* object, const std::set<std::string> expected[2], bool resolve_resources)
 {
     mi::Size index = resolve_resources ? 0 : 1;
     mi::Size n = object->get_resources_count();
@@ -2311,8 +2323,17 @@ void test_resource_maps( DB::Scope* global_scope, bool resolve_resources)
 
     DB::Tag module_tag = transaction->name_to_tag( "mdl::mdl_elements::test_resource_maps");
     DB::Access<MDL::Mdl_module> module( module_tag, transaction);
-    check_resource_map( module.get_ptr(), resolve_resources);
+    check_resource_map( module.get_ptr(), expected, resolve_resources);
     check_resource_ivalue( transaction, module.get_ptr(), resolve_resources);
+
+    result = MDL::Mdl_module::create_module(
+        transaction, "::mdl_elements::test_resource_maps2", &context);
+    MI_CHECK_EQUAL( 0, result);
+
+    // Also test call of a function from a different module using resources from its defaults.
+    DB::Tag module_tag2 = transaction->name_to_tag( "mdl::mdl_elements::test_resource_maps2");
+    DB::Access<MDL::Mdl_module> module2( module_tag2, transaction);
+    check_resource_map( module2.get_ptr(), expected2, resolve_resources);
 
     DB::Tag fd_tag = transaction->name_to_tag(
         "mdl::mdl_elements::test_resource_maps::test_resources(texture_2d,texture_2d)");
@@ -2323,12 +2344,12 @@ void test_resource_maps( DB::Scope* global_scope, bool resolve_resources)
 
     std::unique_ptr<MDL::Mdl_compiled_material> cm_i( fc->create_compiled_material(
         transaction, /*class_compilation*/ false, /*target_type*/ nullptr, &context));
-    check_resource_map( cm_i.get(), resolve_resources);
+    check_resource_map( cm_i.get(), expected, resolve_resources);
 
     std::unique_ptr<MDL::Mdl_compiled_material> cm_c( fc->create_compiled_material(
         transaction, /*class_compilation*/ true, /*target_type*/ nullptr, &context));
     // TODO Should resources only used in the arguments show up here (with class compilation)?
-    check_resource_map( cm_c.get(), resolve_resources);
+    check_resource_map( cm_c.get(), expected, resolve_resources);
 
     transaction->commit();
 }

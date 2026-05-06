@@ -42,9 +42,7 @@
 #ifdef MI_PLATFORM_WINDOWS
 #include <intrin.h>
 #pragma intrinsic(_BitScanReverse)
-#ifdef MI_ARCH_64BIT
 #pragma intrinsic(_BitScanReverse64)
-#endif
 #endif
 
 namespace mi {
@@ -672,18 +670,9 @@ inline Uint32 leading_zeros(Uint64 v) {
     // This implementation tries to use built-in functions if available. For the fallback
     // method, see Henry Warren: "Hacker's Delight" for reference.
 #if defined(MI_COMPILER_MSC)
-#if defined(MI_ARCH_64BIT)
     unsigned long index;
     const unsigned char valid = _BitScanReverse64(&index, v);
     return (valid != 0) ? 63 - index : 64;
-#else
-    unsigned long index_h, index_l;
-    const unsigned char valid_h = _BitScanReverse(&index_h,(Uint32)(v >> 32));
-    const unsigned char valid_l = _BitScanReverse(&index_l,(Uint32)(v & 0xFFFFFFFF));
-    if (valid_h == 0)
-    return (valid_l != 0) ? 63 - index_l : 64;
-    return 63 - index_h + 32;
-#endif
 #elif defined(MI_COMPILER_ICC) || defined(MI_COMPILER_GCC)
     return (v != 0) ? __builtin_clzll(v) : 64;
 #else

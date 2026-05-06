@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
- // examples/mdl_sdk/shared/example_materialx_shared.h
+// examples/mdl_sdk/shared/example_materialx_shared.h
 
 #ifndef EXAMPLE_SHARED_MATERIALX_SHARED_H
 #define EXAMPLE_SHARED_MATERIALX_SHARED_H
@@ -37,6 +37,13 @@
 #include "example_shared.h"
 
 namespace mi { namespace examples { namespace materialx {
+
+/// Indicates whether the given string represents a MaterialX resource.
+///
+/// Returns \c true iff the strings ends in ".mtlx" or contains ".mtlx?".
+bool is_materialx_resource(const std::string& s);
+
+// --------------------------------------------------------------------------------------------
 
 class Mdl_generator_result
 {

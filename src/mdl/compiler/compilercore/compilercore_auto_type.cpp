@@ -365,6 +365,8 @@ static IType const *needs_uniform_condition(IType const *type)
         case IType::TK_VECTOR:
         case IType::TK_MATRIX:
         case IType::TK_COLOR:
+        case IType::TK_SPECTRAL_SAMPLE:
+        case IType::TK_SPECTRUM:
         case IType::TK_FUNCTION:
         case IType::TK_TEXTURE:
         case IType::TK_PTR:

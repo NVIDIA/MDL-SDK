@@ -38,8 +38,8 @@
 
 #include <base/system/test/i_test_auto_driver.h>
 #include <base/system/test/i_test_auto_case.h>
+#include <string>
 #include <vector>
-#include <sstream>
 
 #include <mi/base/handle.h>
 
@@ -57,18 +57,23 @@
 #include <mi/neuraylib/istring.h>
 #include <mi/neuraylib/itransaction.h>
 
+#include <mi/neuraylib/iattribute_container.h>
 
 #include "test_shared.h"
 
-#define GET_REFCOUNT(X) ((X) ? (X)->retain(), (X)->release() : 999)
-
+// set element property
+void set_element_property( mi::neuraylib::IAttribute_container* element, mi::Size i)
+{
+    mi::base::Handle<mi::ISint32> attribute( element->create_attribute<mi::ISint32>( "value"));
+    MI_CHECK( attribute);
+    attribute->set_value( static_cast<mi::Sint32>( i));
+}
 
 // set element property
 void set_element_property( mi::IString* element, mi::Size i)
 {
-    std::ostringstream str;
-    str << i;
-    element->set_c_str( str.str().c_str());
+    std::string str = std::to_string( i);
+    element->set_c_str( str.c_str());
 }
 
 // set element property
@@ -83,13 +88,23 @@ void set_element_property( mi::IRef* element, mi::Size i)
     // skip
 }
 
+// check element property
+bool check_element_property( const mi::neuraylib::IAttribute_container* element, mi::Size i)
+{
+    mi::base::Handle<const mi::ISint32> attribute(
+        element->access_attribute<mi::ISint32>( "value"));
+    if( !attribute)
+        return false;
+    mi::Sint32 tmp;
+    attribute->get_value( tmp);
+    return tmp == static_cast<mi::Sint32>( i);
+}
 
 // check element property
 bool check_element_property( const mi::IString* element, mi::Size i)
 {
-    std::ostringstream str;
-    str << i;
-    return strcmp( element->get_c_str(), str.str().c_str()) == 0;
+    std::string str = std::to_string( i);
+    return strcmp( element->get_c_str(), str.c_str()) == 0;
 }
 
 // check element property
@@ -106,8 +121,7 @@ bool check_element_property( const mi::IRef* element, mi::Size i)
     return true;
 }
 
-// Does not work if T is derived from mi::IVoid or mi::neuraylib::IGroup because these are
-// hard-coded interfaces to test some expected failures.
+// Uses mi::IVoid and IAttribute_container as hard-coded probe types for some expected failures.
 template<class T>
 void test_interface_IData_collection(
     mi::neuraylib::ITransaction* transaction,
@@ -120,11 +134,8 @@ void test_interface_IData_collection(
 {
     const mi::IData_collection* const_data_collection = data_collection;
 
-    std::ostringstream str, str1;
-    str << N;
-    std::string N_string = str.str();
-    str1 << N-1;
-    std::string N_minus_1_string = str1.str();
+    std::string N_string = std::to_string( N);
+    std::string N_minus_1_string = std::to_string( N-1);
 
     // check type name
     MI_CHECK_EQUAL_CSTR( data_collection->get_type_name(), type_name);
@@ -195,7 +206,11 @@ void test_interface_IData_collection(
 
     mi::base::Handle<mi::IVoid> void_( transaction->create<mi::IVoid>( "Void"));
     MI_CHECK( void_);
-    MI_CHECK_EQUAL( 1, GET_REFCOUNT( void_.get()));
+    MI_CHECK_EQUAL( 1, get_refcount( void_));
+    mi::base::Handle<mi::neuraylib::IAttribute_container> attribute_container_(
+        transaction->create<mi::neuraylib::IAttribute_container>( "Attribute_container"));
+    MI_CHECK( attribute_container_);
+    MI_CHECK_EQUAL( 1, get_refcount( attribute_container_));
 
     // check set_value() via index
     mi::base::Handle<mi::base::IInterface> tmp;
@@ -205,10 +220,12 @@ void test_interface_IData_collection(
     MI_CHECK_EQUAL( -2, data_collection->set_value( N, void_.get()));
     if( untyped) {
         MI_CHECK_EQUAL( 0, data_collection->set_value( N-1, void_.get()));
+        MI_CHECK_EQUAL( 0, data_collection->set_value( N-1, attribute_container_.get()));
         // restore previous state
         MI_CHECK_EQUAL( 0, data_collection->set_value( N-1, tmp.get()));
     } else {
         MI_CHECK_EQUAL( -3, data_collection->set_value( zero_size, void_.get()));
+        MI_CHECK_EQUAL( -3, data_collection->set_value( N-1, attribute_container_.get()));
     }
 
     // check set_value() via key
@@ -218,15 +235,18 @@ void test_interface_IData_collection(
     MI_CHECK_EQUAL( -2, data_collection->set_value( N_string.c_str(), void_.get()));
     if( untyped) {
         MI_CHECK_EQUAL( 0, data_collection->set_value( N_minus_1_string.c_str(), void_.get()));
+        MI_CHECK_EQUAL( 0,
+            data_collection->set_value( N_minus_1_string.c_str(), attribute_container_.get()));
         // restore previous state
         MI_CHECK_EQUAL( 0, data_collection->set_value( N_minus_1_string.c_str(), tmp.get()));
     } else {
         MI_CHECK_EQUAL( -3, data_collection->set_value( "0", void_.get()));
+        MI_CHECK_EQUAL( -3,
+            data_collection->set_value( N_minus_1_string.c_str(), attribute_container_.get()));
     }
 }
 
-// Does not work if T is derived from mi::IVoid or mi::neuraylib::IGroup because these are
-// hard-coded interfaces to test some expected failures.
+// Uses mi::IVoid and IAttribute_container as hard-coded probe types for some expected failures.
 template<class T>
 void test_interface_IArray(
     mi::neuraylib::ITransaction* transaction,
@@ -262,14 +282,14 @@ void test_interface_IArray(
         mi::base::Handle<T> element( transaction->create<T>( element_type_name));
         set_element_property( element.get(), i);
         vector.push_back( element);
-        element = nullptr;
-        MI_CHECK_EQUAL( 1, GET_REFCOUNT( vector[i].get()));
+        element.reset();
+        MI_CHECK_EQUAL( 1, get_refcount( vector[i]));
     }
 
     // set array contents
     for( mi::Size i=0; i < N; ++i) {
         MI_CHECK_EQUAL( 0, array->set_element( i, vector[i].get()));
-        MI_CHECK_EQUAL( attribute ? 1 : 2, GET_REFCOUNT( vector[i].get()));
+        MI_CHECK_EQUAL( attribute ? 1 : 2, get_refcount( vector[i]));
     }
 
     // check that out-of-bound write access fails
@@ -287,7 +307,7 @@ void test_interface_IArray(
         MI_CHECK( check_element_property( element, i));
         element->release();
         iinterface->release();
-        MI_CHECK_EQUAL( attribute ? 1 : 2, GET_REFCOUNT( vector[i].get()));
+        MI_CHECK_EQUAL( attribute ? 1 : 2, get_refcount( vector[i]));
     }
 
     // verify const array contents
@@ -301,7 +321,7 @@ void test_interface_IArray(
         MI_CHECK( check_element_property( element, i));
         element->release();
         iinterface->release();
-        MI_CHECK_EQUAL( attribute ? 1 : 2, GET_REFCOUNT( vector[i].get()));
+        MI_CHECK_EQUAL( attribute ? 1 : 2, get_refcount( vector[i]));
     }
 
     if( N == 0)
@@ -309,22 +329,30 @@ void test_interface_IArray(
 
     mi::base::Handle<mi::IVoid> void_( transaction->create<mi::IVoid>( "Void"));
     MI_CHECK( void_);
-    MI_CHECK_EQUAL( 1, GET_REFCOUNT( void_.get()));
+    MI_CHECK_EQUAL( 1, get_refcount( void_));
+    mi::base::Handle<mi::neuraylib::IAttribute_container> attribute_container_(
+        transaction->create<mi::neuraylib::IAttribute_container>( "Attribute_container"));
+    MI_CHECK( attribute_container_);
+    MI_CHECK_EQUAL( 1, get_refcount( attribute_container_));
     if( untyped) {
         // check that untyped arrays accept any types
         MI_CHECK_EQUAL( 0, array->set_element( 0, void_.get()));
-        MI_CHECK_EQUAL( 2, GET_REFCOUNT( void_.get()));
+        MI_CHECK_EQUAL( 2, get_refcount( void_));
 
+        MI_CHECK_EQUAL( 0, array->set_element( 0, attribute_container_.get()));
+        MI_CHECK_EQUAL( 2, get_refcount( attribute_container_));
     } else {
         // check that typed arrays reject other types
         MI_CHECK_EQUAL( -2, array->set_element( 0, void_.get()));
-        MI_CHECK_EQUAL( 1, GET_REFCOUNT( void_.get()));
+        MI_CHECK_EQUAL( 1, get_refcount( void_));
 
+        MI_CHECK_EQUAL( -2, array->set_element( 0, attribute_container_.get()));
+        MI_CHECK_EQUAL( 1, get_refcount( attribute_container_));
     }
 }
 
-// Does not work if T is derived from mi::IVoid or mi::neuraylib::IGroup because these are
-// hard-coded interfaces to test some expected failures.
+// Uses mi::IVoid and, outside DICE, IAttribute_container as hard-coded probe types for some
+// expected failures.
 template<class T>
 void test_interface_IDynamic_array(
     mi::neuraylib::ITransaction* transaction,
@@ -361,12 +389,12 @@ void test_interface_IDynamic_array(
     mi::base::Handle<T> element( transaction->create<T>( element_type_name));
     set_element_property( element.get(), 42);
     MI_CHECK( element);
-    MI_CHECK_EQUAL( 1, GET_REFCOUNT( element.get()));
+    MI_CHECK_EQUAL( 1, get_refcount( element));
 
     // push back element
     MI_CHECK_EQUAL( 0, array->push_back( element.get()));
     MI_CHECK_EQUAL( 1, array->get_length());
-    MI_CHECK_EQUAL( attribute ? 1 : 2, GET_REFCOUNT( element.get()));
+    MI_CHECK_EQUAL( attribute ? 1 : 2, get_refcount( element));
 
     // check array length
     MI_CHECK_EQUAL( 1, array->get_length());
@@ -386,7 +414,7 @@ void test_interface_IDynamic_array(
         ielement->release();
         interface2->release();
         interface1->release();
-        MI_CHECK_EQUAL( attribute ? 1 : 2, GET_REFCOUNT( element.get()));
+        MI_CHECK_EQUAL( attribute ? 1 : 2, get_refcount( element));
     }
     {
         // and retrieve it via back() and get_element( get_length()-1) (const version)
@@ -402,20 +430,20 @@ void test_interface_IDynamic_array(
         ielement->release();
         interface2->release();
         interface1->release();
-        MI_CHECK_EQUAL( attribute ? 1 : 2, GET_REFCOUNT( element.get()));
+        MI_CHECK_EQUAL( attribute ? 1 : 2, get_refcount( element));
     }
 
     // pop last element
     MI_CHECK_EQUAL( 0, array->pop_back());
     MI_CHECK_EQUAL( 0, array->get_length());
     MI_CHECK( array->empty());
-    MI_CHECK_EQUAL( 1, GET_REFCOUNT( element.get()));
+    MI_CHECK_EQUAL( 1, get_refcount( element));
     MI_CHECK_EQUAL( -3, array->pop_back());
 
     // insert some element
     MI_CHECK_EQUAL( 0, array->insert( 0, element.get()));
     MI_CHECK_EQUAL( 1, array->get_length());
-    MI_CHECK_EQUAL( attribute ? 1 : 2, GET_REFCOUNT( element.get()));
+    MI_CHECK_EQUAL( attribute ? 1 : 2, get_refcount( element));
 
     // check array length
     MI_CHECK_EQUAL( 1, array->get_length());
@@ -435,7 +463,7 @@ void test_interface_IDynamic_array(
         ielement->release();
         interface2->release();
         interface1->release();
-        MI_CHECK_EQUAL( attribute ? 1 : 2, GET_REFCOUNT( element.get()));
+        MI_CHECK_EQUAL( attribute ? 1 : 2, get_refcount( element));
     }
     {
         // and retrieve it via front() and get_element( 0) (const version)
@@ -451,28 +479,28 @@ void test_interface_IDynamic_array(
         ielement->release();
         interface2->release();
         interface1->release();
-        MI_CHECK_EQUAL( attribute ? 1 : 2, GET_REFCOUNT( element.get()));
+        MI_CHECK_EQUAL( attribute ? 1 : 2, get_refcount( element));
     }
 
     // remove element
     MI_CHECK_EQUAL( 0, array->erase( 0));
     MI_CHECK_EQUAL( 0, array->get_length());
     MI_CHECK( array->empty());
-    MI_CHECK_EQUAL( 1, GET_REFCOUNT( element.get()));
+    MI_CHECK_EQUAL( 1, get_refcount( element));
 
     // fill it with N elements
     for( mi::Size i = 0; i < N; ++i) {
         MI_CHECK_EQUAL( 0, array->push_back( element.get()));
     }
     MI_CHECK_EQUAL( N, array->get_length());
-    MI_CHECK_EQUAL( attribute ? 1 : N+1, GET_REFCOUNT( element.get()));
+    MI_CHECK_EQUAL( attribute ? 1 : N+1, get_refcount( element));
 
     // insert elements at the begin, in the middle, and at the end
     MI_CHECK_EQUAL( 0, array->insert( 0, element.get()));
     MI_CHECK_EQUAL( 0, array->insert( (N+1)/2, element.get()));
     MI_CHECK_EQUAL( 0, array->insert( N+2, element.get()));
     MI_CHECK_EQUAL( N+3, array->get_length());
-    MI_CHECK_EQUAL( attribute ? 1 : N+4, GET_REFCOUNT( element.get()));
+    MI_CHECK_EQUAL( attribute ? 1 : N+4, get_refcount( element));
     // insert elements at invalid indices
     MI_CHECK_EQUAL( -1, array->insert( N+4, element.get()));
     MI_CHECK_EQUAL( -1, array->insert( 1u << 31, element.get()));
@@ -482,7 +510,7 @@ void test_interface_IDynamic_array(
     MI_CHECK_EQUAL( 0, array->erase( (N+1)/2));
     MI_CHECK_EQUAL( 0, array->erase( 0));
     MI_CHECK_EQUAL( N, array->get_length());
-    MI_CHECK_EQUAL( attribute ? 1 : N+1, GET_REFCOUNT( element.get()));
+    MI_CHECK_EQUAL( attribute ? 1 : N+1, get_refcount( element));
     // remove elements at invalid indices
     MI_CHECK_EQUAL( -1, array->erase( N));
     MI_CHECK_EQUAL( -1, array->erase( 1u << 31));
@@ -491,34 +519,50 @@ void test_interface_IDynamic_array(
     array->clear();
     MI_CHECK_EQUAL( 0, array->get_length());
     MI_CHECK( array->empty());
-    MI_CHECK_EQUAL( 1, GET_REFCOUNT( element.get()));
+    MI_CHECK_EQUAL( 1, get_refcount( element));
 
     mi::base::Handle<mi::IVoid> void_( transaction->create<mi::IVoid>( "Void"));
     MI_CHECK( void_);
-    MI_CHECK_EQUAL( 1, GET_REFCOUNT( void_.get()));
+    MI_CHECK_EQUAL( 1, get_refcount( void_));
+    mi::base::Handle<mi::neuraylib::IAttribute_container> attribute_container_(
+        transaction->create<mi::neuraylib::IAttribute_container>( "Attribute_container"));
+    MI_CHECK( attribute_container_);
+    MI_CHECK_EQUAL( 1, get_refcount( attribute_container_));
     if( untyped) {
         // check that untyped arrays accept any types
         MI_CHECK_EQUAL( 0, array->push_back( void_.get()));
-        MI_CHECK_EQUAL( 2, GET_REFCOUNT( void_.get()));
+        MI_CHECK_EQUAL( 2, get_refcount( void_));
         MI_CHECK_EQUAL( 1, array->get_length());
         MI_CHECK_EQUAL( 0, array->insert( 0, void_.get()));
-        MI_CHECK_EQUAL( 3, GET_REFCOUNT( void_.get()));
+        MI_CHECK_EQUAL( 3, get_refcount( void_));
         MI_CHECK_EQUAL( 2, array->get_length());
 
+        MI_CHECK_EQUAL( 0, array->push_back( attribute_container_.get()));
+        MI_CHECK_EQUAL( 2, get_refcount( attribute_container_));
+        MI_CHECK_EQUAL( 3, array->get_length());
+        MI_CHECK_EQUAL( 0, array->insert( 0, attribute_container_.get()));
+        MI_CHECK_EQUAL( 3, get_refcount( attribute_container_));
+        MI_CHECK_EQUAL( 4, array->get_length());
     } else {
         // check that typed arrays reject other types
         MI_CHECK_EQUAL( -2, array->push_back( void_.get()));
-        MI_CHECK_EQUAL( 1, GET_REFCOUNT( void_.get()));
+        MI_CHECK_EQUAL( 1, get_refcount( void_));
         MI_CHECK_EQUAL( 0, array->get_length());
         MI_CHECK_EQUAL( -2, array->insert( 0, void_.get()));
-        MI_CHECK_EQUAL( 1, GET_REFCOUNT( void_.get()));
+        MI_CHECK_EQUAL( 1, get_refcount( void_));
         MI_CHECK_EQUAL( 0, array->get_length());
 
+        MI_CHECK_EQUAL( -2, array->push_back( attribute_container_.get()));
+        MI_CHECK_EQUAL( 1, get_refcount( attribute_container_));
+        MI_CHECK_EQUAL( 0, array->get_length());
+        MI_CHECK_EQUAL( -2, array->insert( 0, attribute_container_.get()));
+        MI_CHECK_EQUAL( 1, get_refcount( attribute_container_));
+        MI_CHECK_EQUAL( 0, array->get_length());
     }
 }
 
-// Does not work if T is derived from mi::IVoid or mi::neuraylib::IGroup because these are
-// hard-coded interfaces to test some expected failures.
+// Uses mi::IVoid and, outside DICE, IAttribute_container as hard-coded probe types for some
+// expected failures.
 template<class T>
 void test(
     mi::neuraylib::ITransaction* transaction,
@@ -530,9 +574,7 @@ void test(
     std::string type_name_prefix = untyped ? "Interface" : element_type_name;
 
     // test static array of size N
-    std::ostringstream s1;
-    s1 << type_name_prefix << "[" << N << "]";
-    std::string type_name1 = s1.str();
+    std::string type_name1 = type_name_prefix + "[" + std::to_string( N) + "]";
     mi::base::Handle<mi::IArray> array(
         transaction->create<mi::IArray>( type_name1.c_str()));
     MI_CHECK( array);
@@ -562,6 +604,72 @@ void test(
     MI_CHECK( !array4);
 }
 
+template<class T>
+void test_attribute(
+    mi::neuraylib::ITransaction* transaction,
+    mi::Size N,
+    const char* element_type_name)
+{
+    mi::base::Handle<mi::neuraylib::IAttribute_container> attribute_container(
+        transaction->create<mi::neuraylib::IAttribute_container>( "Attribute_container"));
+    MI_CHECK( attribute_container);
+    MI_CHECK_EQUAL( 0, transaction->store( attribute_container.get(), "attribute_container"));
+    attribute_container = transaction->edit<mi::neuraylib::IAttribute_container>(
+        "attribute_container");
+
+    // test static array of size N
+    std::string type_name1 = std::string( element_type_name) + "[" + std::to_string( N) + "]";
+    mi::base::Handle<mi::IArray> array(
+        attribute_container->create_attribute<mi::IArray>( "array", type_name1.c_str()));
+    MI_CHECK( array);
+    test_interface_IData_collection<T>(
+        transaction, array.get(), N, type_name1.c_str(), element_type_name, false, true);
+    test_interface_IArray<T>(
+        transaction, array.get(), N, type_name1.c_str(), element_type_name, false, true);
+    array.reset();
+
+    attribute_container = transaction->edit<mi::neuraylib::IAttribute_container>(
+        "attribute_container");
+
+    // test dynamic array
+    std::string type_name2 = element_type_name;
+    type_name2 += "[]";
+    mi::base::Handle<mi::IDynamic_array> dynamic_array(
+        attribute_container->create_attribute<mi::IDynamic_array>(
+            "dynamic_array", type_name2.c_str()));
+    MI_CHECK( dynamic_array);
+    dynamic_array->set_length( N);
+    test_interface_IData_collection<T>(
+        transaction, dynamic_array.get(), N, type_name2.c_str(), element_type_name, false, true);
+    test_interface_IArray<T>(
+        transaction, dynamic_array.get(), N, type_name2.c_str(), element_type_name, false, true);
+    test_interface_IDynamic_array<T>(
+        transaction, dynamic_array.get(), N, type_name2.c_str(), element_type_name, false, true);
+    dynamic_array.reset();
+
+    // static arrays of size 0 are not allowed
+    std::string type_name3 = element_type_name;
+    type_name3 += "[0]";
+    mi::base::Handle<mi::IArray> array3(
+        attribute_container->create_attribute<mi::IArray>( "array3", type_name3.c_str()));
+    MI_CHECK( !array3);
+
+    // static arrays of negative size are not allowed
+    std::string type_name4 = element_type_name;
+    type_name4 += "[-42]";
+    mi::base::Handle<mi::IArray> array4(
+        attribute_container->create_attribute<mi::IArray>( "array4", type_name4.c_str()));
+    MI_CHECK( !array4);
+
+    // remove attributes to simplify leak checking as long as DB does not remove all elements on
+    // shutdown
+    attribute_container = transaction->edit<mi::neuraylib::IAttribute_container>(
+        "attribute_container");
+    MI_CHECK( attribute_container->destroy_attribute( "array"));
+    MI_CHECK( attribute_container->destroy_attribute( "dynamic_array"));
+
+    // see also test_types_structure.cpp for more tests related to array attributes
+}
 
 void run_tests( mi::neuraylib::INeuray* neuray)
 {
@@ -581,6 +689,12 @@ void run_tests( mi::neuraylib::INeuray* neuray)
         test<mi::ISint32>( transaction.get(),  0, "Sint32");
         test<mi::IString>( transaction.get(),  0, "String");
         test<mi::IRef>(    transaction.get(),  0, "Ref");
+        test<mi::neuraylib::IAttribute_container>( transaction.get(), 13, "Attribute_container");
+        test<mi::neuraylib::IAttribute_container>( transaction.get(),  0, "Attribute_container");
+
+        test_attribute<mi::ISint32>(  transaction.get(), 10, "Sint32");
+        test_attribute<mi::IString>(  transaction.get(), 11, "String");
+        test_attribute<mi::IRef>(     transaction.get(), 12, "Ref");
 
         MI_CHECK_EQUAL( 0, transaction->commit());
     }
@@ -603,7 +717,7 @@ MI_TEST_AUTO_FUNCTION( test_types_array )
         run_tests( neuray.get());
     }
 
-    neuray = nullptr;
+    neuray.reset();
     MI_CHECK( unload());
 }
 

@@ -684,6 +684,12 @@ char const *get_error_template(
             return "cannot select from not imported struct $0";
         case INVALID_FLOAT_OPERATION_IN_CONSTANT_EXPR:
             return "invalid float operation in constant expression";
+        case DEPRECATED_MODULE:
+            return "module is deprecated$0";
+        case DEPRECATED_MODULE_IMPORT:
+            return "import of deprecated module '$0'$1";
+        case INTEGER_DIVISION_OVERFLOW_IN_CONSTANT_EXPR:
+            return "integer overflow in expression '(int)min $0 -1' of type 'int' results in '$1'";
 
         // ------------------------------------------------------------- //
         case EXTERNAL_APPLICATION_ERROR:
@@ -864,6 +870,9 @@ char const *get_error_template(
         case SCENE_DATA_CALL_IN_ENVIRONMENT_FUNCTION:
             return "calls to scene data functions are currently not supported in environment "
                 "functions";
+        case NOT_ENOUGH_TEXTURE_RESULTS_FOR_PRE_NORMAL_EVALUATIONS:
+            return "not enough texture result slots available for results evaluated before "
+                "changing the state normal in the init function";
         case INTERNAL_JIT_UNSUPPORTED_PTR_TYPE:
             return "internal JIT backend error: Unsupported pointer type";
         case INTERNAL_JIT_UNSUPPORTED_VECTOR_TYPE:
@@ -1950,6 +1959,7 @@ static void print_error_param(
             case IMDL::MDL_VERSION_1_8:  s = "1.8"; break;
             case IMDL::MDL_VERSION_1_9:  s = "1.9"; break;
             case IMDL::MDL_VERSION_1_10: s = "1.10"; break;
+            case IMDL::MDL_VERSION_1_11: s = "1.11"; break;
             case IMDL::MDL_VERSION_EXP:  s = "99.99"; break;
             }
             printer->print(s);

@@ -939,7 +939,6 @@ void process_target_material(
                 Material_parameter::Uvtiles::const_iterator it2;
                 for (it2 = it_cvs->second.begin(); it2 != it_cvs->second.end(); it2++)
                 {
-                    Material_parameter::UVTile uv = it2->first;
                     if (!it2->second) // texture
                         continue;
 

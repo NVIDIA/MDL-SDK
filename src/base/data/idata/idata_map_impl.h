@@ -43,6 +43,8 @@
 #include <mi/base/handle.h>
 #include <mi/base/interface_implement.h>
 
+#include "i_idata_string_cache.h"
+
 namespace MI {
 
 namespace DB { class Transaction; }
@@ -147,8 +149,11 @@ private:
     /// The type name of the map itself.
     std::string m_type_name;
 
-    /// Caches the last return value of get_key().
-    mutable std::string m_cached_key;
+    /// Caches the return values of get_key().
+    mutable String_cache m_string_cache;
+
+    /// Mutex for the three cache variables below.
+    mutable std::mutex m_cache_lock;
 
     /// Indicates whether the next two members #m_cached_iterator and #m_cached_index are valid.
     ///
@@ -156,12 +161,18 @@ private:
     /// on each successful lookup. They are invalidated by each operation that modifies the
     /// structure of the map (#insert(), #erase() and #clear), but not by operations that modify
     /// the values of the map.
+    ///
+    /// Needs #m_cache_lock.
     mutable bool m_cache_valid = false;
 
     /// The index used in the last successful lookup.
+    ///
+    /// Needs #m_cache_lock.
     mutable mi::Size m_cached_index = 0;
 
     /// The iterator for #m_cached_index.
+    ///
+    /// Needs #m_cache_lock.
     mutable Map_type::const_iterator m_cached_iterator;
 
     /// Indicates whether the constructor successfully constructed the instance.

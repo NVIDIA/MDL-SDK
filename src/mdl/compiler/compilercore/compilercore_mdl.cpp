@@ -405,7 +405,7 @@ static mi::mdl::MDL *create_mdl(
 
 }  // anonymous
 
-
+// Constructor.
 MDL::MDL(
     IAllocator *alloc,
     bool       mat_ior_is_varying)
@@ -415,7 +415,7 @@ MDL::MDL(
 , m_mat_ior_is_varying(mat_ior_is_varying)
 , m_arena(alloc)
 , m_sym_tab(m_arena)
-, m_type_factory(m_arena, mat_ior_is_varying, m_sym_tab)
+, m_type_factory(m_arena, mat_ior_is_varying, m_sym_tab, *this)
 , m_options(alloc)
 , m_builtin_module_indexes(0, Module_map::hasher(), Module_map::key_equal(), alloc)
 , m_builtin_modules(alloc)
@@ -1116,7 +1116,7 @@ void MDL::create_options()
         "The smallest positive normalized double value supported by the current platform");
     m_options.add_option(option_limits_double_max, STR(DBL_MAX),
         "The largest double value supported by the current platform");
-    m_options.add_option(option_state_wavelength_base_max, STR(1),
+    m_options.add_option(option_state_wavelength_base_max, STR(4),
         "The number of wavelengths returned in the result of wavelength base()");
 
 
@@ -2395,6 +2395,9 @@ bool MDL::check_version(
         case 10:
             version = MDL_VERSION_1_10;
             return true;
+        case 11:
+            version = MDL_VERSION_1_11;
+            return true;
         default:
             // unsupported yet
             return false;
@@ -2530,8 +2533,11 @@ IMDL_import_result *MDL::resolve_import(
     }
 
     Position_impl zero_pos(0, 0, 0, 0);
-    if (pos == NULL)
+    if (pos == NULL) {
         pos = &zero_pos;
+    }
+
+    // check, if it was already imported
 
     mi::base::Handle<IMDL_import_result> res(resolver.resolve_import(
         *pos,
@@ -2547,8 +2553,9 @@ IMDL_import_result *MDL::resolve_import(
 
     // could be a builtin module, check that
     string s(get_allocator());
-    if (import_name[0] != ':' || import_name[1] != ':')
+    if (import_name[0] != ':' || import_name[1] != ':') {
         s += "::";
+    }
     s += import_name;
     if (Module const *mod = find_builtin_module(s)) {
         // found

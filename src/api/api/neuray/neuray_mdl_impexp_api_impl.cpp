@@ -195,22 +195,6 @@ mi::Sint32 Mdl_impexp_api_impl::export_canvas(
     return result ? 0 : -4;
 }
 
-mi::Sint32 Mdl_impexp_api_impl::deprecated_export_canvas(
-    const char* filename,
-    const mi::neuraylib::ICanvas* canvas,
-    mi::Uint32 quality,
-    bool force_default_gamma) const
-{
-    if( quality > 100)
-       return -3;
-
-    SYSTEM::Access_module<IMAGE::Image_module> image_module( false);
-    mi::base::Handle<mi::IMap> export_options(
-        image_module->convert_legacy_options( quality, force_default_gamma));
-
-    return export_canvas( filename, canvas, export_options.get());
-}
-
 mi::Sint32 Mdl_impexp_api_impl::export_lightprofile(
     const char* filename, const mi::neuraylib::ILightprofile* lightprofile) const
 {

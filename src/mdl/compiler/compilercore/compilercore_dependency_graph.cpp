@@ -33,7 +33,6 @@
 #include "compilercore_cc_conf.h"
 #include "compilercore_dependency_graph.h"
 #include "compilercore_def_table.h"
-#include "compilercore_streams.h"
 #include "compilercore_printers.h"
 #include "compilercore_assert.h"
 

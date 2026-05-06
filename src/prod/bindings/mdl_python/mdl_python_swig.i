@@ -603,14 +603,10 @@ typedef unsigned long long Uint64;  ///< 64-bit unsigned integer.
 typedef float              Float32; ///< 32-bit float.
 typedef double             Float64; ///< 64-bit float.
 
-// Define Size to be signed, otherwise Java would use BigInteger
-#ifdef MI_ARCH_64BIT
+// The Python binding uses a signed type for Size for historic reasons. Fixing that would cause
+// sentinel values to change in Python from -1 to 0xFFFFFFFFFFFFFFFF (as in C++).
 typedef Sint64             Size;
 typedef Sint64             Difference;
-#else // MI_ARCH_64BIT
-typedef Sint32             Size;
-typedef Sint32             Difference;
-#endif // MI_ARCH_64BIT
 
 } // namespace
 

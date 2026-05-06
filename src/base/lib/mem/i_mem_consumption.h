@@ -165,9 +165,7 @@ MI_MEM_HAS_NO_DYNAMIC_MEMORY_CONSUMPTION(float)
 MI_MEM_HAS_NO_DYNAMIC_MEMORY_CONSUMPTION(double)
 MI_MEM_HAS_NO_DYNAMIC_MEMORY_CONSUMPTION(long double)
 #ifndef MI_PLATFORM_WINDOWS
-#ifdef MI_ARCH_64BIT
 MI_MEM_HAS_NO_DYNAMIC_MEMORY_CONSUMPTION(size_t)
-#endif
 #endif
 
 }
@@ -183,9 +181,7 @@ MI_MEM_HAS_NO_DYNAMIC_MEMORY_CONSUMPTION(float)
 MI_MEM_HAS_NO_DYNAMIC_MEMORY_CONSUMPTION(double)
 MI_MEM_HAS_NO_DYNAMIC_MEMORY_CONSUMPTION(long double)
 #ifndef MI_PLATFORM_WINDOWS
-#ifdef MI_ARCH_64BIT
 MI_MEM_HAS_NO_DYNAMIC_MEMORY_CONSUMPTION(size_t)
-#endif
 #endif
 }
 
@@ -205,9 +201,7 @@ MI_MEM_HAS_NO_DYNAMIC_MEMORY_CONSUMPTION(Sint16)
 MI_MEM_HAS_NO_DYNAMIC_MEMORY_CONSUMPTION(Uint64)
 MI_MEM_HAS_NO_DYNAMIC_MEMORY_CONSUMPTION(Sint64)
 #ifndef MI_PLATFORM_WINDOWS
-#ifdef MI_ARCH_64BIT
 MI_MEM_HAS_NO_DYNAMIC_MEMORY_CONSUMPTION(size_t)
-#endif
 #endif
 
 } // MI
@@ -354,8 +348,8 @@ inline size_t dynamic_memory_consumption (const map<T1, T2>& the_map)
 #elif defined(MI_PLATFORM_MACOSX_USING_NODE)
     size_t total = the_map.size() * sizeof(std::__tree_node<std::pair<const T1,T2>, void*>);
 #elif defined(MI_PLATFORM_WINDOWS)
-    struct Sub : public Map_type { typedef Map_type::_Node _Node; };
-    size_t total = the_map.size() * sizeof(Sub::_Node);
+    struct Sub : public Map_type { typedef typename Map_type::_Node _Node; };
+    size_t total = the_map.size() * sizeof(typename Sub::_Node);
 #else
 #warning Unsupported platform
 #endif
@@ -498,8 +492,8 @@ inline size_t dynamic_memory_consumption (const set<T>& the_set)
     size_t total = the_set.size() * sizeof(std::__tree_node<T, void*>);
 #elif defined(MI_PLATFORM_WINDOWS)
     // subclass to get access to _Node type
-    struct Sub : public set<T> { typedef set<T>::_Node _Node; };
-    size_t total = the_set.size() * sizeof(Sub::_Node);
+    struct Sub : public set<T> { typedef typename set<T>::_Node _Node; };
+    size_t total = the_set.size() * sizeof(typename Sub::_Node);
 #endif
 
     // additional dynamic size of the set elements

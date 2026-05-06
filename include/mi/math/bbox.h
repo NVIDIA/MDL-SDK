@@ -107,14 +107,14 @@ public:
     using reference       = Vector&;              ///< Mutable reference to vector.
     using const_reference = const Vector&;        ///< Const reference to vector.
 
-    static const Size DIMENSION = DIM;            ///< Constant dimension of the vectors.
-    static const Size SIZE      = 2;              ///< Constant size of the bounding box.
+    static constexpr Size DIMENSION = DIM;            ///< Constant dimension of the vectors.
+    static constexpr Size SIZE      = 2;              ///< Constant size of the bounding box.
 
     /// Constant size of the bounding box.
-    static inline Size size()     { return SIZE; }
+    static constexpr inline Size size()     { return SIZE; }
 
     /// Constant maximum size of the bounding box.
-    static inline Size max_size() { return SIZE; }
+    static constexpr inline Size max_size() { return SIZE; }
 
     /// Enum type used to tag a special constructor that does not initialize the
     /// elements of the constructed bounding box.

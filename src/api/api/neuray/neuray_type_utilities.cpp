@@ -293,18 +293,10 @@ const char* Type_utilities::convert_type_code_to_type_name( ATTR::Type_code type
     mi::base::Lock::Block block( &s_lock);
     if( !s_initialized)
         init();
+
     Map_code_name::const_iterator it = s_map_code_name.find( type_code);
     if( it == s_map_code_name.end())
         return nullptr;
-
-    if(    type_code == ATTR::TYPE_TEXTURE
-        || type_code == ATTR::TYPE_LIGHTPROFILE
-        || type_code == ATTR::TYPE_BSDF_MEASUREMENT) {
-        LOG::mod_log->error( M_NEURAY_API, LOG::Mod_log::C_DATABASE,
-            R"(Using attributes of type "%s" is deprecated. Use type "Ref" instead.)",
-            it->second.c_str());
-        return nullptr;
-    }
 
     return it->second.c_str();
 }

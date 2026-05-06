@@ -285,10 +285,6 @@ class Attribute_set : public SERIAL::Serializable
     std::shared_ptr<Attribute> lookup_shared_ptr(
         Attribute_id id) const;
 
-    /// Removing this requires changes in several files, but nevertheless this
-    /// should soon be removed though
-    typedef MI::ATTR::Attributes Attributes;
-
     /// Get access to Attributes set.
     const Attributes &get_attributes() const;
     Attributes &get_attributes();
@@ -470,11 +466,9 @@ class Type_iterator
 /// \note Implemented in attr_attrset.cpp due to existing helper function.
 /// \param attr the attribute in question
 /// \param [out] result store found tags here
-/// \param type_comparison function to compare a given \c Type whether it contains a tag value
 void get_references(
     const Attribute& attr,
-    DB::Tag_set& result,
-    Compare type_comparison);
+    DB::Tag_set& result);
 
 
 /// Overload of the default swap() for \c Attribute_sets.

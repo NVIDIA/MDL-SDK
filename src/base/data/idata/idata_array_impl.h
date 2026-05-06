@@ -52,6 +52,7 @@
 #include <mi/base/interface_merger.h>
 
 #include "idata_interfaces.h"
+#include "i_idata_string_cache.h"
 
 namespace MI {
 
@@ -162,8 +163,8 @@ protected:
     /// The type name of array elements, or "Interface" for untyped arrays.
     std::string m_element_type_name;
 
-    /// Caches the last return value of get_key().
-    mutable std::string m_cached_key;
+    /// Caches the return values of get_key().
+    mutable String_cache m_string_cache;
 
     /// Indicates whether the constructor successfully constructed the instance.
     /// \see #successfully_constructed()
@@ -384,8 +385,8 @@ protected:
     /// The name that identifies the attribute (or the corresponding part of the attribute).
     std::string m_attribute_name;
 
-    /// Caches the last return value of get_key().
-    mutable std::string m_cached_key;
+    /// Caches the return values of get_key().
+    mutable String_cache m_string_cache;
 };
 
 /// This class contains an alternative implementation of the IDynamic_array interface.
@@ -566,8 +567,8 @@ protected:
     /// Needed for all resize operations, in particular set_length_internal(), insert(), erase().
     mi::Size m_size_of_element = 0;
 
-    /// Caches the last return value of get_key().
-    mutable std::string m_cached_key;
+    /// Caches the return values of get_key().
+    mutable String_cache m_string_cache;
 };
 
 } // namespace IDATA

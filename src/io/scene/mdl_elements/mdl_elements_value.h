@@ -215,7 +215,8 @@ public:
     mi::Size get_memory_consumption() const;
 
 private:
-    mi::base::Handle<IValue_atomic> m_values[4];
+    static const mi::Size MAX_SIZE = 4;
+    mi::base::Handle<IValue_atomic> m_values[MAX_SIZE];
 };
 
 
@@ -237,7 +238,8 @@ public:
     mi::Size get_memory_consumption() const;
 
 private:
-    mi::base::Handle<IValue_vector> m_values[4];
+    static const mi::Size MAX_SIZE = 4;
+    mi::base::Handle<IValue_vector> m_values[MAX_SIZE];
 };
 
 

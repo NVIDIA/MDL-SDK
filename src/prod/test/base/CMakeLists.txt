@@ -35,7 +35,6 @@ set(PROJECT_NAME prod-test-base)
 create_unit_test(
     SOURCES
         test.cpp
-        test_allocator.cpp
         test_assert.cpp
         test_atom.cpp
         test_get_interface.cpp

@@ -576,7 +576,10 @@ void spectrum_to_cs_refl(
         XYZ_illum[1] += SPECTRAL_XYZ1931_Y[i] * illum;
         XYZ_illum[2] += SPECTRAL_XYZ1931_Z[i] * illum;
     }
-    // note: can ignore actual scaling for both integrals (since it's identical)
+    XYZ_illum[0] *= SPECTRAL_XYZ_LAMBDA_STEP;
+    XYZ_illum[1] *= SPECTRAL_XYZ_LAMBDA_STEP;
+    XYZ_illum[2] *= SPECTRAL_XYZ_LAMBDA_STEP;
+    // note: can ignore scaling by 683 for both integrals (since it's identical)
 
     // convert both to the color space
     float cs_spectral[3];

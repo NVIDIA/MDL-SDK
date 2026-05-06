@@ -67,24 +67,24 @@ public:
 
     // methods of THREAD_POOL::Fragmented_job
 
-    mi::Float32 get_cpu_load() const override { return m_cpu_load; }
+    mi::Float32 get_cpu_load() const final { return m_cpu_load; }
 
-    mi::Float32 get_gpu_load() const override { return m_gpu_load; }
+    mi::Float32 get_gpu_load() const final { return m_gpu_load; }
 
-    mi::Sint8 get_priority() const override { return m_priority; }
+    mi::Sint8 get_priority() const final { return m_priority; }
 
-    size_t get_thread_limit() const override { return m_thread_limit; }
+    size_t get_thread_limit() const final { return m_thread_limit; }
 
     void execute_fragment(
         DB::Transaction* transaction,
         size_t index,
         size_t count,
-        const mi::neuraylib::IJob_execution_context* context) override
+        const mi::neuraylib::IJob_execution_context* context) final
     {
         m_fragmented_job->execute_fragment( transaction, index, count, context);
     }
 
-    void job_finished() override;
+    void job_finished() final;
 
     /// Expose cancel() of the wrapped job.
     void cancel() { m_fragmented_job->cancel(); }

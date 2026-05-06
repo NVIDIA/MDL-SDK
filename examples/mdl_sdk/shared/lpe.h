@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
- // Code shared by all examples that use Light path expressions (LPEs).
+// Code shared by all examples that use Light path expressions (LPEs).
 
 #ifndef EXAMPLE_SHARED_LPE_H
 #define EXAMPLE_SHARED_LPE_H

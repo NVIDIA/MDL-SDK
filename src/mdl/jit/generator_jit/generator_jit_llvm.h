@@ -42,6 +42,7 @@
 #include <mdl/compiler/compilercore/compilercore_function_instance.h>
 #include <mdl/compiler/compilercore/compilercore_memory_arena.h>
 #include <mdl/codegenerators/generator_code/generator_code_tools.h>
+#include <mdl/codegenerators/generator_code/generator_code_state_usage.h>
 
 #include "generator_jit_context.h"
 #include "generator_jit_generated_code.h"
@@ -236,6 +237,12 @@ public:
         KI_STATE_GET_MEASURED_CURVE_VALUE,      ///< Kind of state::get_measured_curve_value()
         KI_STATE_ADAPT_MICROFACET_ROUGHNESS,    ///< Kind of state::adapt_microfacet_roughness()
         KI_STATE_ADAPT_NORMAL,                  ///< Kind of state::adapt_normal()
+        KI_STATE_RGB_TO_SPECTRAL_IOR,           ///< Kind of state::rgb_to_spectral_ior()
+        KI_STATE_RGB_TO_SPECTRAL_REFLECTANCE,   ///< Kind of state::rgb_to_spectral_reflectance()
+        KI_STATE_RGB_TO_SPECTRAL_LUMINANCE,     ///< Kind of state::rgb_to_spectral_luminance()
+        KI_STATE_RGB_TO_SPECTRAL_VOLUME_COEFFICIENT,
+                                           ///< Kind of state::rgb_to_spectral_volume_coefficient()
+        KI_STATE_GET_WAVELENGTHS,               ///< Kind of state::get_wavelengths()
 
         /// Kind of df::bsdf_measurement_resolution(int,int)
         KI_DF_BSDF_MEASUREMENT_RESOLUTION,
@@ -752,6 +759,15 @@ public:
     /// Return the MDL type of the result pointed to by the offset.
     mi::mdl::IType const *get_offset_res_mdl_type() const { return m_offset_res_mdl_type; }
 
+    static Expression_result clone(Expression_result const &other) {
+        return Expression_result(
+            other.m_content,
+            other.m_res_kind,
+            other.m_offs_kind, 
+            other.m_offset_res_llvm_type, 
+            other.m_offset_res_mdl_type);
+    }
+
 private:
     /// Constructor.
     Expression_result(
@@ -930,102 +946,11 @@ typedef vector<Light_profile_attribute_entry>::Type    Light_profile_table;
 typedef vector<Bsdf_measurement_attribute_entry>::Type Bsdf_measurement_table;
 typedef vector<string>::Type                           String_table;
 
+// Forward declaration of LLVM_code_generator for the type alias
+class LLVM_code_generator;
 
-/// Helper class storing information about state usage per function and module.
-class State_usage_analysis
-{
-public:
-    typedef IGenerated_code_lambda_function::State_usage State_usage;
-
-    /// Constructor.
-    State_usage_analysis(LLVM_code_generator &code_gen);
-
-    /// Register a function to take part in the analysis.
-    ///
-    /// \param func  the LLVM function
-    void register_function(
-        llvm::Function *func);
-
-    /// Register a function to take part in the analysis, which has been cloned from an
-    /// already registered function. The state usage is initialized with the usage of the
-    /// original function.
-    ///
-    /// \param cloned_func  the cloned LLVM function which shall be registered
-    /// \param orig_func    the original LLVM function
-    void register_cloned_function(
-        llvm::Function *cloned_func,
-        llvm::Function *orig_func);
-
-    /// Register a mapped function to set the "expected" usage.
-    ///
-    /// \param func  the LLVM function
-    /// \param sema  the MDL semantics
-    void register_mapped_function(
-        llvm::Function              *func,
-        mdl::IDefinition::Semantics sema);
-
-    /// Add a state usage flag to the given function.
-    ///
-    /// \param func         the LLVM function
-    /// \param flag_to_add  the state usage to add
-    void add_state_usage(
-        llvm::Function *func,
-        State_usage    flag_to_add);
-
-    /// Add a call edge from a caller to a callee to the call graph.
-    ///
-    /// \param caller  the caller (LLVM function)
-    /// \param callee  the callee (LLVM function)
-    void add_call(
-        llvm::Function *caller,
-        llvm::Function *callee);
-
-    /// Updates the state usage of the exported functions of the code generator.
-    void update_exported_functions_state_usage();
-
-    /// Returns the state usage for the whole module.
-    State_usage get_module_state_usage() const
-    {
-        return m_module_state_usage;
-    }
-
-    void clear()
-    {
-        m_module_state_usage = 0;
-        m_func_state_usage_info_map.clear();
-    }
-
-private:
-    /// The code generator whose exported functions will be updated in finalize state usage.
-    LLVM_code_generator &m_code_gen;
-
-    /// The memory arena used to allocate usage information.
-    mi::mdl::Memory_arena m_arena;
-
-    /// The builder for objects on the memory arena.
-    mi::mdl::Arena_builder m_arena_builder;
-
-    /// The state usage of the whole module.
-    State_usage m_module_state_usage;
-
-    class Function_state_usage_info
-    {
-    public:
-        State_usage state_usage;
-        mi::mdl::Arena_ptr_hash_set<llvm::Function>::Type called_funcs;
-
-        Function_state_usage_info(Memory_arena *arena)
-            : state_usage(0)
-            , called_funcs(arena)
-        {}
-    };
-
-    typedef mi::mdl::ptr_hash_map<llvm::Function, Function_state_usage_info *>::Type
-        Function_state_usage_info_map;
-
-    /// Map from LLVM functions to per-function state-usage information.
-    Function_state_usage_info_map m_func_state_usage_info_map;
-};
+/// Specialized State_usage_analysis for LLVM code generator
+typedef State_usage_analysis<llvm::Function, LLVM_code_generator> LLVM_state_usage_analysis;
 
 /// Helper struct containing all structured language API helper functions.
 struct SL_api_functions
@@ -1210,6 +1135,448 @@ private:
     Remap_entry *m_first;
 };
 
+
+/// RAII-like helper for handling basic block chains.
+class BB_store {
+public:
+    /// Constructor.
+    BB_store(size_t &store, size_t bb) : m_store(store) { old_bb = store; store = bb; }
+
+    /// Destructor.
+    ~BB_store() { m_store = old_bb; }
+
+private:
+    size_t &m_store;
+    size_t old_bb;
+};
+
+
+/// Struct representing a DAG node to calculate in mdl_init.
+struct Schedule_entry
+{
+    /// The DAG node to calculate.
+    DAG_node const *node;
+
+    /// Bit flags representing the special kinds of this node (1 << kind).
+    unsigned special_kinds;
+
+    /// True, if the result of the DAG node depends on the evaluation state,
+    /// i.e. does change when evaluating before or after evaluating geometry normal.
+    bool is_eval_state_dependent;
+
+    /// The evaluation state, when this result is valid, if \ref is_eval_state_dependent is true.
+    Distribution_function::Eval_state eval_state;
+
+    /// The index of the texture result field in the texture results struct, or -1 if not stored
+    /// in the texture results.
+    int texture_result_index;
+
+    /// The offset into the texture results, where the result should be stored,
+    /// or ~0, if this is just a temporary result.
+    size_t texture_result_offset;
+
+    /// True, if the result of the scheduled DAG node is stored in texture results.
+    bool is_stored_in_texture_results() const
+    {
+        return texture_result_offset != ~0;
+    }
+
+    /// Returns true, if this result candidate has the given special kind.
+    bool has_special_kind(Distribution_function::Special_kind special_kind) const
+    {
+        MDL_ASSERT(special_kind != Distribution_function::SK_INVALID);
+
+        return (special_kinds & (1 << unsigned(special_kind))) != 0;
+    }
+
+    /// Constructor.
+    Schedule_entry(
+        DAG_node const                    *node,
+        unsigned                           special_kinds,
+        bool                               is_eval_state_dependent,
+        Distribution_function::Eval_state  eval_state,
+        int                                texture_result_index,
+        size_t                             texture_result_offset)
+    : node(node)
+    , special_kinds(special_kinds)
+    , is_eval_state_dependent(is_eval_state_dependent)
+    , eval_state(eval_state)
+    , texture_result_index(texture_result_index)
+    , texture_result_offset(texture_result_offset)
+    {}
+};
+
+/// A `Loop_schedule` collects the information required to generate code
+/// for the `mdl_init` loop.
+class Loop_schedule {
+public:
+    /// Simple hash set of DAG node pointers.
+    typedef ptr_hash_set<DAG_node const>::Type Node_ptr_set;
+
+    /// Vector of DAG node pointers.
+    typedef vector<DAG_node const *>::Type Node_ptr_vector;
+
+    /// Vector of size_t/IType pointers, used for relating locals to their types.
+    typedef vector<std::pair<size_t, IType const *>>::Type Node_allocation_vector;
+
+    /// Abstraction over node pointer sets, implementing some common
+    /// set operations.
+    class Node_set {
+    public:
+        /// Create a new, empty node set which uses the given allocator.
+        Node_set(IAllocator *alloc)
+            : m_alloc(alloc)
+            , m_nodes(alloc) {}
+
+        /// Return the number of node pointers in the set.
+        size_t size() const {
+            return m_nodes.size();
+        }
+
+        /// Insert a single node pointer into the set.
+        void insert(DAG_node const *node);
+
+        /// Change the set by intersecting it with `other`.
+        void intersect_with(Node_set const &other);
+
+        /// Change the set by unioning it with `other`.
+        void union_with(Node_set const &other);
+
+        /// Erase the given node pointer from the set.
+        void erase(DAG_node const *other);
+
+        /// Erase all node pointers from the set `other`.
+        void erase(Node_set const &other);
+
+        /// Return true if `node` is contained in the set, false otherwise.
+        bool contains(DAG_node const *node) const;
+
+        /// Return the underlying set structure (for iteration, for example).
+        Node_ptr_set const &nodes() const {
+            return m_nodes;
+        }
+
+        /// Return a vector containing all the node pointers in the set,
+        /// in increasing order of their node IDs.
+        Node_ptr_vector sorted() const;
+
+        /// Clear out the set.
+        void clear() {
+            m_nodes.clear();
+        }
+
+        /// Return a clone of the set.
+        Node_set clone() const {
+            Node_set cloned(m_alloc);
+            cloned.m_nodes.insert(m_nodes.begin(), m_nodes.end());
+            return cloned;
+        }
+    private:
+        IAllocator *m_alloc;
+        Node_ptr_set m_nodes;
+    };
+
+    struct Evaluation {
+        /// There are different kind of evaluations. Some result in code generated,
+        /// other are markers or provide additional information for code generation.
+        enum Kind {
+            /// Marks where the state normal is set, and where certain values in
+            /// the manual node value map need to be invalidated.
+            EK_SET_NORMAL,
+            /// Evaluate a node and store the result in a texture result slot. Also make
+            /// it available for later expressions.
+            EK_WRITE_TEXTURE,
+            /// Evaluate a node and make it available for later expressions.
+            EK_EVAL,
+            /// Save evaluation results to local variables or texture result slots.
+            EK_SAVE,
+            /// Reload evaluation results from local variables or texture result slots.
+            EK_RELOAD,
+            /// Marker for a control-flow split between different loop iterations.
+            EK_CASE_SPLIT,
+            /// Marker for a control-flow split between parameter cases and expensive
+            /// function calls.
+            EK_EXP_PARAM_SPLIT,
+            /// Marker for a control-flow split between an expensive function call and
+            /// the reduction evaluations operating on it's result.
+            EK_EXP_RED_SPLIT
+        };
+
+        /// Create a save evaluation. The set contains the nodes to be saved.
+        static Evaluation save(IAllocator *alloc, Node_set const &values) {
+            Evaluation eval(alloc, Kind::EK_SAVE);
+            eval.values = values.clone();
+            return eval;
+        }
+
+        /// Create a reload evaluation. The set contains the nodes to be reloaded.
+        static Evaluation reload(IAllocator *alloc, Node_set const &values) {
+            Evaluation eval(alloc, Kind::EK_RELOAD);
+            eval.values = values.clone();
+            return eval;
+        }
+
+        /// Create a case split evaluation.
+        static Evaluation case_split(IAllocator *alloc) {
+            Evaluation eval(alloc, Kind::EK_CASE_SPLIT);
+            return eval;
+        }
+
+        /// Create a case parameter evaluation.
+        static Evaluation exp_param_split(IAllocator *alloc) {
+            Evaluation eval(alloc, Kind::EK_EXP_PARAM_SPLIT);
+            return eval;
+        }
+
+        /// Create a reduction split evaluation.
+        static Evaluation exp_red_split(IAllocator *alloc) {
+            Evaluation eval(alloc, Kind::EK_EXP_RED_SPLIT);
+            return eval;
+        }
+
+        /// Constructor for one of the save/reload/split evaluations.
+        Evaluation(IAllocator *alloc, Kind k)
+            : m_alloc(alloc)
+            , kind(k)
+            , node(nullptr)
+            , texture_result_index(~0)
+            , texture_result_offset(~0)
+            , is_geom_normal(false)
+            , to_invalidate(alloc)
+            , expensive(false)
+            , from_schedule(false)
+            , state_dep(false)
+            , live_in(alloc)
+            , live_out(alloc)
+            , values(alloc)
+            , tmp_map(alloc) {
+        }
+
+        /// Constructor for `set_normal' evaluation.
+        Evaluation(IAllocator *alloc, Node_ptr_vector to_invalidate)
+            : m_alloc(alloc)
+            , kind(Kind::EK_SET_NORMAL)
+            , node(nullptr)
+            , texture_result_index(~0)
+            , texture_result_offset(~0)
+            , is_geom_normal(false)
+            , to_invalidate(std::move(to_invalidate))
+            , expensive(false)
+            , from_schedule(false)
+            , state_dep(false)
+            , live_in(alloc)
+            , live_out(alloc)
+            , values(alloc)
+            , tmp_map(alloc) {
+        }
+
+        /// Constructor for `write_texture' evaluation.
+        Evaluation(IAllocator *alloc, DAG_node const *n, size_t index, size_t offset, size_t total_texture_bytes,
+            bool is_normal, bool exp)
+            : m_alloc(alloc)
+            , kind(Kind::EK_WRITE_TEXTURE)
+            , node(n)
+            , texture_result_index(index)
+            , texture_result_offset(offset)
+            , is_geom_normal(is_normal)
+            , to_invalidate(alloc)
+            , expensive(exp)
+            , from_schedule(false)
+            , state_dep(false)
+            , live_in(alloc)
+            , live_out(alloc)
+            , values(alloc)
+            , tmp_map(alloc) {
+        }
+
+        /// Constructor for `eval' evaluation.
+        Evaluation(IAllocator *alloc, DAG_node const *n, bool is_normal, bool exp)
+            : m_alloc(alloc)
+            , kind(Kind::EK_EVAL)
+            , node(n)
+            , texture_result_index(~0)
+            , texture_result_offset(~0)
+            , is_geom_normal(is_normal)
+            , to_invalidate(alloc)
+            , expensive(exp)
+            , from_schedule(false)
+            , state_dep(false)
+            , live_in(alloc)
+            , live_out(alloc)
+            , values(alloc)
+            , tmp_map(alloc) {
+        }
+
+        /// Allocator to use internally.
+        IAllocator *m_alloc;
+
+        /// Evaluation kind.
+        Kind kind;
+
+        /// DAG node to evaluate.
+        DAG_node const *node;
+
+        /// Texture result index to write to, if `write_to_texture_result` is true.
+        size_t texture_result_index;
+
+        /// Texture result offset to write to, if `write_to_texture_result` is true.
+        size_t texture_result_offset;
+
+        /// True if the evaluation determines the geometry normal.
+        bool is_geom_normal;
+
+        /// List of nodes to invalidate. Only used for set-normal evaluations.
+        Node_ptr_vector to_invalidate;
+
+        /// True if this evaluation is a call to an expensive function, false otherwise.
+        bool expensive;
+        /// True if this evaluation is coming from an entry in the expression schedule,
+        /// false if it was scheduled by the loop scheduler.
+        bool from_schedule;
+        /// True if this evaluation depends on the evaluation state, false otherwise.
+        bool state_dep;
+        /// Set of DAG nodes that are live before the evaluation.
+        Node_set live_in;
+        /// Set of DAG nodes that are live after the evaluation.
+        Node_set live_out;
+        /// Set of DAG nodes that have to be saved (for a save evaluation) or reloaded
+        /// (for a reload evaluation).
+        Node_set values;
+        /// Description of a value location to be saved across split points.
+        struct Tmp_location {
+            /// True if this location is texture result slot. Field `tex_result_offset`
+            /// specifies which slot.
+            bool tex_result;
+            /// Index of the local variable, if `tex_result` is false.
+            size_t index;
+            /// Node to be stored/reloaded.
+            DAG_node const *node;
+            /// Texture result slot offset, if `tex_result` is true.
+            size_t tex_result_offset;
+        };
+        /// Vector of the above.
+        typedef vector<Tmp_location >::Type Tmp_map;
+
+        /// Description of stored values, used by save and reload evaluations.
+        Tmp_map tmp_map;
+    };
+
+    /// Vector of the above.
+    typedef vector<Evaluation>::Type Evaluation_vector;
+
+    struct exp_func_equal_to {
+        bool operator()(std::pair<char const *, char const *> const &x, std::pair<char const *, char const *> const &y) const {
+            return strcmp(x.first, y.first) == 0 && strcmp(x.second, y.second) == 0;
+        }
+    };
+
+    /// A functor for hashing C-strings.
+    struct exp_func_hash {
+        size_t operator()(std::pair<char const *, char const *> const &p) const {
+            char const *s = p.first;
+            size_t h = 0;
+            for (; *s != '\0'; ++s)
+                h = 5 * h + *s;
+            h = 5 * h + '_';
+            s = p.second;
+            for (; *s != '\0'; ++s)
+                h = 5 * h + *s;
+            return h;
+        }
+    };
+
+    /// Relates an expensive call site for the given DAG node to a slice of
+    /// the evaluations.
+    struct Expensive_call_site {
+        /// Call site index, is also used for the switch expressions.
+        size_t index;
+        /// First evaluation of the evaluation slice for this call site.
+        size_t first;
+        /// Last evaluation of the evaluation slice for this call site.
+        size_t last;
+        /// Call node for this call site.
+        DAG_call const *call;
+
+        /// Create a new call site description.
+        ///
+        /// \param index  the call site index (also used as the switch case
+        ///               value when the loop is materialized)
+        /// \param first  index of the first evaluation in the slice covered
+        ///               by this call site
+        /// \param last   index of the last evaluation in the slice (inclusive)
+        /// \param call   the call node this call site refers to
+        Expensive_call_site(
+            size_t index, size_t first, size_t last, DAG_call const *call)
+        : index(index), first(first), last(last), call(call)
+        {}
+    };
+
+    /// An expensive call sites collects all matching calls and their common
+    /// parameter properties.
+    struct Expensive_call {
+        Bitset equal_params;
+        Bitset material_param_params;
+        Bitset trivial_params;
+        vector<Expensive_call_site>::Type cases;
+
+        /// Create a new, empty expensive call entry whose per-argument
+        /// bitsets are sized for a call with \p nargs arguments and whose
+        /// containers all use the given allocator.
+        ///
+        /// All bitsets start out cleared; \c cases is empty and is expected
+        /// to be populated by the caller (typically via \c cases.push_back()).
+        ///
+        /// \param alloc  the allocator to be used
+        /// \param nargs  the number of arguments of the call this entry
+        ///               describes; determines the size of each of the
+        ///               per-argument bitsets
+        Expensive_call(IAllocator *alloc, size_t nargs)
+        : equal_params(alloc, nargs)
+        , material_param_params(alloc, nargs)
+        , trivial_params(alloc, nargs)
+        , cases(alloc)
+        {}
+    };
+
+    typedef hash_map<
+        std::pair<char const *, char const *>,
+        Expensive_call,
+        exp_func_hash,
+        exp_func_equal_to>::Type Expensive_call_site_map;
+
+    /// Create a new loop schedule object which uses the given allocator.
+    Loop_schedule(IAllocator *alloc)
+        : m_alloc(alloc)
+        , iterations(0)
+        , evaluations(m_alloc)
+        , call_site_map(m_alloc)
+        , local_types(m_alloc)
+    {}
+
+    /// Update evaluation entry texture result indices from schedule entries.
+    void update_texres_indices(mi::mdl::vector<Schedule_entry>::Type &entries);
+
+    /// Print the given node pointer set to the output stream (for debugging only).
+    void print_debug_node_set(std::ostream &outs, Node_set &s);
+
+    /// Print the given node pointer vector to the output stream (for debugging only).
+    void print_debug_node_ptr_vector(std::ostream &outs, Node_ptr_vector &s);
+
+    IAllocator *m_alloc;
+    size_t iterations;
+    Evaluation_vector evaluations;
+    Expensive_call_site_map call_site_map;
+    Node_allocation_vector local_types;
+
+    /// Configuration option. If true, a loop for mdl_init is generated.
+    bool schedule_loop{ true };
+    /// Configuration option. If true, expressions are scheduled like for loop
+    /// generetion, but the actual code is evaluated sequentially.
+    bool evaluate_sequentially{ false };
+    /// Total number of bytes used in the texture result space.
+    size_t total_texture_bytes{ 0 };
+};
+
 ///
 /// Implementation of the LLVM jit code generator.
 ///
@@ -1224,7 +1591,7 @@ class LLVM_code_generator
     friend class Function_context;
     friend class Df_component_info;
     friend class Derivative_infos;
-    friend class State_usage_analysis;
+    friend class State_usage_analysis<llvm::Function, LLVM_code_generator>;
     friend class Module_scope<Self>;
     friend class Call_ast_expr;
     friend class Call_dag_expr;
@@ -1323,18 +1690,33 @@ public:
 
     /// Description of exported functions used to generate function information.
     struct Exported_function {
+        /// The LLVM function object of the exported function.
         llvm::Function                                *func;
+        /// The distribution kind of the exported function.
         IGenerated_code_executable::Distribution_kind  distribution_kind;
+        /// The function kind of the exported function.
         IGenerated_code_executable::Function_kind      function_kind;
+        /// The index of the argument block to use for the exported function.
         size_t                                         arg_block_index;
 
-        // The name may later be updated by the actual target code generator.
-        // HLSLWriterPass:runOnModule() currently does this.
+        /// The name of the exported function.
+        /// \note The name may later be updated by the actual target code generator.
+        /// HLSLWriterPass:runOnModule() currently does this.
         string                                         name;
+        /// The prototypes of the exported function indexed by target language.
         vector<string>::Type                           prototypes;
+        /// The distribution function handles used by the exported function.
         vector<string>::Type                           df_handles;
+        /// The state usage of the exported function.
         State_usage                                    state_usage;
 
+        /// Constructor.
+        ///
+        /// \param alloc              the allocator
+        /// \param func               the LLVM function object of the exported function
+        /// \param distribution_kind  the distribution kind of the exported function
+        /// \param function_kind      the function kind of the exported function
+        /// \param arg_block_index    the index of the argument block to use for the exported function
         Exported_function(
             IAllocator                                    *alloc,
             llvm::Function                                *func,
@@ -1352,9 +1734,13 @@ public:
         {
         }
 
+        /// Set the function prototype for the given target language.
+        ///
+        /// \param lang       the target language of the prototype
+        /// \param prototype  the prototype
         void set_function_prototype(
             IGenerated_code_executable::Prototype_language lang,
-            char const *prototype)
+            char const                                     *prototype)
         {
             if (prototypes.size() <= size_t(lang)) {
                 prototypes.resize(size_t(lang) + 1, string(prototypes.get_allocator()));
@@ -1362,6 +1748,9 @@ public:
             prototypes[size_t(lang)] = prototype;
         }
 
+        /// Add a distribution function handle.
+        ///
+        /// \param handle_name  the name of the distribution function handle
         void add_df_handle(char const *handle_name)
         {
             df_handles.push_back(string(handle_name, df_handles.get_allocator()));
@@ -1369,6 +1758,25 @@ public:
     };
 
     typedef vector<Exported_function>::Type Exported_function_list;
+
+    /// Struct describing a texture result slot.
+    struct Texture_result_slot
+    {
+        /// Index of field in texture results struct.
+        int      index;
+
+        /// Byte offset of field in texture results struct.
+        unsigned offset;
+
+        /// Constructor.
+        Texture_result_slot(int index = -1, unsigned offset = ~0)
+        : index(index)
+        , offset(offset)
+        {}
+    };
+
+    typedef mi::mdl::ptr_hash_map<mi::mdl::DAG_node const, Texture_result_slot>::Type
+        Texture_result_map;
 
 public:
     /// Constructor.
@@ -1416,6 +1824,12 @@ public:
 
     /// Returns true if strings are mapped to IDs.
     bool strings_mapped_to_ids() const { return m_type_mapper.strings_mapped_to_ids(); }
+
+    /// Returns true if init loop generation is enabled.
+    bool init_loop_enabled() const { return m_enable_init_loop_generation; }
+
+    /// Returns true if spectral support is enabled.
+    bool is_spectral_enabled() const { return m_enable_libbsdf_spectral; }
 
     /// Enable name mangling.
     void enable_name_mangling() { m_mangle_name = true; }
@@ -1467,8 +1881,8 @@ public:
     /// \param llvm_funcs             the generated LLVM functions
     /// \param next_arg_block_index   the next argument block index to use, if an argument block
     ///                               is used by the function
-    /// \param main_function_indices  array which will receive the index of the first exported
-    ///                               function per main function or NULL if not requested.
+    /// \param req_func_indices       array which will receive the index of the first exported
+    ///                               function per explicitly requested node
     ///
     /// \returns The LLVM module containing the generated functions for this material
     ///          or NULL on compilation errors.
@@ -1478,7 +1892,7 @@ public:
         ICall_name_resolver const   *resolver,
         Function_vector             &llvm_funcs,
         size_t                      next_arg_block_index,
-        size_t                      *main_function_indices);
+        size_t                      *req_func_indices);
 
     /// Compile an constant lambda function into an LLVM Module and return the LLVM function.
     ///
@@ -1491,7 +1905,7 @@ public:
     /// \param object_id          the result of state::object_id() for this function
     ///
     /// \return the compiled function or NULL on compilation errors
-    llvm::Function  *compile_const_lambda(
+    llvm::Function *compile_const_lambda(
         Lambda_function const      &lambda,
         ICall_name_resolver const  *resolver,
         ILambda_resource_attribute *attr,
@@ -1546,6 +1960,9 @@ public:
 
     /// Retrieve a reference to the LLVM context that will own the LLVM module.
     llvm::LLVMContext &get_llvm_context() { return m_llvm_context; }
+
+    /// Get the target language.
+    ICode_generator::Target_language get_target_language() const { return m_target_lang; }
 
     /// Retrieve the resource manager if any.
     IResource_manager *get_resource_manager() const { return m_res_manager; }
@@ -1892,6 +2309,37 @@ public:
         }
     }
 
+    /// Determine if function call arguments are overridden.
+    ///
+    /// \returns  true if function call arguments for the next call to be translated
+    ///           are already available, false otherwise
+    /// 
+    bool has_argument_overrides() const;
+
+    /// Determine number of overridden function call arguments.
+    ///
+    /// \returns  number of arguments that are overridden
+    size_t argument_override_count() const;
+
+    /// Return the pre-computed argument value for a parameter index.
+    ///
+    /// \param index  index of the argument to return the parameter override for
+    /// 
+    /// \returns      the expression result for the argument for the given index
+    Expression_result *argument_override(size_t index) const;
+
+    /// Set the argument override for the next call to be translated.
+    /// 
+    /// This is required to correctly translate calls to expensive function when
+    /// the mdl_init function is compiled to a loop to avoid excessive inlining. In
+    /// that case, arguments to expensive function calls are prepared before the
+    /// call itself is being translated, so we need a way to override the argument
+    /// values inside of a call to translate_node(). By setting arguments with this
+    /// functions, the overridden values are picked up inside of translate_argument().
+    ///
+    /// \param arguments  the arguments to use for the next call expression
+    void set_argument_overrides(Expression_result *arguments, size_t argument_count);
+
     /// Get the intrinsic LLVM function for a MDL function for HLSL code.
     ///
     /// \param def            the definition of the MDL function
@@ -2020,6 +2468,17 @@ public:
         m_world_to_object = world_to_object;
         m_object_to_world = object_to_world;
     }
+
+    /// Returns true, if a texture result is stored for this node.
+    ///
+    /// \param node  the DAG node
+    bool has_texture_result(DAG_node const *node) const;
+
+    /// Returns the texture result for the given node in the evaluation state of the current
+    /// requested node, or nullptr if there is none.
+    ///
+    /// \param node  the DAG node
+    Texture_result_slot const *get_texture_result_slot(DAG_node const *node) const;
 
     /// Get the texture results pointer from the state.
     llvm::Value *get_texture_results();
@@ -2217,7 +2676,7 @@ private:
         IDefinition const       *def);
 
 
-    /// Declares an LLVM function from a MDL function instance.
+    /// Declare an LLVM function from a MDL function instance.
     ///
     /// \param owner         the MDL owner module of the function
     /// \param inst          the function instance
@@ -2229,7 +2688,7 @@ private:
         char const              *name_prefix,
         bool                    is_prototype);
 
-    /// Declares an LLVM function from a internal function instance.
+    /// Declare an LLVM function from a internal function instance.
     ///
     /// \param inst          the function instance
     /// \param is_prototype  true if this should just declare a prototype
@@ -2237,11 +2696,19 @@ private:
         Function_instance const &inst,
         bool                     is_prototype);
 
-    /// Declares an LLVM function from a lambda function.
+    /// Declare an LLVM function from a lambda function.
     ///
     /// \param lambda       the lambda function
     LLVM_context_data *declare_lambda(
         mi::mdl::Lambda_function const *lambda);
+
+    /// Declare an LLVM function from a requested node of a distribution function.
+    ///
+    /// \param dist_func     the distribution function
+    /// \param req_node_idx  the index of the requested node
+    LLVM_context_data *declare_requested_node(
+        mi::mdl::Distribution_function const *dist_func,
+        size_t                                req_node_idx);
 
     /// Returns true if the given variable needs storage to be allocated.
     ///
@@ -2658,30 +3125,6 @@ private:
         DAG_call const *dag_call,
         char const      *prefix);
 
-    /// Generate a call to an expression lambda function.
-    ///
-    /// \param expr_lambda         the precalculated lambda function
-    /// \param opt_results_buffer  an optional results buffer. The result will be converted
-    ///                            before writing it there, if necessary
-    /// \param opt_result_index    the index of the result in the results buffer
-    /// \returns the result pointer
-    Expression_result generate_expr_lambda_call(
-        ILambda_function const *expr_lambda,
-        llvm::Value            *opt_results_ptr = NULL,
-        size_t                 opt_result_index = ~0);
-
-    /// Generate a call to an expression lambda function.
-    ///
-    /// \param lambda_index        the index of the precalculated lambda function
-    /// \param opt_results_buffer  an optional results buffer. The result will be converted
-    ///                            before writing it there, if necessary
-    /// \param opt_result_index    the index of the result in the results buffer
-    /// \returns the result pointer
-    Expression_result generate_expr_lambda_call(
-        size_t           lambda_index,
-        llvm::Value      *opt_results_ptr = NULL,
-        size_t           opt_result_index = ~0);
-
     /// Store a value inside a float4 array at the given byte offset, updating the offset.
     ///
     /// \param val        the value to store
@@ -2728,20 +3171,6 @@ private:
         llvm::Value      *src,
         unsigned         src_offs);
 
-    /// Translate a precalculated lambda function to LLVM IR.
-    ///
-    /// \param lambda_index    the index of the precalculated lambda function
-    /// \param expected_type   the result will be converted to this type if necessary
-    Expression_result translate_precalculated_lambda(
-        size_t           lambda_index,
-        llvm::Type       *expected_type);
-
-public:
-    /// Get the lambda index from a lambda DAG call.
-    ///
-    /// \param call            the lambda DAG call
-    static size_t get_lambda_index_from_call(DAG_call const *call);
-
 private:
     /// Translate a DAG call argument which may be a precalculated lambda function to LLVM IR.
     ///
@@ -2749,6 +3178,15 @@ private:
     /// \param expected_type   the result will be converted to this type if necessary
     Expression_result translate_call_arg(
         DAG_node const   *arg,
+        llvm::Type       *expected_type);
+
+    /// Translate a DAG node which may be a precalculated lambda function to LLVM IR
+    /// at the current insert point.
+    ///
+    /// \param node            the DAG node to translate
+    /// \param expected_type   the result will be converted to this type if necessary
+    Expression_result translate_node_at_insert_point(
+        DAG_node const   *node,
         llvm::Type       *expected_type);
 
     /// Get the BSDF parameter ID metadata for an instruction.
@@ -2791,14 +3229,24 @@ private:
         llvm::Value *index,
         llvm::SmallVector<llvm::Instruction *, 16> &delete_list);
 
+    /// Get the array index accessor function for the spectral sample array.
+    ///
+    /// \param arg  the DAG node of the curve_values BSDF argument
+    ///
+    /// \returns the array index accessor function for this DAG node
+    llvm::Function *get_measured_curve_array_index_accessor(
+        DAG_node const *arg);
+
     /// Handle BSDF array parameter during BSDF instantiation.
     ///
     /// \param ctx          the function context
+    /// \param sema         the semantic of the called function
     /// \param inst         the alloca instruction representing the array parameter
     /// \param arg          the DAG node of the BSDF array parameter
     /// \param delete_list  list of instructions to be deleted when function is fully processed
     void handle_df_array_parameter(
         Function_context                           &ctx,
+        IDefinition::Semantics                     sema,
         llvm::AllocaInst                           *inst,
         DAG_node const                             *arg,
         llvm::SmallVector<llvm::Instruction *, 16> &delete_list);
@@ -2905,21 +3353,27 @@ private:
     /// Translate the distribution function DAG node to LLVM IR.
     ///
     /// \param df_node              the distribution function DAG node to translate
-    /// \param lambda_result_exprs  the list of expression lambda indices for the lambda results
     /// \param mat_data_global      if non-null, the global variable containing the material data
     ///                             for the interpreter for the current distribution function
     void translate_distribution_function(
-        DAG_node const                       *df_node,
-        llvm::SmallVector<unsigned, 8> const &lambda_result_exprs,
-        llvm::GlobalVariable                 *mat_data_global);
+        DAG_node const       *df_node,
+        llvm::GlobalVariable *mat_data_global);
 
     /// Translate the init function of the current distribution function to LLVM IR.
     ///
-    /// \param texture_result_exprs  the list of expression lambda indices for the texture results
-    /// \param lambda_result_exprs   the list of expression lambda indices for the lambda results
+    /// \param schedule           the list of expressions scheduled for the init function
+    /// \param loop_schedule      loop schedule forr loop-based mdl_init compilation
+    /// \param use_loop_schedule  if true, use the loop schedule, otherwise use the schedule
     void translate_distribution_function_init(
-        llvm::SmallVector<unsigned, 8> const &texture_result_exprs,
-        llvm::SmallVector<unsigned, 8> const &lambda_result_exprs);
+        mi::mdl::vector<Schedule_entry>::Type const &schedule,
+        Loop_schedule                         const &loop_schedule);
+    void translate_distribution_function_init_loop(
+        Loop_schedule                         const &loop_schedule);
+
+    //void debug_print_distribution_function_init(
+    //    Function_context &ctx,
+    //    mi::mdl::vector<Schedule_entry>::Type const &schedule,
+    //    Loop_schedule                         const &loop_schedule);
 
     /// Translate a DAG intrinsic call expression to LLVM IR.
     ///
@@ -2931,12 +3385,6 @@ private:
     ///
     /// \param call_expr  the call expression to translate
     Expression_result translate_jit_intrinsic(
-        ICall_expr const *call_expr);
-
-    /// Translate a DAG expression lambda call to LLVM IR.
-    ///
-    /// \param call_expr  the call expression to translate
-    Expression_result translate_dag_call_lambda(
         ICall_expr const *call_expr);
 
     /// Get the argument type instances for a given call.
@@ -3800,6 +4248,9 @@ private:
     /// otherwise use a function returning normals unmodified.
     bool m_use_renderer_adapt_normal;
 
+    /// If true, spectral rendering in libbsdf is enabled.
+    bool m_enable_libbsdf_spectral;
+
     /// If true, we generating code for an intrinsic function.
     bool m_in_intrinsic_generator;
 
@@ -3809,6 +4260,9 @@ private:
 
     /// The return mode for lambda functions.
     Return_mode m_lambda_return_mode;
+
+    /// If true, the init-loop optimization is enabled.
+    bool m_enable_init_loop_generation;
 
     /// The function remapper.
     Function_remap m_func_remap;
@@ -3930,6 +4384,18 @@ private:
     /// Map to translate DAG expressions to LLVM IR.
     Node_value_map m_node_value_map;
 
+    typedef mi::mdl::ptr_hash_map<DAG_node const, Expression_result>::Type Manual_node_value_map;
+
+    /// Map from translated DAG expression to LLVM IR, which does not depend on basic blocks
+    /// and must be handled manually, knowing that the values dominate all users.
+    Manual_node_value_map m_manual_node_value_map;
+
+    typedef mi::mdl::ptr_hash_map<DAG_node const, llvm::Function *>::Type
+        Measured_curve_array_index_accessor_map;
+
+    /// Map from DAG nodes to the array index accessor function for the measured curve BSDFs.
+    Measured_curve_array_index_accessor_map m_measured_curve_array_index_accessor_map;
+
     /// Number of the last created basic block chain.
     size_t m_last_bb;
 
@@ -3998,7 +4464,7 @@ private:
     unsigned m_num_texture_results;
 
     /// Analysis object storing state usage information per function and updating
-    State_usage_analysis m_state_usage_analysis;
+    LLVM_state_usage_analysis m_state_usage_analysis;
 
     /// Mark some generated functions as noinline.
     bool m_enable_noinline;
@@ -4073,8 +4539,11 @@ private:
     /// Current state of generating a distribution function.
     Distribution_function_state m_dist_func_state;
 
-    /// Current main function index.
-    size_t m_cur_main_func_index;
+    /// Current name resolver while executing compile_distribution_function.
+    ICall_name_resolver const *m_cur_resolver;
+
+    /// Current requested node.
+    Distribution_function::Requested_node const *m_cur_req_node;
 
     /// Helper struct used as key for cached instantiated df functions.
     struct Instantiated_df {
@@ -4150,6 +4619,9 @@ private:
 
     /// A structure type for storing the results of all lambda functions.
     llvm::StructType *m_texture_results_struct_type;
+
+    /// Map from DAG nodes to texture result slots per evaluation state.
+    Texture_result_map m_texture_result_map[Distribution_function::ES_LAST + 1];
 
     /// Array which maps expression lambda indices to texture result indices.
     /// For expression lambdas without a texture result entry the array contains -1.
@@ -4268,6 +4740,26 @@ private:
     /// The internal state::adapt_normal(float3) function, only available for libbsdf.
     Internal_function* m_int_func_state_adapt_normal;
 
+    /// The internal state::rgb_to_spectral_ior(float3,spectral_sample) function,
+    /// only available for libbsdf.
+    Internal_function* m_int_func_state_rgb_to_spectral_ior;
+
+    /// The internal state::rgb_to_spectral_reflectance(float3,spectral_sample) function,
+    /// only available for libbsdf.
+    Internal_function* m_int_func_state_rgb_to_spectral_reflectance;
+
+    /// The internal state::rgb_to_spectral_luminance(float3,spectral_sample) function,
+    /// only available for libbsdf.
+    Internal_function* m_int_func_state_rgb_to_spectral_luminance;
+
+    /// The internal state::rgb_to_spectral_volume_coefficient(float3,spectral_sample) function,
+    /// only available for libbsdf.
+    Internal_function* m_int_func_state_rgb_to_spectral_volume_coefficient;
+
+    /// The internal state::get_wavelengths() function,
+    /// only available for libbsdf.
+    Internal_function* m_int_func_state_get_wavelengths;
+
     /// The internal df::bsdf_measurement_resolution(int,int) function, only available for libbsdf.
     Internal_function *m_int_func_df_bsdf_measurement_resolution;
 
@@ -4301,6 +4793,17 @@ private:
 
     /// The next ID used to create unique function names for cloned LLVM functions.
     unsigned m_next_func_name_id;
+
+    /// Overridden arguments. When set, translate_argument() will take argument
+    /// values from this array rather than translating the argument in a call.
+    Expression_result *m_overridden_arguments;
+
+    /// Number of entries in the array above. 0 if no arguments are set.
+    size_t m_overridden_argument_count;
+
+    /// HACK: This variable is used to avoid loop-invariant-code-motion (LICM) moving
+    /// offset + constant values out of the mdl_init loop and cause a high stack frame size.
+    llvm::Value *m_sl_value_hack_loop_var;
 };
 
 /// copysignf implementation for windows runtime.

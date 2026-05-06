@@ -63,7 +63,7 @@ public:
         IMaterial_instance const *instance,
         ICall_name_resolver      *call_resolver);
 
-    virtual ~Distiller_plugin_api_impl() {}
+    virtual ~Distiller_plugin_api_impl();
 
     virtual void debug_node(IOutput_stream *outs, DAG_node const *node);
 
@@ -123,7 +123,8 @@ public:
     ///
     /// \returns            The created constant.
     DAG_constant const *create_constant(
-        IValue const *value)  MDL_FINAL;
+        IValue const *value,
+        DAG_DbgInfo  dbg_info)  MDL_FINAL;
 
     /// Create a temporary reference.
     ///
@@ -332,6 +333,11 @@ public:
     /// \param i  the index of the enum value
     DAG_constant const *create_scatter_enum_constant(int i)  MDL_FINAL;
 
+    /// Creates a constant of the df::backscatter_modifier enum.
+    ///
+    /// \param i  the index of the enum value
+    DAG_constant const *create_backscatter_enum_constant(int i)  MDL_FINAL;
+
     /// Creates a constant of the tex::wrap_mode enum.
     ///
     /// \param i  the index of the enum value
@@ -426,15 +432,15 @@ public:
     /// to true or cannot be evaluated.
     bool eval_maybe_if( DAG_node const* node)  MDL_FINAL;
 
-    // Compute all properties of a node that are required for matching against a rule pattern.
+    /// Compute all properties of a node that are required for matching against a rule pattern.
     void get_match_properties(
         DAG_node const *node,
         Match_properties &mprops) const MDL_FINAL;
 
-     /// Compute the node selector for the matcher, either the semantic for a DAG_call
-    /// node, or one of the Distiller_extended_node_semantics covering DAG_constant 
-    /// of type bsdf, edf or vdf respectively, or for DAG_constant's and DAG_call's of 
-    /// one of the material structs, and selectors for mix_1, mix_2, mix_3, 
+    /// Compute the node selector for the matcher, either the semantic for a DAG_call
+    /// node, or one of the Distiller_extended_node_semantics covering DAG_constant
+    /// of type bsdf, edf or vdf respectively, or for DAG_constant's and DAG_call's of
+    /// one of the material structs, and selectors for mix_1, mix_2, mix_3,
     /// clamped_mix_1, ..., as well as a special selector for local_normal.
     /// All other nodes return 0.
     int get_selector( DAG_node const* node) const  MDL_FINAL;
@@ -505,7 +511,9 @@ private:
     DAG_node const *replace(
         DAG_node const *root,
         string const   &path,
-        Visited_node_map &marker_map);
+        Visited_node_map &marker_map,
+        unsigned replacement_index,
+        std::atomic_uint32_t *replace_counter);
 
     /// Checks recursively for all call nodes if the property test_fct returns true.
     bool all_nodes_rec(
@@ -550,11 +558,9 @@ private:
 
     void import_attributes(IMaterial_instance const *inst);
 
-    void pprint_attributes(IMaterial_instance const *inst,
-                           DAG_node const *node,
+    void pprint_attributes(DAG_node const *node,
                            int level, std::ostream &outs);
-    void pprint_node(IMaterial_instance const *inst,
-                     DAG_node const *node,
+    void pprint_node(DAG_node const *node,
                      int level, std::ostream &outs);
     void pprint_material(IMaterial_instance const *inst, std::ostream &outs);
 
@@ -610,10 +616,13 @@ private:
     /// Map for holding attribute sets of a single node.
     typedef mi::mdl::map<char const *, DAG_node const *, strcmp_string_less>::Type Node_attr_map;
 
+public:
     /// Map for holding attribute sets of DAG nodes.
     typedef mi::mdl::ptr_map<DAG_node const, Node_attr_map>::Type Attr_map;
-
+private:
     Attr_map m_attribute_map;
+    typedef mi::mdl::ptr_hash_set<DAG_node const>::Type Node_set;
+    Node_set m_changed_attributes;
 };
 
 IDistiller_plugin_api *create_distiller_plugin_api(

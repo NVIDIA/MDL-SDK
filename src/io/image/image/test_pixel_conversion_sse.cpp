@@ -143,6 +143,8 @@ MI_TEST_AUTO_FUNCTION( test_pixel_conversion )
     test_conversion<PT_COLOR, PT_RGBA>();
 
     MI_CHECK_EQUAL( g_failures, 0);
+    
+    g_image_module.reset();
 }
 
 MI_TEST_MAIN_CALLING_TEST_MAIN();

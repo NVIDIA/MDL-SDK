@@ -32,6 +32,7 @@ set(PROJECT_NAME base-data-idata)
 # collect sources
 set(PROJECT_HEADERS
     "i_idata_factory.h"
+    "i_idata_string_cache.h"
     "idata_array_impl.h"
     "idata_compound_impl.h"
     "idata_interfaces.h"

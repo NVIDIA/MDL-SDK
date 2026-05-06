@@ -25,7 +25,7 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  ******************************************************************************/
-mdl 1.10;
+mdl 1.11;
 
 using ::anno import hard_range, soft_range;
 using ::state import texture_tangent_u, normal, transform_vector, coordinate_space;
@@ -35,6 +35,13 @@ export enum scatter_mode {
     scatter_reflect,
     scatter_transmit,
     scatter_reflect_transmit
+};
+
+export enum backscatter_modifier [[ since(1,11) ]] {
+    backscatter_none,            // No backscatter
+    backscatter_reflect,         // Reflective backscatter
+    backscatter_transmit,        // Transmissive backscatter
+    backscatter_reflect_transmit // Both reflective and transmissive backscatter
 };
 
 export declarative bsdf diffuse_reflection_bsdf(
@@ -65,7 +72,14 @@ export declarative bsdf specular_bsdf(
     color                tint = color(1.0),
     uniform scatter_mode mode = scatter_reflect,
     uniform string       handle = ""
-) [[ intrinsic() ]];
+) [[ intrinsic(), removed(1,11) ]];
+
+export declarative bsdf specular_bsdf(
+    color                        tint        = color(1.0),
+    uniform scatter_mode         mode        = scatter_reflect,
+    uniform backscatter_modifier backscatter = backscatter_none,
+    uniform string               handle      = ""
+) [[ intrinsic(), since(1,11) ]];
 
 export declarative bsdf simple_glossy_bsdf(
     float                roughness_u               [[ hard_range(0.0, +1.0/0.0) ]],
@@ -84,7 +98,18 @@ export declarative bsdf simple_glossy_bsdf(
     float3               tangent_u         = state::texture_tangent_u(0),
     uniform scatter_mode mode              = scatter_reflect,
     uniform string       handle            = ""
-) [[ intrinsic(),since(1,6) ]];
+) [[ intrinsic(), since(1,6), removed(1,11) ]];
+
+export declarative bsdf simple_glossy_bsdf(
+    float                        roughness_u                     [[ hard_range(0.0, +1.0/0.0) ]],
+    float                        roughness_v       = roughness_u [[ hard_range(0.0, +1.0/0.0) ]],
+    color                        tint              = color(1.0),
+    color                        multiscatter_tint = color(0.0),
+    float3                       tangent_u         = state::texture_tangent_u(0),
+    uniform scatter_mode         mode              = scatter_reflect,
+    uniform backscatter_modifier backscatter       = backscatter_none,
+    uniform string       handle                    = ""
+) [[ intrinsic(), since(1,11) ]];
 
 export declarative bsdf backscattering_glossy_reflection_bsdf(
     float                roughness_u               [[ hard_range(0.0, +1.0/0.0) ]],
@@ -127,7 +152,18 @@ export declarative bsdf microfacet_beckmann_smith_bsdf(
     float3               tangent_u         = state::texture_tangent_u(0),
     uniform scatter_mode mode              = scatter_reflect,
     uniform string       handle            = ""
-) [[ intrinsic(), since(1,6) ]];
+) [[ intrinsic(), since(1,6), removed(1,11) ]];
+
+export declarative bsdf microfacet_beckmann_smith_bsdf(
+    float                        roughness_u                     [[ hard_range(0.0, +1.0/0.0) ]],
+    float                        roughness_v       = roughness_u [[ hard_range(0.0, +1.0/0.0) ]],
+    color                        tint              = color(1.0),
+    color                        multiscatter_tint = color(0.0),
+    float3                       tangent_u         = state::texture_tangent_u(0),
+    uniform scatter_mode         mode              = scatter_reflect,
+    uniform backscatter_modifier backscatter       = backscatter_none,
+    uniform string       handle                    = ""
+) [[ intrinsic(), since(1,11) ]];
 
 // anisotropic GGX distribution
 export declarative bsdf microfacet_ggx_smith_bsdf(
@@ -147,7 +183,18 @@ export declarative bsdf microfacet_ggx_smith_bsdf(
     float3               tangent_u         = state::texture_tangent_u(0),
     uniform scatter_mode mode              = scatter_reflect,
     uniform string handle                  = ""
-) [[ intrinsic(), since(1,6) ]];
+) [[ intrinsic(), since(1,6), removed(1,11) ]];
+
+export declarative bsdf microfacet_ggx_smith_bsdf(
+    float                        roughness_u                     [[ hard_range(0.0, +1.0/0.0) ]],
+    float                        roughness_v       = roughness_u [[ hard_range(0.0, +1.0/0.0) ]],
+    color                        tint              = color(1.0),
+    color                        multiscatter_tint = color(0.0),
+    float3                       tangent_u         = state::texture_tangent_u(0),
+    uniform scatter_mode         mode              = scatter_reflect,
+    uniform backscatter_modifier backscatter       = backscatter_none,
+    uniform string handle                          = ""
+) [[ intrinsic(), since(1,11) ]];
 
 export declarative bsdf microfacet_beckmann_vcavities_bsdf(
     float                roughness_u               [[ hard_range(0.0, +1.0/0.0) ]],
@@ -166,7 +213,18 @@ export declarative bsdf microfacet_beckmann_vcavities_bsdf(
     float3               tangent_u         = state::texture_tangent_u(0),
     uniform scatter_mode mode              = scatter_reflect,
     uniform string       handle            = ""
-) [[ intrinsic(), since(1,6) ]];
+) [[ intrinsic(), since(1,6), removed(1,11) ]];
+
+export declarative bsdf microfacet_beckmann_vcavities_bsdf(
+    float                        roughness_u                     [[ hard_range(0.0, +1.0/0.0) ]],
+    float                        roughness_v       = roughness_u [[ hard_range(0.0, +1.0/0.0) ]],
+    color                        tint              = color(1.0),
+    color                        multiscatter_tint = color(0.0),
+    float3                       tangent_u         = state::texture_tangent_u(0),
+    uniform scatter_mode         mode              = scatter_reflect,
+    uniform backscatter_modifier backscatter       = backscatter_none,
+    uniform string               handle            = ""
+) [[ intrinsic(), since(1,11) ]];
 
 export declarative bsdf microfacet_ggx_vcavities_bsdf(
     float                roughness_u               [[ hard_range(0.0, +1.0/0.0) ]],
@@ -185,7 +243,18 @@ export declarative bsdf microfacet_ggx_vcavities_bsdf(
     float3               tangent_u         = state::texture_tangent_u(0),
     uniform scatter_mode mode              = scatter_reflect,
     uniform string       handle            = ""
-) [[ intrinsic(), since(1,6) ]];
+) [[ intrinsic(), since(1,6), removed(1,11) ]];
+
+export declarative bsdf microfacet_ggx_vcavities_bsdf(
+    float                        roughness_u                     [[ hard_range(0.0, +1.0/0.0) ]],
+    float                        roughness_v       = roughness_u [[ hard_range(0.0, +1.0/0.0) ]],
+    color                        tint              = color(1.0),
+    color                        multiscatter_tint = color(0.0),
+    float3                       tangent_u         = state::texture_tangent_u(0),
+    uniform scatter_mode         mode              = scatter_reflect,
+    uniform backscatter_modifier backscatter       = backscatter_none,
+    uniform string               handle            = ""
+) [[ intrinsic(), since(1,11) ]];
 
 export declarative bsdf ward_geisler_moroder_bsdf(
     float                roughness_u               [[ hard_range(0.0, +1.0/0.0) ]],
@@ -338,7 +407,16 @@ export declarative bsdf directional_factor(
     color  f82_factor    = color(1.0),
     float  exponent      = 5.0,
     bsdf   base          = bsdf()
-) [[ intrinsic(), since(1,10) ]];
+) [[ intrinsic(), since(1,10), removed(1,11) ]];
+
+export declarative bsdf directional_factor(
+    color                        normal_tint  = color(1.0),
+    color                        grazing_tint = color(1.0),
+    color                        f82_factor   = color(1.0),
+    float                        exponent     = 5.0,
+    bsdf                         base         = bsdf(),
+    uniform backscatter_modifier backscatter  = backscatter_none
+) [[ intrinsic(), since(1,11) ]];
 
 export declarative edf directional_factor(
     color  normal_tint  = color(1.0),
@@ -395,7 +473,18 @@ export declarative bsdf custom_curve_layer(
     bsdf   layer  = bsdf(),
     bsdf   base   = bsdf(),
     float3 normal = state::normal()
-) [[ intrinsic() ]];
+) [[ intrinsic(), removed(1,11) ]];
+
+export declarative bsdf custom_curve_layer(
+    float                       normal_reflectivity,
+    float                       grazing_reflectivity = 1.0,
+    float                       exponent             = 5.0, // Schlick's approximation
+    float                       weight               = 1.0 [[ hard_range(0.0, 1.0) ]],
+    bsdf                        layer                = bsdf(),
+    bsdf                        base                 = bsdf(),
+    float3                      normal               = state::normal(),
+   uniform backscatter_modifier backscatter          = backscatter_none
+) [[ intrinsic(), since(1,11) ]];
 
 export declarative bsdf measured_curve_layer(
     color[<N>]          curve_values,
@@ -403,12 +492,27 @@ export declarative bsdf measured_curve_layer(
     bsdf                layer = bsdf(),
     bsdf                base = bsdf(),
     float3              normal = state::normal()
-) [[ intrinsic(), since(1,1) ]];
+) [[ intrinsic(), since(1,1), removed(1,11) ]];
+
+export declarative bsdf measured_curve_layer(
+    color[<N>]                  curve_values,
+    float                       weight      = 1.0,
+    bsdf                        layer       = bsdf(),
+    bsdf                        base        = bsdf(),
+    float3                      normal      = state::normal(),
+   uniform backscatter_modifier backscatter = backscatter_none
+) [[ intrinsic(), since(1,11) ]];
 
 export declarative bsdf measured_curve_factor(
     color[<N>]          curve_values,
     bsdf                base = bsdf()
-) [[ intrinsic(), since(1,1) ]];
+) [[ intrinsic(), since(1,1), removed(1,11) ]];
+
+export declarative bsdf measured_curve_factor(
+    color[<N>]                   curve_values,
+    bsdf                         base         = bsdf(),
+    uniform backscatter_modifier backscatter  = backscatter_none
+) [[ intrinsic(), since(1,11) ]];
 
 export float light_profile_power(
     uniform light_profile profile) uniform [[ intrinsic(), since(1,1) ]];
@@ -464,7 +568,16 @@ export declarative bsdf fresnel_layer(
     bsdf   layer  = bsdf(),
     bsdf   base   = bsdf(),
     float3 normal = state::normal()
-) [[ intrinsic(), since(1,4) ]];
+) [[ intrinsic(), since(1,4), removed(1,11) ]];
+
+export declarative bsdf fresnel_layer(
+    float                       ior,
+    float                       weight      = 1.0 [[ hard_range(0.0, 1.0) ]],
+    bsdf                        layer       = bsdf(),
+    bsdf                        base        = bsdf(),
+    float3                      normal      = state::normal(),
+   uniform backscatter_modifier backscatter = backscatter_none
+) [[ intrinsic(), since(1,11) ]];
 
 export declarative bsdf color_fresnel_layer(
     color  ior,
@@ -472,7 +585,16 @@ export declarative bsdf color_fresnel_layer(
     bsdf   layer  = bsdf(),
     bsdf   base   = bsdf(),
     float3 normal = state::normal()
-) [[ intrinsic(), since(1,4) ]];
+) [[ intrinsic(), since(1,4), removed(1,11) ]];
+
+export declarative bsdf color_fresnel_layer(
+    color                       ior,
+    color                       weight      = color(1.0) [[ hard_range(color(0.0), color(1.0)) ]],
+    bsdf                        layer       = bsdf(),
+    bsdf                        base        = bsdf(),
+    float3                      normal      = state::normal(),
+   uniform backscatter_modifier backscatter = backscatter_none
+) [[ intrinsic(), since(1,11) ]];
 
 export declarative bsdf color_custom_curve_layer(
     color  normal_reflectivity,
@@ -493,7 +615,20 @@ export declarative bsdf color_custom_curve_layer(
     bsdf   layer                = bsdf(),
     bsdf   base                 = bsdf(),
     float3 normal               = state::normal()
-) [[ intrinsic(), since(1,10) ]];
+) [[ intrinsic(), since(1,10), removed(1,11) ]];
+
+export declarative bsdf color_custom_curve_layer(
+    color                       normal_reflectivity,
+    color                       grazing_reflectivity = color(1.0),
+    color                       f82_factor           = color(1.0),
+    float                       exponent             = 5.0,
+    color                       weight               = color(1.0)
+                                                         [[ hard_range(color(0.0), color(1.0)) ]],
+    bsdf                        layer                = bsdf(),
+    bsdf                        base                 = bsdf(),
+    float3                      normal               = state::normal(),
+   uniform backscatter_modifier backscatter          = backscatter_none
+) [[ intrinsic(), since(1,11) ]];
 
 export declarative bsdf color_measured_curve_layer(
     color[<N>] curve_values,
@@ -501,18 +636,40 @@ export declarative bsdf color_measured_curve_layer(
     bsdf       layer  = bsdf(),
     bsdf       base   = bsdf(),
     float3     normal = state::normal()
-) [[ intrinsic(), since(1,4) ]];
+) [[ intrinsic(), since(1,4), removed(1,11) ]];
+
+export declarative bsdf color_measured_curve_layer(
+    color[<N>]                  curve_values,
+    color                       weight      = color(1.0) [[ hard_range(color(0.0), color(1.0)) ]],
+    bsdf                        layer       = bsdf(),
+    bsdf                        base        = bsdf(),
+    float3                      normal      = state::normal(),
+   uniform backscatter_modifier backscatter = backscatter_none
+) [[ intrinsic(), since(1,11) ]];
 
 export declarative bsdf fresnel_factor(
     color ior,                     // n(Eta), refractive index, per wavelength
     color extinction_coefficient,  // k, extinction coefficient, per wavelength
     bsdf  base = bsdf()
-) [[ intrinsic(), since(1,4) ]];
+) [[ intrinsic(), since(1,4), removed(1,11) ]];
+
+export declarative bsdf fresnel_factor(
+    color                        ior,                     // n(Eta), refractive index, per wavelength
+    color                        extinction_coefficient,  // k, extinction coefficient, per wavelength
+    bsdf                         base        = bsdf(),
+    uniform backscatter_modifier backscatter = backscatter_none
+) [[ intrinsic(), since(1,11) ]];
 
 export declarative bsdf measured_factor(
     uniform texture_2d values,
     bsdf  base = bsdf()
-) [[ intrinsic(), since(1,5) ]];
+) [[ intrinsic(), since(1,5), removed(1,11) ]];
+
+export declarative bsdf measured_factor(
+    uniform texture_2d          values,
+    bsdf                        base = bsdf(),
+   uniform backscatter_modifier backscatter = backscatter_none
+) [[ intrinsic(), since(1,11) ]];
 
 export declarative hair_bsdf chiang_hair_bsdf(
     float   diffuse_reflection_weight = 0.0,

@@ -90,7 +90,6 @@ Call_graph::Call_graph(
 , m_call_nodes(0, Definition_call_map::hasher(), Definition_call_map::key_equal(), alloc)
 , m_visit_count(0)
 , m_next_dfs_num(0)
-, m_visitor(NULL)
 , m_scc_visitor(NULL)
 , m_stack(Call_node_stack::container_type(alloc))
 , m_definition_set(Definition_set::key_compare(), alloc)
@@ -359,7 +358,7 @@ void Call_graph::distribute_reachability()
 {
     // Note: we do it this way because every node might be reached more than once ...
     typedef mi::mdl::queue<Call_node *>::Type Queue;
-    
+
     Queue queue(Queue::container_type(m_arena.get_allocator()));
 
     // push all reachable roots

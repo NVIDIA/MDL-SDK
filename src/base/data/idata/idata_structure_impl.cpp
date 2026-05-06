@@ -186,9 +186,11 @@ Structure_impl::~Structure_impl() = default;
 
 const char* Structure_impl::get_key( mi::Size index) const
 {
-    if( !index_to_key( index, m_cached_key))
+    std::string key;
+    if( !index_to_key( index, key))
         return nullptr;
-    return m_cached_key.c_str();
+
+    return m_string_cache.add( key);
 }
 
 bool Structure_impl::has_key( const char* key) const
@@ -369,9 +371,11 @@ Structure_impl_proxy::Structure_impl_proxy(
 
 const char* Structure_impl_proxy::get_key( mi::Size index) const
 {
-    if( !index_to_key( index, m_cached_key))
+    std::string key;
+    if( !index_to_key( index, key))
         return nullptr;
-    return m_cached_key.c_str();
+
+    return m_string_cache.add( key);
 }
 
 bool Structure_impl_proxy::has_key( const char* key) const
@@ -466,6 +470,12 @@ const mi::IStructure_decl* Structure_impl_proxy::get_structure_decl() const
 
 void Structure_impl_proxy::set_pointer_and_owner( void* pointer, const mi::base::IInterface* owner)
 {
+    MI_ASSERT( pointer);
+    MI_ASSERT( owner);
+
+    mi::base::Handle attribute_context( owner->get_interface<IAttribute_context>());
+    MI_ASSERT( attribute_context);
+
     m_owner = make_handle_dup( owner);
 }
 

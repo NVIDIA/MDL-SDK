@@ -40,7 +40,9 @@
 
 #undef DOUT
 
-#if 0
+#define ENABLE_DOUT 0
+
+#if ENABLE_DOUT
 #define DOUT(x)     printf x
 #else
 #define DOUT(x)
@@ -53,6 +55,7 @@ typedef Store<Definition *> Def_store;
 
 namespace {
 
+#if ENABLE_DOUT
 static char const * const expr_kind_name[] = {
     "EK_INVALID",
     "EK_LITERAL",
@@ -120,6 +123,7 @@ static char const * const expr_operator_name[] = {
     // variadic
     "OK_CALL"
 };
+#endif
 
 /// Helper class to compute the semantic function hash.
 class Function_hasher : public Module_visitor, public ICallgraph_visitor {
@@ -691,6 +695,8 @@ void Function_hasher::hash(IType const *tp)
     case IType::TK_EDF:
     case IType::TK_VDF:
     case IType::TK_COLOR:
+    case IType::TK_SPECTRAL_SAMPLE:
+    case IType::TK_SPECTRUM:
     case IType::TK_BSDF_MEASUREMENT:
     case IType::TK_VOID:
     case IType::TK_AUTO:
@@ -875,6 +881,8 @@ void Function_hasher::hash(IValue const *v)
     case IValue::VK_MATRIX:
     case IValue::VK_ARRAY:
     case IValue::VK_RGB_COLOR:
+    case IValue::VK_SPECTRUM:
+    case IValue::VK_SPECTRAL_SAMPLE:
     case IValue::VK_STRUCT:
         {
             IValue_compound const *c = cast<IValue_compound>(v);

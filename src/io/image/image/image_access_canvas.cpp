@@ -35,6 +35,7 @@
 #include <mi/neuraylib/itile.h>
 
 #include <algorithm>
+
 #include <base/lib/log/i_log_assert.h>
 
 namespace MI {

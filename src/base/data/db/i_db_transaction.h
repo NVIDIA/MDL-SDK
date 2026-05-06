@@ -63,9 +63,10 @@ class Scope;
 /// Transactions are associated with a scope of the database and can be created with
 /// #Scope::start_transaction().
 ///
-/// Transactions are not thread-safe. If you use a particular transaction from multiple threads,
-/// then you have to serialize all transaction uses. TODO This rule is frequently violated by
-/// fragmented jobs. It is unclear to what extend this is safely possible.
+/// Transactions themselves are thread-safe. However, using a transaction concurrently from
+/// multiple threads, in particular the return values of #access_element() and #edit_element(),
+/// heavily depends on the thread-safety of the involved database element or job itself. See also
+/// the note about ownership transfer of #store() and #store_for_reference_counting().
 ///
 /// See #mi::neuraylib::ITransaction for semantics of concurrent transactions, and for concurrent
 /// accesses to the very same database element within one particular transaction.
@@ -80,7 +81,7 @@ class Scope;
 /// required. Processing similar content in independent scopes often leads to m:1 relations. Also,
 /// when storing a DB element with a name that is eligible for GC one often allocates a new tag,
 /// leading to an m:1 relation. Even 1:n or m:n relations are legal from a DB point of view.
-/// However, the effects can be quite confusing for users, and its recommended to avoid them.
+/// However, the effects can be quite confusing for users, and it is recommended to avoid them.
 ///
 /// \section levels Store level and privacy level
 ///
@@ -106,6 +107,9 @@ class Scope;
 ///   than or equal to the requested privacy level (scope levels do not need to be consecutive).
 /// In other words, when editing a database element, it is automatically localized to its privacy
 /// level (and avoids one additional copy of the database element).
+///
+/// The rules for the store level also apply to database jobs, including their results. The privacy
+/// level is used as store level for jobs that need to be split (and their results).
 ///
 /// \note The API does not distinguish between store level and privacy level. It only exposes the
 ///       privacy level and uses the default store level (currently 255, which is internally
@@ -264,6 +268,12 @@ public:
     /// to specify an initial value for the journal flags, whereas the first variants use
     /// JOURNAL_NONE.
     ///
+    /// \ref ownership
+    /// Note that all #store() and #store_for_reference_counting() methods transfer ownership of
+    /// the database element or job to the database. During and after such a call the pointer must
+    /// not be used anymore in any way. In fact, there is no guarantee that the database element or
+    /// job is still alive at the given address, e.g., due to deserialization.
+    ///
     //@{
 
     /// Reserves and returns a free tag.
@@ -326,37 +336,6 @@ public:
         Journal_type journal_type = JOURNAL_ALL,
         Privacy_level store_level = 255) = 0;
 
-    /// Stores a DB element or Job in the database.
-    ///
-    /// This functions the same as the overloads but yields a typed tag.
-    template <typename T,
-              typename = std::enable_if_t<   std::is_convertible_v<T*,Element_base*>
-                                          || std::is_convertible_v<T*,SCHED::Job_base*>>>
-    Typed_tag<T> store(
-            T* element_or_job,
-            Privacy_level privacy_level = 0,
-            Privacy_level store_level = 255,
-            const char* name = nullptr)
-    {
-        return Typed_tag<T>{store(element_or_job, name, privacy_level, store_level)};
-    }
-
-    /// Stores a DB element or Job in the database.
-    ///
-    /// This functions the same as the overloads but yields a typed tag.
-    template <typename T,
-              typename = std::enable_if_t<   std::is_convertible_v<T*,Element_base*>
-                                          || std::is_convertible_v<T*,SCHED::Job_base*>>>
-    Typed_tag<T> store_for_reference_counting(
-            T* element_or_job,
-            Privacy_level privacy_level = 0,
-            Privacy_level store_level = 255,
-            const char* name = nullptr)
-    {
-        return Typed_tag<T>{store_for_reference_counting(
-                element_or_job, name, privacy_level, store_level)};
-    }
-
     //@}
     /// \name Storing database jobs
     //@{
@@ -368,7 +347,7 @@ public:
     /// \param job                      The DB job to store. RCS:TRO
     /// \param name                     Optional name for the DB job. The empty string is not
     ///                                 valid.
-    /// \param privacy_level            Privacy level of the DB job.
+    /// \param privacy_level            Privacy level of the DB job (unused).
     /// \param store_level              Store level of the DB job.
     /// \return                         The assigned tag.
     virtual Tag store(
@@ -379,6 +358,8 @@ public:
 
     /// Stores a DB job in the database (tag as parameter).
     ///
+    /// The journal flags are set to JOURNAL_NONE.
+    ///
     /// \param tag                      The tag to be used for the DB job. Retrieved from
     ///                                 #reserve_tag(), or from a previous store operation or
     ///                                 #name_to_tag() (to overwrite the current version of the DB
@@ -386,8 +367,7 @@ public:
     /// \param job                      The DB job to store. RCS:TRO
     /// \param name                     Optional name for the DB job. The empty string is not
     ///                                 valid.
-    /// \param privacy_level            Privacy level of the DB job.
-    /// \param journal_type             The journal flags of the DB element.
+    /// \param privacy_level            Privacy level of the DB job (unused).
     /// \param store_level              Store level of the DB job.
     /// \return                         The assigned tag.
     virtual void store(
@@ -395,7 +375,6 @@ public:
         SCHED::Job_base* job,
         const char* name = nullptr,
         Privacy_level privacy_level = 0,
-        Journal_type journal_type = JOURNAL_NONE,
         Privacy_level store_level = 255) = 0;
 
     /// Stores a DB job in the database (tag as return value).
@@ -415,8 +394,42 @@ public:
         SCHED::Job_base* job,
         const char* name = nullptr,
         Privacy_level privacy_level = 0,
-        Journal_type journal_type = JOURNAL_NONE,
         Privacy_level store_level = 255) = 0;
+
+    //@}
+    /// \name Storing database elements or jobs (wrapper for typed tags)
+    //@{
+
+    /// Stores a DB element or job in the database (typed tag as return value).
+    ///
+    /// This functions the same as the overloads but yields a typed tag.
+    template <typename T,
+              typename = std::enable_if_t<   std::is_convertible_v<T*,Element_base*>
+                                          || std::is_convertible_v<T*,SCHED::Job_base*>>>
+    Typed_tag<T> store(
+            T* element_or_job,
+            Privacy_level privacy_level = 0,
+            Privacy_level store_level = 255,
+            const char* name = nullptr)
+    {
+        return Typed_tag<T>{ store( element_or_job, name, privacy_level, store_level)};
+    }
+
+    /// Stores a DB element or job in the database (typed tag as return value).
+    ///
+    /// Same as #store(T*,...) above, but with an additional call to #remove().
+    template <typename T,
+              typename = std::enable_if_t<   std::is_convertible_v<T*,Element_base*>
+                                          || std::is_convertible_v<T*,SCHED::Job_base*>>>
+    Typed_tag<T> store_for_reference_counting(
+            T* element_or_job,
+            Privacy_level privacy_level = 0,
+            Privacy_level store_level = 255,
+            const char* name = nullptr)
+    {
+        return Typed_tag<T>{
+            store_for_reference_counting( element_or_job, name, privacy_level, store_level)};
+    }
 
     //@}
     /// \name Localization and removal
@@ -492,34 +505,34 @@ public:
         UNKNOWN_CONTEXT
     };
 
-    /// Looks up the tag for a name (within the context of this transaction, safe version).
+    /// Looks up the tag for a name (within the context of this transaction).
     ///
-    /// This method differs from name_to_tag_unsafe() in the following way:
-    /// - (1) No difference if no tag is found for the given name.
-    /// - (2) No difference if the found tag is not flagged for removal.
-    /// - (3) If flagged for removal and (the reference count is equal to 0 and \p context
-    ///       is \c STORE_CONTEXT), pretend that no tag was found.
-    /// - (4) If flagged for removal and (the reference count is larger than 0 or \p context
-    ///       is not \c STORE_CONTEXT), keep the found info pinned until the end of the transaction.
+    /// There are four different cases that are handled as follows:
+    /// - (1) No tag is found for the given name. Return the invalid tag.
+    /// - (2) The found tag is not flagged for global removal. Return the tag.
+    /// - (3) The found tag is flagged for global removal and (the reference count is equal to 0
+    ///       and \p context is \c STORE_CONTEXT). Pretend that no tag was found and return the
+    ///       invalid tag.
+    /// - (4) The found tag is flagged for global removal and (the reference count is larger than 0
+    ///       or \p context is not \c STORE_CONTEXT). Keep the found info pinned until the end of
+    ///       the transaction. Return the tag.
     ///
     /// Case (3): The tag can be garbage collected at any time after this method returned. Instead
     /// of handing out a tag that might lead to an invalid tag access, pretend that the lookup
     /// failed, with the intention that the caller requests a new tag for store or copy operations.
-    /// A new tag also avoids that the removal flag carries over to a new version of that database
-    /// element.
+    /// A new tag also avoids that the global removal flag carries over to a new version of that
+    /// database element.
     ///
     /// Case (4): A garbage collection of all referencing elements would decrease the reference
     /// count of this tag to 0, and then it can be garbage collected, too. However, we do not know
     /// whether the referencing elements will be garbage collected at all, and unconditionally
     /// letting the look up fail is logically wrong. Instead we pin the info until the end of the
     /// transaction. This gives callers a chance to store a new version of that database element,
-    /// and to reference it again (or keep it referenced). The removal flag will carry over to a
-    /// potentially new version of that database element.
+    /// and to reference it again (or keep it referenced). The global removal flag will carry over
+    /// to a potentially new version of that database element.
     ///
     /// \note There is no guarantee that #name_to_tag() followed by #tag_to_name() produces
     ///       the original name.
-    ///
-    /// \see #name_to_tag_unsafe()
     ///
     /// \param name      The name to look up.
     /// \param context   The context of the operation controls whether case (3) above is a feasible
@@ -527,15 +540,6 @@ public:
     ///                  treated the same way.
     /// \return          The corresponding tag, or the invalid tag if the name was not found.
     virtual Tag name_to_tag( const char* name, Name_to_tag_context context = UNKNOWN_CONTEXT) = 0;
-
-    /// Looks up the name of a tag (within the context of this transaction, unsafe version).
-    ///
-    /// \note There is no guarantee that #name_to_tag_unsafe () followed by #tag_to_name() produces
-    ///       the original tag.
-    ///
-    /// \param tag   The tag to look up.
-    /// \return      The corresponding name, or \c nullptr if the tag has no associated name.
-    virtual Tag name_to_tag_unsafe( const char* name) = 0;
 
     //@}
     /// \name Information about a specific tag
@@ -610,7 +614,7 @@ public:
     /// \return                    \c true if the reference is valid, \c false otherwise.
     virtual bool can_reference_tag( Tag referencing_tag, Tag referenced_tag) = 0;
 
-    /// Indicates whether #remove() has already been called on a tag.
+    /// Indicates whether a given tag has been marked for global removal.
     ///
     /// \param tag                 The tag to look up.
     /// \return                    \c true if #remove() has already been called, \c false
@@ -660,8 +664,11 @@ public:
 
     /// Executes a fragmented job, splitting it in a given number of fragments (synchronous).
     ///
-    /// This method will not return before all fragments have been executed. The fragments may be
-    /// executed in any number of threads and on any number of hosts.
+    /// The fragments may be executed in any order and in any number of threads (but subject to
+    /// #Fragmented_job::get_thread_limit()).
+    ///
+    /// This method will not return before all fragments have been executed. See also the note
+    /// on #THREAD_POOL::Thread_pool::submit_job_and_wait().
     ///
     /// \param job                      The fragmented job to be executed. RCS:NEU
     /// \param count                    The number of fragments this job should be split into. This
@@ -669,22 +676,24 @@ public:
     ///                                 of the job is ONCE_PER_HOST.
     ///                                 \note If the job has a scheduling mode which defines the
     ///                                 number of fragments implicitly (e.g. ONCE_PER_HOST) and
-    ///                                 count is not 0 then count indicates the maximum number of
-    ///                                 fragments to be scheduled. It will in that case not exceed
-    ///                                 the number of hosts.
+    ///                                 \p count is not 0, then \p count indicates the maximum
+    ///                                 number of fragments to be scheduled. It will in that case
+    ///                                 not exceed the number of hosts.
     /// \return
     ///                                 -  0: Success.
-    ///                                 - -1: Invalid parameters (\p job is \c nullptr, or \c count
+    ///                                 - -1: Invalid parameters (\p job is \c nullptr, or \p count
     ///                                       is zero but the scheduling is not ONCE_PER_HOST).
     ///                                 - -3: Invalid job priority (negative value).
     ///                                 - -4: The transaction is no longer open.
     virtual mi::Sint32 execute_fragmented(
         Fragmented_job* job, size_t count) = 0;
 
-    /// Execute a job splitting, it in a given number of fragments (asynchronous).
+    /// Execute a fragmented job splitting, it in a given number of fragments (asynchronous).
     ///
-    /// This method will return immediately, typically before all fragments have been executed. The
-    /// fragments may be executed in any number of threads and on any number of hosts.
+    /// The fragments may be executed in any order and in any number of threads (but subject to
+    /// #Fragmented_job::get_thread_limit()).
+    ///
+    /// This method will return immediately, typically before all fragments have been executed.
     ///
     /// \param job                      The fragmented job to be executed. RCS:NEU
     /// \param count                    The number of fragments this job should be split into. This
@@ -692,7 +701,7 @@ public:
     /// \param listener                 Provides a callback to be called when the job is done.
     /// \return
     ///                                 -  0: Success.
-    ///                                 - -1: Invalid parameters (\p job is \c nullptr or \c count
+    ///                                 - -1: Invalid parameters (\p job is \c nullptr or \p count
     ///                                       is zero).
     ///                                 - -2: Invalid scheduling mode (asynchronous execution is
     ///                                       restricted to local jobs).

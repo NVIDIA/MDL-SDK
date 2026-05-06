@@ -872,10 +872,11 @@ void MDL_name_mangler::mangle_type(IType_array const *type)
 {
     // <array-type> ::= A <positive dimension number> _ <element type>
     //              ::= A <deferred size> _ <element type>
-    m_out.append(1, 'A');
     if (type->is_immediate_sized()) {
         mangle_array_type(type->get_element_type(), type->get_size());
     } else {
+        m_out.append(1, 'A');
+
         IType_array_size const *size = type->get_deferred_size();
         mangle_deferred_size(size);
 
@@ -889,8 +890,8 @@ void MDL_name_mangler::mangle_array_type(
     int         size)
 {
     // <array-type> ::= A <positive dimension number> _ <element type>
-    //              ::= A <deferred size> _ <element type>
     m_out.append(1, 'A');
+
     char buf[16];
     snprintf(buf, sizeof(buf), "%d", size);
     m_out.append(buf);
@@ -1139,6 +1140,9 @@ bool MDL_name_mangler::demangle(char const *mangled_name, size_t len)
     Memory_arena arena(m_alloc);
     Arena_vector<char const *>::Type substitutions(&arena);
     Arena_vector<bool>::Type subst_skips(&arena);
+    Arena_vector<string>::Type sizes(&arena);
+
+    bool has_return_type = false;
 
     // got qualified name?
     if (*ptr == 'N') {
@@ -1158,6 +1162,51 @@ bool MDL_name_mangler::demangle(char const *mangled_name, size_t len)
             // unexpected end of string?
             if (ptr >= endptr) {
                 return false;
+            }
+
+            if (*ptr == 'I') {
+                // <template-args> ::= I <template-arg>+ E
+                // <template-arg>  ::= <expr-primary>
+                // <expr-primary>  ::= L <type> <value number> E
+                {
+                    // if we have template arguments, we have a return type
+                    has_return_type = true;
+
+                    ++ptr;
+                    name += '<';
+                    bool first_arg = true;
+                    while (ptr < endptr && *ptr != 'E') {
+                        if (!first_arg) {
+                            name += ',';
+                        }
+                        first_arg = false;
+
+                        // simple case, we support only integer literals for now
+                        if (ptr >= endptr || *ptr != 'L') {
+                            return false;
+                        }
+                        ++ptr;
+                        if (ptr >= endptr || *ptr != 'i') {
+                            return false;
+                        }
+                        ++ptr;
+
+                        while (ptr < endptr && '0' <= *ptr && *ptr <= '9') {
+                            name += *ptr;
+                            ++ptr;
+                        }
+
+                        if (ptr >= endptr || *ptr != 'E') {
+                            return false;
+                        }
+                        ++ptr;
+                    }
+                    if (ptr >= endptr) {
+                        return false;
+                    }
+                    ++ptr;  // skip final 'E'
+                    name += '>';
+                }
             }
 
             // end of qualified name?
@@ -1251,6 +1300,32 @@ bool MDL_name_mangler::demangle(char const *mangled_name, size_t len)
                     }
                     break;
 
+                case 'A':
+                    ++ptr;
+                    if (ptr < endptr) {
+                        string size(get_allocator());
+                        if (*ptr == 'D') {
+                            ++ptr;
+                            if (!demangle_name(ptr, endptr, size)) {
+                                return false;
+                            }
+                            add_subst = Arena_strdup(arena, size.c_str());
+                            add_self_subst = true;
+                        } else {
+                            while (ptr < endptr && '0' <= *ptr && *ptr <= '9') {
+                                size += *ptr;
+                                ++ptr;
+                            }
+                        }
+                        if (ptr < endptr && *ptr == '_') {
+                            ++ptr;
+                            sizes.push_back(size);
+                            continue;
+                        } else {
+                            return false;
+                        }
+                    }
+                    return false;
                 case 'N':
                     ++ptr;
 
@@ -1378,15 +1453,37 @@ bool MDL_name_mangler::demangle(char const *mangled_name, size_t len)
                     return false;
                 }
 
+                string tmp(m_alloc);
+                if (has_return_type) {
+                    tmp = m_out;
+                    m_out = "";
+                }
+
                 // append name as parameter, if we shouldn't skip it
                 if (!skip_parameter) {
-                    if (first) {
-                        first = false;
-                    } else {
-                        m_out += ',';
+                    if (!has_return_type) {
+                        if (first) {
+                            first = false;
+                        } else {
+                            m_out += ',';
+                        }
                     }
                     m_out += qualifiers;
                     m_out += name;
+
+                    for (size_t i = 0, n = sizes.size(); i < n; ++i) {
+                        m_out += '[';
+                        m_out += sizes[i];
+                        m_out += ']';
+                    }
+                }
+                sizes.clear();
+
+                if (has_return_type) {
+                    m_out += ' ';
+                    m_out += tmp;
+
+                    has_return_type = false;
                 }
 
                 // the substitution table would normally also contain entries for all
@@ -1497,6 +1594,9 @@ string DAG_mangler::mangle(
             break;
         case IMDL::MDL_VERSION_1_10:
             m_printer.print("$1.9");
+            break;
+        case IMDL::MDL_VERSION_1_11:
+            m_printer.print("$1.10");
             break;
         case IMDL::MDL_VERSION_EXP:
             m_printer.print("$99.99");

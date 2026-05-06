@@ -37,6 +37,8 @@
 #include <render/mdl/runtime/i_mdlrt_light_profile.h>
 #include <render/mdl/runtime/i_mdlrt_bsdf_measurement.h>
 
+#include <mdl/runtime/spectral/i_spectral.h>
+
 namespace MI {
 namespace MDLRT {
 
@@ -997,5 +999,148 @@ void Resource_handler::bm_albedos(
         o->albedos(*reinterpret_cast<mi::Float32_2 const *>(theta_phi));
 }
 
+static inline mi::mdl::tct_spectral_sample get_wavelengths(const mi::mdl::Shading_state_material *state)
+{
+    return (static_cast<const mi::mdl::Shading_state_material_spectral *>(state))->spectral_wavelengths;
+}
+
+static inline mi::mdl::tct_spectral_sample get_wavelengths(const mi::mdl::Shading_state_material_with_derivs *state)
+{
+    return (static_cast<const mi::mdl::Shading_state_material_spectral_with_derivs *>(state))->spectral_wavelengths;
+}
+
+template <bool is_emission>
+static inline mi::mdl::tct_spectral_sample rgb_to_spectral(
+    const mi::mdl::tct_spectral_sample lambdas,
+    const float rgb[3])
+{
+    mi::mdl::tct_spectral_sample s;
+    for (unsigned int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+    {
+        const float lambda = lambdas.values[i];
+        // construct simple spectral reflectivity
+        // (using Jendersie - "Fast Spectral Upsampling of Volume Attenuation Coefficients")
+        s.values[i] = (lambda < 485.0f) ? rgb[2] : ((lambda < 595.9f) ? rgb[1] : rgb[0]);
+
+        // for emission, apply spectral illuminant
+        if (is_emission) {
+            s.values[i] *= mi::mdl::spectral::get_value_lerp(
+                mi::mdl::spectral::D65,
+                mi::mdl::spectral::SPECTRAL_XYZ_RES,
+                mi::mdl::spectral::SPECTRAL_XYZ_LAMBDA_MIN,
+                mi::mdl::spectral::SPECTRAL_XYZ_LAMBDA_MAX,
+                lambda) * float(1.0 / mi::mdl::spectral::D65_LUMINANCE);
+        }
+    }
+    return s;
+}
+
+static inline mi::mdl::tct_spectral_sample rgb_to_spectral_ior(
+    const mi::mdl::tct_spectral_sample lambdas,
+    const float rgb[3])
+{
+    mi::mdl::tct_spectral_sample s;
+    for (unsigned int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+    {
+        // piecewise-linear spectrum for IOR assuming point samples at 435, 546, and 700 nm for blue, green, and red
+        const float lambda = lambdas.values[i];
+        if (lambda > 546.0f) {
+            const float t = std::min((lambda - 546.0f) *  float(1.0 / (700.0 - 546.0)), 1.0f);
+            s.values[i] = t * rgb[0] + (1.0f - t) * rgb[1];
+        } else {
+            const float t = std::max((lambda - 435.0f) *  float(1.0 / (546.0 - 435.0)), 0.0f);
+            s.values[i] = t * rgb[1] + (1.0f - t) * rgb[2];
+        }
+    }
+    return s;
+}
+
+void Resource_handler::mdl_rgb_to_spectral_ior(
+    mi::mdl::tct_spectral_sample    *result,
+    void                            *thread_data,
+    mi::mdl::Shading_state_material *state,
+    float const                     rgb[3]) const
+{
+    *result = rgb_to_spectral_ior(get_wavelengths(state), rgb);
+}
+
+void Resource_handler::mdl_rgb_to_spectral_ior_deriv(
+    mi::mdl::tct_spectral_sample                *result,
+    void                                        *thread_data,
+    mi::mdl::Shading_state_material_with_derivs *state,
+    float const                                 rgb[3]) const
+{
+    *result = rgb_to_spectral_ior(get_wavelengths(state), rgb);
+}
+
+void Resource_handler::mdl_rgb_to_spectral_reflectance(
+    mi::mdl::tct_spectral_sample    *result,
+    void                            *thread_data,
+    mi::mdl::Shading_state_material *state,
+    float const                     rgb[3]) const
+{
+    *result = rgb_to_spectral<false>(get_wavelengths(state), rgb);
+}
+
+void Resource_handler::mdl_rgb_to_spectral_reflectance_deriv(
+    mi::mdl::tct_spectral_sample                *result,
+    void                                        *thread_data,
+    mi::mdl::Shading_state_material_with_derivs *state,
+    float const                                 rgb[3]) const
+{
+    *result = rgb_to_spectral<false>(get_wavelengths(state), rgb);
+}
+
+void Resource_handler::mdl_rgb_to_spectral_luminance(
+    mi::mdl::tct_spectral_sample    *result,
+    void                            *thread_data,
+    mi::mdl::Shading_state_material *state,
+    float const                     rgb[3]) const
+{
+    *result = rgb_to_spectral<true>(get_wavelengths(state), rgb);
+}
+
+void Resource_handler::mdl_rgb_to_spectral_luminance_deriv(
+    mi::mdl::tct_spectral_sample                *result,
+    void                                        *thread_data,
+    mi::mdl::Shading_state_material_with_derivs *state,
+    float const                                 rgb[3]) const
+{
+    *result = rgb_to_spectral<true>(get_wavelengths(state), rgb);
+}
+
+void Resource_handler::mdl_rgb_to_spectral_volume_coefficient(
+    mi::mdl::tct_spectral_sample    *result,
+    void                            *thread_data,
+    mi::mdl::Shading_state_material *state,
+    float const                     rgb[3]) const
+{
+    *result = rgb_to_spectral<false>(get_wavelengths(state), rgb);
+}
+
+void Resource_handler::mdl_rgb_to_spectral_volume_coefficient_deriv(
+    mi::mdl::tct_spectral_sample                *result,
+    void                                        *thread_data,
+    mi::mdl::Shading_state_material_with_derivs *state,
+    float const                                 rgb[3]) const
+{
+    *result = rgb_to_spectral<false>(get_wavelengths(state), rgb);
+}
+
+void Resource_handler::mdl_get_wavelengths(
+    mi::mdl::tct_spectral_sample    *result,
+    void                            *thread_data,
+    mi::mdl::Shading_state_material *state) const
+{
+    *result = get_wavelengths(state);
+}
+
+void Resource_handler::mdl_get_wavelengths_deriv(
+    mi::mdl::tct_spectral_sample                *result,
+    void                                        *thread_data,
+    mi::mdl::Shading_state_material_with_derivs *state) const
+{
+    *result = get_wavelengths(state);
+}
 }  // MDLRT
 }  // MI

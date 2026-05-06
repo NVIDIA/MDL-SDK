@@ -33,6 +33,7 @@
 
 #include <mi/base/interface_declare.h>
 #include <mi/base/interface_implement.h>
+#include <mi/neuraylib/iextension_api.h>
 
 namespace mi {
 
@@ -113,6 +114,13 @@ public:
         return new T;
     }
 };
+
+template <class T>
+Sint32 IExtension_api::register_class( const char* class_name)
+{
+    mi::base::Handle<IUser_class_factory> factory( new User_class_factory<T>());
+    return register_class( class_name, typename T::IID(), factory.get());
+}
 
 /**@}*/ // end group mi_neuray_plugins
 

@@ -828,6 +828,9 @@ protected:
     /// uniform SSBO name if any.
     char const *m_glsl_uniform_ssbo_name;
 
+    /// Include path for API type definitions, or nullptr/empty to emit types inline.
+    char const *m_glsl_include_for_api_types;
+
     /// The shader storage buffer object binding (if != ~0u).
     unsigned m_glsl_uniform_ssbo_binding;
 

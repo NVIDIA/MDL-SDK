@@ -49,21 +49,6 @@ inline void Deserializer::read(DB::Typed_tag<T>* value_pointer)
     *value_pointer = DB::Typed_tag<T>(t);
 }
 
-template <typename T>
-inline void Serializer::write(const CONT::Array<T>& array)
-{
-    write(STLEXT::safe_cast<Uint32>(array.size()));
-    write_range(*this, array.begin(), array.end());
-}
-
-template <typename T>
-inline void Serializer::write(const CONT::Array<T*>& array)
-{
-    const Uint32 size( STLEXT::safe_cast<Uint32>(array.size()) );
-    write(size);
-    for (Uint32 i(0u); i != size; ++i)
-        serialize(array[i]);
-}
 
 template <typename T, typename SWO>
 inline void Serializer::write(const std::set<T, SWO>& set)
@@ -94,24 +79,6 @@ inline void Serializer::write(const std::pair<T1, T2>& pair)
     write(pair.second);
 }
 
-template <typename T>
-inline void Deserializer::read(CONT::Array<T>* array)
-{
-    Uint32 size;
-    read(&size);
-    array->resize(size);
-    read_range(*this, array->begin(), array->end());
-}
-
-template <typename T>
-inline void Deserializer::read(CONT::Array<T*>* array)
-{
-    Uint32 size;
-    read(&size);
-    array->resize(size);
-    for (Uint32 i(0u); i != size; ++i)
-        (*array)[i] = reinterpret_cast<T*>( deserialize() );
-}
 
 template <typename T, typename A1, typename A2>
 inline void Deserializer::read(std::vector< std::vector<T, A1>, A2>* array)
@@ -300,15 +267,6 @@ inline void write(S* serial, const mi::math::Bbox<T,DIM>& value)
     write(serial,value.max);
 }
 
-inline void write(Serializer* serial, const CONT::Bitvector& value)
-{
-    serial->write( value );
-}
-
-inline void write(Serializer* serial, const CONT::Dictionary& value)
-{
-    serial->write( value );
-}
 
 inline void write(Serializer* serial, const DB::Transaction_id& value)
 {
@@ -420,15 +378,6 @@ inline void read(D* deser, mi::math::Bbox<T,DIM>* value)
     read(deser,&value->max);
 }
 
-inline void read(Deserializer* deser, CONT::Bitvector* value_type)
-{
-    deser->read( value_type );
-}
-
-inline void read(Deserializer* deser, CONT::Dictionary* value_pointer)
-{
-    deser->read( value_pointer );
-}
 
 inline void read(Deserializer* deser, DB::Transaction_id* value_pointer)
 {

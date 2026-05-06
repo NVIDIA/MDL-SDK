@@ -34,6 +34,8 @@
 
 #include "mdl/compiler/compilercore/compilercore_cc_conf.h"
 #include "mdl/compiler/compilercore/compilercore_memory_arena.h"
+#include "mdl/compiler/compilercore/compilercore_array_ref.h"
+#include "mdl/compiler/compilercore/compilercore_promotion.h"
 
 #include "generator_dag_unit.h"
 
@@ -41,7 +43,7 @@ namespace mi {
 namespace mdl {
 
 class Call_impl;
-class IMDL;
+class MDL;
 class IType_df;
 class Value_factory;
 class IValue_matrix;
@@ -56,19 +58,21 @@ public:
 
     /// Constructor.
     ///
-    /// \param mdl             The MDL compiler interface.
+    /// \param mdl             The MDL compiler.
     /// \param unit            The DAG unit.
     /// \param internal_space  The internal space for which to compile.
     DAG_node_factory_impl(
-        IMDL          *mdl,
-        DAG_unit      &unit,
-        char const    *internal_space);
+        MDL         *mdl,
+        DAG_unit    &unit,
+        char const  *internal_space);
 
     /// Create a constant.
     /// \param value       The value of the constant.
+    /// \param dbg_info    The debug info for this node if any.
     /// \returns           The created constant.
     DAG_constant const *create_constant(
-        IValue const *value) MDL_FINAL;
+        IValue const *value,
+        DAG_DbgInfo  dbg_info) MDL_FINAL;
 
     /// Create a temporary reference.
     /// \param node         The DAG IR node that is "named" by this temporary.
@@ -488,8 +492,11 @@ private:
 
     /// Creates an invalid reference (i.e. a call to the a default df constructor).
     ///
-    /// \param df_type  The df type of the constructor.
-    DAG_node const *create_default_df_constructor(IType_df const *df_type);
+    /// \param df_type   The df type of the constructor.
+    /// \param dbg_info  The debug info for this constructor if any.
+    DAG_node const *create_default_df_constructor(
+        IType_df const *df_type,
+        DAG_DbgInfo    dbg_info);
 
     /// Remove zero weigthed components for df::normalized_mix() and color_normalized_mix().
     ///
@@ -560,15 +567,51 @@ private:
         IType const                   *ret_type,
         DAG_DbgInfo                   dbg_info);
 
+    /// Get the ::df::backscatter_modifier type of the current back unit.
+    IType_enum const *get_backscatter_modifier_type();
+
+    /// Get the default ::df::backscatter_modifier enum value.
+    IValue_enum const *get_backscatter_modifier_default_value();
+
+    /// Create a transformed call.
+    ///
+    /// \param transforms      The transformations to apply, must be sorted by index.
+    /// \param name            The name of the called function (after transformation).
+    /// \param sema            The semantics of the called function.
+    /// \param call_args       The call arguments of the called function (before transformation).
+    /// \param ret_type        The return type of the function.
+    /// \param dbg_info        The debug info for this node if any.
+    /// \returns               The created call or an equivalent IR node.
+    DAG_node const *create_transformed_call(
+        Array_ref<Param_transform>         transforms,
+        char const                         *name,
+        IDefinition::Semantics             sema,
+        Array_ref<DAG_call::Call_argument> call_args,
+        IType const                        *ret_type,
+        DAG_DbgInfo                        dbg_info);
+
+    /// Check the given debug info for soundness.
+    ///
+    /// \param dbg_info  The debug info to check.
+    ///
+    /// \returns True if the debug info is sound, false otherwise.
+    bool check_dbg_info(DAG_DbgInfo dbg_info);
+
 private:
     /// The arena builder.
     Arena_builder m_builder;
 
-    /// The mdl interface.
-    mi::base::Handle<IMDL> m_mdl;
+    /// The mdl compiler.
+    mi::base::Handle<MDL> m_mdl;
 
     /// The DAG unit to fill.
     DAG_unit &m_dag_unit;
+
+    /// Once set, the ::df::backscatter_modifier type imported into the dag unit.
+    IType_enum const *m_df_backscatter_modifier_type;
+
+    /// Once set, the ::df::backscatter_modifier default enum value imported into the dag unit.
+    IValue_enum const *m_df_backscatter_modifier_def_value;
 
     /// The internal space for which to compile.
     char const *m_internal_space;

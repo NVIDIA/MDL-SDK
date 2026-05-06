@@ -47,12 +47,10 @@ class IEnum_decl;
 /// type #mi::Sint32). Such a pair of name and value is also called enumerator. Note that different
 /// enumerators can have the same value (but need to have different names).
 ///
-/// \ifnot MDL_SDK_API
 /// Enum declarations can be used to create new enum types. In this case, they are populated
 /// through a sequence of #add_enumerator() calls. Finally, such a declaration is registered
 /// via #mi::neuraylib::IExtension_api::register_enum_decl(). The name used for registration
 /// can later be used as a type name to create instances of the type described by the declaration.
-/// \endif
 ///
 /// \see #mi::IEnum
 class IEnum_decl :

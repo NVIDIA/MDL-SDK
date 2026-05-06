@@ -89,7 +89,7 @@ public:
         m_resolution_phi( resolution_phi),
         m_type( type)
     {
-        Size size = resolution_theta * resolution_theta * resolution_phi;
+        Size size = static_cast<Size>( resolution_theta) * resolution_theta * resolution_phi;
         if( type == BSDF_RGB)
             size *= 3;
         m_bsdf_buffer = new Bsdf_buffer( size);

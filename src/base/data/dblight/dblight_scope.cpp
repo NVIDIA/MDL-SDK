@@ -79,7 +79,8 @@ Scope_impl::~Scope_impl()
 
     m_scope_manager->remove_scope_internal( this);
 
-    info_manager->garbage_collection( /*update_lowest_open_transaction_ids*/ false);
+    info_manager->garbage_collection(
+        /*force*/ false, /*update_lowest_open_transaction_ids*/ false);
 
     block.release();
     if( m_parent)
@@ -249,10 +250,10 @@ bool Scope_impl::get_journal(
     if( last_transaction_id <= m_journal_last_pruned_visibility)
         return false;
 
-    // Loop over the journal with visibility IDs from \p last_transaction_id+1 to
+    // Loop over the journal with visibilities from \p last_transaction_id+1 to
     // \p current_transaction_id.
     //
-    // Note that the visibility ID of changes from \p last_transaction is at least
+    // Note that the visibility of changes from \p last_transaction is at least
     // \p last_transaction_id+1.
     auto it     = m_journal.upper_bound( last_transaction_id);
     auto it_end = m_journal.end();
@@ -299,14 +300,31 @@ Scope_manager::~Scope_manager()
     // cause more than one scope to remove itself from the containers if such a scope has been
     // marked for removal but is still pinned by its child scopes.
     while( !m_scopes_by_id.empty()) {
+
         Scope_impl* last = & *m_scopes_by_id.rbegin();
+
         // An assertion failure indicates
         // - a leaked DB element/transaction/scope,
-        // - a reference cycle between elements, or
+        // - a reference cycle between elements (rare), or
         // - a DB element pinned while the last transaction was committed (edit, or access after
-        //   edit), which prevented the GC from clearing the creator transaction.
+        //   edit), which prevented the GC from clearing the creator transaction (rare).
+        //
         // Calling dump() from Database_impl::~Database_impl() might provide some insights.
+        // However, the output is huge and identifying the root cause from that output can be
+        // difficult. Usually, it is faster to bisect the changes to a known good state. Typical
+        // mistakes are:
+        // - Function calls returning a reference-counted interface without capturing it in a
+        //   handle (or similar handling).
+        // - A special case of the above is chaining such calls incorrectly as in
+        //   foo->get_bar()->get_baz().
+        //
+        // Also, watch out for error messages from the API layer about DB elements still referenced
+        // when a transaction is committed/aborted. And from the Python binding for imbalanced
+        // reference counts.
+        //
+        // Is the assertion the consequence of an earlier error, in particular, abnormal shutdown?
         MI_ASSERT( last->get_pin_count() == 1);
+
         last->unpin();
     }
 }
@@ -453,7 +471,7 @@ void Scope_manager::dump( std::ostream& s, bool verbose, bool mask_pointer_value
         std::string name_str = !name.empty() ? ("\"" + name + "\"") : "(null)";
         DB::Scope* parent = scope.get_parent();
 
-        s << "ID " << scope.get_id();
+        s << "Index " << scope.get_id();
         if( !mask_pointer_values) s << " at " << &scope;
         s << ": name = " << name_str
           << ", pin count = " << scope.get_pin_count()
@@ -477,7 +495,7 @@ void Scope_manager::dump( std::ostream& s, bool verbose, bool mask_pointer_value
                 size_t i = 0;
                 for( const auto& entry: journal) {
                     s << "    Item " << i++
-                    << ": visibility ID = " << entry.first()
+                    << ": visibility = " << entry.first()
                     << ", tag = " << entry.second.m_tag()
                     << ", version = " << entry.second.m_version
                     << ", transaction ID = " << entry.second.m_transaction_id()
@@ -488,8 +506,46 @@ void Scope_manager::dump( std::ostream& s, bool verbose, bool mask_pointer_value
          }
     }
 
-    if( !m_scopes_by_id.empty())
-        s << std::endl;
+    s << std::endl;
+}
+
+void Scope_manager::dump_html( std::ostream& s, const Html_context& context)
+{
+    m_database->get_lock().check_is_owned_shared_or_exclusive();
+
+    s << "<table border cellspacing=0 cellpadding=5>\n";
+    s << "<tr>\n";
+    s << "<th>ID</th>\n";
+    s << "<th>Name</th>\n";
+    s << "<th>Pin count</th>\n";
+    s << "<th>Level</th>\n";
+    s << "<th>Parent ID</th>\n";
+    s << "<th>Removed</th>\n";
+    s << "<th>Low. open TX ID</th>\n";
+    s << "<th># Infos</th>\n";
+    s << "</tr>\n";
+
+    for( const auto& scope: m_scopes_by_id) {
+
+        std::string name = scope.get_name();
+        if( name.empty())
+            name = "-";
+        DB::Scope* parent = scope.get_parent();
+        std::string parent_id = parent ? std::to_string( parent->get_id()) : "-";
+
+        s << "<tr>\n";
+        s << "<td align=right>"  << scope.get_id() << "</td>\n";
+        s << "<td>"              << context.m_html_encoder( name) << "</td>\n";
+        s << "<td align=right>"  << scope.get_pin_count() << "</td>\n";
+        s << "<td align=right>"  << static_cast<mi::Uint32>( scope.get_level()) << "</td>\n";
+        s << "<td align=right>"  << parent_id << "</td>\n";
+        s << "<td align=center>" << to_yes_no( scope.get_is_removed()) << "</td>\n";
+        s << "<td align=right>"  << scope.get_lowest_open_transaction_id()() << "</td>\n";
+        s << "<td align=right>"  << scope.get_infos().size() << "</td>\n";
+        s << "</tr>\n";
+    }
+
+    s << "</table>\n";
 }
 
 } // namespace DBLIGHT

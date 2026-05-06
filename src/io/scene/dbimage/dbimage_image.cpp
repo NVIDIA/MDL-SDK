@@ -788,7 +788,8 @@ mi::Size Image::get_uvtile_id( mi::Size frame_id, mi::Sint32 u, mi::Sint32 v) co
     if( frame_id >= m_cached_frames.size())
         return -1;
 
-    return m_cached_frames[frame_id].m_uv_to_id.get( u, v);
+    mi::Uint32 id = m_cached_frames[frame_id].m_uv_to_id.get( u, v);
+    return id != ~0u ? static_cast<mi::Size>( id) : -1;
 }
 
 const SERIAL::Serializable* Image::serialize( SERIAL::Serializer* serializer) const
@@ -1660,7 +1661,8 @@ mi::Size Image_impl::get_uvtile_id( mi::Size frame_id, mi::Sint32 u, mi::Sint32 
     if( frame_id >= m_frames.size())
         return -1;
 
-    return m_frames[frame_id].m_uv_to_id.get( u, v);
+    mi::Uint32 id = m_frames[frame_id].m_uv_to_id.get( u, v);
+    return id != ~0u ? static_cast<mi::Size>( id) : -1;
 }
 
 const SERIAL::Serializable* Image_impl::serialize( SERIAL::Serializer* serializer) const

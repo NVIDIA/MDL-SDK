@@ -28,6 +28,7 @@
 
 #include "pch.h"
 
+#include <cinttypes>
 #include <cstdio>
 #include <cstdlib>
 
@@ -35,7 +36,11 @@
 #include <base/system/stlext/i_stlext_binary_cast.h>
 
 #include <vector>
-#include <algorithm>
+
+// winnt.h defines X86 as 1 which conflicts with llvm::WinEH::EncodingType::X86
+#ifdef X86
+#  undef X86
+#endif
 
 #include <llvm/ADT/StringMap.h>
 #include <llvm/ADT/Triple.h>
@@ -47,6 +52,17 @@
 #include <llvm/ExecutionEngine/Orc/JITTargetMachineBuilder.h>
 #include <llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h>
 #include <llvm/ExecutionEngine/SectionMemoryManager.h>
+#include <llvm/MC/MCAsmInfo.h>
+#include <llvm/MC/MCContext.h>
+#include <llvm/MC/MCDisassembler/MCDisassembler.h>
+#include <llvm/MC/MCInstPrinter.h>
+#include <llvm/MC/MCInstrInfo.h>
+#include <llvm/MC/MCRegisterInfo.h>
+#include <llvm/MC/MCSubtargetInfo.h>
+#include <llvm/MC/MCTargetOptions.h>
+#include <llvm/Object/ObjectFile.h>
+#include <llvm/Object/SymbolSize.h>
+#include <llvm/Support/Host.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/DIBuilder.h>
@@ -80,7 +96,6 @@
 #include <mi/mdl/mdl_code_generators.h>
 
 #include "mdl/compiler/compilercore/compilercore_analysis.h"
-#include "mdl/compiler/compilercore/compilercore_bitset.h"
 #include "mdl/compiler/compilercore/compilercore_cc_conf.h"
 #include "mdl/compiler/compilercore/compilercore_errors.h"
 #include "mdl/compiler/compilercore/compilercore_positions.h"
@@ -89,13 +104,11 @@
 #include "mdl/codegenerators/generator_dag/generator_dag_derivatives.h"
 #include "mdl/codegenerators/generator_dag/generator_dag_lambda_function.h"
 #include "mdl/codegenerators/generator_dag/generator_dag_tools.h"
-#include "mdl/codegenerators/generator_dag/generator_dag_walker.h"
 #include "mdl/codegenerators/generator_code/generator_code.h"
 
 #include "generator_jit_llvm.h"
 #include "generator_jit_llvm_passes.h"
 #include "generator_jit_context.h"
-#include "generator_jit_res_manager.h"
 #include "generator_jit_streams.h"
 #include "generator_jit_sl_passes.h"
 
@@ -132,18 +145,170 @@ public:
 // handle lifetime of LLVM managed statics.
 LLVM_shutdown_obj llvm_life_time;
 
-/// RAII-like helper for handling basic block chains.
-class BB_store {
+/// JIT event listener that disassembles loaded objects using the actual runtime
+/// memory addresses, so the output can be directly correlated with a debugger.
+///
+/// Activated by setting the MDL_JIT_DISASM_FILE environment variable to a file
+/// path.  Each time the ORC JIT loads a compiled object into memory, the
+/// notifyObjectLoaded callback fires and the relocated machine code of every
+/// function symbol is disassembled and written to the output file.
+class Disassembly_event_listener : public llvm::JITEventListener {
 public:
-    /// Constructor.
-    BB_store(size_t &store, size_t bb) : m_store(store) { old_bb = store; store = bb; }
+    /// Set up the LLVM MC components (disassembler, instruction printer, etc.)
+    /// for the host target.  If any component cannot be created, the listener
+    /// silently disables itself (m_target stays nullptr).
+    Disassembly_event_listener(llvm::raw_fd_ostream &out)
+    : m_out(out)
+    , m_target(nullptr)
+    {
+        // Look up the host target so we disassemble the right instruction set.
+        std::string triple_str = llvm::sys::getDefaultTargetTriple();
+        std::string error_str;
+        m_target = llvm::TargetRegistry::lookupTarget(triple_str, error_str);
+        if (!m_target)
+            return;
 
-    /// Destructor.
-    ~BB_store() { m_store = old_bb; }
+        // Build the MC layer objects needed by the disassembler.
+        m_mii.reset(m_target->createMCInstrInfo());
+        m_mri.reset(m_target->createMCRegInfo(triple_str));
+        llvm::MCTargetOptions mc_options;
+        m_mai.reset(m_target->createMCAsmInfo(*m_mri, triple_str, mc_options));
+        m_sti.reset(m_target->createMCSubtargetInfo(triple_str, "", ""));
+        if (!m_mii || !m_mri || !m_mai || !m_sti) {
+            m_target = nullptr;
+            return;
+        }
+
+        // Create the disassembler.
+        m_mc_ctx = std::make_unique<llvm::MCContext>(
+            m_mai.get(), m_mri.get(), /*MOFI=*/nullptr);
+        m_disasm.reset(m_target->createMCDisassembler(*m_sti, *m_mc_ctx));
+
+        // Use Intel syntax on x86 (variant 1), AT&T is variant 0.
+        unsigned syntax_variant = m_mai->getAssemblerDialect();
+        if (llvm::Triple(triple_str).isX86())
+            syntax_variant = 1;
+        m_printer.reset(m_target->createMCInstPrinter(
+            llvm::Triple(triple_str), syntax_variant, *m_mai, *m_mii, *m_mri));
+
+        if (!m_disasm || !m_printer)
+            m_target = nullptr;
+    }
+
+    /// Called by the RTDyldObjectLinkingLayer after an object has been loaded
+    /// into memory and relocations have been applied.  At this point the code
+    /// bytes reside at their final runtime addresses.
+    void notifyObjectLoaded(
+        ObjectKey K,
+        const llvm::object::ObjectFile &obj,
+        const llvm::RuntimeDyld::LoadedObjectInfo &load_info) override
+    {
+        if (!m_target)
+            return;
+
+        // Iterate over every function symbol in the object.
+        auto sym_sizes = llvm::object::computeSymbolSizes(obj);
+        for (const auto &pair : sym_sizes) {
+            llvm::object::SymbolRef sym = pair.first;
+            uint64_t size = pair.second;
+
+            // Skip non-function symbols.
+            auto type_or_err = sym.getType();
+            if (!type_or_err) {
+                llvm::consumeError(type_or_err.takeError());
+                continue;
+            }
+            if (*type_or_err != llvm::object::SymbolRef::ST_Function)
+                continue;
+
+            auto name_or_err = sym.getName();
+            if (!name_or_err) {
+                llvm::consumeError(name_or_err.takeError());
+                continue;
+            }
+            llvm::StringRef name = *name_or_err;
+
+            // Get the symbol's address within the object file.
+            auto addr_or_err = sym.getAddress();
+            if (!addr_or_err) {
+                llvm::consumeError(addr_or_err.takeError());
+                continue;
+            }
+            uint64_t obj_addr = *addr_or_err;
+
+            // Resolve the containing text section.
+            auto sect_or_err = sym.getSection();
+            if (!sect_or_err) {
+                llvm::consumeError(sect_or_err.takeError());
+                continue;
+            }
+            if (*sect_or_err == obj.section_end())
+                continue;
+
+            llvm::object::SectionRef section = **sect_or_err;
+            if (!section.isText())
+                continue;
+
+            // Translate from the object-file section address to the actual
+            // runtime address where the linker placed the section.
+            uint64_t sect_load_addr = load_info.getSectionLoadAddress(section);
+            if (sect_load_addr == 0)
+                continue;
+
+            uint64_t func_addr = sect_load_addr + (obj_addr - section.getAddress());
+
+            // Read the relocated code bytes directly from the JIT memory.
+            const uint8_t *code = reinterpret_cast<const uint8_t *>(func_addr);
+            llvm::ArrayRef<uint8_t> bytes(code, size);
+
+            m_out << "\n; Function: " << name
+                  << "  (addr=0x" << llvm::utohexstr(func_addr)
+                  << ", size=" << size << ")\n";
+
+            // Disassemble instruction by instruction.
+            uint64_t pos = 0;
+            while (pos < size) {
+                llvm::MCInst inst;
+                uint64_t inst_size = 0;
+                llvm::MCDisassembler::DecodeStatus status =
+                    m_disasm->getInstruction(inst, inst_size,
+                        bytes.slice(pos), func_addr + pos, llvm::nulls());
+
+                m_out << llvm::format("  %016" PRIx64 ": ", func_addr + pos);
+
+                if (status == llvm::MCDisassembler::Success) {
+                    // Print up to 10 hex bytes inline, pad the rest.
+                    uint64_t n = std::min(inst_size, uint64_t(10));
+                    for (uint64_t i = 0; i < n; ++i)
+                        m_out << llvm::format("%02x ", bytes[pos + i]);
+                    for (uint64_t i = n; i < 10; ++i)
+                        m_out << "   ";
+
+                    m_printer->printInst(
+                        &inst, func_addr + pos, "", *m_sti, m_out);
+                    m_out << "\n";
+                    pos += inst_size;
+                } else {
+                    m_out << llvm::format("%02x ", bytes[pos])
+                          << " <unknown>\n";
+                    pos++;
+                }
+            }
+        }
+        m_out << "\n";
+        m_out.flush();
+    }
 
 private:
-    size_t &m_store;
-    size_t old_bb;
+    llvm::raw_fd_ostream                    &m_out;
+    const llvm::Target                      *m_target;
+    std::unique_ptr<llvm::MCInstrInfo>       m_mii;
+    std::unique_ptr<llvm::MCRegisterInfo>    m_mri;
+    std::unique_ptr<llvm::MCAsmInfo>         m_mai;
+    std::unique_ptr<llvm::MCSubtargetInfo>   m_sti;
+    std::unique_ptr<llvm::MCContext>         m_mc_ctx;
+    std::unique_ptr<llvm::MCDisassembler>    m_disasm;
+    std::unique_ptr<llvm::MCInstPrinter>     m_printer;
 };
 
 }  // anonymous
@@ -213,6 +378,23 @@ public:
 
             // Add support for COFF comdat constants
             m_object_layer.setAutoClaimResponsibilityForObjectSymbols(true);
+        }
+
+        // If MDL_JIT_DISASM_FILE is set, create a disassembly output file and
+        // register an event listener that writes the disassembly of every JIT-
+        // compiled function to it.  The output uses actual runtime addresses so
+        // it can be matched against debugger output.
+        if (char const *path = getenv("MDL_JIT_DISASM_FILE")) {
+            std::error_code ec;
+            m_disasm_stream = std::make_unique<llvm::raw_fd_ostream>(
+                path, ec, llvm::sys::fs::OF_Text);
+            if (!ec) {
+                m_disasm_listener = std::make_unique<Disassembly_event_listener>(
+                    *m_disasm_stream);
+                m_object_layer.registerJITEventListener(*m_disasm_listener);
+            } else {
+                m_disasm_stream.reset();
+            }
         }
     }
 
@@ -336,6 +518,12 @@ private:
     };
 
     DefaultMMapper m_memory_mapper;
+
+    /// Output stream for disassembly, opened when MDL_JIT_DISASM_FILE is set.
+    std::unique_ptr<llvm::raw_fd_ostream> m_disasm_stream;
+
+    /// Event listener for disassembly of loaded objects.
+    std::unique_ptr<Disassembly_event_listener> m_disasm_listener;
 };
 
 
@@ -350,12 +538,6 @@ Jitted_code::Jitted_code(
 , m_mdl_jit(NULL)
 , m_enable_opt_remarks(enable_opt_remarks)
 {
-    std::unique_ptr<llvm::Module> module(new llvm::Module("MDL global", *m_llvm_context));
-
-    // Set the default triple here: This is only necessary for MacOS where the triple
-    // contains the lowest supported runtime version.
-    module->setTargetTriple(LLVM_DEFAULT_TARGET_TRIPLE);
-
     // In 64-bit mode, the stack alignment is always 16 bytes
     llvm::orc::JITTargetMachineBuilder jtm_builder = llvm::cantFail(
         llvm::orc::JITTargetMachineBuilder::detectHost());
@@ -387,6 +569,11 @@ void Jitted_code::init_llvm(
     llvm::InitializeAllTargets();
     llvm::InitializeAllAsmPrinters();
     llvm::InitializeAllTargetMCs();
+
+    // Initialize disassemblers if needed
+    if (getenv("MDL_JIT_DISASM_FILE")) {
+        llvm::InitializeAllDisassemblers();
+    }
 
     // initialize our own passes
     llvm::initializeDeleteUnusedLibDevicePass(*llvm::PassRegistry::getPassRegistry());
@@ -632,6 +819,10 @@ public:
         size_t              i,
         bool                wants_derivs) const MDL_FINAL
     {
+        if (m_code_gen.has_argument_overrides()) {
+            MDL_ASSERT(i < m_code_gen.argument_override_count());
+            return *m_code_gen.argument_override(i);
+        }
         mi::mdl::IExpression const *arg = m_call->get_argument(int(i))->get_argument_expr();
 
         return m_code_gen.translate_expression(arg, wants_derivs);
@@ -855,6 +1046,10 @@ public:
         size_t              i,
         bool                wants_derivs) const MDL_FINAL
     {
+        if (m_code_gen.has_argument_overrides()) {
+            MDL_ASSERT(i < m_code_gen.argument_override_count());
+            return *m_code_gen.argument_override(i);
+        }
         mi::mdl::DAG_node const *arg = m_call->get_argument(int(i));
 
         return m_code_gen.translate_node(arg, m_resolver);
@@ -1087,164 +1282,6 @@ Call_dag_expr const *impl_cast(ICall_expr const *expr) {
 }
 
 
-// ------------------------------- State usage analysis ------------------------------
-
-// Constructor.
-State_usage_analysis::State_usage_analysis(LLVM_code_generator &code_gen)
-: m_code_gen(code_gen)
-, m_arena(code_gen.get_allocator())
-, m_arena_builder(m_arena)
-, m_module_state_usage(0)
-, m_func_state_usage_info_map(code_gen.get_allocator())
-{
-}
-
-// Register a function to take part in the analysis.
-void State_usage_analysis::register_function(llvm::Function *func)
-{
-    Function_state_usage_info *info =
-        m_arena_builder.create<Function_state_usage_info>(&m_arena);
-    m_func_state_usage_info_map[func] = info;
-}
-
-// Register a function to take part in the analysis, which has been cloned from an
-// already registered function. The state usage is initialized with the usage of the
-// original function.
-void State_usage_analysis::register_cloned_function(
-    llvm::Function *cloned_func,
-    llvm::Function *orig_func)
-{
-    Function_state_usage_info *info =
-        m_arena_builder.create<Function_state_usage_info>(&m_arena);
-    m_func_state_usage_info_map[cloned_func] = info;
-
-    Function_state_usage_info_map::iterator it = m_func_state_usage_info_map.find(orig_func);
-    if (it == m_func_state_usage_info_map.end()) {
-        MDL_ASSERT(!"Function not registered for state usage info");
-        return;
-    }
-
-    Function_state_usage_info *orig_info = it->second;
-    info->state_usage = orig_info->state_usage;
-    info->called_funcs.insert(orig_info->called_funcs.cbegin(), orig_info->called_funcs.cend());
-}
-
-// Register a mapped function to set the "expected" usage.
-void State_usage_analysis::register_mapped_function(
-    llvm::Function              *func,
-    mdl::IDefinition::Semantics sema)
-{
-    Function_state_usage_info *info =
-        m_arena_builder.create<Function_state_usage_info>(&m_arena);
-    m_func_state_usage_info_map[func] = info;
-
-    State_usage flag_to_add;
-
-    // If a state function is mapped, assume its state is accessed. This might be
-    // not enough, but probably an educated guess.
-    switch (sema) {
-    default:
-    case mi::mdl::IDefinition::DS_UNKNOWN:
-        return;
-
-#define CASE(state) \
-    case mi::mdl::IDefinition::DS_INTRINSIC_STATE_##state: \
-        flag_to_add = mi::mdl::IGenerated_code_executable::SU_##state; \
-        break;
-
-#define CASE_TEXTURE_TANGENTS(state) \
-    case mi::mdl::IDefinition::DS_INTRINSIC_STATE_##state: \
-        flag_to_add = mi::mdl::IGenerated_code_executable::SU_TEXTURE_TANGENTS; \
-        break;
-
-#define CASE_GEOMETRY_TANGENTS(state) \
-    case mi::mdl::IDefinition::DS_INTRINSIC_STATE_##state: \
-        flag_to_add = mi::mdl::IGenerated_code_executable::SU_GEOMETRY_TANGENTS; \
-        break;
-
-#define CASE_TRANSFORMS(state) \
-    case mi::mdl::IDefinition::DS_INTRINSIC_STATE_##state: \
-        flag_to_add = mi::mdl::IGenerated_code_executable::SU_TRANSFORMS; \
-        break;
-
-    CASE(POSITION)
-    CASE(NORMAL)
-    CASE(GEOMETRY_NORMAL)
-    CASE(MOTION)
-    CASE(TEXTURE_COORDINATE)
-    CASE_TEXTURE_TANGENTS(TEXTURE_TANGENT_U)
-    CASE_TEXTURE_TANGENTS(TEXTURE_TANGENT_V)
-    CASE(TANGENT_SPACE)
-    CASE_GEOMETRY_TANGENTS(GEOMETRY_TANGENT_U)
-    CASE_GEOMETRY_TANGENTS(GEOMETRY_TANGENT_V)
-    CASE(DIRECTION)
-    CASE(ANIMATION_TIME)
-    CASE_TRANSFORMS(TRANSFORM)
-    CASE_TRANSFORMS(TRANSFORM_POINT)
-    CASE_TRANSFORMS(TRANSFORM_VECTOR)
-    CASE_TRANSFORMS(TRANSFORM_NORMAL)
-    CASE_TRANSFORMS(TRANSFORM_SCALE)
-    CASE(ROUNDED_CORNER_NORMAL)
-    CASE(OBJECT_ID)
-
-#undef CASE_TRANSFORMS
-#undef CASE_GEOMETRY_TANGENTS
-#undef CASE_TEXTURE_TANGENTS
-#undef CASE
-    }
-
-    info->state_usage    |= flag_to_add;
-    m_module_state_usage |= flag_to_add;
-}
-
-// Add a state usage flag to the currently compiled function.
-void State_usage_analysis::add_state_usage(llvm::Function *func, State_usage flag_to_add)
-{
-    m_module_state_usage |= flag_to_add;
-
-    Function_state_usage_info_map::iterator it = m_func_state_usage_info_map.find(func);
-    if (it == m_func_state_usage_info_map.end()) {
-        MDL_ASSERT(!"Function not registered for state usage info");
-        return;
-    }
-
-    it->second->state_usage |= flag_to_add;
-}
-
-// Add a call to the call graph.
-void State_usage_analysis::add_call(llvm::Function *caller, llvm::Function *callee)
-{
-    Function_state_usage_info_map::iterator it = m_func_state_usage_info_map.find(caller);
-    if (it == m_func_state_usage_info_map.end()) {
-        MDL_ASSERT(!"Function not registered for state usage info");
-        return;
-    }
-
-    it->second->called_funcs.insert(callee);
-}
-
-// Updates the state usage of the exported functions of the code generator.
-void State_usage_analysis::update_exported_functions_state_usage()
-{
-    for (LLVM_code_generator::Exported_function &exported_func : m_code_gen.m_exported_func_list) {
-        llvm::SmallPtrSet<llvm::Function *, 16> visited;
-        llvm::SmallVector<llvm::Function *, 16> worklist;
-        worklist.push_back(exported_func.func);
-
-        while (!worklist.empty()) {
-            llvm::Function *cur = worklist.pop_back_val();
-            if (visited.count(cur)) {
-                continue;
-            }
-            visited.insert(cur);
-            Function_state_usage_info const *info = m_func_state_usage_info_map[cur];
-            exported_func.state_usage |= info->state_usage;
-            worklist.append(info->called_funcs.begin(), info->called_funcs.end());
-        }
-    }
-}
-
-
 // ------------------------------- LLVM code generator -------------------------------
 
 static unsigned map_target_lang(
@@ -1352,10 +1389,13 @@ LLVM_code_generator::LLVM_code_generator(
     MDL_JIT_OPTION_USE_RENDERER_ADAPT_MICROFACET_ROUGHNESS))
 , m_use_renderer_adapt_normal(options.get_bool_option(
     MDL_JIT_OPTION_USE_RENDERER_ADAPT_NORMAL))
+, m_enable_libbsdf_spectral(options.get_bool_option(MDL_JIT_OPTION_ENABLE_LIBBSDF_SPECTRAL))
 , m_in_intrinsic_generator(false)
 , m_target_lang(target_lang)
 , m_lambda_return_mode(
     parse_return_mode(options.get_string_option(MDL_JIT_OPTION_LAMBDA_RETURN_MODE)))
+, m_enable_init_loop_generation(
+        options.get_bool_option(MDL_JIT_OPTION_ENABLE_INIT_LOOP_GENERATION))
 , m_func_remap(
     jitted_code->get_allocator(), options.get_string_option(MDL_JIT_OPTION_REMAP_FUNCTIONS))
 , m_runtime(create_mdl_runtime(
@@ -1400,12 +1440,19 @@ LLVM_code_generator::LLVM_code_generator(
     Type_mapper::Type_mapping_mode(
         map_target_lang(target_lang, tm_mode) |
         (options.get_bool_option(MDL_JIT_OPTION_MAP_STRINGS_TO_IDS) ?
-            Type_mapper::TM_STRINGS_ARE_IDS : 0)),
+            Type_mapper::TM_STRINGS_ARE_IDS : 0) |
+        (m_enable_libbsdf_spectral ? Type_mapper::TM_SPECTRAL_ENABLED : 0)),
     num_texture_spaces,
     num_texture_results)
 , m_module_stack(get_allocator())
 , m_functions_q(Function_wait_queue::container_type(get_allocator()))
 , m_node_value_map(0, Node_value_map::hasher(), Node_value_map::key_equal(), get_allocator())
+, m_manual_node_value_map(get_allocator())
+, m_measured_curve_array_index_accessor_map(
+    0,
+    Measured_curve_array_index_accessor_map::hasher(),
+    Measured_curve_array_index_accessor_map::key_equal(),
+    get_allocator())
 , m_last_bb(0)
 , m_curr_bb(get_next_bb())
 , m_scatter_components_map(
@@ -1468,7 +1515,7 @@ LLVM_code_generator::LLVM_code_generator(
     options.get_string_option(MDL_JIT_OPTION_TEX_LOOKUP_CALL_MODE)))
 , m_dist_func(NULL)
 , m_dist_func_state(DFSTATE_NONE)
-, m_cur_main_func_index(0)
+, m_cur_req_node(NULL)
 , m_instantiated_dfs(
     Distribution_function_state::DFSTATE_END_STATE,
     Instantiated_dfs(get_allocator()),
@@ -1482,6 +1529,7 @@ LLVM_code_generator::LLVM_code_generator(
 , m_lambda_results_struct_type(NULL)
 , m_lambda_result_indices(get_allocator())
 , m_texture_results_struct_type(NULL)
+, m_texture_result_map{Texture_result_map(get_allocator()), Texture_result_map(get_allocator())}
 , m_texture_result_indices(get_allocator())
 , m_texture_result_offsets(get_allocator())
 , m_float3_struct_type(NULL)
@@ -1520,6 +1568,11 @@ LLVM_code_generator::LLVM_code_generator(
 , m_int_func_state_get_measured_curve_value(NULL)
 , m_int_func_state_adapt_microfacet_roughness(NULL)
 , m_int_func_state_adapt_normal(NULL)
+, m_int_func_state_rgb_to_spectral_ior(NULL)
+, m_int_func_state_rgb_to_spectral_reflectance(NULL)
+, m_int_func_state_rgb_to_spectral_luminance(NULL)
+, m_int_func_state_rgb_to_spectral_volume_coefficient(NULL)
+, m_int_func_state_get_wavelengths(NULL)
 , m_int_func_df_bsdf_measurement_resolution(NULL)
 , m_int_func_df_bsdf_measurement_evaluate(NULL)
 , m_int_func_df_bsdf_measurement_sample(NULL)
@@ -1529,6 +1582,9 @@ LLVM_code_generator::LLVM_code_generator(
 , m_int_func_df_light_profile_sample(NULL)
 , m_int_func_df_light_profile_pdf(NULL)
 , m_next_func_name_id(0)
+, m_overridden_arguments(NULL)
+, m_overridden_argument_count(0)
+, m_sl_value_hack_loop_var(NULL)
 {
     // clear the lookup tables
     memset(m_lut_info,              0, sizeof(m_lut_info));
@@ -1815,6 +1871,58 @@ void LLVM_code_generator::prepare_internal_functions()
         /*param_types=*/ Array_ref<IType const*>(float3_type),
         /*param_names=*/ Array_ref<char const*>("normal"));
 
+    IType const* rgb_to_spectral_types[] = { float3_type };
+    char const* rgb_to_spectral_names[] = { "rgb" };
+    m_int_func_state_rgb_to_spectral_ior = m_arena_builder.create<Internal_function>(
+        m_arena_builder.get_arena(),
+        "::state::rgb_to_spectral_ior(float3)",
+        "_ZN5state19rgb_to_spectral_iorERK6float3",
+        Internal_function::KI_STATE_RGB_TO_SPECTRAL_IOR,
+        Internal_function::FL_HAS_STATE | Internal_function::FL_HAS_RES,
+        /*ret_type=*/ m_type_mapper.get_spectral_sample_type(),
+        /*param_types=*/ Array_ref<IType const*>(rgb_to_spectral_types),
+        /*param_names=*/ Array_ref<char const*>(rgb_to_spectral_names));
+
+    m_int_func_state_rgb_to_spectral_reflectance = m_arena_builder.create<Internal_function>(
+        m_arena_builder.get_arena(),
+        "::state::rgb_to_spectral_reflectance(float3)",
+        "_ZN5state27rgb_to_spectral_reflectanceERK6float3",
+        Internal_function::KI_STATE_RGB_TO_SPECTRAL_REFLECTANCE,
+        Internal_function::FL_HAS_STATE | Internal_function::FL_HAS_RES,
+        /*ret_type=*/ m_type_mapper.get_spectral_sample_type(),
+        /*param_types=*/ Array_ref<IType const*>(rgb_to_spectral_types),
+        /*param_names=*/ Array_ref<char const*>(rgb_to_spectral_names));
+
+    m_int_func_state_rgb_to_spectral_luminance = m_arena_builder.create<Internal_function>(
+        m_arena_builder.get_arena(),
+        "::state::rgb_to_spectral_luminance(float3)",
+        "_ZN5state25rgb_to_spectral_luminanceERK6float3",
+        Internal_function::KI_STATE_RGB_TO_SPECTRAL_LUMINANCE,
+        Internal_function::FL_HAS_STATE | Internal_function::FL_HAS_RES,
+        /*ret_type=*/ m_type_mapper.get_spectral_sample_type(),
+        /*param_types=*/ Array_ref<IType const*>(rgb_to_spectral_types),
+        /*param_names=*/ Array_ref<char const*>(rgb_to_spectral_names));
+
+    m_int_func_state_rgb_to_spectral_volume_coefficient = m_arena_builder.create<Internal_function>(
+        m_arena_builder.get_arena(),
+        "::state::rgb_to_spectral_volume_coefficient(float3)",
+        "_ZN5state34rgb_to_spectral_volume_coefficientERK6float3",
+        Internal_function::KI_STATE_RGB_TO_SPECTRAL_VOLUME_COEFFICIENT,
+        Internal_function::FL_HAS_STATE | Internal_function::FL_HAS_RES,
+        /*ret_type=*/ m_type_mapper.get_spectral_sample_type(),
+        /*param_types=*/ Array_ref<IType const*>(rgb_to_spectral_types),
+        /*param_names=*/ Array_ref<char const*>(rgb_to_spectral_names));
+
+    m_int_func_state_get_wavelengths = m_arena_builder.create<Internal_function>(
+        m_arena_builder.get_arena(),
+        "::state::get_wavelengths()",
+        "_ZN5state15get_wavelengthsEv",
+        Internal_function::KI_STATE_GET_WAVELENGTHS,
+        Internal_function::FL_HAS_STATE | Internal_function::FL_HAS_RES,
+        /*ret_type=*/ m_type_mapper.get_spectral_sample_type(),
+        /*param_types=*/ Array_ref<IType const*>(),
+        /*param_names=*/ Array_ref<char const*>());
+
     IType const* resolution_param_types[] = { int_type, int_type };
     char const* resolution_param_names[] = { "bm_index", "part" };
     m_int_func_df_bsdf_measurement_resolution = m_arena_builder.create<Internal_function>(
@@ -1980,9 +2088,10 @@ bool LLVM_code_generator::optimize(llvm::Module *module)
     }
 
     llvm::PassManagerBuilder builder;
-    builder.OptLevel         = m_opt_level;
-    builder.AvoidPointerPHIs = target_is_structured_language();
-    builder.EnableVectorizer = !target_is_structured_language();
+    builder.OptLevel           = m_opt_level;
+    builder.AvoidPointerPHIs   = target_is_structured_language();
+    builder.EnableVectorizer   = !target_is_structured_language();
+    builder.SimplifyCondBranch = !target_is_structured_language();
 
     // TODO: in PTX mode we don't use the C-library, but libdevice, this probably must
     // be registered somewhere, or libcall simplification can happen
@@ -3413,14 +3522,6 @@ LLVM_context_data *LLVM_code_generator::declare_lambda(
 
         flags |= LLVM_context_data::FL_HAS_CAP_ARGS;
     }
-    if (!m_lambda_force_no_lambda_results && target_supports_lambda_results_parameter() &&
-        lambda->uses_lambda_results())
-    {
-        // add lambda results parameter
-        arg_types.push_back(m_type_mapper.get_void_ptr_type());
-
-        flags |= LLVM_context_data::FL_HAS_LMBD_RES;
-    }
 
     // lambda functions have NEITHER an object_id NOR a transform parameter
 
@@ -3473,6 +3574,144 @@ LLVM_context_data *LLVM_code_generator::declare_lambda(
             func->addParamAttr(arg_it->getArgNo(), llvm::Attribute::NoAlias);
             func->addParamAttr(arg_it->getArgNo(), llvm::Attribute::NoCapture);
         }
+        ++arg_it;
+    }
+    if (flags & LLVM_context_data::FL_HAS_STATE) {
+        arg_it->setName("state");
+
+        // the state pointer does not alias and is not captured
+        func->addParamAttr(arg_it->getArgNo(), llvm::Attribute::NoAlias);
+        func->addParamAttr(arg_it->getArgNo(), llvm::Attribute::NoCapture);
+        ++arg_it;
+    }
+    if (flags & LLVM_context_data::FL_HAS_RES) {
+        if (target_supports_pointers()) {
+            arg_it->setName("res_data_pair");
+        } else {
+            arg_it->setName("res_data");
+        }
+
+        // the resource data pointer does not alias and is not captured
+        func->addParamAttr(arg_it->getArgNo(), llvm::Attribute::NoAlias);
+        func->addParamAttr(arg_it->getArgNo(), llvm::Attribute::NoCapture);
+        ++arg_it;
+    }
+    if (flags & LLVM_context_data::FL_HAS_EXC) {
+        arg_it->setName("exc_state");
+
+        // the exc_data pointer does not alias and is not captured
+        func->addParamAttr(arg_it->getArgNo(), llvm::Attribute::NoAlias);
+        func->addParamAttr(arg_it->getArgNo(), llvm::Attribute::NoCapture);
+        ++arg_it;
+    }
+    if (flags & LLVM_context_data::FL_HAS_CAP_ARGS) {
+        arg_it->setName("captured_arguments");
+
+        // the cap_args pointer does not alias and is not captured
+        func->addParamAttr(arg_it->getArgNo(), llvm::Attribute::NoAlias);
+        func->addParamAttr(arg_it->getArgNo(), llvm::Attribute::NoCapture);
+        ++arg_it;
+    }
+    if (flags & LLVM_context_data::FL_HAS_OBJ_ID) {
+        arg_it->setName("object_id");
+        ++arg_it;
+    }
+    if (flags & LLVM_context_data::FL_HAS_TRANSFORMS) {
+        arg_it->setName("w2o_transform");
+        ++arg_it;
+        arg_it->setName("o2w_transform");
+        ++arg_it;
+    }
+
+    return m_arena_builder.create<LLVM_context_data>(func, real_ret_tp, flags);
+}
+
+// Declares an LLVM function from a requested node of a distribution function.
+LLVM_context_data *LLVM_code_generator::declare_requested_node(
+    mi::mdl::Distribution_function const *dist_func,
+    size_t                                req_node_idx)
+{
+    LLVM_context_data::Flags flags = LLVM_context_data::FL_NONE;
+
+    mi::mdl::Distribution_function::Requested_node const *req_node =
+        dist_func->get_requested_node(req_node_idx);
+
+    // create function prototype
+    mi::mdl::IType const *mdl_ret_tp = req_node->node->get_type();
+    llvm::Type *ret_tp;
+    if (m_dist_func_state == DFSTATE_INIT) {
+        ret_tp = m_type_mapper.get_void_type();
+    } else {
+        ret_tp = lookup_type(mdl_ret_tp);
+    }
+    MDL_ASSERT(ret_tp != NULL);
+
+    llvm::Type *real_ret_tp = ret_tp;
+
+    mi::mdl::vector<llvm::Type *>::Type arg_types(get_allocator());
+
+    bool is_sret_func = (m_lambda_force_sret || need_reference_return(mdl_ret_tp, -1));
+
+    if (is_sret_func) {
+        // add a hidden parameter for the struct return
+        arg_types.push_back(Type_mapper::get_ptr(ret_tp));
+        ret_tp = m_type_mapper.get_void_type();
+
+        // lambda function are always interfaced with the "outer-world", so
+        // we cannot control alignment here
+        flags |= LLVM_context_data::FL_SRET | LLVM_context_data::FL_UNALIGNED_RET;
+    }
+
+    // requested node functions are always entrypoints callable by the renderer
+
+    // requested node functions always take a state parameter
+    arg_types.push_back(m_type_mapper.get_state_ptr_type(m_state_mode));
+
+    flags |= LLVM_context_data::FL_HAS_STATE;
+
+    if (target_uses_resource_data_parameter()) {
+        // add a hidden resource_data parameter
+        arg_types.push_back(m_type_mapper.get_res_data_pair_ptr_type());
+
+        flags |= LLVM_context_data::FL_HAS_RES;
+    }
+    if (target_uses_exception_state_parameter()) {
+        // add a hidden exc_state parameter
+        arg_types.push_back(m_type_mapper.get_exc_state_ptr_type());
+
+        flags |= LLVM_context_data::FL_HAS_EXC;
+    }
+    if (target_supports_captured_argument_parameter()) {
+        // add captured arguments pointer parameter
+        arg_types.push_back(m_type_mapper.get_void_ptr_type());
+
+        flags |= LLVM_context_data::FL_HAS_CAP_ARGS;
+    }
+
+    // requested node functions have NEITHER an object_id NOR a transform parameter
+
+    llvm::GlobalValue::LinkageTypes const linkage = llvm::GlobalValue::ExternalLinkage;
+
+    llvm::Function *func = llvm::Function::Create(
+        llvm::FunctionType::get(ret_tp, arg_types, false),
+        linkage,
+        req_node->function_name,
+        m_module);
+    set_llvm_function_attributes(func, /*mark_noinline=*/false);
+    m_state_usage_analysis.register_function(func);
+
+    func->setCallingConv(llvm::CallingConv::C);
+
+    // set parameter names
+    llvm::Function::arg_iterator arg_it = func->arg_begin();
+    if (flags & LLVM_context_data::FL_SRET) {
+        // the first argument is the struct return
+        arg_it->setName("sret_ptr");
+
+        // treat the first argument as a pointer, but we could at least improve
+        // the code a bit, because we "know" that the extra parameter is alias free
+        func->addParamAttr(arg_it->getArgNo(), llvm::Attribute::NoAlias);
+        func->addParamAttr(arg_it->getArgNo(), llvm::Attribute::NoCapture);
         ++arg_it;
     }
     if (flags & LLVM_context_data::FL_HAS_STATE) {
@@ -4389,16 +4628,18 @@ void LLVM_code_generator::translate_switch(
                 ctx->CreateBr(default_bb);
                 ctx->SetInsertPoint(default_bb);
             } else {
-                llvm::BasicBlock *case_bb = ctx.create_bb("case_body");
-
-                // fall-through from previous case and switch to the new block
-                ctx->CreateBr(case_bb);
-                ctx->SetInsertPoint(case_bb);
-
                 mi::mdl::IExpression_literal const *lit =
                     cast<mi::mdl::IExpression_literal>(label);
                 mi::mdl::IValue_int_valued const *v =
                     cast<mi::mdl::IValue_int_valued>(lit->get_value());
+
+                char case_name[24];
+                snprintf(case_name, sizeof(case_name), "case_body_%u_", v->get_value());
+                llvm::BasicBlock *case_bb = ctx.create_bb(case_name);
+
+                // fall-through from previous case and switch to the new block
+                ctx->CreateBr(case_bb);
+                ctx->SetInsertPoint(case_bb);
 
                 switch_instr->addCase(ctx.get_constant(v), case_bb);
             }
@@ -5139,7 +5380,7 @@ Expression_result LLVM_code_generator::translate_expression(
             case mi::mdl::IDefinition::DK_CONSTANT:
                 {
                     mi::mdl::IValue const *v = def->get_constant_value();
-                    res = Expression_result::value(ctx.get_constant(v));
+                    res = translate_value(v);
                 }
                 break;
 
@@ -5290,6 +5531,8 @@ bool LLVM_code_generator::can_be_stored_in_ro_segment(IType const *t)
     case IType::TK_VECTOR:
     case IType::TK_MATRIX:
     case IType::TK_COLOR:
+    case IType::TK_SPECTRAL_SAMPLE:
+    case IType::TK_SPECTRUM:
         // supported
         return true;
     case IType::TK_ARRAY:
@@ -7283,6 +7526,40 @@ Expression_result LLVM_code_generator::translate_dag_intrinsic(
             res.ensure_deriv_result(ctx, true);  // always ensure we get a derivative
             return res;
         }
+        case mi::mdl::IDefinition::DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_IOR:
+        case mi::mdl::IDefinition::DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_REFLECTANCE:
+        case mi::mdl::IDefinition::DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_LUMINANCE:
+        case mi::mdl::IDefinition::DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_VOLUME_COEFFICIENT:
+            {
+                Internal_function *int_func = nullptr;
+                switch (sema) {
+                case mi::mdl::IDefinition::DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_IOR:
+                    int_func = m_int_func_state_rgb_to_spectral_ior;
+                    break;
+                case mi::mdl::IDefinition::DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_REFLECTANCE:
+                    int_func = m_int_func_state_rgb_to_spectral_reflectance;
+                    break;
+                case mi::mdl::IDefinition::DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_LUMINANCE:
+                    int_func = m_int_func_state_rgb_to_spectral_luminance;
+                    break;
+                case mi::mdl::IDefinition::DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_VOLUME_COEFFICIENT:
+                    int_func = m_int_func_state_rgb_to_spectral_volume_coefficient;
+                    break;
+                default:
+                    MDL_ASSERT(!"Unexpected DAG intrinsic");
+                    return Expression_result::undef(lookup_type(call_expr->get_type()));
+                }
+                llvm::Function *conv_func = get_internal_function(int_func);
+                llvm::SmallVector<llvm::Value *, 3> args;
+                args.push_back(ctx.get_state_parameter());
+                if (target_uses_resource_data_parameter()) {
+                    args.push_back(ctx.get_resource_data_parameter());
+                }
+                llvm::Value *rgb = call_expr->translate_argument(0, derivs).as_value(ctx);
+                args.push_back(rgb);
+                llvm::Value *spectral_sample = call_rt_func(conv_func, args);
+                return Expression_result::value(spectral_sample);
+            }
     }
     MDL_ASSERT(!"Unexpected DAG intrinsic");
     return Expression_result::undef(lookup_type(call_expr->get_type()));
@@ -7546,13 +7823,14 @@ Expression_result LLVM_code_generator::translate_call(
     case mi::mdl::IDefinition::DS_INTRINSIC_DAG_SET_OBJECT_ID:
     case mi::mdl::IDefinition::DS_INTRINSIC_DAG_SET_TRANSFORMS:
     case mi::mdl::IDefinition::DS_INTRINSIC_DAG_MAKE_DERIV:
+    case mi::mdl::IDefinition::DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_IOR:
+    case mi::mdl::IDefinition::DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_REFLECTANCE:
+    case mi::mdl::IDefinition::DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_LUMINANCE:
+    case mi::mdl::IDefinition::DS_INTRINSIC_DAG_RGB_TO_SPECTRAL_VOLUME_COEFFICIENT:
         return translate_dag_intrinsic(call_expr);
 
     case mi::mdl::IDefinition::DS_INTRINSIC_JIT_LOOKUP:
         return translate_jit_intrinsic(call_expr);
-
-    case mi::mdl::IDefinition::DS_INTRINSIC_DAG_CALL_LAMBDA:
-        return translate_dag_call_lambda(call_expr);
 
     case mi::mdl::IDefinition::DS_INTRINSIC_DAG_DECL_CAST:
         error(INTERNAL_JIT_BACKEND_ERROR, "Cannot compile decl_cast nodes");
@@ -7910,21 +8188,6 @@ Expression_result LLVM_code_generator::translate_call_user_defined_function(
         return Expression_result::ptr(sret_res);
     }
     return Expression_result::value(res);
-}
-
-// Translate a DAG expression lambda call to LLVM IR.
-Expression_result LLVM_code_generator::translate_dag_call_lambda(
-    ICall_expr const *call_expr)
-{
-    MDL_ASSERT(call_expr->get_semantics() == IDefinition::DS_INTRINSIC_DAG_CALL_LAMBDA);
-
-    DAG_call const *dag_call = call_expr->as_dag_call();
-    MDL_ASSERT(dag_call != NULL && "Cannot convert lambda call to DAG node");
-
-    size_t lambda_index = strtoul(dag_call->get_name(), NULL, 10);
-    return translate_precalculated_lambda(
-        lambda_index,
-        m_type_mapper.lookup_type(m_llvm_context, dag_call->get_type()));
 }
 
 /// Return the length of a vector3 (fourth component ignored).
@@ -9370,6 +9633,14 @@ Expression_result LLVM_code_generator::translate_node(
     mi::mdl::DAG_node const            *node,
     mi::mdl::ICall_name_resolver const *resolver)
 {
+    Function_context &ctx = *m_ctx;
+
+    // only used for already calculated results in the mdl_init function
+    auto manual_it = m_manual_node_value_map.find(node);
+    if (manual_it != m_manual_node_value_map.end()) {
+        return manual_it->second;
+    }
+
     Node_value_map::iterator it = m_node_value_map.find(Value_entry(node, m_curr_bb));
     if (it != m_node_value_map.end()) {
         return it->second;
@@ -9377,58 +9648,76 @@ Expression_result LLVM_code_generator::translate_node(
 
     Expression_result res;
 
-    switch (node->get_kind()) {
-    case mi::mdl::DAG_node::EK_CONSTANT:
-        // simple case: just a constant
-        {
-            mi::mdl::DAG_constant const *c = cast<mi::mdl::DAG_constant>(node);
-            mi::mdl::IValue const *v = c->get_value();
-
-            res = translate_value(v);
+    // check whether the node result is already available in the texture results map
+    // for the evaluation state of the current requested node (if present)
+    if (Texture_result_slot const *slot = get_texture_result_slot(node)) {
+        // is the result available in the texture results from the MDL SDK state
+        if (target_is_structured_language()) {
+            res = Expression_result::value(load_from_float4_array(
+                m_texture_results_struct_type->getElementType(slot->index),
+                get_texture_results(),
+                slot->offset));
+        } else {
+            res = Expression_result::ptr(ctx->CreateConstGEP2_32(
+                nullptr,
+                get_texture_results(),
+                0,
+                unsigned(slot->index)));
         }
-        break;
-
-    case mi::mdl::DAG_node::EK_TEMPORARY:
-        // there should be no temporaries at this point
-        res = translate_node(cast<mi::mdl::DAG_temporary>(node)->get_expr(), resolver);
-        break;
-
-    case mi::mdl::DAG_node::EK_CALL:
-        {
-            DAG_call const *call_node = cast<DAG_call>(node);
-            Call_dag_expr call(*this, call_node, resolver);
-
-            // We must be inside some module when the call is translated, but if it is DAG-call,
-            // there is no module.
-            // Solve this by entering the owner module of the called entity.
-
-            IDefinition::Semantics sema = call_node->get_semantic();
-            if (sema == IDefinition::DS_INTRINSIC_DAG_SET_TRANSFORMS ||
-                sema == IDefinition::DS_INTRINSIC_DAG_SET_OBJECT_ID)
+    } else {
+        switch (node->get_kind()) {
+        case mi::mdl::DAG_node::EK_CONSTANT:
+            // simple case: just a constant
             {
-                // these two have no module and no owner
-                res = translate_call(&call);
-            } else {
-                char const *signature = call_node->get_name();
-                if (signature[0] == '#') {
-                    // skip prefix for derivative variants
-                    ++signature;
-                }
-                mi::base::Handle<mi::mdl::Module const> mod(
-                    impl_cast<mi::mdl::Module>(resolver->get_owner_module(signature)));
-                MDL_module_scope scope(*this, mod.get());
+                mi::mdl::DAG_constant const *c = cast<mi::mdl::DAG_constant>(node);
+                mi::mdl::IValue const *v = c->get_value();
 
-                res = translate_call(&call);
+                res = translate_value(v);
             }
-        }
-        break;
+            break;
 
-    case mi::mdl::DAG_node::EK_PARAMETER:
-        {
-            DAG_parameter const *param_node = cast<DAG_parameter>(node);
-            res = translate_parameter(param_node);
+        case mi::mdl::DAG_node::EK_TEMPORARY:
+            // there should be no temporaries at this point
+            res = translate_node(cast<mi::mdl::DAG_temporary>(node)->get_expr(), resolver);
+            break;
+
+        case mi::mdl::DAG_node::EK_CALL:
+            {
+                DAG_call const *call_node = cast<DAG_call>(node);
+                Call_dag_expr call(*this, call_node, resolver);
+
+                // We must be inside some module when the call is translated, but if it is DAG-call,
+                // there is no module.
+                // Solve this by entering the owner module of the called entity.
+
+                IDefinition::Semantics sema = call_node->get_semantic();
+                if (sema == IDefinition::DS_INTRINSIC_DAG_SET_TRANSFORMS ||
+                    sema == IDefinition::DS_INTRINSIC_DAG_SET_OBJECT_ID)
+                {
+                    // these two have no module and no owner
+                    res = translate_call(&call);
+                } else {
+                    char const *signature = call_node->get_name();
+                    if (signature[0] == '#') {
+                        // skip prefix for derivative variants
+                        ++signature;
+                    }
+                    mi::base::Handle<mi::mdl::Module const> mod(
+                        impl_cast<mi::mdl::Module>(resolver->get_owner_module(signature)));
+                    MDL_module_scope scope(*this, mod.get());
+
+                    res = translate_call(&call);
+                }
+            }
+            break;
+
+        case mi::mdl::DAG_node::EK_PARAMETER:
+            {
+                DAG_parameter const *param_node = cast<DAG_parameter>(node);
+                res = translate_parameter(param_node);
+            }
+            break;
         }
-        break;
     }
     if (res.is_unset()) {
         MDL_ASSERT(!"Unsupported DAG node kind");
@@ -9659,6 +9948,24 @@ Expression_result LLVM_code_generator::translate_sl_value(
                 : Type_mapper::STATE_CORE_RO_DATA_SEG)
         ));
     llvm::Value *base_offs = ctx->CreateLoad(adr);
+
+    // HACK: If the loop var is set, use the highest bit of the base offset
+    // to get a zero which the compiler cannot optimize away.
+    // Then "and" it with the loop variable to make it loop-dependent and
+    // use it to make the base offset loop-dependent as well.
+    if (m_sl_value_hack_loop_var != NULL) {
+        llvm::Value *hack_zero = ctx->CreateAShr(base_offs, 31);
+        llvm::Value *hack_zero_loop_dep = ctx->CreateAnd(
+            hack_zero,
+            m_sl_value_hack_loop_var);
+
+        llvm::Value *hack_all_one_loop_dep = ctx->CreateNot(hack_zero_loop_dep);
+
+        base_offs = ctx->CreateAnd(
+            hack_all_one_loop_dep,
+            base_offs);
+    }
+
     if (add_val != NULL) {
         add_val = ctx->CreateAdd(base_offs, add_val);
     } else {
@@ -9747,7 +10054,6 @@ public:
         size_t                 size)
     : m_code_gen(code_gen)
     , m_dl(code_gen.get_target_layout_data())
-    , m_segment(segment)
     , m_end(segment + size)
     , m_next(segment)
     {
@@ -9842,6 +10148,8 @@ private:
             case IValue::VK_MATRIX:
             case IValue::VK_ARRAY:
             case IValue::VK_RGB_COLOR:
+            case IValue::VK_SPECTRUM:
+            case IValue::VK_SPECTRAL_SAMPLE:
             case IValue::VK_STRUCT:
                 MDL_ASSERT(!"Unexpected compound value");
                 break;
@@ -9878,13 +10186,10 @@ private:
     /// The data layout of the target.
     llvm::DataLayout const *m_dl;
 
-    /// The segment start.
-    Byte *m_segment;
-
-    /// Pointer to the end.
+    /// Pointer to the segment end.
     Byte *m_end;
 
-    /// Pointer to the next data written.
+    /// Pointer to the next data written in the segment.
     Byte *m_next;
 };
 
@@ -9963,9 +10268,10 @@ void LLVM_code_generator::create_module(char const *mod_name, char const *mod_fn
     m_func_pass_manager.reset(new llvm::legacy::FunctionPassManager(m_module));
 
     llvm::PassManagerBuilder builder;
-    builder.OptLevel         = m_opt_level;
-    builder.AvoidPointerPHIs = target_is_structured_language();
-    builder.EnableVectorizer = !target_is_structured_language();
+    builder.OptLevel           = m_opt_level;
+    builder.AvoidPointerPHIs   = target_is_structured_language();
+    builder.EnableVectorizer   = !target_is_structured_language();
+    builder.SimplifyCondBranch = !target_is_structured_language();
     builder.populateFunctionPassManager(*m_func_pass_manager);
     m_func_pass_manager->doInitialization();
 }
@@ -10301,6 +10607,11 @@ void LLVM_code_generator::ptx_compile(
                 break;
 
             case llvm::Type::FixedVectorTyID:
+            case llvm::Type::StructTyID:
+                // Aggregates (vectors and small structs such as
+                // `struct S { float a[4]; }`) are returned as a properly-aligned
+                // byte array `func_retval0[N]` in PTX; the data layout supplies
+                // the size and alignment regardless of the aggregate's shape.
                 p += "(.param .align ";
                 p += std::to_string(m_data_layout.getABITypeAlignment(ret_type)).c_str();
                 p += " .b8 func_retval0[";
@@ -10374,6 +10685,36 @@ void LLVM_code_generator::ptx_compile(
             case llvm::Type::DoubleTyID:
                 p += "double";
                 break;
+            case llvm::Type::StructTyID:
+                {
+                    // Handle `struct { T[N]; }` (e.g. `struct S { float a[4]; }`),
+                    // which is how nvcc lowers a small fixed-size by-value array
+                    // return. Extract T and N and reuse the vector-size suffix
+                    // logic below by setting num_elems = N.
+                    llvm::StructType *st = llvm::cast<llvm::StructType>(elem_type);
+                    llvm::ArrayType *at = NULL;
+                    if (st->getNumElements() == 1) {
+                        at = llvm::dyn_cast<llvm::ArrayType>(st->getElementType(0));
+                    }
+                    if (at != NULL) {
+                        llvm::Type *at_elem = at->getElementType();
+                        if (at_elem->isFloatTy()) {
+                            p += "float";
+                            num_elems = unsigned(at->getNumElements());
+                            break;
+                        } else if (at_elem->isDoubleTy()) {
+                            p += "double";
+                            num_elems = unsigned(at->getNumElements());
+                            break;
+                        } else if (at_elem->isIntegerTy()) {
+                            p += "int";
+                            num_elems = unsigned(at->getNumElements());
+                            break;
+                        }
+                    }
+                }
+                // Unsupported struct shape - fall through to default.
+                // fallthrough
             default:
                 MDL_ASSERT(!"Unexpected return type");
                 p += "<INVALID RETURN TYPE> ";  // add syntax error to prototype
@@ -11390,6 +11731,24 @@ IDefinition const *LLVM_code_generator::promote_to_highest_version(
     }
 
     return def;
+}
+
+bool LLVM_code_generator::has_argument_overrides() const {
+    return m_overridden_arguments != nullptr;
+}
+
+size_t LLVM_code_generator::argument_override_count() const {
+    return m_overridden_argument_count;
+}
+
+
+Expression_result *LLVM_code_generator::argument_override(size_t index) const {
+    return &m_overridden_arguments[index];
+}
+
+void LLVM_code_generator::set_argument_overrides(Expression_result *arguments, size_t argument_count) {
+    m_overridden_arguments = arguments;
+    m_overridden_argument_count = argument_count;
 }
 
 // Get a unique string value object used to represent the string of the value.

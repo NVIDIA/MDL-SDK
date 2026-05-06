@@ -1444,7 +1444,7 @@ static void usage(const char *name)
 {
     std::cout
         << "Usage: " << name << " [options] [<material_name1> ...]\n"
-        << "-h                          print this text\n"
+        << "-h|--help                   print this text and exit\n"
         << "--no_window                 don't open interactive display\n"
         << "--nocc                      don't use class-compilation\n"
         << "--gui_scale <factor>        GUI scaling factor (default: 1.0)\n"
@@ -1460,11 +1460,11 @@ static void usage(const char *name)
         << "                            (default: 2)\n"
         << "-e <exposure>               exposure for interactive display (default: 0.0)\n"
         << "-f <fov>                    the camera field of view in degree (default: 96.0)\n"
-        << "-p <x> <y> <z>              set the camera position (default 0 0 3).\n"
+        << "--camera <x> <y> <z>        set the camera position (default 0 0 3).\n"
         << "                            The camera will always look towards (0, 0, 0).\n"
         << "-l <x> <y> <z> <r> <g> <b>  add an isotropic point light with given coordinates and "
            "intensity (flux)\n"
-        << "--mdl_path <path>           MDL search path, can occur multiple times.\n"
+        << "-p|--mdl_path <path>        MDL search path, can occur multiple times.\n"
         << "--max_path_length <num>     maximum path length, default 4 (up to one total internal\n"
         << "                            reflection), clamped to 2..100\n"
         << "--noaa                      disable pixel oversampling\n"
@@ -1515,7 +1515,7 @@ int MAIN_UTF8(int argc, char* argv[])
                 options.exposure = static_cast<float>(atof(argv[++i]));
             } else if (strcmp(opt, "-f") == 0 && i < argc - 1) {
                 options.fov = static_cast<float>(atof(argv[++i]));
-            } else if (strcmp(opt, "-p") == 0 && i < argc - 3) {
+            } else if (strcmp(opt, "--camera") == 0 && i < argc - 3) {
                 options.cam_pos.x = static_cast<float>(atof(argv[++i]));
                 options.cam_pos.y = static_cast<float>(atof(argv[++i]));
                 options.cam_pos.z = static_cast<float>(atof(argv[++i]));
@@ -1526,7 +1526,7 @@ int MAIN_UTF8(int argc, char* argv[])
                 options.light_intensity.x = static_cast<float>(atof(argv[++i]));
                 options.light_intensity.y = static_cast<float>(atof(argv[++i]));
                 options.light_intensity.z = static_cast<float>(atof(argv[++i]));
-            } else if (strcmp(opt, "--mdl_path") == 0 && i < argc - 1) {
+            } else if ((strcmp(opt, "-p") == 0 || strcmp(opt, "--mdl_path") == 0) && i < argc - 1) {
                 options.mdl_paths.push_back(argv[++i]);
             } else if (strcmp(opt, "--max_path_length") == 0 && i < argc - 1) {
                 options.max_path_length = std::min(std::max(atoi(argv[++i]), 2), 100);
@@ -1535,7 +1535,8 @@ int MAIN_UTF8(int argc, char* argv[])
             } else if (strcmp(opt, "-d") == 0) {
                 options.enable_derivatives = true;
             } else {
-                std::cout << "Unknown option: \"" << opt << "\"" << std::endl;
+                if (strcmp(opt, "-h") != 0 && strcmp(opt, "--help") != 0)
+                    std::cout << "Unknown option: \"" << opt << "\"" << std::endl;
                 usage(argv[0]);
             }
         }
@@ -1585,9 +1586,34 @@ int MAIN_UTF8(int argc, char* argv[])
         descs.push_back(
             Target_function_description("volume.absorption_coefficient"));
 
+        std::vector<std::string> used_material_names;
+        auto add_material = [&](const std::string& material_name) {
+            std::cout << "Adding material \"" << material_name << "\"..." << std::endl;
+
+            // Create material instance
+            Material_instance mat_instance(
+                mc.create_and_init_material_instance(
+                    material_name, options.use_class_compilation));
+            if (!mat_instance) {
+                std::cout << "Failed creating material instance for \"" << material_name << "\"." << std::endl;
+                return false;
+            }
+
+            // Add functions of the material to the link unit
+            if (!mc.add_material(mat_instance, descs.data(), descs.size())) {
+                std::cout << "Failed!" << std::endl;
+                return false;
+            }
+
+            // Create application material representation
+            material_bundle.push_back(create_cuda_material(
+                0, material_bundle.size(), descs));
+            used_material_names.push_back(material_name);
+            return true;
+        };
+
         // Generate code for all materials
         bool success = true;
-        std::vector<std::string> used_material_names;
         for (size_t i = 0; i < options.material_names.size(); ++i) {
             std::string material_name(options.material_names[i]);
             if (!starts_with(material_name, "::")) material_name = "::" + material_name;
@@ -1606,38 +1632,12 @@ int MAIN_UTF8(int argc, char* argv[])
                     if (!starts_with(material_name, pattern))
                         continue;
 
-                    std::cout << "Adding material \"" << material_name << "\"..." << std::endl;
-
-                    // Add functions of the material to the link unit
-                    if (!mc.add_material(
-                            material_name,
-                            descs.data(), descs.size(),
-                            options.use_class_compilation)) {
-                        std::cout << "Failed!" << std::endl;
+                    if (!add_material(material_name)) {
                         success = false;
                     }
-
-                    // Create application material representation
-                    material_bundle.push_back(create_cuda_material(
-                        0, material_bundle.size(), descs));
-                    used_material_names.push_back(material_name);
                 }
-            } else {
-                std::cout << "Adding material \"" << material_name << "\"..." << std::endl;
-
-                // Add functions of the material to the link unit
-                if (!mc.add_material(
-                        material_name,
-                        descs.data(), descs.size(),
-                        options.use_class_compilation)) {
-                    std::cout << "Failed!" << std::endl;
-                    success = false;
-                }
-
-                // Create application material representation
-                material_bundle.push_back(create_cuda_material(
-                    0, material_bundle.size(), descs));
-                used_material_names.push_back(material_name);
+            } else if (!add_material(material_name)) {
+                success = false;
             }
         }
 

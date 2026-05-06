@@ -471,6 +471,7 @@ MI_TEST_AUTO_FUNCTION( test_import_export )
     test_import( "test_simple.jpg");
     test_import( "test_simple.png");
     test_import( "test_simple.pnm");
+    test_import( "test_simple.psd");
     test_import( "test_simple.tga");
     test_import( "test_simple_jpeg.tif");
     test_import( "test_simple_lzw.tif");

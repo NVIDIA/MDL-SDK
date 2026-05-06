@@ -32,7 +32,6 @@
 #define BASE_HAL_HOST_I_HOST_H
 
 #include <base/system/main/i_module.h>
-#include <base/lib/mem/i_mem_allocatable.h>
 
 namespace MI {
 
@@ -41,7 +40,7 @@ namespace SYSTEM { class Module_registration_entry; }
 namespace HOST {
 
 /// Interface for the host module
-class Host_module : public SYSTEM::IModule, public MEM::Allocatable
+class Host_module : public SYSTEM::IModule
 {
   public:
     /// Returns the number of CPUs (or 1 in case of failure)

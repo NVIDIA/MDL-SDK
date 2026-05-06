@@ -274,6 +274,17 @@ public:
             type, DL.getAllocaAddrSpace(), nullptr, name, &*m_function->front().begin());
     }
 
+    /// Create a new local variable with explicit alignment and return its address.
+    ///
+    /// \param type   the LLVM type of the local
+    /// \param align  the required alignment
+    /// \param name   its name
+    llvm::AllocaInst *create_local(llvm::Type *type, llvm::Align align, char const *name) {
+        const llvm::DataLayout &DL = m_function->getParent()->getDataLayout();
+        return new llvm::AllocaInst(
+            type, DL.getAllocaAddrSpace(), nullptr, align, name, &*m_function->front().begin());
+    }
+
     /// Create a new local array variable and return its address.
     ///
     /// \param type        the LLVM element type of the local
@@ -410,6 +421,16 @@ public:
     /// \param w      fourth component
     llvm::Constant *get_constant(llvm::FixedVectorType *vtype, float x, float y, float z, float w);
 
+    /// Get a spectral sample zero constant.
+    ///
+    /// \return the spectral sample zero constant
+    llvm::Constant *get_constant_spectral_sample_zero();
+
+    /// Get a spectral sample one constant.
+    ///
+    /// \return the spectral sample one constant
+    llvm::Constant *get_constant_spectral_sample_one();
+
     /// Get the file name of a module.
     ///
     /// \param mod  the MDL module
@@ -530,6 +551,11 @@ public:
     ///
     /// \param val   the value
     unsigned get_num_elements(llvm::Value *val);
+
+    /// Get the number of elements for a fixed vector or an array.
+    ///
+    /// \param type  the type
+    unsigned get_num_elements(llvm::Type *type);
 
     /// Get the element type for a fixed vector or an array.
     llvm::Type *get_element_type(llvm::Type *type);
@@ -715,6 +741,16 @@ public:
     /// \param size          the array size
     void set_deferred_size(llvm::Value *arr_desc_ptr, llvm::Value *size);
 
+    /// Returns true, if the given LLVM type is a spectral sample type.
+    ///
+    /// \param type  the type to check
+    bool is_spectral_sample_type(llvm::Type *type);
+
+    /// Get the values of a spectral sample.
+    ///
+    /// \param sample  the spectral sample
+    llvm::Value *get_spectral_sample_values(llvm::Value *sample);
+
     /// Returns true, if the given LLVM type is a derivative type.
     ///
     /// \param type  the type to check
@@ -865,6 +901,11 @@ private:
     ///
     /// \param pos  the position of the block if any
     void push_block_scope(mi::mdl::Position const *pos);
+
+    /// Creates a new block scope for a function and push it.
+    ///
+    /// \param di_func  the debug subprogram whose scope line is used as the block position
+    void push_block_scope(llvm::DISubprogram &di_func);
 
     /// Pop a variable scope, creating running if necessary.
     void pop_block_scope();

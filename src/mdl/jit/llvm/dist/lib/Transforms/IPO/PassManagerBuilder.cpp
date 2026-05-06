@@ -210,6 +210,7 @@ PassManagerBuilder::PassManagerBuilder() {
     CallGraphProfile = true;
     AvoidPointerPHIs = false;
     EnableVectorizer = true;
+    SimplifyCondBranch = true;
 }
 
 PassManagerBuilder::~PassManagerBuilder() {
@@ -320,7 +321,8 @@ void PassManagerBuilder::populateFunctionPassManager(
   addInitialAliasAnalysisPasses(FPM);
 
   FPM.add(createCFGSimplificationPass(SimplifyCFGOptions()
-                                        .avoidPointerPHIs(AvoidPointerPHIs)));
+                                        .avoidPointerPHIs(AvoidPointerPHIs)
+                                        .setSimplifyCondBranch(SimplifyCondBranch)));
   FPM.add(createSROAPass());
   FPM.add(createEarlyCSEPass());
   FPM.add(createLowerExpectIntrinsicPass());
@@ -356,7 +358,8 @@ void PassManagerBuilder::addPGOInstrPasses(legacy::PassManagerBase &MPM,
     MPM.add(createSROAPass());
     MPM.add(createEarlyCSEPass());             // Catch trivial redundancies
     MPM.add(createCFGSimplificationPass(SimplifyCFGOptions()  // Merge & remove BBs
-                                            .avoidPointerPHIs(AvoidPointerPHIs)));
+                                            .avoidPointerPHIs(AvoidPointerPHIs)
+                                            .setSimplifyCondBranch(SimplifyCondBranch)));
     MPM.add(createInstructionCombiningPass()); // Combine silly seq's
     addExtensionsToPM(EP_Peephole, MPM);
   }
@@ -396,7 +399,8 @@ void PassManagerBuilder::addFunctionSimplificationPasses(
     if (EnableGVNSink) {
       MPM.add(createGVNSinkPass());
       MPM.add(createCFGSimplificationPass(SimplifyCFGOptions()
-                                            .avoidPointerPHIs(AvoidPointerPHIs)));
+                                            .avoidPointerPHIs(AvoidPointerPHIs)
+                                            .setSimplifyCondBranch(SimplifyCondBranch)));
     }
   }
 
@@ -411,7 +415,8 @@ void PassManagerBuilder::addFunctionSimplificationPasses(
     MPM.add(createCorrelatedValuePropagationPass()); // Propagate conditionals
   }
   MPM.add(createCFGSimplificationPass(SimplifyCFGOptions()   // Merge & remove BBs
-                                        .avoidPointerPHIs(AvoidPointerPHIs)));
+                                        .avoidPointerPHIs(AvoidPointerPHIs)
+                                        .setSimplifyCondBranch(SimplifyCondBranch)));
   // Combine silly seq's
   if (OptLevel > 2)
     MPM.add(createAggressiveInstCombinerPass());
@@ -428,7 +433,8 @@ void PassManagerBuilder::addFunctionSimplificationPasses(
   if (OptLevel > 1)
     MPM.add(createTailCallEliminationPass()); // Eliminate tail calls
   MPM.add(createCFGSimplificationPass(SimplifyCFGOptions()   // Merge & remove BBs
-                                        .avoidPointerPHIs(AvoidPointerPHIs)));
+                                        .avoidPointerPHIs(AvoidPointerPHIs)
+                                        .setSimplifyCondBranch(SimplifyCondBranch)));
   MPM.add(createReassociatePass());           // Reassociate expressions
 
   // Begin the loop pass pipeline.
@@ -451,7 +457,8 @@ void PassManagerBuilder::addFunctionSimplificationPasses(
   // simplify-cfg. Eventually loop-simplifycfg should be enhanced to replace the
   // need for this.
   MPM.add(createCFGSimplificationPass(SimplifyCFGOptions()
-                                        .avoidPointerPHIs(AvoidPointerPHIs)));
+                                        .avoidPointerPHIs(AvoidPointerPHIs)
+                                        .setSimplifyCondBranch(SimplifyCondBranch)));
   MPM.add(createInstructionCombiningPass());
   // We resume loop passes creating a second loop pipeline here.
   if (EnableLoopFlatten) {
@@ -513,7 +520,8 @@ void PassManagerBuilder::addFunctionSimplificationPasses(
     MPM.add(createLoopRerollPass());
 
   MPM.add(createCFGSimplificationPass(SimplifyCFGOptions()   // Merge & remove BBs
-                                        .avoidPointerPHIs(AvoidPointerPHIs)));
+                                        .avoidPointerPHIs(AvoidPointerPHIs)
+                                        .setSimplifyCondBranch(SimplifyCondBranch)));
   // Clean up after everything.
   MPM.add(createInstructionCombiningPass());
   addExtensionsToPM(EP_Peephole, MPM);
@@ -637,7 +645,8 @@ void PassManagerBuilder::populateModulePassManager(
   MPM.add(createInstructionCombiningPass()); // Clean up after IPCP & DAE
   addExtensionsToPM(EP_Peephole, MPM);
   MPM.add(createCFGSimplificationPass(SimplifyCFGOptions()  // Clean up after IPCP & DAE
-                                        .avoidPointerPHIs(AvoidPointerPHIs)));
+                                        .avoidPointerPHIs(AvoidPointerPHIs)
+                                        .setSimplifyCondBranch(SimplifyCondBranch)));
 
   // For SamplePGO in ThinLTO compile phase, we do not want to do indirect
   // call promotion as it will change the CFG too much to make the 2nd
@@ -822,7 +831,8 @@ void PassManagerBuilder::populateModulePassManager(
     MPM.add(createLICMPass(LicmMssaOptCap, LicmMssaNoAccForPromotionCap));
     MPM.add(createLoopUnswitchPass(SizeLevel || OptLevel < 3, DivergentTarget));
     MPM.add(createCFGSimplificationPass(SimplifyCFGOptions()
-                                            .avoidPointerPHIs(AvoidPointerPHIs)));
+                                            .avoidPointerPHIs(AvoidPointerPHIs)
+                                            .setSimplifyCondBranch(SimplifyCondBranch)));
     MPM.add(createInstructionCombiningPass());
   }
 
@@ -839,7 +849,8 @@ void PassManagerBuilder::populateModulePassManager(
                                           .needCanonicalLoops(false)
                                           .hoistCommonInsts(true)
                                           .sinkCommonInsts(true)
-                                          .avoidPointerPHIs(AvoidPointerPHIs)));
+                                          .avoidPointerPHIs(AvoidPointerPHIs)
+                                          .setSimplifyCondBranch(SimplifyCondBranch)));
 
   if (EnableVectorizer) {
     if (SLPVectorize) {
@@ -925,7 +936,8 @@ void PassManagerBuilder::populateModulePassManager(
   // LoopSink (and other loop passes since the last simplifyCFG) might have
   // resulted in single-entry-single-exit or empty blocks. Clean up the CFG.
   MPM.add(createCFGSimplificationPass(SimplifyCFGOptions()
-                                        .avoidPointerPHIs(AvoidPointerPHIs)));
+                                        .avoidPointerPHIs(AvoidPointerPHIs)
+                                        .setSimplifyCondBranch(SimplifyCondBranch)));
 
   addExtensionsToPM(EP_OptimizerLast, MPM);
 
@@ -1108,7 +1120,8 @@ void PassManagerBuilder::addLTOOptimizationPasses(legacy::PassManagerBase &PM) {
   PM.add(createInstructionCombiningPass()); // Initial cleanup
   PM.add(createCFGSimplificationPass(SimplifyCFGOptions() // if-convert
                                          .hoistCommonInsts(true)
-                                         .avoidPointerPHIs(AvoidPointerPHIs)));
+                                         .avoidPointerPHIs(AvoidPointerPHIs)
+                                         .setSimplifyCondBranch(SimplifyCondBranch)));
   PM.add(createSCCPPass()); // Propagate exposed constants
   PM.add(createInstructionCombiningPass()); // Clean up again
   PM.add(createBitTrackingDCEPass());
@@ -1143,7 +1156,8 @@ void PassManagerBuilder::addLateLTOOptimizationPasses(
   PM.add(
       createCFGSimplificationPass(SimplifyCFGOptions()
                                     .hoistCommonInsts(true)
-                                    .avoidPointerPHIs(AvoidPointerPHIs)));
+                                    .avoidPointerPHIs(AvoidPointerPHIs)
+                                    .setSimplifyCondBranch(SimplifyCondBranch)));
 
   // Drop bodies of available externally objects to improve GlobalDCE.
   PM.add(createEliminateAvailableExternallyPass());

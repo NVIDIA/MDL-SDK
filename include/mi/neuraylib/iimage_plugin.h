@@ -62,7 +62,7 @@ class IWriter;
 */
 
 /// Type of image plugins
-#define MI_NEURAY_IMAGE_PLUGIN_TYPE "image v40"
+#define MI_NEURAY_IMAGE_PLUGIN_TYPE "image v41"
 
 /// Abstract interface for image plugins.
 ///

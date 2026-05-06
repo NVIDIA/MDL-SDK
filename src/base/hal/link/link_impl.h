@@ -36,14 +36,13 @@
 
 #include <set>
 #include <mi/base/interface_implement.h>
-#include <base/lib/mem/i_mem_allocatable.h>
 
 namespace MI {
 
 namespace LINK {
 
 /// Implementation of the Link_module interface
-class Link_module_impl : public Link_module, public MEM::Allocatable
+class Link_module_impl : public Link_module
 {
 public:
     ILibrary* load_library( const char* path);
@@ -56,8 +55,7 @@ public:
 };
 
 /// Implementation of the Library interface
-class Library_impl
-  : public mi::base::Interface_implement<ILibrary>, public MEM::Allocatable
+class Library_impl : public mi::base::Interface_implement<ILibrary>
 {
 public:
     /// Constructor

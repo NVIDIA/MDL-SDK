@@ -67,7 +67,12 @@ DAG_node const* Lhs_alias::matcher(
     const mi::mdl::Distiller_options *options,
     Rule_result_code &result_code) const
 {
-    auto match_rule1 = [&] (DAG_node const *node, IDistiller_plugin_api::Match_properties &node_props) -> const DAG_node * { return node; };
+    auto match_rule1 = [&] (DAG_node const *node, IDistiller_plugin_api::Match_properties &node_props) -> const DAG_node * {
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0 ,{ mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::No_match, ""});
+        }
+        return node;
+        };
 
 // 040_lhs_alias.mdltl:7
 //RUID 245040
@@ -75,13 +80,25 @@ DAG_node const* Lhs_alias::matcher(
         DAG_node const *v_a = node0;
         // match for custom_curve_layer(_, _, _, _, _, _, _)
         if (node_props0.sema != IDefinition::DS_INTRINSIC_DF_CUSTOM_CURVE_LAYER) {
+            if (event_handler != nullptr) {
+                fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_mismatch,
+                "custom_curve_layer(_, _, _, _, _, _, _)"});
+            }
             return match_rule1(node0, node_props0);
+        }
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "custom_curve_layer(_, _, _, _, _, _, _)"});
         }
         DAG_DbgInfo root_dbg_info = node0->get_dbg_info();
         (void) root_dbg_info;
 
-        if (event_handler != nullptr)
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Rule_match,
+            ""});
+
             fire_match_event(*event_handler, 0);
+        }
         return v_a;
     };
     (void)match_rule0;
@@ -129,6 +146,16 @@ void Lhs_alias::fire_debug_print(
     Rule_info const &ri = g_rule_info[idx];
     event_handler.debug_print(plugin_api, "Lhs_alias", ri.ruid, ri.rname, ri.fname,
         ri.fline, var_name, value);
+}
+
+void Lhs_alias::fire_detailed_trace_event(
+    mi::mdl::IRule_matcher_event &event_handler,
+    std::size_t id,
+    mi::mdl::IRule_matcher_event::Detailed_trace_event trace_event)
+{
+    Rule_info const &ri = g_rule_info[id];
+    event_handler.detailed_trace_event("Lhs_alias", ri.ruid, ri.rname, ri.fname,
+        ri.fline, trace_event);
 }
 
 

@@ -28,11 +28,11 @@
 /// \file mi/base/plugin.h
 /// \brief Base class for all plugins
 
-#include <mi/base/types.h>
-#include <mi/base/interface_declare.h>
-
 #ifndef MI_BASE_PLUGIN_H
 #define MI_BASE_PLUGIN_H
+
+#include <mi/base/types.h>
+#include <mi/base/interface_declare.h>
 
 namespace mi {
 

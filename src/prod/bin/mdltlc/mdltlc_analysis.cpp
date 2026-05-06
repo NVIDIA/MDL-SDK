@@ -82,9 +82,8 @@ void check_topdown_attrs(Compilation_unit *unit, Expr const *expr) {
     walker.walk(expr);
 }
 
-void used_target_materials(mi::mdl::Memory_arena &arena,
-                           Expr const *expr, Var_set &u_vars) {
-    Used_target_material_visitor visitor(arena, u_vars);
+void used_target_materials(Expr const *expr, Var_set &u_vars) {
+    Used_target_material_visitor visitor( u_vars);
     Const_expr_walker walker(visitor);
     walker.walk(expr);
 }

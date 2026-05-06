@@ -425,6 +425,14 @@ public:
         IDefinition const *def,
         IThread_context   *context) const = 0;
 
+    /// Find a type defined at global scope of this module given by its name.
+    ///
+    /// \param name  the name of the type
+    ///
+    /// \return The type if the type was defined in this module, NULL otherwise.
+    virtual IType const *find_type(
+        char const *name) const = 0;
+
     /// Lookup an exact annotation definition given by its name and an array of all (positional)
     /// parameter types.
     ///

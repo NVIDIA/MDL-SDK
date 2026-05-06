@@ -215,12 +215,13 @@ bool Edit_mipmap::read_rect(
 
     // Use the cached Edit_canvas for level 0
     if( miplevel == 0)
-        m_edit_canvas_0.read_rect(
+        return m_edit_canvas_0.read_rect(
             buffer, buffer_topdown, buffer_pixel_type, miplevel_x, miplevel_y, width, height,
             buffer_padding, miplevel_layer);
 
     // Get the actual canvas for higher miplevels
-    mi::base::Handle<const mi::neuraylib::ICanvas> canvas( m_mipmap->get_level( miplevel));
+    mi::base::Handle<const IMipmap> const_mipmap( m_mipmap);
+    mi::base::Handle<const mi::neuraylib::ICanvas> canvas( const_mipmap->get_level( miplevel));
     if( !canvas)
         return false;
 
@@ -273,7 +274,8 @@ bool Edit_mipmap::lookup(
         return m_edit_canvas_0.lookup( color, x, y, z);
 
     // Get the actual canvas for higher miplevels
-    mi::base::Handle<const mi::neuraylib::ICanvas> canvas( m_mipmap->get_level( miplevel));
+    mi::base::Handle<const IMipmap> const_mipmap( m_mipmap);
+    mi::base::Handle<const mi::neuraylib::ICanvas> canvas( const_mipmap->get_level( miplevel));
     if( !canvas)
         return false;
 
@@ -281,8 +283,9 @@ bool Edit_mipmap::lookup(
     if( !tile)
         return false;
 
-    ASSERT(M_IMAGE,x < tile->get_resolution_x());
-    ASSERT(M_IMAGE,y < tile->get_resolution_y());
+    ASSERT( M_IMAGE, x < tile->get_resolution_x());
+    ASSERT( M_IMAGE, y < tile->get_resolution_y());
+
     tile->get_pixel( x, y, &color.r);
     return true;
 }
@@ -306,8 +309,9 @@ bool Edit_mipmap::store(
     if( !tile)
         return false;
 
-    ASSERT(M_IMAGE,x < tile->get_resolution_x());
-    ASSERT(M_IMAGE,y < tile->get_resolution_y());
+    ASSERT( M_IMAGE, x < tile->get_resolution_x());
+    ASSERT( M_IMAGE, y < tile->get_resolution_y());
+
     tile->set_pixel( x, y, &color.r);
     return true;
 }

@@ -35,7 +35,6 @@
 #include "i_attr_type.h"
 #include "attr.h"
 
-#include <base/lib/cont/i_cont_rle_array.h>
 #include <base/lib/log/i_log_logger.h>
 
 #include <mi/math.h>
@@ -46,7 +45,6 @@ namespace MI {
 namespace ATTR {
 
 using namespace std;
-using namespace CONT;
 using namespace LOG;
 
 using namespace mi::math;
@@ -78,30 +76,12 @@ void eval_typecode(
       case TYPE_DVECTOR2:               *type = 'd'; *size = 8; *count = 2;     break;
       case TYPE_DVECTOR3:               *type = 'd'; *size = 8; *count = 3;     break;
       case TYPE_DVECTOR4:               *type = 'd'; *size = 8; *count = 4;     break;
-          // case TYPE_MATRIX4X4:       // identical to type matrix
       case TYPE_MATRIX:                 *type = 'f'; *size = 4; *count = 16;    break;
       case TYPE_DMATRIX:                *type = 'd'; *size = 8; *count = 16;    break;
-      case TYPE_QUATERNION:             *type = 'f'; *size = 4; *count = 4;     break;
       case TYPE_STRING:                 *type = '*'; *size = sizeof(void*); *count = 1; break;
-          // case TYPE_RGBA_FP: // identical to type color
       case TYPE_COLOR:                  *type = 'f'; *size = 4; *count = 4;     break;
-      case TYPE_RGB:                    *type = 'c'; *size = 1; *count = 3;     break;
-      case TYPE_RGBA:                   *type = 'c'; *size = 1; *count = 4;     break;
-      case TYPE_RGBE:                   *type = 'c'; *size = 1; *count = 4;     break;
-      case TYPE_RGBEA:                  *type = 'c'; *size = 1; *count = 5;     break;
-      case TYPE_RGB_16:                 *type = 's'; *size = 2; *count = 3;     break;
-      case TYPE_RGBA_16:                *type = 's'; *size = 2; *count = 4;     break;
       case TYPE_RGB_FP:                 *type = 'f'; *size = 4; *count = 3;     break;
       case TYPE_TAG:                    *type = 't'; *size = 4; *count = 1;     break;
-      case TYPE_TEXTURE:                *type = 't'; *size = 4; *count = 1;     break;
-      case TYPE_TEXTURE1D:              *type = 't'; *size = 4; *count = 1;     break;
-      case TYPE_TEXTURE2D:              *type = 't'; *size = 4; *count = 1;     break;
-      case TYPE_TEXTURE3D:              *type = 't'; *size = 4; *count = 1;     break;
-      case TYPE_TEXTURE_CUBE:           *type = 't'; *size = 4; *count = 1;     break;
-      case TYPE_LIGHTPROFILE:           *type = 't'; *size = 4; *count = 1;     break;
-      case TYPE_BRDF:                   *type = 't'; *size = 4; *count = 1;     break;
-      case TYPE_LIGHT:                  *type = 't'; *size = 4; *count = 1;     break;
-      case TYPE_BSDF_MEASUREMENT:       *type = 't'; *size = 4; *count = 1;     break;
       case TYPE_ENUM:                   *type = 'i'; *size = 4; *count = 1;     break;
       case TYPE_VECTOR2I:               *type = 'i'; *size = 4; *count = 2;     break;
       case TYPE_VECTOR3I:               *type = 'i'; *size = 4; *count = 3;     break;
@@ -117,12 +97,7 @@ void eval_typecode(
       case TYPE_MATRIX3X4:              *type = 'f'; *size = 4; *count = 12;    break;
       case TYPE_MATRIX4X2:              *type = 'f'; *size = 4; *count = 8;     break;
       case TYPE_MATRIX2X4:              *type = 'f'; *size = 4; *count = 8;     break;
-      case TYPE_SHADER:                 *type = 't'; *size = 4; *count = 1;     break;
-      case TYPE_PARTICLE_MAP:           *type = 't'; *size = 4; *count = 1;     break;
       case TYPE_SPECTRUM:               *type = 'f'; *size = 4; *count = 3;     break;
-      case TYPE_ID:                     *type = 'i'; *size = 4; *count = 1;     break;
-      case TYPE_PARAMETER:              *type = 'i'; *size = 4; *count = 1;     break;
-      case TYPE_TEMPORARY:              *type = 'i'; *size = 4; *count = 1;     break;
       case TYPE_DMATRIX2X2:             *type = 'd'; *size = 8; *count = 4;     break;
       case TYPE_DMATRIX2X3:             *type = 'd'; *size = 8; *count = 6;     break;
       case TYPE_DMATRIX3X2:             *type = 'd'; *size = 8; *count = 6;     break;
@@ -131,13 +106,10 @@ void eval_typecode(
       case TYPE_DMATRIX3X4:             *type = 'd'; *size = 8; *count = 12;    break;
       case TYPE_DMATRIX4X2:             *type = 'd'; *size = 8; *count = 8;     break;
       case TYPE_DMATRIX2X4:             *type = 'd'; *size = 8; *count = 8;     break;
-      case TYPE_CALL:                   *type = '*'; *size = sizeof(void*); *count = 2; break;
 
       case TYPE_UNDEF:
       case TYPE_STRUCT:
       case TYPE_ARRAY:
-      case TYPE_RLE_UINT_PTR:
-      case TYPE_ATTACHABLE:
       case TYPE_NUM:
           ASSERT(M_ATTR, 0);
     }
@@ -146,3 +118,4 @@ void eval_typecode(
 
 }
 }
+

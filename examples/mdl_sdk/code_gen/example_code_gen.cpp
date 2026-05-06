@@ -26,9 +26,9 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
- // examples/mdl_sdk/code_gen/example_code_gen.cpp
- //
- // Loads an MDL material and processes it up to code generation and beyond.
+// examples/mdl_sdk/code_gen/example_code_gen.cpp
+//
+// Loads an MDL material and processes it up to code generation and beyond.
 
 #include <iostream>
 #include <algorithm>
@@ -68,6 +68,7 @@ public:
     bool m_disable_pdf = false;
     bool m_enable_aux = false;
     bool m_enable_bsdf_flags = false;
+    bool m_enable_spectral = false;
     bool m_inline_aggressively = false;
     bool m_tex_direct_call = false;
     bool m_glsl_place_uniforms_into_ssbo = false;
@@ -451,6 +452,8 @@ void code_gen(mi::neuraylib::INeuray* neuray, Options& options)
                 options.m_enable_aux ? "on" : "off");
             backend->set_option("libbsdf_flags_in_bsdf_data",
                 options.m_enable_bsdf_flags ? "on" : "off");
+            backend->set_option("libbsdf_enable_spectral",
+                options.m_enable_spectral ? "on" : "off");
             backend->set_option("inline_aggressively",
                 options.m_inline_aggressively ? "on" : "off");
             if (options.m_tex_direct_call) {
@@ -487,12 +490,12 @@ void code_gen(mi::neuraylib::INeuray* neuray, Options& options)
                     options.m_backend.c_str());
 
             if (options.m_descs.empty()) {
-                // select some default expressions to generate code for.
+                // select the known material slots except "volume.scattering" and "hair" to
+                // generate code for.
                 // The functions to select depends on the renderer.
                 // To get started, generating 'surface.scattering' would be enough
                 // (see the other examples, like DXR, for how to consume the generated code in a shader).
                 auto &descs = options.m_descs;
-                descs.push_back(TD("ior", "ior"));
                 descs.push_back(TD("thin_walled", "thin_walled"));
                 descs.push_back(TD("surface.scattering", "surface_scattering"));
                 descs.push_back(TD("surface.emission.emission", "surface_emission_emission"));
@@ -502,11 +505,13 @@ void code_gen(mi::neuraylib::INeuray* neuray, Options& options)
                 descs.push_back(TD("backface.emission.emission", "backface_emission_emission"));
                 descs.push_back(TD("backface.emission.intensity", "backface_emission_intensity"));
                 descs.push_back(TD("backface.emission.mode", "backface_emission_mode"));
+                descs.push_back(TD("ior", "ior"));
                 descs.push_back(TD("volume.absorption_coefficient", "volume_absorption_coefficient"));
                 descs.push_back(TD("volume.scattering_coefficient", "volume_scattering_coefficient"));
-                descs.push_back(TD("geometry.normal", "geometry_normal"));
-                descs.push_back(TD("geometry.cutout_opacity", "geometry_cutout_opacity"));
+                descs.push_back(TD("volume.emission_intensity", "volume_emission_intensity"));
                 descs.push_back(TD("geometry.displacement", "geometry_displacement"));
+                descs.push_back(TD("geometry.cutout_opacity", "geometry_cutout_opacity"));
+                descs.push_back(TD("geometry.normal", "geometry_normal"));
             }
 
             if (options.m_single_init)
@@ -585,6 +590,20 @@ void code_gen(mi::neuraylib::INeuray* neuray, Options& options)
         std::cout << "compiled material hash: \n" << std::hex << hash.m_id1 << " " << hash.m_id2
                     << " " << hash.m_id3 << " " << hash.m_id4 << std::dec  <<"\n";
 
+        if (options.m_dump_metadata) {
+            std::cout << "Resource tables:\n";
+            size_t n_scene_data = compiled_material->get_referenced_scene_data_count();
+            if (n_scene_data == 0) {
+                std::cout << "  No possible scene data references \n";
+            } else {
+                std::cout << "  " << n_scene_data << " possible scene data references :\n";
+                for (mi::Size i = 0; i < n_scene_data; ++i) {
+                    std::cout <<
+                        "  \"" << compiled_material->get_referenced_scene_data_name(i) << "\"\n";
+                }
+                std::cout << "\n";
+            }
+        }
         if (options.m_run_material_analysis) {
             std::cout << "\n\n\n";
             std::cout << "Might depend on transform state functions: " <<
@@ -653,6 +672,7 @@ int MAIN_UTF8(int argc, char* argv[])
     if (mi::examples::mdl::load_plugin(neuray.get(), "mdl_distiller" MI_BASE_DLL_FILE_EXT) != 0)
         exit_failure("Failed to load the mdl_distiller plugin.");
 
+
     // Start the MDL SDK
     mi::Sint32 ret = neuray->start();
     if (ret != 0)
@@ -706,6 +726,7 @@ options:
   --disable_pdf                 Disable generation of separate PDF function.
   --enable_aux                  Enable generation of auxiliary function.
   --enable_bsdf_flags           Enable "flags" field in BSDF data structures in generated code.
+  --spectral                    Enable spectral mode in generated code.
   --inline_aggressively         Aggressively inline all code.
   --tex_direct_call             Generate direct calls to texture runtime functions instead of
                                 vtable calls.
@@ -763,6 +784,8 @@ bool Options::parse(int argc, char* argv[])
                 m_enable_aux = true;
             else if (arg == "--enable_bsdf_flags")
                 m_enable_bsdf_flags = true;
+            else if (arg == "--spectral")
+                m_enable_spectral = true;
             else if (arg == "--inline_aggressively")
                 m_inline_aggressively = true;
             else if (arg == "--tex_direct_call")
@@ -912,3 +935,4 @@ bool Options::parse(int argc, char* argv[])
     }
     return true;
 }
+

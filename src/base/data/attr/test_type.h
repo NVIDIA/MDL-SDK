@@ -78,7 +78,6 @@ public:
         MI_CHECK_EQUAL(type.get_arraysize(), 1);
         MI_CHECK_EQUAL(type.get_next(), nullptr);
         MI_CHECK_EQUAL(type.get_child(), nullptr);
-        MI_CHECK_EQUAL(type.get_const(), false);
         }
     }
 
@@ -93,7 +92,6 @@ public:
         MI_CHECK_EQUAL(type.get_arraysize(), 1);
         MI_CHECK_EQUAL(type.get_next(), nullptr);
         MI_CHECK_EQUAL(type.get_child(), nullptr);
-        MI_CHECK_EQUAL(type.get_const(), false);
         }
         // copy constructor of initialized object
         {
@@ -104,7 +102,6 @@ public:
         MI_CHECK_EQUAL(type.get_arraysize(), 0);
         MI_CHECK_EQUAL(type.get_next(), nullptr);
         MI_CHECK_EQUAL(type.get_child(), nullptr);
-        MI_CHECK_EQUAL(type.get_const(), false);
         }
     }
 
@@ -204,11 +201,7 @@ public:
         // unknown component count but of array type_code
         MI_CHECK_EQUAL(array_type.get_arraysize(), 0);
         MI_CHECK_EQUAL(array_type.component_count(), 0);
-#ifdef EXPERIMENTAL_ARRAYS_OF_ARRAYS_MODE
-        MI_CHECK_EQUAL(array_type.component_type(), TYPE_ARRAY);
-#else
         MI_CHECK_EQUAL(array_type.component_type(), TYPE_UNDEF);
-#endif
         }
         // dynamic array
         {
@@ -226,142 +219,147 @@ public:
         // return 0 if not found
         {
         Type type;
-        Uint offs;
-        MI_CHECK_EQUAL(type.lookup("dummy", &offs), nullptr);
+        const char* base_address = (const char*) 0x1;
+        const char* ret_address = nullptr;
+        MI_CHECK_EQUAL(type.lookup("dummy", base_address, &ret_address), nullptr);
         // same for array
         Type array(TYPE_ARRAY, "array", 0);
         array.set_child(type);
         array.set_arraysize(4);
-        MI_CHECK_EQUAL(array.lookup("dummy", &offs), nullptr);
+        MI_CHECK_EQUAL(array.lookup("dummy", base_address, &ret_address), nullptr);
         }
         // standard behaviour
         {
         Type type(TYPE_INT32, "dummy", 4);
-        Uint offs;
-        const Type* res = type.lookup("dummy", &offs);
+        Attribute attr(0, type);
+        const char* base_address = attr.get_values();
+        const char* ret_address = nullptr;
+        const Type* res = type.lookup("dummy", base_address, &ret_address);
         MI_CHECK_EQUAL(res, &type);
-        MI_CHECK_EQUAL(offs, 0);
+        MI_CHECK_EQUAL(ret_address-base_address, 0);
         // same for array
         Type array(TYPE_ARRAY, "array", 0);
         array.set_child(type);
         array.set_arraysize(4);
         // looking up w/o an index returns the array itself
-        res = array.lookup("dummy", &offs);
+        res = array.lookup("dummy", base_address, &ret_address);
         MI_REQUIRE(res);
         MI_CHECK_EQUAL(res->get_typecode(), TYPE_ARRAY);
-        MI_CHECK_EQUAL(offs, 0);
+        MI_CHECK_EQUAL(ret_address-base_address, 0);
         MI_CHECK_EQUAL(*res, array);
         // looking up with an index returns the array element type
-        res = array.lookup("dummy[0]", &offs);
+        res = array.lookup("dummy[0]", base_address, &ret_address);
         MI_REQUIRE(res);
         MI_CHECK(res->get_typecode() == TYPE_INT32);
-        MI_CHECK_EQUAL(offs, 0);
+        MI_CHECK_EQUAL(ret_address-base_address, 0);
         MI_CHECK_EQUAL(*res, type);
         }
         {
         // original structure
         // build an attribute type tree: struct [100] {}.
-        // typedef struct { char a[5]; } Rgbea;
-        // struct Atype {struct {Rgbea rgbea[2]; Color color; char byte;} s[100]; };
+        // typedef struct { float r,g,b; } Rgb_fp;
+        // struct Atype {struct {Rgb_fp rgb_fp[2]; Color color; char byte;} s[100]; };
 #define ATTRNAME "attr"
         Type type0(TYPE_STRUCT, ATTRNAME, 100);    // struct {
-        Type type1(TYPE_RGBEA,  "rgbea", 2);            //   Rgbea[2];
-        Type type2(TYPE_COLOR,  "color");               //   Scalar[4];
-        Type type3(TYPE_INT8,   "byte");                //   char;
-        type1.set_const();
+        Type type1(TYPE_RGB_FP, "rgb_fp", 2);      //   Rgb_fp[2];
+        Type type2(TYPE_COLOR,  "color");          //   Scalar[4];
+        Type type3(TYPE_INT8,   "byte");           //   char;
         type2.set_next(type3);
         type1.set_next(type2);
-        type0.set_child(type1);                     // } [100]
-        Uint offs;
-        MI_REQUIRE_EQUAL(type0, *type0.lookup(ATTRNAME,                 &offs));
-        MI_REQUIRE_EQUAL(offs, 0);
-        MI_REQUIRE_EQUAL(type1, *type0.lookup(ATTRNAME ".rgbea",        &offs));
-        MI_REQUIRE_EQUAL(offs, 0);
-        MI_REQUIRE_EQUAL(type1, *type0.lookup(ATTRNAME ".rgbea[0]",     &offs));
-        MI_REQUIRE_EQUAL(offs, 0);
-        MI_REQUIRE_EQUAL(type1, *type0.lookup(ATTRNAME ".rgbea[1]",     &offs));
-        MI_REQUIRE_EQUAL(offs, 5);
-        MI_REQUIRE_EQUAL(type2, *type0.lookup(ATTRNAME ".color",        &offs));
-        MI_REQUIRE_EQUAL(offs, 12);
-        MI_REQUIRE_EQUAL(type3, *type0.lookup(ATTRNAME ".byte", &offs));
-        MI_REQUIRE_EQUAL(offs, 28);
-        MI_REQUIRE(!type0.lookup(ATTRNAME ".rgbea[2]", &offs));
-        MI_REQUIRE(!type0.lookup(ATTRNAME ".foo",      &offs));
+        type0.set_child(type1);                    // } [100]
+        Attribute attr(0, type0);
+        const char* base_address = attr.get_values();
+        const char* ret_address = nullptr;
+        MI_REQUIRE_EQUAL(type0, *type0.lookup(ATTRNAME,                 base_address, &ret_address));
+        MI_REQUIRE_EQUAL(ret_address-base_address, 0);
+        MI_REQUIRE_EQUAL(type1, *type0.lookup(ATTRNAME ".rgb_fp",       base_address, &ret_address));
+        MI_REQUIRE_EQUAL(ret_address-base_address, 0);
+        MI_REQUIRE_EQUAL(type1, *type0.lookup(ATTRNAME ".rgb_fp[0]",    base_address, &ret_address));
+        MI_REQUIRE_EQUAL(ret_address-base_address, 0);
+        MI_REQUIRE_EQUAL(type1, *type0.lookup(ATTRNAME ".rgb_fp[1]",    base_address, &ret_address));
+        MI_REQUIRE_EQUAL(ret_address-base_address, 12);
+        MI_REQUIRE_EQUAL(type2, *type0.lookup(ATTRNAME ".color",        base_address, &ret_address));
+        MI_REQUIRE_EQUAL(ret_address-base_address, 24);
+        MI_REQUIRE_EQUAL(type3, *type0.lookup(ATTRNAME ".byte", base_address, &ret_address));
+        MI_REQUIRE_EQUAL(ret_address-base_address, 40);
+        MI_REQUIRE(!type0.lookup(ATTRNAME ".rgb_fp[2]", base_address, &ret_address));
+        MI_REQUIRE(!type0.lookup(ATTRNAME ".foo",      base_address, &ret_address));
 
         // check correct offset computation
-        Uint offset_01 = 0;
-        type0.lookup(ATTRNAME ".rgbea[0]", &offset_01);
-        Uint offset_02 = 0;
-        type0.lookup(ATTRNAME ".rgbea[1]", &offset_02);
-        MI_REQUIRE_LESS(offset_01, offset_02);
+        const char* ret_address_01 = nullptr;
+        type0.lookup(ATTRNAME ".rgb_fp[0]", base_address, &ret_address_01);
+        const char* ret_address_02 = nullptr;
+        type0.lookup(ATTRNAME ".rgb_fp[1]", base_address, &ret_address_02);
+        MI_REQUIRE_LESS(ret_address_01, ret_address_02);
 
-        const Type* res = type0.lookup("attr[1].byte", &offs);
+        const Type* res = type0.lookup("attr[1].byte", base_address, &ret_address);
         MI_CHECK_EQUAL(res->get_typecode(), TYPE_INT8);
         MI_CHECK_EQUAL(res->get_arraysize(), 1);
-        MI_REQUIRE_EQUAL(offs, 60);
+        MI_REQUIRE_EQUAL(ret_address-base_address, 84);
 
 #undef ATTRNAME
         }
         {
         // use exactly the same layout as above but inbetween using array types now -
         // this should NOT change the lookup() at all
-        // typedef struct { char a[5]; } Rgbe;
-        // struct Atype {struct {Rgbe rgbe[2]; Color color; char byte;} s[100]; };
+        // typedef struct { float r,g,b; } Rgb_fp;
+        // struct Atype {struct {Rgb_fp rgb_fp[2]; Color color; char byte;} s[100]; };
 #define ATTRNAME "attr"
         Type array0(TYPE_ARRAY, ATTRNAME, 0); // here the name does not matter
         Type type0(TYPE_STRUCT, ATTRNAME, 100);
         Type array1(TYPE_ARRAY, 0, 0);
-        Type type1(TYPE_RGBEA, "rgbea", 2);
+        Type type1(TYPE_RGB_FP, "rgb_fp", 2);
         Type type2(TYPE_COLOR, "color");
         Type type3(TYPE_INT8, "byte");
-        type1.set_const();
         type2.set_next(type3);
         type1.set_next(type2);
         array1.set_child(type1);
         array1.set_arraysize(type1.get_arraysize());
         type0.set_child(array1);
         array0.set_child(type0); // this will overwrite array0's name with type0's name
-        Uint offs;
+        Attribute attr(0, array0);
+        const char* base_address = attr.get_values();
+        const char* ret_address = nullptr;
         // array0
-        const Type* res = array0.lookup("attr", &offs);
+        const Type* res = array0.lookup("attr", base_address, &ret_address);
         MI_CHECK_EQUAL(res->get_typecode(), TYPE_ARRAY);
         MI_CHECK_EQUAL(res->get_arraysize(), 100);
-        MI_REQUIRE_EQUAL(offs, 0);
+        MI_REQUIRE_EQUAL(ret_address-base_address, 0);
         // type0
-        res = array0.lookup("attr[0]", &offs);
+        res = array0.lookup("attr[0]", base_address, &ret_address);
         MI_CHECK_EQUAL(res->get_typecode(), TYPE_STRUCT);
         MI_CHECK_EQUAL(res->get_arraysize(), 100);
-        MI_REQUIRE_EQUAL(offs, 0);
+        MI_REQUIRE_EQUAL(ret_address-base_address, 0);
         // array1
-        res = array0.lookup("attr[0].rgbea", &offs);
+        res = array0.lookup("attr[0].rgb_fp", base_address, &ret_address);
         MI_CHECK_EQUAL(res->get_typecode(), TYPE_ARRAY);
         MI_CHECK_EQUAL(res->get_arraysize(), 2);
-        MI_REQUIRE_EQUAL(offs, 0);
+        MI_REQUIRE_EQUAL(ret_address-base_address, 0);
         // type1[0]
-        res = array0.lookup("attr[0].rgbea[0]", &offs);
-        MI_CHECK_EQUAL(res->get_typecode(), TYPE_RGBEA);
+        res = array0.lookup("attr[0].rgb_fp[0]", base_address, &ret_address);
+        MI_CHECK_EQUAL(res->get_typecode(), TYPE_RGB_FP);
         MI_CHECK_EQUAL(res->get_arraysize(), 2);
-        MI_REQUIRE_EQUAL(offs, 0);
+        MI_REQUIRE_EQUAL(ret_address-base_address, 0);
         // type1[1]
-        res = array0.lookup("attr[0].rgbea[1]", &offs);
-        MI_CHECK_EQUAL(res->get_typecode(), TYPE_RGBEA);
+        res = array0.lookup("attr[0].rgb_fp[1]", base_address, &ret_address);
+        MI_CHECK_EQUAL(res->get_typecode(), TYPE_RGB_FP);
         MI_CHECK_EQUAL(res->get_arraysize(), 2);
-        MI_REQUIRE_EQUAL(offs, 5);
+        MI_REQUIRE_EQUAL(ret_address-base_address, 12);
         // type2
-        res = array0.lookup("attr[0].color", &offs);
+        res = array0.lookup("attr[0].color", base_address, &ret_address);
         MI_CHECK_EQUAL(res->get_typecode(), TYPE_COLOR);
         MI_CHECK_EQUAL(res->get_arraysize(), 1);
-        MI_REQUIRE_EQUAL(offs, 12);
+        MI_REQUIRE_EQUAL(ret_address-base_address, 24);
         // type3
-        res = array0.lookup("attr[0].byte", &offs);
+        res = array0.lookup("attr[0].byte", base_address, &ret_address);
         MI_CHECK_EQUAL(res->get_typecode(), TYPE_INT8);
         MI_CHECK_EQUAL(res->get_arraysize(), 1);
-        MI_REQUIRE_EQUAL(offs, 28);
+        MI_REQUIRE_EQUAL(ret_address-base_address, 40);
 
-        res = array0.lookup("attr[1].byte", &offs);
+        res = array0.lookup("attr[1].byte", base_address, &ret_address);
         MI_CHECK_EQUAL(res->get_typecode(), TYPE_INT8);
         MI_CHECK_EQUAL(res->get_arraysize(), 1);
-        MI_REQUIRE_EQUAL(offs, 60);
+        MI_REQUIRE_EQUAL(ret_address-base_address, 84);
 #undef ATTRNAME
         }
     }

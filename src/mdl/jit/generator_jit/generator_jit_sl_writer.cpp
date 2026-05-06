@@ -28,9 +28,6 @@
 
 #include "pch.h"
 
-#include <algorithm>
-#include <string>
-
 #include <llvm/ADT/SmallPtrSet.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Module.h>
@@ -120,6 +117,14 @@ void SLWriterPass<BasePass>::register_api_types(
     MDL_ASSERT(m_df_handle_slot_mode != mi::mdl::DF_HSM_POINTER &&
         "df_handle_slot_mode POINTER is not supported for GLSL/HLSL");
 
+    // map LLVM struct.Spectral_sample_struct to Spectral_sample if in spectral mode
+    if (Base::m_type_mapper.is_spectral_enabled()) {
+        static char const *const fields[] = {
+            "values",
+        };
+        Base::add_api_type_info("struct.Spectral_sample_struct", "Spectral_sample", fields);
+    }
+
     // map LLVM State_core type to Shading_state_material
     {
         static struct Core_fields {
@@ -199,19 +204,33 @@ void SLWriterPass<BasePass>::register_api_types(
 
     // map LLVM struct.BSDF_sample_data to Bsdf_sample_data
     {
-        static char const *const fields[] = {
-            "ior1",
-            "ior2",
-            "k1",
-            "k2",
-            "xi",
-            "pdf",
-            "bsdf_over_pdf",
-            "event_type",
-            "handle",
-            "flags",
-        };
-        Base::add_api_type_info("struct.BSDF_sample_data", "Bsdf_sample_data", fields);
+        // Depending on the size of spectral_sample, an additional padding field
+        // may be added by Clang before the xi field
+        llvm::SmallVector<char const *, 10> fields;
+        fields.push_back("ior1");
+        fields.push_back("ior2");
+        fields.push_back("k1");
+        fields.push_back("k2");
+
+        llvm::StructType *bsdf_sample_data_type = llvm::StructType::getTypeByName(
+            Base::m_type_mapper.get_llvm_context(), "struct.BSDF_sample_data");
+        if (bsdf_sample_data_type != nullptr &&
+                bsdf_sample_data_type->getElementType(4)->isArrayTy()) {
+            // Additional padding field is present
+            fields.push_back("padding");
+        }
+
+        fields.push_back("xi");
+        fields.push_back("pdf");
+        fields.push_back("bsdf_over_pdf");
+        fields.push_back("event_type");
+        fields.push_back("handle");
+        fields.push_back("flags");
+
+        Base::add_api_type_info(
+            "struct.BSDF_sample_data",
+            "Bsdf_sample_data",
+            Array_ref<char const *>(fields.begin(), fields.end()));
     }
 
     // map LLVM struct.BSDF_evaluate_data to Bsdf_evaluate_data
@@ -665,13 +684,13 @@ void print_ssa_value(llvm::Value *v) {
 /// Register transfer graph. This is inspired by the graph described in
 /// Chapter 4 of Sebastian Hack, "Register Allocation for Programs in SSA Form",
 /// PhD Thesis, Universitaet Fridericiana zu Karlsruhe (TH), 2006.
-/// 
+///
 /// The graph models the value transfer between SSA values on the edges of
 /// the CFG. Each edge is a copy operation between a PHI node input and the
 /// corresponding PHI node output.
-/// 
+///
 /// The algorithm for copying inputs to outputs works as follows:
-/// 
+///
 /// 1. When a node with an in-degree of 0 exists, a copy instruction to
 ///    one of the successors can be emitted, and the edge removed.
 ///    Copies to the same variable can be ignored.
@@ -682,7 +701,7 @@ void print_ssa_value(llvm::Value *v) {
 ///    process the rest of the graph and emit a copy from the temporary
 ///    to the target node of the original edge.
 /// 3. Repeat until there are no more edges.
-/// 
+///
 /// In contrast to the original algorithm, we do not have to care about
 /// spilling, as we can simply create temporaries. Also, when removing an edge,
 /// we do not move successors of `from` to `to` (which the original algoritm
@@ -779,7 +798,7 @@ public:
     /// one predecessor. Note that the returned node's predecessor can
     /// be itself. The caller has to handle that case (e.g. by simply
     /// ignoring it, since a copy would be useless).
-    /// 
+    ///
     /// Return nullptr if no such edge can be found.
     llvm::Value *pick_without_outgoing_edges() {
         // Pick edge r->s, with outdegree of s == 0 by iterating over
@@ -812,6 +831,15 @@ public:
 #endif
 
 namespace {
+
+    bool phi_node_forces_materialization(llvm::PHINode *phi, llvm::BasicBlock *bb) {
+        for (llvm::BasicBlock *pred_bb : llvm::successors(bb)) {
+            if (phi->getParent() == pred_bb) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     // Return true if the value phi is used in any terminating instruction,
     // which requires special handling in the out-of-SSA transformation.
@@ -998,6 +1026,30 @@ typename SLWriterPass<BasePass>::Stmt *SLWriterPass<BasePass>::translate_block(
         }
     }
 
+    auto add_gen_inst = [&](llvm::Value *cur_val) {
+        while (llvm::Instruction *cur_inst = llvm::dyn_cast<llvm::Instruction>(cur_val)) {
+            if (!(cur_inst->isCast() && cur_inst->getType()->isPointerTy())) {
+                break;
+            }
+            cur_val = cur_inst->getOperand(0);
+        }
+
+        // only add to generate set, if it's really an instruction
+        if (llvm::Instruction *cur_inst = llvm::dyn_cast<llvm::Instruction>(cur_val)) {
+            // still don't generate statements for getelementptr, alloca and phis
+            if (llvm::isa<llvm::GetElementPtrInst>(cur_inst) ||
+                llvm::isa<llvm::AllocaInst>(cur_inst) ||
+                llvm::isa<llvm::PHINode>(cur_inst)) {
+                return;
+            }
+
+            if (gen_insts_set.count(cur_val) == 0) {
+                gen_insts.push_back(cur_inst);
+                gen_insts_set.insert(cur_inst);
+            }
+        }
+        };
+
     for (llvm::Instruction &value : *bb) {
         // don't generate statements for vector element access of already available values
         if (llvm::ExtractElementInst *extract = llvm::dyn_cast<llvm::ExtractElementInst>(&value)) {
@@ -1131,7 +1183,7 @@ typename SLWriterPass<BasePass>::Stmt *SLWriterPass<BasePass>::translate_block(
 
             if (!gen_statement) {
                 bool has_phi_operands = false;
-                if (llvm::Instruction *inst = llvm::dyn_cast<llvm::Instruction>(&value)) {
+                if (llvm::isa<llvm::Instruction>(&value)) {
                     for (auto &operand : value.operands()) {
                         if (llvm::isa<llvm::PHINode>(&operand)) {
                             has_phi_operands = true;
@@ -1148,26 +1200,24 @@ typename SLWriterPass<BasePass>::Stmt *SLWriterPass<BasePass>::translate_block(
         if (gen_statement) {
             // skip any pointer casts
             llvm::Value *cur_val = &value;
-            while (llvm::Instruction *cur_inst = llvm::dyn_cast<llvm::Instruction>(cur_val)) {
-                if (!(cur_inst->isCast() && cur_inst->getType()->isPointerTy())) {
-                    break;
+            add_gen_inst(cur_val);
+        }
+    }
+
+    llvm::Instruction *terminator = bb->getTerminator();
+    for (auto &op : terminator->operands()) {
+        if (llvm::Instruction *op_inst = llvm::dyn_cast<llvm::Instruction>(&op)) {
+            bool has_phi_operands = false;
+            for (auto &operand : op_inst->operands()) {
+                if (llvm::PHINode *op_phi = llvm::dyn_cast<llvm::PHINode>(&operand)) {
+                    if (phi_node_forces_materialization(op_phi, bb)) {
+                        has_phi_operands = true;
+                        break;
+                    }
                 }
-                cur_val = cur_inst->getOperand(0);
             }
-
-            // only add to generate set, if it's really an instruction
-            if (llvm::Instruction *cur_inst = llvm::dyn_cast<llvm::Instruction>(cur_val)) {
-                // still don't generate statements for getelementptr, alloca and phis
-                if (llvm::isa<llvm::GetElementPtrInst>(cur_inst) ||
-                        llvm::isa<llvm::AllocaInst>(cur_inst) ||
-                        llvm::isa<llvm::PHINode>(value)) {
-                    continue;
-                }
-
-                if (gen_insts_set.count(cur_val) == 0) {
-                    gen_insts.push_back(cur_inst);
-                    gen_insts_set.insert(cur_inst);
-                }
+            if (has_phi_operands) {
+                add_gen_inst(op_inst);
             }
         }
     }
@@ -1184,8 +1234,8 @@ typename SLWriterPass<BasePass>::Stmt *SLWriterPass<BasePass>::translate_block(
     }
 #else
     // When a variable is used in a terminating instruction, we have to introduce a
-    // variable for holding it's value across a control-flow edge, so that the old 
-    // variable's value is available to the terminating instruction (for example, a 
+    // variable for holding it's value across a control-flow edge, so that the old
+    // variable's value is available to the terminating instruction (for example, a
     // branch).
     for (llvm::PHINode& phi : bb->phis()) {
         if (used_in_terminator(&phi)) {
@@ -1353,7 +1403,7 @@ typename SLWriterPass<BasePass>::Stmt *SLWriterPass<BasePass>::translate_block(
                         Expr *res = translate_expr(incoming);
                         stmts.push_back(create_assign_stmt(phi_in_var, res));
                     } else {
-                        // Variables not used in terminating instruction go into the register 
+                        // Variables not used in terminating instruction go into the register
                         // transfer graph.
                         rtg.add_edge(incoming, &phi);
                     }
@@ -3018,6 +3068,7 @@ typename SLWriterPass<BasePass>::Expr *SLWriterPass<BasePass>::translate_expr_bi
         sl_op = Expr_binary::OK_SHIFT_RIGHT;
         break;
     case llvm::Instruction::And:
+        // There is no bitwise AND on bool values in HLSL/GLSL (DXC does allow it though)
         if (is<Type_bool>(left->get_type()->skip_type_alias()) &&
             is<Type_bool>(right->get_type()->skip_type_alias()))
         {
@@ -3028,6 +3079,7 @@ typename SLWriterPass<BasePass>::Expr *SLWriterPass<BasePass>::translate_expr_bi
         }
         break;
     case llvm::Instruction::Or:
+        // There is no bitwise OR on bool values in HLSL/GLSL (DXC does allow it though)
         if (is<Type_bool>(left->get_type()->skip_type_alias()) &&
             is<Type_bool>(right->get_type()->skip_type_alias()))
         {

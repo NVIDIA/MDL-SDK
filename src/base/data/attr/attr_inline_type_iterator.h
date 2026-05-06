@@ -81,9 +81,7 @@ inline Type_iterator::Type_iterator(
     char                *values)        // data
 {
     ASSERT(M_ATTR, par->m_type->get_typecode() == TYPE_STRUCT
-                || par->m_type->get_typecode() == TYPE_ARRAY
-                || par->m_type->get_typecode() == TYPE_ATTACHABLE
-                || par->m_type->get_typecode() == TYPE_CALL);
+                || par->m_type->get_typecode() == TYPE_ARRAY);
     m_type                = par->m_type->get_child();
     m_value               = values;
 }

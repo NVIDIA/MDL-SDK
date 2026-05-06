@@ -133,7 +133,6 @@ public:
     {
         {
         Attribute_set attr_set;
-        size_t check_size = 0;
         // setting up the set
         {
             // dynamic array inside a struct { BOOLEAN, INT32[], BOOLEAN } - raw access
@@ -155,18 +154,14 @@ public:
 
             Attribute_id id = Attribute::id_create(root.get_name());
             auto attr = std::make_shared<Attribute>(id, root);
-            check_size += attr->get_type().sizeof_all();
 
             *reinterpret_cast<bool*>(attr->set_values()) = true;
             char* ret_address=0;
             root.lookup("one.second", attr->set_values(), &ret_address);
             reinterpret_cast<Dynamic_array*>(ret_address)->m_count = values.m_count;
             reinterpret_cast<Dynamic_array*>(ret_address)->m_value = values.m_value;
-            Uint offset=0;
-            root.lookup("one.third", &offset);
             root.lookup("one.third", attr->set_values(), &ret_address);
-            MI_CHECK_EQUAL(ret_address, attr->set_values()+offset);
-            *reinterpret_cast<bool*>(attr->set_values()+offset) = false;
+            *reinterpret_cast<bool*>(ret_address) = false;
 
             attr_set.attach(attr);
             }
@@ -174,7 +169,6 @@ public:
             {
             int value = 12;
             auto attr = std::make_shared<Attribute>(TYPE_INT32, "two");
-            check_size += attr->get_type().sizeof_all();
             attr->set_value_int(value);
             MI_CHECK_EQUAL(value, *(int*)attr->get_values());
 
@@ -184,7 +178,6 @@ public:
             {
             int value = 123;
             auto attr = std::make_shared<Attribute>(TYPE_INT32, "three");
-            check_size += attr->get_type().sizeof_all();
             *reinterpret_cast<int*>(attr->set_values()) = value;
             MI_CHECK_EQUAL(value, *(int*)attr->get_values());
 
@@ -194,7 +187,6 @@ public:
             {
             const char* value = "value";
             auto attr = std::make_shared<Attribute>(TYPE_STRING, "four");
-            check_size += attr->get_type().sizeof_all();
             int len = strlen(value)+1;
             char* v = new char[len];
             memcpy(v, value, len);
@@ -208,14 +200,12 @@ public:
 
         {
         Attribute_set attr_set;
-        size_t check_size = 0;
         // setting up the set
         {
             // "on" (boolean) true
             {
             bool value = true;
             auto attr = std::make_shared<Attribute>(TYPE_BOOLEAN, "on");
-            check_size += attr->get_type().sizeof_all();
             *reinterpret_cast<bool*>(attr->set_values()) = value;
             MI_CHECK_EQUAL(value, *(bool*)attr->get_values());
             attr_set.attach(attr);
@@ -224,7 +214,6 @@ public:
             {
             int value = 0;
             auto attr = std::make_shared<Attribute>(TYPE_INT32, "flags");
-            check_size += attr->get_type().sizeof_all();
             *reinterpret_cast<int*>(attr->set_values()) = value;
             MI_CHECK_EQUAL(value, *(int*)attr->get_values());
             attr_set.attach(attr);
@@ -234,7 +223,6 @@ public:
             //float value[3] = {0.5f, 0.5f, 0.f};
             Vector3 value; value.x = 0.5f; value.y = 0.5f; value.z = 0.f;
             auto attr = std::make_shared<Attribute>(TYPE_VECTOR3, "sun_direction");
-            check_size += attr->get_type().sizeof_all();
             *reinterpret_cast<Vector3*>(attr->set_values()) = value;
             attr_set.attach(attr);
             }
@@ -242,7 +230,6 @@ public:
             {
             float value = 1.2f;
             auto attr = std::make_shared<Attribute>(TYPE_SCALAR, "saturation");
-            check_size += attr->get_type().sizeof_all();
             *reinterpret_cast<float*>(attr->set_values()) = value;
             attr_set.attach(attr);
             }

@@ -52,6 +52,20 @@
 #include "libbsdf_bitcode_hsm4_debug.h"
 #include "libbsdf_bitcode_hsm8_debug.h"
 
+// spectral variants
+#include "libbsdf_bitcode_spectral_hsmp.h"
+#include "libbsdf_bitcode_spectral_hsmn.h"
+#include "libbsdf_bitcode_spectral_hsm1.h"
+#include "libbsdf_bitcode_spectral_hsm2.h"
+#include "libbsdf_bitcode_spectral_hsm4.h"
+#include "libbsdf_bitcode_spectral_hsm8.h"
+#include "libbsdf_bitcode_spectral_hsmp_debug.h"
+#include "libbsdf_bitcode_spectral_hsmn_debug.h"
+#include "libbsdf_bitcode_spectral_hsm1_debug.h"
+#include "libbsdf_bitcode_spectral_hsm2_debug.h"
+#include "libbsdf_bitcode_spectral_hsm4_debug.h"
+#include "libbsdf_bitcode_spectral_hsm8_debug.h"
+
 namespace mi {
 namespace mdl {
 
@@ -61,70 +75,154 @@ std::unique_ptr<llvm::Module> LLVM_code_generator::load_libbsdf(
 {
     unsigned char const *bitcode;
     size_t bitcode_size;
-    switch (hsm) {
-    case DF_HSM_POINTER:
-        if (m_enable_full_debug) {
-            bitcode = libbsdf_bitcode_hsmp_debug;
-            bitcode_size = dimension_of(libbsdf_bitcode_hsmp_debug);
-        } else {
-            bitcode = libbsdf_bitcode_hsmp;
-            bitcode_size = dimension_of(libbsdf_bitcode_hsmp);
-        }
-        break;
 
-    case DF_HSM_NONE:
-        if (m_enable_full_debug) {
-            bitcode = libbsdf_bitcode_hsmn_debug;
-            bitcode_size = dimension_of(libbsdf_bitcode_hsmn_debug);
-        } else {
-            bitcode = libbsdf_bitcode_hsmn;
-            bitcode_size = dimension_of(libbsdf_bitcode_hsmn);
-        }
-        break;
+    if (m_enable_libbsdf_spectral)
+    {
+        switch (hsm) {
+        case DF_HSM_POINTER:
+            if (m_enable_full_debug) {
+                bitcode = libbsdf_bitcode_spectral_hsmp_debug;
+                bitcode_size = dimension_of(libbsdf_bitcode_spectral_hsmp_debug);
+            }
+            else {
+                bitcode = libbsdf_bitcode_spectral_hsmp;
+                bitcode_size = dimension_of(libbsdf_bitcode_spectral_hsmp);
+            }
+            break;
 
-    case DF_HSM_FIXED_1:
-        if (m_enable_full_debug) {
-            bitcode = libbsdf_bitcode_hsm1_debug;
-            bitcode_size = dimension_of(libbsdf_bitcode_hsm1_debug);
-        } else {
-            bitcode = libbsdf_bitcode_hsm1;
-            bitcode_size = dimension_of(libbsdf_bitcode_hsm1);
-        }
-        break;
+        case DF_HSM_NONE:
+            if (m_enable_full_debug) {
+                bitcode = libbsdf_bitcode_spectral_hsmn_debug;
+                bitcode_size = dimension_of(libbsdf_bitcode_spectral_hsmn_debug);
+            }
+            else {
+                bitcode = libbsdf_bitcode_spectral_hsmn;
+                bitcode_size = dimension_of(libbsdf_bitcode_spectral_hsmn);
+            }
+            break;
 
-    case DF_HSM_FIXED_2:
-        if (m_enable_full_debug) {
-            bitcode = libbsdf_bitcode_hsm2_debug;
-            bitcode_size = dimension_of(libbsdf_bitcode_hsm2_debug);
-        } else {
-            bitcode = libbsdf_bitcode_hsm2;
-            bitcode_size = dimension_of(libbsdf_bitcode_hsm2);
-        }
-        break;
+        case DF_HSM_FIXED_1:
+            if (m_enable_full_debug) {
+                bitcode = libbsdf_bitcode_spectral_hsm1_debug;
+                bitcode_size = dimension_of(libbsdf_bitcode_spectral_hsm1_debug);
+            }
+            else {
+                bitcode = libbsdf_bitcode_spectral_hsm1;
+                bitcode_size = dimension_of(libbsdf_bitcode_spectral_hsm1);
+            }
+            break;
 
-    case DF_HSM_FIXED_4:
-        if (m_enable_full_debug) {
-            bitcode = libbsdf_bitcode_hsm4_debug;
-            bitcode_size = dimension_of(libbsdf_bitcode_hsm4_debug);
-        } else {
-            bitcode = libbsdf_bitcode_hsm4;
-            bitcode_size = dimension_of(libbsdf_bitcode_hsm4);
-        }
-        break;
+        case DF_HSM_FIXED_2:
+            if (m_enable_full_debug) {
+                bitcode = libbsdf_bitcode_spectral_hsm2_debug;
+                bitcode_size = dimension_of(libbsdf_bitcode_spectral_hsm2_debug);
+            }
+            else {
+                bitcode = libbsdf_bitcode_spectral_hsm2;
+                bitcode_size = dimension_of(libbsdf_bitcode_spectral_hsm2);
+            }
+            break;
 
-    case DF_HSM_FIXED_8:
-        if (m_enable_full_debug) {
-            bitcode = libbsdf_bitcode_hsm8_debug;
-            bitcode_size = dimension_of(libbsdf_bitcode_hsm8_debug);
-        } else {
-            bitcode = libbsdf_bitcode_hsm8;
-            bitcode_size = dimension_of(libbsdf_bitcode_hsm8);
-        }
-        break;
+        case DF_HSM_FIXED_4:
+            if (m_enable_full_debug) {
+                bitcode = libbsdf_bitcode_spectral_hsm4_debug;
+                bitcode_size = dimension_of(libbsdf_bitcode_spectral_hsm4_debug);
+            }
+            else {
+                bitcode = libbsdf_bitcode_spectral_hsm4;
+                bitcode_size = dimension_of(libbsdf_bitcode_spectral_hsm4);
+            }
+            break;
 
-    default:
-        MDL_ASSERT(!"Loading libbsdf bytecode version failed");
-        return nullptr;
+        case DF_HSM_FIXED_8:
+            if (m_enable_full_debug) {
+                bitcode = libbsdf_bitcode_spectral_hsm8_debug;
+                bitcode_size = dimension_of(libbsdf_bitcode_spectral_hsm8_debug);
+            }
+            else {
+                bitcode = libbsdf_bitcode_spectral_hsm8;
+                bitcode_size = dimension_of(libbsdf_bitcode_spectral_hsm8);
+            }
+            break;
+
+        default:
+            MDL_ASSERT(!"Loading libbsdf bytecode version failed");
+            return nullptr;
+        }
+    }
+    else
+    {
+        switch (hsm) {
+        case DF_HSM_POINTER:
+            if (m_enable_full_debug) {
+                bitcode = libbsdf_bitcode_hsmp_debug;
+                bitcode_size = dimension_of(libbsdf_bitcode_hsmp_debug);
+            }
+            else {
+                bitcode = libbsdf_bitcode_hsmp;
+                bitcode_size = dimension_of(libbsdf_bitcode_hsmp);
+            }
+            break;
+
+        case DF_HSM_NONE:
+            if (m_enable_full_debug) {
+                bitcode = libbsdf_bitcode_hsmn_debug;
+                bitcode_size = dimension_of(libbsdf_bitcode_hsmn_debug);
+            }
+            else {
+                bitcode = libbsdf_bitcode_hsmn;
+                bitcode_size = dimension_of(libbsdf_bitcode_hsmn);
+            }
+            break;
+
+        case DF_HSM_FIXED_1:
+            if (m_enable_full_debug) {
+                bitcode = libbsdf_bitcode_hsm1_debug;
+                bitcode_size = dimension_of(libbsdf_bitcode_hsm1_debug);
+            }
+            else {
+                bitcode = libbsdf_bitcode_hsm1;
+                bitcode_size = dimension_of(libbsdf_bitcode_hsm1);
+            }
+            break;
+
+        case DF_HSM_FIXED_2:
+            if (m_enable_full_debug) {
+                bitcode = libbsdf_bitcode_hsm2_debug;
+                bitcode_size = dimension_of(libbsdf_bitcode_hsm2_debug);
+            }
+            else {
+                bitcode = libbsdf_bitcode_hsm2;
+                bitcode_size = dimension_of(libbsdf_bitcode_hsm2);
+            }
+            break;
+
+        case DF_HSM_FIXED_4:
+            if (m_enable_full_debug) {
+                bitcode = libbsdf_bitcode_hsm4_debug;
+                bitcode_size = dimension_of(libbsdf_bitcode_hsm4_debug);
+            }
+            else {
+                bitcode = libbsdf_bitcode_hsm4;
+                bitcode_size = dimension_of(libbsdf_bitcode_hsm4);
+            }
+            break;
+
+        case DF_HSM_FIXED_8:
+            if (m_enable_full_debug) {
+                bitcode = libbsdf_bitcode_hsm8_debug;
+                bitcode_size = dimension_of(libbsdf_bitcode_hsm8_debug);
+            }
+            else {
+                bitcode = libbsdf_bitcode_hsm8;
+                bitcode_size = dimension_of(libbsdf_bitcode_hsm8);
+            }
+            break;
+
+        default:
+            MDL_ASSERT(!"Loading libbsdf bytecode version failed");
+            return nullptr;
+        }
     }
 
     std::unique_ptr<llvm::MemoryBuffer> mem(llvm::MemoryBuffer::getMemBuffer(

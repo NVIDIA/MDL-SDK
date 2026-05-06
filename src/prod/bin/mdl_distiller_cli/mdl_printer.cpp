@@ -1738,6 +1738,19 @@ void Mdl_printer::check_mdl_version_requirement(
     IExpression_direct_call const *call,
     IExpression_list const *arguments)
 {
+    Handle<IExpression_list const> args(call->get_arguments());
+    for (size_t i = 0, n = args->get_size(); i < n; ++i) {
+        Handle<IExpression const> arg(args->get_expression(i));
+        Handle<IType const> arg_ty(arg->get_type());
+        if (arg_ty->get_kind() == IType::TK_ENUM) {
+            Handle<const IType_enum> enum_ty(arg_ty->get_interface<IType_enum>());
+            char const *name = enum_ty->get_symbol();
+            if (strcmp(name, "::df::backscatter_modifier") == 0) {
+                set_min_mdl_version(mdl_spec_1_11);
+                return;
+            }
+        }
+    }
     if (is_unicode_identifier(function_name)) {
             set_min_mdl_version(mdl_spec_1_8);
             return;
@@ -1861,6 +1874,14 @@ void Mdl_printer::print_prolog()
 
     case mdl_spec_1_9:
         m_out << "mdl 1.9;\n";
+        break;
+
+    case mdl_spec_1_10:
+        m_out << "mdl 1.10;\n";
+        break;
+
+    case mdl_spec_1_11:
+        m_out << "mdl 1.11;\n";
         break;
 
     default:

@@ -39,6 +39,8 @@
 #include <base/system/test/i_test_auto_driver.h>
 #include <base/system/test/i_test_auto_case.h>
 
+#include <string>
+
 #include <mi/neuraylib/iarray.h>
 #include <mi/neuraylib/icanvas.h>
 #include <mi/neuraylib/idatabase.h>
@@ -105,9 +107,8 @@ mi::IArray* create_array_for_canvases(
     const struct Data* data,
     size_t data_N)
 {
-    std::ostringstream type_name;
-    type_name << "Uvtile[" << data_N << "]";
-    auto* array = transaction->create<mi::IArray>( type_name.str().c_str());
+    std::string type_name = std::string( "Uvtile[") + std::to_string( data_N) + "]";
+    auto* array = transaction->create<mi::IArray>( type_name.c_str());
 
     for( mi::Size i = 0; i < data_N; ++i) {
         mi::base::Handle<mi::IStructure> elem( array->get_element<mi::IStructure>( i));
@@ -204,7 +205,7 @@ MI_TEST_AUTO_FUNCTION( test_iimage )
         run_tests( neuray.get());
     }
 
-    neuray = nullptr;
+    neuray.reset();
     MI_CHECK( unload());
 }
 

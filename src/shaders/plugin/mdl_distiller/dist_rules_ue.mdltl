@@ -40,28 +40,28 @@ rules Make_simple_for_ue4 bottomup {
     microfacet_ggx_vcavities_bsdf(_,_,tint,_,_,mode) --> diffuse_transmission_bsdf(tint)
         if mode == scatter_transmit;
 
-    microfacet_ggx_vcavities_bsdf(ru,rv,tint,_,t,mode) -->
+    microfacet_ggx_vcavities_bsdf(ru,rv,tint,_,t,mode,bs,handle) -->
                 custom_curve_layer( nvidia::distilling_support::refl_from_ior(option( global_float_ior)),
                     1.0,5.0,1.0, microfacet_ggx_vcavities_bsdf(ru,rv,tint,color(0.0),t), diffuse_transmission_bsdf(tint))
         if mode == scatter_reflect_transmit;
 
     //get rid of anisotropy: preserve the lower roughness component
-    //microfacet_ggx_vcavities_bsdf( ru,rv,tint,_,t,mode) --> microfacet_ggx_vcavities_bsdf( math::pow((ru+rv)*0.5,.95),math::pow((ru+rv)*0.5,.95),tint,color(0.0),t,mode);
-//    microfacet_ggx_vcavities_bsdf( ru,rv,tint,_,t,mode) --> microfacet_ggx_vcavities_bsdf( (ru+rv)*0.5,(ru+rv)*0.5,tint,color(0.0),t,mode);
-    microfacet_ggx_vcavities_bsdf( ru,rv,tint,_,t,mode) -->
-        microfacet_ggx_vcavities_bsdf( nvidia::distilling_support::combine_anisotropic_roughness(ru,rv),nvidia::distilling_support::combine_anisotropic_roughness(ru,rv),tint,color(0.0),t,mode)
+    //microfacet_ggx_vcavities_bsdf( ru,rv,tint,_,t,mode,bs,handle) --> microfacet_ggx_vcavities_bsdf( math::pow((ru+rv)*0.5,.95),math::pow((ru+rv)*0.5,.95),tint,color(0.0),t,mode,bs,handle);
+//    microfacet_ggx_vcavities_bsdf( ru,rv,tint,_,t,mode,bs,handle) --> microfacet_ggx_vcavities_bsdf( (ru+rv)*0.5,(ru+rv)*0.5,tint,color(0.0),t,mode,bs,handle);
+    microfacet_ggx_vcavities_bsdf( ru,rv,tint,_,t,mode,bs,handle) -->
+        microfacet_ggx_vcavities_bsdf( nvidia::distilling_support::combine_anisotropic_roughness(ru,rv),nvidia::distilling_support::combine_anisotropic_roughness(ru,rv),tint,color(0.0),t,mode,bs,handle)
             maybe ru != rv;
 
     //fix all glossy/specular to be ggx
-    microfacet_beckmann_smith_bsdf(ru,rv,tint,_,t,mode) --> microfacet_ggx_vcavities_bsdf( ru,rv,tint,color(0.0),t,mode) repeat_rules;
-    specular_bsdf(tint,mode) --> microfacet_ggx_vcavities_bsdf( 0.0,0.0,tint,color(0.0),state::texture_tangent_u(0),mode) repeat_rules;
-    microfacet_beckmann_vcavities_bsdf(ru,rv,tint,_,t,mode)--> microfacet_ggx_vcavities_bsdf( ru,rv,tint,color(0.0),t,mode) repeat_rules;
-    microfacet_ggx_smith_bsdf(ru,rv,tint,_,t,mode) --> microfacet_ggx_vcavities_bsdf( ru,rv,tint,color(0.0),t,mode) repeat_rules;
-    simple_glossy_bsdf(ru,rv,tint,_,t,mode) --> microfacet_ggx_vcavities_bsdf( ru,rv,tint,color(0.0),t,mode) repeat_rules;
+    microfacet_beckmann_smith_bsdf(ru,rv,tint,_,t,mode,bs,handle) --> microfacet_ggx_vcavities_bsdf( ru,rv,tint,color(0.0),t,mode,bs,handle) repeat_rules;
+    specular_bsdf(tint,mode,bs,handle) --> microfacet_ggx_vcavities_bsdf( 0.0,0.0,tint,color(0.0),state::texture_tangent_u(0),mode,bs,handle) repeat_rules;
+    microfacet_beckmann_vcavities_bsdf(ru,rv,tint,_,t,mode,bs,handle)--> microfacet_ggx_vcavities_bsdf( ru,rv,tint,color(0.0),t,mode,bs,handle) repeat_rules;
+    microfacet_ggx_smith_bsdf(ru,rv,tint,_,t,mode,bs,handle) --> microfacet_ggx_vcavities_bsdf( ru,rv,tint,color(0.0),t,mode,bs,handle) repeat_rules;
+    simple_glossy_bsdf(ru,rv,tint,_,t,mode,bs,handle) --> microfacet_ggx_vcavities_bsdf( ru,rv,tint,color(0.0),t,mode,bs,handle) repeat_rules;
     ward_geisler_moroder_bsdf(ru,rv,tint,_,t) --> microfacet_ggx_vcavities_bsdf( ru,rv,tint,color(0.0),t) repeat_rules;
-    backscattering_glossy_reflection_bsdf(ru,rv,tint,_,t,handle) --> microfacet_ggx_vcavities_bsdf(ru,rv,tint,color(0.0),t,scatter_reflect,handle) repeat_rules;
-    sheen_bsdf(r,tint,tintt,_,handle) --> microfacet_ggx_vcavities_bsdf(r,r,tint,tintt,state::texture_tangent_u(0),scatter_reflect,handle) repeat_rules;
-    microflake_sheen_bsdf(r,tint,tintt,_,handle) --> microfacet_ggx_vcavities_bsdf(r,r,tint,tintt,state::texture_tangent_u(0),scatter_reflect,handle) repeat_rules;
+    backscattering_glossy_reflection_bsdf(ru,rv,tint,_,t,handle) --> microfacet_ggx_vcavities_bsdf(ru,rv,tint,color(0.0),t,scatter_reflect,backscatter_none,handle) repeat_rules;
+    sheen_bsdf(r,tint,tintt,_,handle) --> microfacet_ggx_vcavities_bsdf(r,r,tint,tintt,state::texture_tangent_u(0),scatter_reflect,backscatter_none,handle) repeat_rules;
+    microflake_sheen_bsdf(r,tint,tintt,_,handle) --> microfacet_ggx_vcavities_bsdf(r,r,tint,tintt,state::texture_tangent_u(0),scatter_reflect,backscatter_none,handle) repeat_rules;
 
     //some brutal removal of unsupported components: todo see if we can do better
     measured_bsdf(_) --> bsdf();
@@ -79,9 +79,9 @@ rules Make_simple_for_ue4 bottomup {
                               wrap_repeat,wrap_repeat,float2(0.0,1.0),float2(0.0,1.0),0.0
                       ),1.0),base);
 
-    bsdf_directional_factor(tint_n,tint_g,f82_factor,e,base) -->
+    bsdf_directional_factor(tint_n,tint_g,f82_factor,e,base,_bs) -->
         bsdf_tint( nvidia::distilling_support::directional_coloring(tint_n,tint_g*f82_factor,e), base) maybe tint_g!=color(1.0);
-    bsdf_directional_factor(tint_n,tint_g,f82_factor,e,base) -->
+    bsdf_directional_factor(tint_n,tint_g,f82_factor,e,base,_bs) -->
         custom_curve_layer( 0.0,1.0,e, 1.0, bsdf_tint(tint_g*f82_factor,base), bsdf_tint(tint_n,base));
 
     bsdf_clamped_mix_1(w1,df1) --> bsdf_tint( color(w1), df1);
@@ -558,12 +558,12 @@ rules Elide_tint_for_ue4 topdown {
 
 rules Fix_common_tint_for_UE4 topdown {
 //align color if there are  metallic and dielectric
-    material(tw,material_surface(custom_curve_layer(f0_3,f90_3,e3,w3,microfacet_ggx_vcavities_bsdf(ru4,rv4,tint4,_,t4),bsdf_mix_2(
-        w1,microfacet_ggx_vcavities_bsdf(ru1,rv1,tint1,_,t1),
+    material(tw,material_surface(custom_curve_layer(f0_3,f90_3,e3,w3,microfacet_ggx_vcavities_bsdf(ru4,rv4,tint4,_,t4,bs1,handle1),bsdf_mix_2(
+        w1,microfacet_ggx_vcavities_bsdf(ru1,rv1,tint1,_,t1,bs2,handle2),
         w2,custom_curve_layer(f0,f90,e,w,layer,diffuse_reflection_bsdf(tint2,r2),n)),n3),em),
             bf,ior,vol,material_geometry(d,cutout,ng)) -->
-        material(tw,material_surface(custom_curve_layer(f0_3,f90_3,e3,w3,microfacet_ggx_vcavities_bsdf(ru4,rv4,tint4,color(0.0),t4),bsdf_mix_2(
-            w1,microfacet_ggx_vcavities_bsdf(ru1,rv1,nvidia::distilling_support::average(w1,tint1,w2,tint2),color(0.0),t1),
+        material(tw,material_surface(custom_curve_layer(f0_3,f90_3,e3,w3,microfacet_ggx_vcavities_bsdf(ru4,rv4,tint4,color(0.0),t4,bs1,handle1),bsdf_mix_2(
+            w1,microfacet_ggx_vcavities_bsdf(ru1,rv1,nvidia::distilling_support::average(w1,tint1,w2,tint2),color(0.0),t1,bs2,handle2),
             w2,custom_curve_layer(f0,f90,e,w,
                 layer,
                 diffuse_reflection_bsdf(nvidia::distilling_support::average(w1,tint1,w2,tint2),r2),n)),n3),em),

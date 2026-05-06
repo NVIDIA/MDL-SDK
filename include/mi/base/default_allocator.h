@@ -25,13 +25,11 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  **************************************************************************************************/
-/// \file mi/base/default_allocator.h
-/// \brief Default allocator implementation based on global new and delete.
-///
-/// See \ref mi_base_iinterface.
 
 #ifndef MI_BASE_DEFAULT_ALLOCATOR_H
 #define MI_BASE_DEFAULT_ALLOCATOR_H
+
+#ifdef MI_NEURAYLIB_DEPRECATED_17_0
 
 #include <mi/base/types.h>
 #include <mi/base/iallocator.h>
@@ -106,5 +104,7 @@ public:
 
 } // namespace base
 } // namespace mi
+
+#endif // MI_NEURAYLIB_DEPRECATED_17_0
 
 #endif // MI_BASE_DEFAULT_ALLOCATOR_H

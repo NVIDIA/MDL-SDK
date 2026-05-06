@@ -29,6 +29,7 @@
 #include "pch.h"
 
 #include <mi/base/handle.h>
+#include <mi/mdl/mdl_generated_executable.h>
 
 #include <base/system/stlext/i_stlext_restore.h>
 
@@ -36,7 +37,6 @@
 #include <llvm/IR/Module.h>
 
 #include "generator_jit_code_printer.h"
-#include "generator_jit_generated_code.h"
 
 namespace mi {
 namespace mdl {

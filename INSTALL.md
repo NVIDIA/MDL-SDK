@@ -28,7 +28,7 @@ might work as well.
 <a name="thirdparty-dependencies-libs"></a>
 The following third-party libraries and tools are required to build the MDL SDK:
 
--   <a name="vcpkg">**vcpkg**</a> *(git commit ID 5fac54d)*  
+-   <a name="vcpkg">**vcpkg**</a> *(git commit ID 7853666)*  
     [Vcpkg](https://vcpkg.io/en/getting-started.html) is the recommended way to
     install other dependencies like Boost, OpenImageIO, GLEW, GLFW, and Vulkan.
     The vcpkg version mentioned above corresponds to the versions mentioned for
@@ -114,7 +114,7 @@ of examples is of no interest to you.
     Download and extract the pre-compiled x64 binaries from
     [github](https://github.com/microsoft/DirectXShaderCompiler/releases).
 
--   **GLEW** *(2.2.0)*  
+-   **GLEW** *(2.3.1)*  
     This dependency is required for all OpenGL-based examples.  
     Installation via [vcpkg](#vcpkg) is strongly recommended. Install the vcpkg
     package *glew*.  

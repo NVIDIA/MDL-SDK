@@ -28,8 +28,6 @@
 
 #include "pch.h"
 
-#include "compilercore_cc_conf.h"
-
 #include "compilercore_hash.h"
 
 namespace mi {

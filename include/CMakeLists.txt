@@ -108,6 +108,7 @@ set(PROJECT_HEADERS_MDL
     "${MDL_INCLUDE_FOLDER}/mi/mdl/mdl_positions.h"
     "${MDL_INCLUDE_FOLDER}/mi/mdl/mdl_printers.h"
     "${MDL_INCLUDE_FOLDER}/mi/mdl/mdl_serializer.h"
+    "${MDL_INCLUDE_FOLDER}/mi/mdl/mdl_spectral_support.h"
     "${MDL_INCLUDE_FOLDER}/mi/mdl/mdl_statements.h"
     "${MDL_INCLUDE_FOLDER}/mi/mdl/mdl_stdlib_types.h"
     "${MDL_INCLUDE_FOLDER}/mi/mdl/mdl_streams.h"
@@ -145,6 +146,7 @@ set(PROJECT_HEADERS_NEURAYLIB
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/ienum.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/ienum_decl.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/iexpression.h"
+    "${MDL_INCLUDE_FOLDER}/mi/neuraylib/iextension_api.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/ifactory.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/ifunction_call.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/ifunction_definition.h"
@@ -242,28 +244,46 @@ source_group("neuraylib" FILES ${PROJECT_HEADERS_NEURAYLIB})
 # Create installation rules to install public headers
 # -------------------------------------------------------------------------------------------------
 install(
-  FILES
-  ${PROJECT_HEADERS_TOPLEVEL}
-  DESTINATION include/mi
-  )
+    FILES
+    ${PROJECT_HEADERS_TOPLEVEL}
+    DESTINATION include/mi
+    )
 
 install(
-  FILES
-  ${PROJECT_HEADERS_BASE}
-  DESTINATION include/mi/base
-  )
+    FILES
+    ${PROJECT_HEADERS_BASE}
+    DESTINATION include/mi/base
+    )
 install(
-  FILES
-  ${PROJECT_HEADERS_MATH}
-  DESTINATION include/mi/math
-  )
+    FILES
+    ${PROJECT_HEADERS_MATH}
+    DESTINATION include/mi/math
+    )
 install(
-  FILES
-  ${PROJECT_HEADERS_MDL}
-  DESTINATION include/mi/mdl
-  )
+    FILES
+    ${PROJECT_HEADERS_MDL}
+    DESTINATION include/mi/mdl
+    )
 install(
-  FILES
-  ${PROJECT_HEADERS_NEURAYLIB}
-  DESTINATION include/mi/neuraylib
-  )
+    FILES
+    ${PROJECT_HEADERS_NEURAYLIB}
+    DESTINATION include/mi/neuraylib
+    )
+
+install(CODE
+    "if(NOT \"${MDL_DF_SPECTRAL_SAMPLES_OVERRIDE}\" STREQUAL \"\")
+        set(_FILES
+            \"include/mi/mdl/mdl_spectral_support.h\"
+            \"include/mi/neuraylib/target_code_types.h\")
+        # Note that the regular expression needs to match the entire file, i.e., no use of ^ and $.
+        set(_MATCH \"#define +MDL_DF_SPECTRAL_SAMPLES +[0-9]*\")
+        set(_REPLACE \"#define MDL_DF_SPECTRAL_SAMPLES ${MDL_DF_SPECTRAL_SAMPLES_OVERRIDE}\")
+        foreach(_FILE \${_FILES})
+            message(STATUS \"Patching \${_FILE} with explicitly configured value \"
+                \"${MDL_DF_SPECTRAL_SAMPLES_OVERRIDE} for MDL_DF_SPECTRAL_SAMPLES\")
+            file(READ \"\${CMAKE_INSTALL_PREFIX}/\${_FILE}\" _CONTENT)
+            string(REGEX REPLACE \"\${_MATCH}\" \"\${_REPLACE}\" \"_CONTENT\" \"\${_CONTENT}\")
+            file(WRITE \"\${CMAKE_INSTALL_PREFIX}/\${_FILE}\" \"\${_CONTENT}\")
+        endforeach()
+    endif()"
+    )

@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
- // examples/mdl_sdk/dxr/mdl_d3d12/mdl_sdk.h
+// examples/mdl_sdk/dxr/mdl_d3d12/mdl_sdk.h
 
 #ifndef MDL_D3D12_MDL_SDK_H
 #define MDL_D3D12_MDL_SDK_H

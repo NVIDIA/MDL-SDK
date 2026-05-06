@@ -295,19 +295,21 @@ mi::Sint32 Mdl_configuration_impl::start()
     m_mdlc_module.set();
 
     // configure implicit casts
-    m_mdlc_module->set_implicit_cast_enabled(m_implicit_cast_enabled);
+    m_mdlc_module->set_implicit_cast_enabled( m_implicit_cast_enabled);
 
     // configure exposure of let-expression names
-    m_mdlc_module->set_expose_names_of_let_expressions(m_expose_names_of_let_expressions);
+    m_mdlc_module->set_expose_names_of_let_expressions( m_expose_names_of_let_expressions);
+
+    m_mdlc_module->set_warn_about_nvidia_df( false);
 
     // configure simple-glossy legacy behavior
-    mi::base::Handle<mi::mdl::IMDL> mdl(m_mdlc_module->get_mdl());
+    mi::base::Handle<mi::mdl::IMDL> mdl( m_mdlc_module->get_mdl());
 
     // install external entity resolver, if given
-    if (m_entity_resolver) {
+    if( m_entity_resolver) {
         mi::base::Handle<mi::mdl::IEntity_resolver> mdl_resolver(
-            new Core_entity_resolver_impl(mdl.get(), m_entity_resolver.get()));
-        mdl->set_external_entity_resolver(mdl_resolver.get());
+            new Core_entity_resolver_impl( mdl.get(), m_entity_resolver.get()));
+        mdl->set_external_entity_resolver( mdl_resolver.get());
     }
 
     return 0;
@@ -317,10 +319,10 @@ mi::Sint32 Mdl_configuration_impl::shutdown()
 {
     // drop any reference to a user resolver
     m_entity_resolver.reset();
-    if (m_mdlc_module.get_status() == MODULE_STATUS_INITIALIZED) {
-        mi::base::Handle<mi::mdl::IMDL> mdl(m_mdlc_module->get_mdl());
-        if (mdl)
-            mdl->set_external_entity_resolver(nullptr);
+    if( m_mdlc_module.get_status() == MODULE_STATUS_INITIALIZED) {
+        mi::base::Handle<mi::mdl::IMDL> mdl( m_mdlc_module->get_mdl());
+        if( mdl)
+            mdl->set_external_entity_resolver( nullptr);
     }
     return 0;
 }

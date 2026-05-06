@@ -81,7 +81,7 @@ void set_z_verbose(int level)
 #ifdef DEBUG
     z_verbose = level;
 #endif // DEBUG
-    level = level; // stop compiler warnings about unused parameter
+    (void) level; // stop compiler warnings about unused parameter
 }
 
 ///
@@ -96,7 +96,7 @@ int get_z_verbose()
     return z_verbose;
 #else // DEBUG
     return 0;
-#endif // DEBUG    
+#endif // DEBUG
 }
 
 }}      // namespace MI::ZLIB

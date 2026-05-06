@@ -28,8 +28,6 @@
 
 #include "pch.h"
 
-#include <map>
-
 #include <mi/base/ilogger.h>
 #include <mi/base/plugin.h>
 #include <mi/mdl/mdl_code_generators.h>
@@ -68,18 +66,18 @@ namespace MI {
 namespace MDLC {
 
 class Assert_helper : public mi::mdl::IAsserter {
-    virtual void assertfailed(
+    void assertfailed(
         char const   *exp,
         char const   *file,
-        unsigned int line)
+        unsigned int line) final
     {
         ::MI::LOG::report_assertion_failure(M_MDLC, exp, file, line);
     }
 };
 
 class Fatal_helper : public mi::mdl::IFatal_error {
-    virtual void fatal(
-        char const *msg)
+    void fatal(
+        char const *msg) final
     {
         ::MI::LOG::mod_log->fatal(M_MDLC, MI::LOG::ILogger::C_COMPILER, "%s", msg);
     }
@@ -88,17 +86,17 @@ class Fatal_helper : public mi::mdl::IFatal_error {
 class DebugOutput : public mi::mdl::IOutput_stream {
 public:
     /// Write a character to the output stream.
-    virtual void write_char(char c) {
+    void write_char(char c) final {
         ::MI::LOG::mod_log->info(M_MDLC, LOG::ILogger::C_RENDER, "%c", c);
     }
 
     /// Write a string to the stream.
-    virtual void write(const char *string) {
+    void write(const char *string) final {
         ::MI::LOG::mod_log->info(M_MDLC, LOG::ILogger::C_RENDER, "%s", string);
     }
 
     /// Flush stream.
-    virtual void flush() {}
+    void flush() final {}
 
     /// Remove the last character from output stream if possible.
     ///
@@ -106,21 +104,21 @@ public:
     ///
     /// \return true if c was the last character in the stream and it was successfully removed,
     /// false otherwise
-    virtual bool unput(char c) {
+    bool unput(char c) final {
         // unsupported
         return false;
     }
 
     // from IInterface: This object is not reference counted.
-    virtual Uint32 retain() const { return 1; }
-    virtual Uint32 release() const { return 1; }
-    virtual const mi::base::IInterface* get_interface(mi::base::Uuid const &interface_id) const {
+    Uint32 retain() const final { return 1; }
+    Uint32 release() const final { return 1; }
+    const mi::base::IInterface* get_interface(mi::base::Uuid const &interface_id) const final {
         return nullptr;
     }
-    virtual mi::base::IInterface* get_interface(mi::base::Uuid const &interface_id) {
+    mi::base::IInterface* get_interface(mi::base::Uuid const &interface_id) final {
         return nullptr;
     }
-    virtual mi::base::Uuid get_iid() const { return IID(); }
+    mi::base::Uuid get_iid() const final { return IID(); }
 };
 
 static Assert_helper g_assert_helper;
@@ -140,10 +138,10 @@ class MDL_deserializer : public mi::mdl::Base_deserializer
 {
 public:
     /// Read a byte.
-    virtual Byte read() { Uint8 c; m_deserializer->read(&c); return c; }
+    Byte read() final { Uint8 c; m_deserializer->read(&c); return c; }
 
     /// Reads a DB::Tag 32bit encoding.
-    virtual unsigned read_db_tag() {
+    unsigned read_db_tag() final {
         DB::Tag t;
         m_deserializer->read(&t);
         return t.get_uint();
@@ -167,12 +165,12 @@ public:
     /// Write a byte.
     ///
     /// \param b  the byte to write
-    virtual void write(Byte b) { m_serializer->write(Uint8(b)); }
+    void write(Byte b) final { m_serializer->write(Uint8(b)); }
 
     /// Write a DB::Tag.
     ///
     /// \param tag  the DB::Tag encoded as 32bit
-    virtual void write_db_tag(unsigned tag) {
+    void write_db_tag(unsigned tag) final {
         DB::Tag t(tag);
         m_serializer->write(t);
     }
@@ -198,6 +196,7 @@ Mdlc_module_impl::Mdlc_module_impl()
   , m_code_cache(0)
   , m_implicit_cast_enabled(true)
   , m_expose_names_of_let_expressions(true)
+  , m_warn_about_nvidia_df(true)
   , m_module_wait_queue(0)
 {
 }
@@ -227,7 +226,7 @@ bool Mdlc_module_impl::init()
 
     m_mdl->install_search_path(MDL_search_path::create(m_allocator.get()));
 
-    mi::mdl::Options                             &options = m_mdl->access_options();
+    mi::mdl::Options &options = m_mdl->access_options();
 
     int opt_level = 0;
     if (registry.get_value("mdl_opt_level", opt_level)) {
@@ -241,7 +240,6 @@ bool Mdlc_module_impl::init()
     // disable "deprecated entity" warning by default
     MDL_ASSERT(mi::mdl::DEPRECATED_ENTITY == 275);
     options.set_option(mi::mdl::MDL::option_warn, "275=off");
-
 
     {
         // register nvidia/distilling_support.mdl
@@ -390,6 +388,16 @@ void Mdlc_module_impl::set_expose_names_of_let_expressions(bool value)
 bool Mdlc_module_impl::get_expose_names_of_let_expressions() const
 {
     return m_expose_names_of_let_expressions;
+}
+
+void Mdlc_module_impl::set_warn_about_nvidia_df(bool value)
+{
+    m_warn_about_nvidia_df = value;
+}
+
+bool Mdlc_module_impl::get_warn_about_nvidia_df() const
+{
+    return m_warn_about_nvidia_df;
 }
 
 MDL::Mdl_module_wait_queue* Mdlc_module_impl::get_module_wait_queue() const

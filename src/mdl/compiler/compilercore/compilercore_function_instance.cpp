@@ -42,6 +42,7 @@ Function_instance::Function_instance(
     bool                              return_derivs,
     bool                              has_storage_spaces)
 : m_key(def)
+, m_req_node_index(0)
 , m_array_instances(arg_instances)
 , m_parameter_storage_mods(param_mods)
 , m_return_derivs(return_derivs)
@@ -58,6 +59,7 @@ Function_instance::Function_instance(
     bool               return_derivs,
     bool               has_storage_spaces)
 : m_key(def)
+, m_req_node_index(0)
 , m_array_instances(alloc)
 , m_parameter_storage_mods(alloc)
 , m_return_derivs(return_derivs)
@@ -77,11 +79,28 @@ Function_instance::Function_instance(
     ILambda_function const *lambda,
     bool                    has_storage_spaces)
 : m_key(lambda)
+, m_req_node_index(0)
 , m_array_instances(alloc)
 , m_parameter_storage_mods(alloc)
 , m_return_derivs(false)
 , m_has_storage_spaces(has_storage_spaces)
 , m_kind(KI_LAMBDA)
+{
+}
+
+// Constructor from a requested node of a distribution function.
+Function_instance::Function_instance(
+    IAllocator                   *alloc,
+    IDistribution_function const *dist_func,
+    size_t                        req_node_index,
+    bool                          has_storage_spaces)
+: m_key(dist_func)
+, m_req_node_index(req_node_index)
+, m_array_instances(alloc)
+, m_parameter_storage_mods(alloc)
+, m_return_derivs(false)
+, m_has_storage_spaces(has_storage_spaces)
+, m_kind(KI_REQUESTED_NODE)
 {
 }
 
@@ -91,6 +110,7 @@ Function_instance::Function_instance(
     size_t     code,
     bool       has_storage_spaces)
 : m_key(Key_t(code))
+, m_req_node_index(0)
 , m_array_instances(alloc)
 , m_parameter_storage_mods(alloc)
 , m_return_derivs(false)

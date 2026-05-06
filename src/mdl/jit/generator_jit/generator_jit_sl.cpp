@@ -40,7 +40,6 @@
 #include "generator_jit_ast_compute.h"
 #include "generator_jit_cns_pass.h"
 #include "generator_jit_sl_writer.h"
-#include "generator_jit_streams.h"
 #include "generator_jit_sl_passes.h"
 
 namespace mi {
@@ -110,10 +109,10 @@ void LLVM_code_generator::sl_compile(
         }
 
         mpm.add(llvm::createCFGSimplificationPass(     // must be executed before CNS
-            llvm::SimplifyCFGOptions().avoidPointerPHIs(true)));
+            llvm::SimplifyCFGOptions().avoidPointerPHIs(true).setSimplifyCondBranch(false)));
         mpm.add(llvm::sl::createControlledNodeSplittingPass());  // resolve irreducible CF
         mpm.add(llvm::createCFGSimplificationPass(     // eliminate dead blocks created by CNS
-            llvm::SimplifyCFGOptions().avoidPointerPHIs(true)));
+            llvm::SimplifyCFGOptions().avoidPointerPHIs(true).setSimplifyCondBranch(false)));
         mpm.add(llvm::sl::createUnswitchPass());       // get rid of all switch instructions
         mpm.add(llvm::createLoopSimplifyCFGPass());    // ensure all exit blocks are dominated by
                                                        // the loop header

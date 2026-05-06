@@ -67,7 +67,12 @@ DAG_node const* Mixer_error::matcher(
     const mi::mdl::Distiller_options *options,
     Rule_result_code &result_code) const
 {
-    auto match_rule2 = [&] (DAG_node const *node, IDistiller_plugin_api::Match_properties &node_props) -> const DAG_node * { return node; };
+    auto match_rule2 = [&] (DAG_node const *node, IDistiller_plugin_api::Match_properties &node_props) -> const DAG_node * {
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 1 ,{ mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::No_match, ""});
+        }
+        return node;
+        };
 
 // 043_mixer_error.mdltl:8
 //RUID 127964
@@ -79,13 +84,29 @@ DAG_node const* Mixer_error::matcher(
         e.get_match_properties(node3, node_props3); 
         // match for bsdf()
         if (node_props3.sema != IDefinition::DS_INVALID_REF_CONSTRUCTOR || node_props3.type_kind != IType::TK_BSDF) {
+            if (event_handler != nullptr) {
+                fire_detailed_trace_event(*event_handler, 1, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_mismatch,
+                "bsdf()"});
+            }
             return match_rule2(node1, node_props1);
+        }
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 1, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "bsdf()"});
+        }
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 1, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "bsdf_mix_2(_, bsdf(), _, _)"});
         }
         DAG_DbgInfo root_dbg_info = node1->get_dbg_info();
         (void) root_dbg_info;
 
-        if (event_handler != nullptr)
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 1, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Rule_match,
+            ""});
+
             fire_match_event(*event_handler, 1);
+        }
         return v_matched_bsdf;
     };
     (void)match_rule1;
@@ -97,28 +118,60 @@ DAG_node const* Mixer_error::matcher(
         // match for bsdf_mix_2(_ [[ x ~ _xx ]], _, _, bsdf())
         if (node_props0.sema != IDefinition::DS_INTRINSIC_DF_NORMALIZED_MIX || node_props0.arity != 2
          || node_props0.type_kind != IType::TK_BSDF) {
+            if (event_handler != nullptr) {
+                fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_mismatch,
+                "bsdf_mix_2(_ [[ x ~ _xx ]], _, _, bsdf())"});
+            }
             return match_rule2(node0, node_props0);
         }
         DAG_node const *node2 = e.get_remapped_argument(node0, 0);
         IDistiller_plugin_api::Match_properties node_props2;
         e.get_match_properties(node2, node_props2); 
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "_"});
+        }
         if (!e.attribute_exists(node2, "x")) {
+            if (event_handler != nullptr) {
+                fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Attribute_missing,
+                "x"});
+            }
             return match_rule1(node0, node_props0);
         }
         const DAG_node *node3 = e.get_attribute(node2, "x"); (void)node3;
         DAG_node const *v__xx = node3; (void)v__xx;
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Attribute_match,
+            "_xx"});
+        }
         DAG_node const *node6 = e.get_remapped_argument(node0, 3);
         IDistiller_plugin_api::Match_properties node_props6;
         e.get_match_properties(node6, node_props6); 
         // match for bsdf()
         if (node_props6.sema != IDefinition::DS_INVALID_REF_CONSTRUCTOR || node_props6.type_kind != IType::TK_BSDF) {
+            if (event_handler != nullptr) {
+                fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_mismatch,
+                "bsdf()"});
+            }
             return match_rule1(node0, node_props0);
+        }
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "bsdf()"});
+        }
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "bsdf_mix_2(_ [[ x ~ _xx ]], _, _, bsdf())"});
         }
         DAG_DbgInfo root_dbg_info = node0->get_dbg_info();
         (void) root_dbg_info;
 
-        if (event_handler != nullptr)
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Rule_match,
+            ""});
+
             fire_match_event(*event_handler, 0);
+        }
         DAG_node const *node_result_1 = v_matched_bsdf;
         DAG_node const *node_result_1_x = e.create_int_constant(1);
         e.set_attribute(node_result_1, "x",node_result_1_x);
@@ -169,6 +222,16 @@ void Mixer_error::fire_debug_print(
     Rule_info const &ri = g_rule_info[idx];
     event_handler.debug_print(plugin_api, "Mixer_error", ri.ruid, ri.rname, ri.fname,
         ri.fline, var_name, value);
+}
+
+void Mixer_error::fire_detailed_trace_event(
+    mi::mdl::IRule_matcher_event &event_handler,
+    std::size_t id,
+    mi::mdl::IRule_matcher_event::Detailed_trace_event trace_event)
+{
+    Rule_info const &ri = g_rule_info[id];
+    event_handler.detailed_trace_event("Mixer_error", ri.ruid, ri.rname, ri.fname,
+        ri.fline, trace_event);
 }
 
 

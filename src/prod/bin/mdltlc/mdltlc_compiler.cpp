@@ -185,6 +185,14 @@ void Compiler::print_messages() {
         printer->print(": ");
         printer->print(m->get_message());
         printer->print("\n");
+        if (m->has_source_excerpt()) {
+            printer->print("    ");
+            printer->print(m->get_source_line());
+            printer->print("\n");
+            printer->print("    ");
+            printer->print(m->get_source_underline());
+            printer->print("\n");
+        }
     }
     if (cnt < total_message_cnt) {
         printer->print("... and ");
@@ -356,6 +364,12 @@ void Compiler::declare_builtins() {
 
     (void)num_args;
 
+    using mi::mdl::Version_flags::REMOVED_1_1;
+    using mi::mdl::Version_flags::SINCE_1_1;
+    using mi::mdl::Version_flags::REMOVED_1_5;
+    using mi::mdl::Version_flags::SINCE_1_5;
+    using mi::mdl::Version_flags::REMOVED_1_7;
+    using mi::mdl::Version_flags::SINCE_1_7;
 
 #define BUILTIN_TYPE_BEGIN(typenam, flags)                               \
     {                                                                    \
@@ -408,12 +422,6 @@ void Compiler::declare_builtins() {
 
 #define CONSTRUCTOR(kind, classname, args, sema, flags)                 \
         {                                                               \
-            using mi::mdl::Version_flags::REMOVED_1_1; \
-            using mi::mdl::Version_flags::SINCE_1_1; \
-            using mi::mdl::Version_flags::REMOVED_1_5; \
-            using mi::mdl::Version_flags::SINCE_1_5; \
-            using mi::mdl::Version_flags::REMOVED_1_7; \
-            using mi::mdl::Version_flags::SINCE_1_7; \
             unsigned version_removed = (flags >> 8) & 0xff; \
             if (version_removed == 0) { \
             Type_function *constr_type = m_type_factory.create_function(builtin_type); \

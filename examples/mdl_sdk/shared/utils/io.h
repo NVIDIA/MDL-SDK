@@ -26,9 +26,9 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
- // examples/mdl_sdk/shared/utils/io.h
- //
- // Code shared by all examples
+// examples/mdl_sdk/shared/utils/io.h
+//
+// Code shared by all examples
 
 #ifndef EXAMPLE_SHARED_UTILS_IO_H
 #define EXAMPLE_SHARED_UTILS_IO_H
@@ -331,6 +331,9 @@ namespace mi { namespace examples { namespace io
     // --------------------------------------------------------------------------------------------
 
     // Returns the folder path of the current executable.
+    //
+    // Direct use of this method to locate files relative to the position of the executable is
+    // deprecated. Use mi::examples::mdl::find_resource_file() instead.
     inline std::string get_executable_folder()
     {
         #ifdef MI_PLATFORM_WINDOWS

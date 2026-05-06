@@ -51,11 +51,15 @@ using namespace mi::mdl::df;
 #endif
 #define M_ONE_OVER_PI       0.318309886183790671538
 
+#ifndef MDL_DF_SPECTRAL_SAMPLES
+#define MDL_DF_SPECTRAL_SAMPLES 5
+#endif // !MDL_DF_SPECTRAL_SAMPLES
+
+struct Spectral_sample_struct;
+
 //-----------------------------------------------------------------------------
 // define vector types CUDA-like
 //-----------------------------------------------------------------------------
-
-
 
 struct __align__(8) bool2
 {
@@ -237,6 +241,14 @@ namespace
     template<> struct vector<bool, 3>       { typedef bool3 TYPE; };    VECTOR_TRAIT(bool, 3);
     template<> struct vector<bool, 4>       { typedef bool4 TYPE; };    VECTOR_TRAIT(bool, 4);
 
+    // Spectral_sample_struct is treated as a vector of floats
+    template<>
+    struct vector_trait<Spectral_sample_struct>
+    {
+        typedef float ELEMENT_TYPE;
+        enum { SIZE = MDL_DF_SPECTRAL_SAMPLES };
+    };
+
     // convert vector to type to vector of same size but different element type
     template<typename TInput, typename TTargetElement>
     struct convert_base
@@ -256,7 +268,7 @@ BSDF_INLINE typename convert_base<TInput, TTargetElement>::TARGET_TYPE to(const 
     typedef typename convert_base<TInput, TTargetElement>::TARGET_TYPE TTarget;  // target vec type
     typedef typename vector_trait<TInput>::ELEMENT_TYPE TInputElement;        // input element type
 
-    TTarget res; // convert vector element-wise
+    TTarget res{}; // convert vector element-wise
     const TInputElement* src_ptr = reinterpret_cast<const TInputElement*>(&a);
     TTargetElement* dst_ptr = reinterpret_cast<TTargetElement*>(&res);
     for (unsigned i = 0; i < vector_size; ++i)
@@ -307,7 +319,7 @@ BSDF_INLINE TTarget make(const TComponent& ... args)
                   "Vector size and argument count do not match. "
                   "They have to be equal, or argument count has to be one.");
 
-    TTarget res;
+    TTarget res{};
     if (arg_size == 1)
         for (unsigned i = 0; i < vector_size; ++i)
             set_component(res, i, args...);
@@ -348,7 +360,7 @@ BSDF_INLINE TVector ternary(const TBool& condition,
     static_assert(is_same_type<typename vector_trait<TBool>::ELEMENT_TYPE, bool>::VALUE,
                   "ternary<T(Condition,T,T)>: Condition has to be a boolean type.");
 
-    TVector res;
+    TVector res{};
     TElement* res_ptr = reinterpret_cast<TElement*>(&res);
     const bool* condition_ptr = reinterpret_cast<const bool*>(&condition);
     const TElement* expr_true_ptr = reinterpret_cast<const TElement*>(&expr_true);
@@ -359,8 +371,6 @@ BSDF_INLINE TVector ternary(const TBool& condition,
 
     return res;
 }
-
-
 
 //-----------------------------------------------------------------------------
 // Operators
@@ -579,6 +589,349 @@ BSDF_INLINE bool3 greater_than_equal(const float3& a, const float3& b)
     return res;
 }
 
+BSDF_INLINE bool operator==(const float3& a, const float3& b)
+{
+    return (a.x == b.x && a.y == b.y && a.z == b.z);
+}
+
+BSDF_INLINE bool operator==(const float3& a, float f)
+{
+    return a.x == f && a.y == f && a.z == f;
+}
+
+BSDF_INLINE bool operator<=(const float3& a, float f)
+{
+    return a.x <= f && a.y <= f && a.z <= f;
+}
+
+BSDF_INLINE float average(const float3& a)
+{
+    return (a.x + a.y + a.z) * float(1.0 / 3.0);
+}
+
+BSDF_INLINE float luminance(const float3& a)
+{
+    return a.x*0.212671f + a.y*0.715160f + a.z*0.072169f;
+}
+
+BSDF_INLINE float3 max(const float3& a, const float3& b)
+{
+    return make_float3(
+        a.x >= b.x ? a.x : b.x,
+        a.y >= b.y ? a.y : b.y,
+        a.z >= b.z ? a.z : b.z);
+}
+
+BSDF_INLINE float saturate(const float f)
+{
+    if (f < 0.f)
+        return 0.f;
+    if (f > 1.f)
+        return 1.f;
+    return f;
+}
+
+BSDF_INLINE float3 saturate(const float3& a)
+{
+    return make_float3(saturate(a.x), saturate(a.y), saturate(a.z));
+}
+
+// the calling code can mark an IOR field in *_data with BSDF_USE_MATERIAL_IOR, which will then
+// be replaced by BSDF functions with the MDL material's IOR
+#define BSDF_USE_MATERIAL_IOR   -1.0f
+
+BSDF_INLINE bool use_material_ior(const float3& a)
+{
+    return a.x == BSDF_USE_MATERIAL_IOR;
+}
+
+//-----------------------------------------------------------------------------
+// define spectral sample type
+//-----------------------------------------------------------------------------
+
+/// A floatN type to represent spectral samples, where N is the number of wave-lengths
+/// processed per sample.
+struct Spectral_sample_struct {
+    float values[MDL_DF_SPECTRAL_SAMPLES];
+};
+
+//-----------------------------------------------------------------------------
+// Functions
+//-----------------------------------------------------------------------------
+
+// Determines if the spectral values needs to be retrieved from the material
+BSDF_INLINE bool use_material_ior(const Spectral_sample_struct& sp)
+{
+    return sp.values[0] == BSDF_USE_MATERIAL_IOR;
+}
+
+// Spectral sample values average
+BSDF_INLINE float average(const Spectral_sample_struct& sp)
+{
+    float avg = 0.f;
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        avg += sp.values[i];
+
+    return avg * float(1.0 / MDL_DF_SPECTRAL_SAMPLES);
+}
+
+// for luminance as measure of importance: use average
+BSDF_INLINE float luminance(const Spectral_sample_struct& sp)
+{
+    return average(sp);
+}
+
+BSDF_INLINE Spectral_sample_struct max(
+    const Spectral_sample_struct& a,
+    const Spectral_sample_struct& b)
+{
+    Spectral_sample_struct c;
+
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        c.values[i] = ( a.values[i] >= b.values[i] ) ? a.values[i] : b.values[i];
+
+    return c;
+}
+
+BSDF_INLINE Spectral_sample_struct saturate(const Spectral_sample_struct& sp)
+{
+    Spectral_sample_struct a;
+
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+    {
+        if (sp.values[i] < 0.f)
+            a.values[i] = 0.f;
+        else if (sp.values[i] > 1.f)
+            a.values[i] = 1.f;
+        else
+            a.values[i] = sp.values[i];
+    }
+
+    return a;
+}
+
+// Component-wise add and assign
+BSDF_INLINE void spectral_sample_add_assign(
+    Spectral_sample_struct& lhs,
+    const Spectral_sample_struct& rhs)
+{
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        lhs.values[i] += rhs.values[i];
+}
+
+// Component-wise multiply and assign
+BSDF_INLINE void spectral_sample_mul_assign(
+    Spectral_sample_struct& lhs,
+    const Spectral_sample_struct& rhs)
+{
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        lhs.values[i] *= rhs.values[i];
+}
+
+// Scalar multiply and assign
+BSDF_INLINE void spectral_sample_mul_assign(
+    Spectral_sample_struct& lhs,
+    const float s)
+{
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        lhs.values[i] *= s;
+}
+
+//-----------------------------------------------------------------------------
+// Operators
+//-----------------------------------------------------------------------------
+
+BSDF_INLINE bool operator==(const Spectral_sample_struct& sp, float f)
+{
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        if (sp.values[i] != f)
+            return false;
+
+    return true;
+}
+
+BSDF_INLINE bool operator<=(const Spectral_sample_struct& sp, float f)
+{
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        if (sp.values[i] > f)
+            return false;
+
+    return true;
+}
+
+BSDF_INLINE bool operator==(const Spectral_sample_struct& a, const Spectral_sample_struct& b)
+{
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+    {
+        if (a.values[i] != b.values[i])
+            return false;
+    }
+
+    return true;
+}
+
+BSDF_INLINE bool operator!= (const Spectral_sample_struct& a, const Spectral_sample_struct& b)
+{
+    return !(a == b);
+}
+
+BSDF_INLINE Spectral_sample_struct operator+(const Spectral_sample_struct& a, const Spectral_sample_struct& b)
+{
+    Spectral_sample_struct result;
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        result.values[i] = a.values[i] + b.values[i];
+    return result;
+}
+
+BSDF_INLINE Spectral_sample_struct operator-(const Spectral_sample_struct& a, const Spectral_sample_struct& b)
+{
+    Spectral_sample_struct result;
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        result.values[i] = a.values[i] - b.values[i];
+    return result;
+}
+
+BSDF_INLINE Spectral_sample_struct operator*(const Spectral_sample_struct& a, const Spectral_sample_struct& b)
+{
+    Spectral_sample_struct result;
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        result.values[i] = a.values[i] * b.values[i];
+    return result;
+}
+
+BSDF_INLINE Spectral_sample_struct operator/(const Spectral_sample_struct& a, const Spectral_sample_struct& b)
+{
+    Spectral_sample_struct result;
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        result.values[i] = a.values[i] / b.values[i];
+    return result;
+}
+
+BSDF_INLINE Spectral_sample_struct operator+(float f, const Spectral_sample_struct& sp)
+{
+    Spectral_sample_struct a;
+
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        a.values[i] = f + sp.values[i];
+
+    return a;
+}
+
+BSDF_INLINE Spectral_sample_struct operator+(const Spectral_sample_struct& sp, float f)
+{
+    Spectral_sample_struct a;
+
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        a.values[i] = sp.values[i] + f;
+
+    return a;
+}
+
+BSDF_INLINE Spectral_sample_struct operator-(float f, const Spectral_sample_struct& sp)
+{
+    Spectral_sample_struct a;
+
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        a.values[i] = f - sp.values[i];
+
+    return a;
+}
+
+BSDF_INLINE Spectral_sample_struct operator-(const Spectral_sample_struct& sp, float f)
+{
+    Spectral_sample_struct a;
+
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        a.values[i] = sp.values[i] - f;
+
+    return a;
+}
+
+BSDF_INLINE Spectral_sample_struct operator*(float f, const Spectral_sample_struct& sp)
+{
+    Spectral_sample_struct a;
+
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        a.values[i] = f * sp.values[i];
+
+    return a;
+}
+
+BSDF_INLINE Spectral_sample_struct operator*(const Spectral_sample_struct& sp, float f)
+{
+    Spectral_sample_struct a;
+
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        a.values[i] = sp.values[i] * f;
+
+    return a;
+}
+
+BSDF_INLINE Spectral_sample_struct operator/(float f, const Spectral_sample_struct& sp)
+{
+    Spectral_sample_struct a;
+
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        a.values[i] = f / sp.values[i];
+
+    return a;
+}
+
+BSDF_INLINE Spectral_sample_struct operator/(const Spectral_sample_struct& sp, float f)
+{
+    Spectral_sample_struct a;
+
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        a.values[i] = sp.values[i] / f;
+
+    return a;
+}
+
+BSDF_INLINE void operator+=(Spectral_sample_struct& sp, const Spectral_sample_struct& b)
+{
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        sp.values[i] += b.values[i];
+}
+
+BSDF_INLINE void operator*=(Spectral_sample_struct& sp, float f)
+{
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        sp.values[i] *= f;
+}
+
+BSDF_INLINE void operator*=(Spectral_sample_struct& sp, const Spectral_sample_struct& b)
+{
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        sp.values[i] *= b.values[i];
+}
+
+BSDF_INLINE void operator/=(Spectral_sample_struct& sp, float f)
+{
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        sp.values[i] /= f;
+}
+
+BSDF_INLINE void operator/=(Spectral_sample_struct& sp, const Spectral_sample_struct& b)
+{
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        sp.values[i] /= b.values[i];
+}
+
+#ifdef MDL_DF_SPECTRAL_ENABLE
+
+typedef Spectral_sample_struct color_sample;
+typedef Spectral_sample_struct pdf_sample;
+
+#else
+
+typedef float3 color_sample;
+typedef float  pdf_sample;
+
+#endif // !MDL_DF_SPECTRAL_ENABLE
+
+//-----------------------------------------------------------------------------
+// 
+//-----------------------------------------------------------------------------
 
 enum Mbsdf_part
 {
@@ -634,7 +987,6 @@ public:
     float3 get_arg_block_float3(int offset) const;
     unsigned int get_arg_block_uint(int offset) const;
     bool get_arg_block_bool(int offset) const;
-    float3 get_material_ior() const;
     float3 get_measured_curve_value(int measured_curve_idx, int value_idx);
     unsigned int get_thin_walled() const;
 
@@ -700,6 +1052,14 @@ public:
 
     float2 adapt_microfacet_roughness(const float2& roughness_uv) const;
     float3 adapt_normal(const float3& normal) const;
+
+#ifdef MDL_DF_SPECTRAL_ENABLE
+    color_sample rgb_to_spectral_ior(const float3& rgb) const;
+    color_sample rgb_to_spectral_reflectance(const float3& rgb) const;
+    color_sample rgb_to_spectral_luminance(const float3& rgb) const;
+    color_sample rgb_to_spectral_volume_coefficient(const float3& rgb) const;
+    color_sample get_wavelengths() const;
+#endif
 };
 
 #include "libbsdf_runtime.h"
@@ -718,7 +1078,7 @@ struct BSDF
         BSDF_evaluate_data *data,
         State *state,
         float3 const &inherited_normal,
-        float3 const &inherited_weight);
+        color_sample const &inherited_weight);
 
     void(*pdf)(
         BSDF_pdf_data *data, 
@@ -729,7 +1089,7 @@ struct BSDF
         BSDF_auxiliary_data *data, 
         State *state, 
         float3 const &inherited_normal,
-        float3 const &inherited_weight);
+        color_sample const &inherited_weight);
 
     // returns true, if the attached BSDF is "bsdf()".
     // note: this is currently unsupported for BSDFs in BSDF_component
@@ -781,7 +1141,7 @@ struct BSDF_component
 
 struct color_BSDF_component
 {
-    float3 weight;
+    color_sample weight;
     BSDF component;
 };
 
@@ -796,7 +1156,7 @@ struct EDF
         EDF_evaluate_data *data,
         State *state,
         float3 const &inherited_normal,
-        float3 const &inherited_weight);
+        color_sample const &inherited_weight);
 
     void(*pdf)(
         EDF_pdf_data *data, 
@@ -807,7 +1167,7 @@ struct EDF
         EDF_auxiliary_data *data, 
         State *state, 
         float3 const &inherited_normal,
-        float3 const &inherited_weight);
+        color_sample const &inherited_weight);
 
     // returns true, if the attached BSDF is "edf()".
     // note: this is currently unsupported for EDFs in EDF_component
@@ -822,7 +1182,7 @@ struct EDF_component
 
 struct color_EDF_component
 {
-    float3 weight;
+    color_sample weight; // TODO SPECTRAL???
     EDF component;
 };
 
@@ -932,24 +1292,73 @@ BSDF_INLINE bool adapt_reflect_prob_for_allowed_mode(
     return true;
 }
 
+BSDF_INLINE pdf_sample create_probability(const color_sample &w)
+{
+#ifdef MDL_DF_SPECTRAL_ENABLE
+    return w;
+#else
+    return math::average(w);
+#endif
+}
+
+#ifdef MDL_DF_SPECTRAL_ENABLE
+BSDF_INLINE float use_probability(const pdf_sample &prob)
+{
+    // always use main wavelength
+    return prob.values[0];
+}
+#endif
+BSDF_INLINE float use_probability(const float prob)
+{
+    return prob;
+}
+
+BSDF_INLINE pdf_sample divide_if_greater_than_zero(const pdf_sample &p, const pdf_sample &q)
+{
+#ifdef MDL_DF_SPECTRAL_ENABLE
+    pdf_sample s;
+    for (unsigned int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        s.values[i] = (q.values[i] > 0.0f) ? (p.values[i] / q.values[i]) : q.values[i];
+    return s;
+#else
+    return (q > 0.0f) ? (p / q) : p;
+#endif
+}
+
+BSDF_INLINE bool has_greater_than_zero(const pdf_sample &p)
+{
+#ifdef MDL_DF_SPECTRAL_ENABLE
+    for (unsigned int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i) {
+        if (p.values[i] > 0.0f)
+            return true;
+    }
+    return false;
+#else
+    return (p > 0.0f);
+#endif
+}
+
+
 // Decides how to sample layer and base based on a sample condition and the allowed modes.
 // Returns false, if absorption was selected.
-template <typename Data>
+template <typename Data, typename Probability>
 BSDF_INLINE bool decide_sampling_and_update_random_number(
     Data *data,
     bool sample_condition,
     const BSDF &layer,
     const BSDF &base,
-    float *prob_layer,         // in/out, original probability for selecting layer
+    Probability *prob_layer,   // in/out, original probability for selecting layer
     float *prob_selected_inv,  // inverse probability of the selected BSDF
     bool *sample_layer)
 {
     *prob_selected_inv = 0.0f;
     *sample_layer = false;
 
+    const float pl = use_probability(*prob_layer);
+
     Df_flags allowed_mode = get_allowed_scatter_mode(data);
-    bool layer_allowed = layer.has_allowed_components(allowed_mode) && *prob_layer > 0.0f;
-    bool base_allowed = base.has_allowed_components(allowed_mode) && *prob_layer < 1.0f;
+    bool layer_allowed = layer.has_allowed_components(allowed_mode) && pl > 0.0f;
+    bool base_allowed = base.has_allowed_components(allowed_mode) && pl < 1.0f;
     if (!layer_allowed && !base_allowed) {
         return false;
     }
@@ -958,12 +1367,13 @@ BSDF_INLINE bool decide_sampling_and_update_random_number(
 
     if (*sample_layer) {
         if (base_allowed) {
-            *prob_selected_inv = 1.0f / *prob_layer;
+            *prob_selected_inv = 1.0f / pl;
 
             // Only update random number, if layer and base are allowed
             data->xi.z *= *prob_selected_inv;
         } else {
-            *prob_layer = *prob_selected_inv = 1.0f;
+            *prob_layer = make<Probability>(1.0f);
+            *prob_selected_inv = 1.0f;
         }
     } else {
         if (!base_allowed) {
@@ -971,36 +1381,99 @@ BSDF_INLINE bool decide_sampling_and_update_random_number(
         }
 
         if (layer_allowed) {
-            *prob_selected_inv = 1.0f / (1.0f - *prob_layer);
+            *prob_selected_inv = 1.0f / (1.0f - pl);
 
             // Only update random number, if layer and base are allowed
-            data->xi.z = saturate_below_one((data->xi.z - *prob_layer) * *prob_selected_inv);
+            data->xi.z = saturate_below_one((data->xi.z - pl) * *prob_selected_inv);
         } else {
-            *prob_layer = 0.0f;
+            *prob_layer = make<Probability>(0.0f);
             *prob_selected_inv = 1.0f;
         }
     }
     return true;
 }
 
+
 // Returns the adapted layer probability according to the allowed components of layer and base
 // compared to the allowed scatter mode. For the absorb case, a negative probability is returned.
 template <typename Data>
-BSDF_INLINE float adapt_layer_prob_for_allowed_mode(
+BSDF_INLINE pdf_sample adapt_layer_prob_for_allowed_mode(
     Data const *data,
     const BSDF &layer,
     const BSDF &base,
-    float prob_layer)
+    const pdf_sample prob_layer)
 {
-    Df_flags allowed_mode = get_allowed_scatter_mode(data);
-    bool layer_allowed = layer.has_allowed_components(allowed_mode);
-    bool base_allowed = base.has_allowed_components(allowed_mode);
+    const Df_flags allowed_mode = get_allowed_scatter_mode(data);
+    const bool layer_allowed = layer.has_allowed_components(allowed_mode);
+    const bool base_allowed = base.has_allowed_components(allowed_mode);
 
     if (!layer_allowed) {
-        return base_allowed ? 0.0f : -1.0f;
+        return base_allowed ? make<pdf_sample>(0.0f) : make<pdf_sample>(-1.0f);
     } else {
-        return base_allowed ? prob_layer: 1.0f;
+        return base_allowed ? prob_layer : make<pdf_sample>(1.0f);
     }
 }
+
+
+//BSDF_INLINE float3 clamp(const float3& a, const float3& min, const float3& max)
+//{
+//    return math::clamp(a, min, max);
+//}
+//
+//BSDF_INLINE float3 sqrt(const float3& a)
+//{
+//    return math::sqrt(a);
+//}
+//
+//BSDF_INLINE Spectral_sample_struct clamp(const Spectral_sample_struct& a, const Spectral_sample_struct& min, const Spectral_sample_struct& max)
+//{
+//    Spectral_sample_struct c;
+//
+//    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+//        c.values[i] = math::clamp(a.values[i], min.values[i], max.values[i]);
+//
+//    return c;
+//}
+//
+//BSDF_INLINE Spectral_sample_struct sqrt(const Spectral_sample_struct& a)
+//{
+//    Spectral_sample_struct c;
+//
+//    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+//        c.values[i] = math::sqrt(a.values[i]);
+//
+//    return c;
+//}
+
+#ifdef MDL_DF_SPECTRAL_ENABLE
+
+// Creates a spectral PDF with the given value for all wavelengths.
+BSDF_INLINE pdf_sample make_pdf_sample(float value)
+{
+    pdf_sample result;
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        result.values[i] = value;
+    return result;
+}
+
+BSDF_INLINE color_sample make_spectral_sample_reflectance(State *state, const float3& rgb)
+{
+    return state->rgb_to_spectral_reflectance(rgb);
+}
+
+#else
+
+// Creates a PDF with the given value.
+BSDF_INLINE pdf_sample make_pdf_sample(float value)
+{
+    return value;
+}
+
+BSDF_INLINE color_sample make_spectral_sample_reflectance(State *state, const float3& rgb)
+{
+    return rgb;
+}
+
+#endif // !MDL_DF_SPECTRAL_ENABLE
 
 #endif // MDL_LIBBSDF_INTERNAL_H

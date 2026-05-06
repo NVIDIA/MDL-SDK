@@ -31,6 +31,7 @@
 <div align="right">
     [\link mi_neuray_example_optix7 Previous\endlink]
     [\link mi_neuray_examples Up\endlink]
+    [\link mi_neuray_example_spectral_rendering Next\endlink]    
 </div>
 
 This example loads an X-Rite AxF(Appearance Exchange Format) file and converts it to an equivalent representation in MDL format.
@@ -83,6 +84,7 @@ This example loads an X-Rite AxF(Appearance Exchange Format) file and converts i
 <div align="right">
     [\link mi_neuray_example_optix7 Previous\endlink]
     [\link mi_neuray_examples Up\endlink]
+    [\link mi_neuray_example_spectral_rendering Next\endlink]    
 </div>
 
 */

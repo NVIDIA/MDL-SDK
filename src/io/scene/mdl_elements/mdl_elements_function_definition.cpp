@@ -1232,39 +1232,47 @@ const char* Mdl_function_definition::get_module_db_name() const
 }
 
 bool Mdl_function_definition::is_valid(
-    DB::Transaction* transaction,
-    Execution_context* context) const
+    DB::Transaction* transaction, Execution_context* context) const
 {
-    DB::Tag module_tag = get_module(transaction);
-    DB::Access<Mdl_module> module(module_tag, transaction);
-    if (!module->is_valid(transaction, context))
+    DB::Tag_set modules_checked;
+    DB::Tag_set call_tags_stack;
+
+    DB::Tag module_tag = get_module( transaction);
+    DB::Access<Mdl_module> module( module_tag, transaction);
+    if( !module->is_valid( transaction, modules_checked, context))
         return false;
 
-    if (module->has_definition( m_is_material, m_db_name, m_function_ident) < 0)
+    modules_checked.insert( module_tag);
+
+    if( module->has_definition( m_is_material, m_db_name, m_function_ident) < 0)
         return false;
 
-    // check defaults. is this really needed?
-    for (mi::Size i = 0; i < m_defaults->get_size(); ++i) {
+    for( mi::Size i = 0; i < m_defaults->get_size(); ++i) {
 
         mi::base::Handle<const IExpression_call> expr(
             m_defaults->get_expression<IExpression_call>(i));
-        if (!expr)
+        if( !expr)
             continue;
+
         DB::Tag call_tag = expr->get_call();
-        if (!call_tag)
+        if( !call_tag)
             continue;
-        SERIAL::Class_id class_id = transaction->get_class_id(call_tag);
-        if (class_id != ID_MDL_FUNCTION_CALL) {
+
+        DB::Access<Mdl_function_call> call( call_tag, transaction);
+        if( !call) {
             add_error_message(
                 context, "The function call attached to parameter '"
-                + std::string(m_defaults->get_name(i)) + "' has a wrong element type.", -1);
+                + std::string( m_defaults->get_name( i)) + "' has a wrong element type.", -1);
             return false;
         }
-        DB::Access<Mdl_function_call> fcall(call_tag, transaction);
-        DB::Tag_set tags_seen;
-        if (!fcall->is_valid(transaction, tags_seen, context))
+
+        call_tags_stack.insert( call_tag);
+        if( !call->is_valid( transaction, modules_checked, call_tags_stack, context))
             return false;
+
+        call_tags_stack.erase( call_tag);
     }
+
     return true;
 }
 

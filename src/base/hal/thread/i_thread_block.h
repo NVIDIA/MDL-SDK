@@ -41,7 +41,7 @@ namespace MI {
 namespace THREAD {
 
 /// This class uses the guard pattern to acquire a lock within the scope of its lifetime.
-/// The class is templated to work on either Lock or Spin_lock.
+/// The class is templated to work on either Lock, Shared_lock, or Spin_lock.
 template<typename T>
 class Block
 {

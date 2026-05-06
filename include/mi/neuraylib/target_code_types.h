@@ -38,6 +38,12 @@
 #error "Only one of TARGET_CODE_USE_CUDA_TYPES and TARGET_CODE_USE_NEURAY_TYPES may be defined."
 #endif
 
+/// The default number of elements in a spectral sample. This value can be configured via the CMake
+/// option MDL_DF_SPECTRAL_SAMPLES_OVERRIDE.
+#ifndef MDL_DF_SPECTRAL_SAMPLES
+#define MDL_DF_SPECTRAL_SAMPLES 5
+#endif // !MDL_DF_SPECTRAL_SAMPLES
+
 #if !defined(TARGET_CODE_USE_NEURAY_TYPES) && \
     (defined(TARGET_CODE_USE_CUDA_TYPES) || defined(__CUDA_ARCH__))
 
@@ -66,6 +72,9 @@ using tct_float3 = float3;
 /// A float4.
 using tct_float4 = float4;
 
+// Aligned float4.
+using tct_float4_a16 = float4;
+
 /// An int.
 using tct_int = int;
 
@@ -75,7 +84,7 @@ using tct_uint = unsigned;
 #else
 
 #include <mi/neuraylib/typedefs.h>
-#include <mi/neuraylib/version.h>
+#include <mi/neuraylib/version.h> // for MI_NEURAYLIB_DEPRECATED_ENUM_VALUE
 
 namespace mi {
 
@@ -97,6 +106,12 @@ using tct_float3 = mi::Float32_3_struct;
 /// A float4.
 using tct_float4 = mi::Float32_4_struct;
 
+// Aligned float4.
+struct alignas(16) tct_float4_a16
+{
+    float x, y, z, w;
+};
+
 /// An int.
 using tct_int = mi::Sint32;
 
@@ -108,6 +123,10 @@ using tct_uint = mi::Uint32;
 /// A bool.
 using tct_bool = bool;
 
+/// A floatN type for spectral sampling.
+struct tct_spectral_sample {
+    float values[MDL_DF_SPECTRAL_SAMPLES];
+};
 
 /// A template struct with derivatives.
 template<typename T>
@@ -126,7 +145,7 @@ struct tct_traits<false>
     using tct_derivable_float = tct_float;
     using tct_derivable_float2 = tct_float2;
     using tct_derivable_float3 = tct_float3;
-    using tct_derivable_float4 = tct_float4;
+    using tct_derivable_float4 = tct_float4_a16;
     using tct_coord2_type = const tct_float[2];
 };
 
@@ -136,7 +155,7 @@ struct tct_traits<true>
     using tct_derivable_float = tct_deriv<tct_float>;
     using tct_derivable_float2 = tct_deriv<tct_float2>;
     using tct_derivable_float3 = tct_deriv<tct_float3>;
-    using tct_derivable_float4 = tct_deriv<tct_float4>;
+    using tct_derivable_float4 = tct_deriv<tct_float4_a16>;
     using tct_coord2_type = const tct_derivable_float2 *;
 };
 
@@ -273,7 +292,7 @@ struct Shading_state_material_impl
     /// This field is only relevant for code generated with
     /// #mi::neuraylib::IMdl_backend::translate_material_df() or
     /// #mi::neuraylib::ILink_unit::add_material_df(). In other cases this may be \c nullptr.
-    tct_float4           *text_results;
+    tct_float4_a16       *text_results;
 
     /// A pointer to a read-only data segment.
     /// For "PTX", "LLVM-IR" and "native" JIT backend:
@@ -295,14 +314,14 @@ struct Shading_state_material_impl
     /// The last row is always implied to be (0, 0, 0, 1) and does not have to be provided.
     /// It is used by the state::transform_*() methods.
     /// This field is only used if the uniform state is included.
-    tct_float4 const     *world_to_object;
+    tct_float4_a16 const *world_to_object;
 
     /// A 4x4 transformation matrix in row-major order transforming from object to world
     /// coordinates.
     /// The last row is always implied to be (0, 0, 0, 1) and does not have to be provided.
     /// It is used by the state::transform_*() methods.
     /// This field is only used if the uniform state is included.
-    tct_float4 const     *object_to_world;
+    tct_float4_a16 const *object_to_world;
 
     /// The result of state::object_id().
     /// It is an application-specific identifier of the hit object as provided in a scene.
@@ -316,11 +335,25 @@ struct Shading_state_material_impl
     tct_float             meters_per_scene_unit;
 };
 
+/// The MDL material state structure for spectral rendering.
+/// This is only used by the native runtime, but may also be used by custom runtimes.
+template<bool with_derivatives = false>
+struct Shading_state_material_spectral_impl : public Shading_state_material_impl<with_derivatives> {
+    /// currently active wavelengths in nm
+    tct_spectral_sample   spectral_wavelengths;
+};
+
 /// The MDL material state structure.
 using Shading_state_material = Shading_state_material_impl<false>;
 
 /// The MDL material state structure with derivatives.
 using Shading_state_material_with_derivs = Shading_state_material_impl<true>;
+
+/// The MDL material state structure for spectral rendering.
+using Shading_state_material_spectral = Shading_state_material_spectral_impl<false>;
+
+/// The MDL material state structure for spectral rendering with derivatives.
+using Shading_state_material_spectral_with_derivs = Shading_state_material_spectral_impl<true>;
 
 
 /// The texture wrap modes as defined by \c tex::wrap_mode in the MDL specification.
@@ -365,6 +398,7 @@ template<bool with_derivatives = false>
 struct Texture_handler_vtable_impl
 {
     using traits = tct_traits<with_derivatives>;
+    using Shading_state_material_type = Shading_state_material_impl<with_derivatives>;
 
     /// Implementation of \c tex::lookup_float4() for a texture_2d texture.
     void (*m_tex_lookup_float4_2d)(
@@ -574,8 +608,42 @@ struct Texture_handler_vtable_impl
     void (*m_adapt_normal)(
         tct_float                              result[3],
         Texture_handler_base const            *self_base,
-        Shading_state_material                *state,
+        Shading_state_material_type           *state,
         tct_float const                        normal[3]);
+
+    /// Implementation of \c rgb_to_spectral_ior().
+    void (*m_rgb_to_spectral_ior)(
+        tct_spectral_sample                   *result,
+        Texture_handler_base const            *self_base,
+        Shading_state_material_type           *state,
+        tct_float const                        rgb[3]);
+
+    /// Implementation of \c rgb_to_spectral_reflectance().
+    void (*m_rgb_to_spectral_reflectance)(
+        tct_spectral_sample                   *result,
+        Texture_handler_base const            *self_base,
+        Shading_state_material_type           *state,
+        tct_float const                        rgb[3]);
+
+    /// Implementation of \c rgb_to_spectral_luminance().
+    void (*m_rgb_to_spectral_luminance)(
+        tct_spectral_sample                   *result,
+        Texture_handler_base const            *self_base,
+        Shading_state_material_type           *state,
+        tct_float const                        rgb[3]);
+
+    /// Implementation of \c rgb_to_spectral_volume_coefficient().
+    void (*m_rgb_to_spectral_volume_coefficient)(
+        tct_spectral_sample                   *result,
+        Texture_handler_base const            *self_base,
+        Shading_state_material_type           *state,
+        tct_float const                        rgb[3]);
+
+    /// Implementation of \c get_wavelengths().
+    void (*m_get_wavelengths)(
+        tct_spectral_sample                   *result,
+        Texture_handler_base const            *self_base,
+        Shading_state_material_type           *state);
 
     /// Implementation of \c scene_data_isvalid().
     tct_bool (*m_scene_data_isvalid)(
@@ -795,15 +863,31 @@ enum Df_flags : tct_uint
     MI_NEURAYLIB_DEPRECATED_ENUM_VALUE(DF_FLAGS_FORCE_32_BIT, 0xffffffffU)
 };
 
+/// Spectral rendering enabled or disabled depending on the backend and its configuration.
+enum Target_code_color_mode : tct_int
+{
+    TCCM_RGB = 0,               ///< no spectral sampling, use RGB
+    TCCM_SPECTRAL_SAMPLING = 1, ///< spectral sampling, use spectral samples
+};
+
 /// Input and output structure for BSDF sampling data.
-struct alignas(16) Bsdf_sample_data
+struct alignas(16) Bsdf_sample_data_base {};
+
+template <Target_code_color_mode C = TCCM_RGB>
+struct Bsdf_sample_data : public Bsdf_sample_data_base {};
+
+// Explicit specialization for RGB case
+template<>
+struct Bsdf_sample_data<TCCM_RGB> : public Bsdf_sample_data_base
 {
     tct_float3       ior1;           ///< mutual input: IOR current medium
     tct_float3       ior2;           ///< mutual input: IOR other side
     tct_float3       k1;             ///< mutual input: outgoing direction
 
     tct_float3       k2;             ///< output: incoming direction
-    tct_float4       xi;             ///< input: pseudo-random sample numbers in range [0, 1)
+
+    tct_float4_a16   xi;             ///< input: pseudo-random sample numbers in range [0, 1)
+
     tct_float        pdf;            ///< output: pdf (non-projected hemisphere)
     tct_float3       bsdf_over_pdf;  ///< output: bsdf * dot(normal, k2) / pdf
     Bsdf_event_type  event_type;     ///< output: the type of event for the generated sample
@@ -811,6 +895,27 @@ struct alignas(16) Bsdf_sample_data
 
     Df_flags         flags;          ///< input: flags controlling calculation of result
                                      ///<     (optional depending on backend options)
+};
+
+// Explicit specialization for spectral sampling case
+template<>
+struct Bsdf_sample_data<TCCM_SPECTRAL_SAMPLING> : public Bsdf_sample_data_base
+{
+    tct_spectral_sample ior1;           ///< mutual input: IOR current medium
+    tct_spectral_sample ior2;           ///< mutual input: IOR other side
+    tct_float3          k1;             ///< mutual input: outgoing direction
+
+    tct_float3          k2;             ///< output: incoming direction
+
+    tct_float4_a16      xi;             ///< input: pseudo-random sample numbers in range [0, 1)
+
+    tct_spectral_sample pdf;            ///< output: pdf (non-projected hemisphere)
+    tct_spectral_sample bsdf_over_pdf;  ///< output: bsdf * dot(normal, k2) / pdf
+    Bsdf_event_type     event_type;     ///< output: the type of event for the generated sample
+    tct_int             handle;         ///< output: handle of the sampled elemental BSDF (lobe)
+
+    Df_flags            flags;          ///< input: flags controlling calculation of result
+                                        ///<     (optional depending on backend options)
 };
 
 /// Type of Bsdf_evaluate_data variants, depending on the backend and its configuration.
@@ -827,8 +932,11 @@ enum Df_handle_slot_mode : tct_int
 /// Input and output structure for BSDF evaluation data.
 struct alignas(16) Bsdf_evaluate_data_base {};
 
+template<Df_handle_slot_mode N, Target_code_color_mode C = TCCM_RGB>
+struct Bsdf_evaluate_data : public Bsdf_evaluate_data_base {};
+
 template<Df_handle_slot_mode N>
-struct Bsdf_evaluate_data : public Bsdf_evaluate_data_base
+struct Bsdf_evaluate_data<N, TCCM_RGB> : public Bsdf_evaluate_data_base
 {
     tct_float3       ior1;           ///< mutual input: IOR current medium
     tct_float3       ior2;           ///< mutual input: IOR other side
@@ -838,9 +946,9 @@ struct Bsdf_evaluate_data : public Bsdf_evaluate_data_base
     tct_int          handle_offset;  ///< input: handle offset to allow the evaluation of more than
                                      ///<     DF_HANDLE_SLOTS handles, calling 'evaluate' multiple
                                      ///<     times
-    tct_float3       bsdf_diffuse[static_cast<size_t>(N)]; ///< output: (diffuse part of the)
+    tct_float3       bsdf_diffuse[static_cast<size_t>(N)]; ///< output: (diffuse part of)
                                                            ///<     bsdf * dot(normal, k2)
-    tct_float3       bsdf_glossy[static_cast<size_t>(N)];  ///< output: (glossy part of the)
+    tct_float3       bsdf_glossy[static_cast<size_t>(N)];  ///< output: (glossy part of)
                                                            ///<     bsdf * dot(normal, k2)
     tct_float        pdf;            ///< output: pdf (non-projected hemisphere)
 
@@ -848,8 +956,29 @@ struct Bsdf_evaluate_data : public Bsdf_evaluate_data_base
                                      ///<     (optional depending on backend options)
 };
 
+template<Df_handle_slot_mode N>
+struct Bsdf_evaluate_data<N, TCCM_SPECTRAL_SAMPLING> : public Bsdf_evaluate_data_base
+{
+    tct_spectral_sample ior1;           ///< mutual input: IOR current medium
+    tct_spectral_sample ior2;           ///< mutual input: IOR other side
+    tct_float3          k1;             ///< mutual input: outgoing direction
+
+    tct_float3          k2;             ///< input: incoming direction
+    tct_int             handle_offset;  ///< input: handle offset to allow the evaluation of more
+                                        ///<     than DF_HANDLE_SLOTS handles, calling 'evaluate'
+                                        ///<     multiple times
+    tct_spectral_sample bsdf_diffuse[static_cast<size_t>(N)]; ///< output: (diffuse part of)
+                                                              ///<     bsdf * dot(normal, k2)
+    tct_spectral_sample bsdf_glossy[static_cast<size_t>(N)];  ///< output: (glossy part of)
+                                                              ///<     bsdf * dot(normal, k2)
+    tct_spectral_sample pdf;            ///< output: pdf (non-projected hemisphere)
+
+    Df_flags            flags;          ///< input: flags controlling calculation of result
+                                        ///<     (optional depending on backend options)
+};
+
 template<>
-struct Bsdf_evaluate_data<DF_HSM_POINTER> : public Bsdf_evaluate_data_base
+struct Bsdf_evaluate_data<DF_HSM_POINTER, TCCM_RGB> : public Bsdf_evaluate_data_base
 {
     tct_float3       ior1;           ///< mutual input: IOR current medium
     tct_float3       ior2;           ///< mutual input: IOR other side
@@ -859,8 +988,8 @@ struct Bsdf_evaluate_data<DF_HSM_POINTER> : public Bsdf_evaluate_data_base
     tct_int          handle_offset;  ///< input: handle offset to allow the evaluation of many
                                      ///<     handles using in multiple steps
     tct_int          handle_count;   ///< input: number of elements of 'bsdf_diffuse', 'bsdf_glossy'
-    tct_float3*      bsdf_diffuse;   ///< output: (diffuse part of the) bsdf * dot(normal, k2)
-    tct_float3*      bsdf_glossy;    ///< output: (glossy part of the) bsdf * dot(normal, k2)
+    tct_float3*      bsdf_diffuse;   ///< output: (diffuse part of) bsdf * dot(normal, k2)
+    tct_float3*      bsdf_glossy;    ///< output: (glossy part of) bsdf * dot(normal, k2)
     tct_float        pdf;            ///< output: pdf (non-projected hemisphere)
 
     Df_flags         flags;          ///< input: flags controlling calculation of result
@@ -868,23 +997,66 @@ struct Bsdf_evaluate_data<DF_HSM_POINTER> : public Bsdf_evaluate_data_base
 };
 
 template<>
-struct Bsdf_evaluate_data<DF_HSM_NONE> : public Bsdf_evaluate_data_base
+struct Bsdf_evaluate_data<DF_HSM_POINTER, TCCM_SPECTRAL_SAMPLING> : public Bsdf_evaluate_data_base
+{
+    tct_spectral_sample     ior1;           ///< mutual input: IOR current medium
+    tct_spectral_sample     ior2;           ///< mutual input: IOR other side
+    tct_float3              k1;             ///< mutual input: outgoing direction
+
+    tct_float3              k2;             ///< input: incoming direction
+    tct_int                 handle_offset;  ///< input: handle offset to allow the evaluation of
+                                            ///<     many handles using in multiple steps
+    tct_int                 handle_count;   ///< input: number of elements of 'bsdf_diffuse',
+                                            ///<     'bsdf_glossy'
+    tct_spectral_sample*    bsdf_diffuse;   ///< output: (diffuse part of) bsdf * dot(normal, k2)
+    tct_spectral_sample*    bsdf_glossy;    ///< output: (glossy part of) bsdf * dot(normal, k2)
+    tct_spectral_sample     pdf;            ///< output: pdf (non-projected hemisphere)
+
+    Df_flags                flags;          ///< input: flags controlling calculation of result
+                                            ///<     (optional depending on backend options)
+};
+
+template<>
+struct Bsdf_evaluate_data<DF_HSM_NONE, TCCM_RGB> : public Bsdf_evaluate_data_base
 {
     tct_float3       ior1;           ///< mutual input: IOR current medium
     tct_float3       ior2;           ///< mutual input: IOR other side
     tct_float3       k1;             ///< mutual input: outgoing direction
 
     tct_float3       k2;             ///< input: incoming direction
-    tct_float3       bsdf_diffuse;   ///< output: (diffuse part of the) bsdf * dot(normal, k2)
-    tct_float3       bsdf_glossy;    ///< output: (glossy part of the) bsdf * dot(normal, k2)
+    tct_float3       bsdf_diffuse;   ///< output: (diffuse part of) bsdf * dot(normal, k2)
+    tct_float3       bsdf_glossy;    ///< output: (glossy part of) bsdf * dot(normal, k2)
     tct_float        pdf;            ///< output: pdf (non-projected hemisphere)
 
     Df_flags         flags;          ///< input: flags controlling calculation of result
                                      ///<     (optional depending on backend options)
 };
 
+template<>
+struct Bsdf_evaluate_data<DF_HSM_NONE, TCCM_SPECTRAL_SAMPLING> : public Bsdf_evaluate_data_base
+{
+    tct_spectral_sample ior1;           ///< mutual input: IOR current medium
+    tct_spectral_sample ior2;           ///< mutual input: IOR other side
+    tct_float3          k1;             ///< mutual input: outgoing direction
+
+    tct_float3          k2;             ///< input: incoming direction
+    tct_spectral_sample bsdf_diffuse;   ///< output: (diffuse part of) bsdf * dot(normal, k2)
+    tct_spectral_sample bsdf_glossy;    ///< output: (glossy part of) bsdf * dot(normal, k2)
+    tct_spectral_sample pdf;            ///< output: pdf (non-projected hemisphere)
+
+    Df_flags            flags;          ///< input: flags controlling calculation of result
+                                        ///<     (optional depending on backend options)
+};
+
 /// Input and output structure for BSDF PDF calculation data.
-struct alignas(16) Bsdf_pdf_data
+struct alignas(16) Bsdf_pdf_data_base {};
+
+template <Target_code_color_mode C = TCCM_RGB>
+struct Bsdf_pdf_data : public Bsdf_pdf_data_base {};
+
+// Explicit specialization for RGB case
+template<>
+struct Bsdf_pdf_data<TCCM_RGB> : public Bsdf_pdf_data_base
 {
     tct_float3       ior1;           ///< mutual input: IOR current medium
     tct_float3       ior2;           ///< mutual input: IOR other side
@@ -894,14 +1066,32 @@ struct alignas(16) Bsdf_pdf_data
     tct_float        pdf;            ///< output: pdf (non-projected hemisphere)
 
     Df_flags         flags;          ///< input: flags controlling calculation of result
+                                     ///<     (optional depending on backend options)
+};
+
+// Explicit specialization for spectral case
+template<>
+struct Bsdf_pdf_data<TCCM_SPECTRAL_SAMPLING> : public Bsdf_pdf_data_base
+{
+    tct_spectral_sample ior1;        ///< mutual input: IOR current medium
+    tct_spectral_sample ior2;        ///< mutual input: IOR other side
+    tct_float3          k1;          ///< mutual input: outgoing direction
+
+    tct_float3          k2;          ///< input: incoming direction
+    tct_spectral_sample pdf;         ///< output: pdf (non-projected hemisphere)
+
+    Df_flags            flags;       ///< input: flags controlling calculation of result
                                      ///<     (optional depending on backend options)
 };
 
 /// Input and output structure for BSDF auxiliary calculation data.
 struct alignas(16) Bsdf_auxiliary_data_base {};
 
+template<Df_handle_slot_mode N, Target_code_color_mode C = TCCM_RGB>
+struct Bsdf_auxiliary_data : public Bsdf_auxiliary_data_base {};
+
 template<Df_handle_slot_mode N>
-struct Bsdf_auxiliary_data : public Bsdf_auxiliary_data_base
+struct Bsdf_auxiliary_data<N, TCCM_RGB> : public Bsdf_auxiliary_data_base
 {
     tct_float3       ior1;           ///< mutual input: IOR current medium
     tct_float3       ior2;           ///< mutual input: IOR other side
@@ -912,7 +1102,8 @@ struct Bsdf_auxiliary_data : public Bsdf_auxiliary_data_base
                                      ///<     times
     tct_float3       albedo_diffuse[static_cast<size_t>(N)];///< output: (diffuse part of the)
                                                             ///<     albedo
-    tct_float3       albedo_glossy[static_cast<size_t>(N)]; ///< output: (glossy part of the) albedo
+    tct_float3       albedo_glossy[static_cast<size_t>(N)]; ///< output: (glossy part of the)
+                                                            ///<     albedo
     tct_float3       normal[static_cast<size_t>(N)];        ///< output: normal
     tct_float3       roughness[static_cast<size_t>(N)];     ///< output: glossy roughness_u,
                                                             ///<     glossy roughness_v, bsdf_weight
@@ -921,8 +1112,31 @@ struct Bsdf_auxiliary_data : public Bsdf_auxiliary_data_base
                                      ///<     (optional depending on backend options)
 };
 
+template<Df_handle_slot_mode N>
+struct Bsdf_auxiliary_data<N, TCCM_SPECTRAL_SAMPLING> : public Bsdf_auxiliary_data_base
+{
+    tct_spectral_sample ior1;           ///< mutual input: IOR current medium
+    tct_spectral_sample ior2;           ///< mutual input: IOR other side
+    tct_float3          k1;             ///< mutual input: outgoing direction
+
+    tct_int             handle_offset;  ///< input: handle offset to allow the evaluation of more
+                                        ///<     than DF_HANDLE_SLOTS handles, calling 'auxiliary'
+                                        ///<     multiple times
+    tct_spectral_sample albedo_diffuse[static_cast<size_t>(N)];///< output: (diffuse part of the)
+                                                               ///<     albedo
+    tct_spectral_sample albedo_glossy[static_cast<size_t>(N)]; ///< output: (glossy part of the)
+                                                               ///<     albedo
+    tct_float3          normal[static_cast<size_t>(N)];        ///< output: normal
+    tct_float3          roughness[static_cast<size_t>(N)];     ///< output: glossy roughness_u,
+                                                               ///<     glossy roughness_v,
+                                                               ///<     bsdf_weight
+
+    Df_flags            flags;          ///< input: flags controlling calculation of result
+                                        ///<     (optional depending on backend options)
+};
+
 template<>
-struct Bsdf_auxiliary_data<DF_HSM_POINTER> : public Bsdf_auxiliary_data_base
+struct Bsdf_auxiliary_data<DF_HSM_POINTER, TCCM_RGB> : public Bsdf_auxiliary_data_base
 {
     tct_float3       ior1;           ///< mutual input: IOR current medium
     tct_float3       ior2;           ///< mutual input: IOR other side
@@ -943,7 +1157,28 @@ struct Bsdf_auxiliary_data<DF_HSM_POINTER> : public Bsdf_auxiliary_data_base
 };
 
 template<>
-struct Bsdf_auxiliary_data<DF_HSM_NONE> : public Bsdf_auxiliary_data_base
+struct Bsdf_auxiliary_data<DF_HSM_POINTER, TCCM_SPECTRAL_SAMPLING> : public Bsdf_auxiliary_data_base
+{
+    tct_spectral_sample  ior1;           ///< mutual input: IOR current medium
+    tct_spectral_sample  ior2;           ///< mutual input: IOR other side
+    tct_float3           k1;             ///< mutual input: outgoing direction
+
+    tct_int              handle_offset;  ///< input: handle offset to allow the evaluation of more
+                                         ///<     than DF_HANDLE_SLOTS handles, calling 'auxiliary'
+                                         ///<     multiple times
+    tct_int              handle_count;   ///< input: number of elements of 'albedo_*' and 'normal'
+    tct_spectral_sample* albedo_diffuse; ///< output: (diffuse part of the) albedo
+    tct_spectral_sample* albedo_glossy;  ///< output: (glossy part of the) albedo
+    tct_float3*          normal;         ///< output: normal
+    tct_float3*          roughness;      ///< output: glossy roughness_u, glossy roughness_v,
+                                         ///<     bsdf_weight
+
+    Df_flags             flags;          ///< input: flags controlling calculation of result
+                                         ///<     (optional depending on backend options)
+};
+
+template<>
+struct Bsdf_auxiliary_data<DF_HSM_NONE, TCCM_RGB> : public Bsdf_auxiliary_data_base
 {
     tct_float3       ior1;           ///< mutual input: IOR current medium
     tct_float3       ior2;           ///< mutual input: IOR other side
@@ -957,6 +1192,23 @@ struct Bsdf_auxiliary_data<DF_HSM_NONE> : public Bsdf_auxiliary_data_base
 
     Df_flags         flags;          ///< input: flags controlling calculation of result
                                      ///<     (optional depending on backend options)
+};
+
+template<>
+struct Bsdf_auxiliary_data<DF_HSM_NONE, TCCM_SPECTRAL_SAMPLING> : public Bsdf_auxiliary_data_base
+{
+    tct_spectral_sample ior1;           ///< mutual input: IOR current medium
+    tct_spectral_sample ior2;           ///< mutual input: IOR other side
+    tct_float3          k1;             ///< mutual input: outgoing direction
+
+    tct_spectral_sample albedo_diffuse; ///< output: (diffuse part of the) albedo
+    tct_spectral_sample albedo_glossy;  ///< output: (glossy part of the) albedo
+    tct_float3          normal;         ///< output: normal
+    tct_float3          roughness;      ///< output: glossy roughness_u, glossy roughness_v,
+                                        ///<     bsdf_weight
+
+    Df_flags            flags;          ///< input: flags controlling calculation of result
+                                        ///<     (optional depending on backend options)
 };
 
 // Signatures for generated target code functions.
@@ -1085,7 +1337,7 @@ using Bsdf_init_function_with_derivs = void(
 /// \param res_data         the resources
 /// \param arg_block_data   the target argument block data, if class compilation was used
 using Bsdf_sample_function = void(
-    Bsdf_sample_data              *data,
+    Bsdf_sample_data_base         *data,
     Shading_state_material const  *state,
     Resource_data const           *res_data,
     char const                    *arg_block_data);
@@ -1100,7 +1352,7 @@ using Bsdf_sample_function = void(
 /// \param res_data         the resources
 /// \param arg_block_data   the target argument block data, if class compilation was used
 using Bsdf_sample_function_with_derivs = void(
-    Bsdf_sample_data                          *data,
+    Bsdf_sample_data_base                     *data,
     Shading_state_material_with_derivs const  *state,
     Resource_data const                       *res_data,
     char const                                *arg_block_data);
@@ -1145,7 +1397,7 @@ using Bsdf_evaluate_function_with_derivs = void(
 /// \param res_data         the resources
 /// \param arg_block_data   the target argument block data, if class compilation was used
 using Bsdf_pdf_function = void(
-    Bsdf_pdf_data                 *data,
+    Bsdf_pdf_data_base            *data,
     Shading_state_material const  *state,
     Resource_data const           *res_data,
     char const                    *arg_block_data);
@@ -1160,7 +1412,7 @@ using Bsdf_pdf_function = void(
 /// \param res_data         the resources
 /// \param arg_block_data   the target argument block data, if class compilation was used
 using Bsdf_pdf_function_with_derivs = void(
-    Bsdf_pdf_data                             *data,
+    Bsdf_pdf_data_base                        *data,
     Shading_state_material_with_derivs const  *state,
     Resource_data const                       *res_data,
     char const                                *arg_block_data);
@@ -1204,9 +1456,16 @@ enum Edf_event_type : tct_uint
 
 
 /// Input and output structure for EDF sampling data.
-struct alignas(16) Edf_sample_data
+struct alignas(16) Edf_sample_data_base {};
+
+template <Target_code_color_mode C = TCCM_RGB>
+struct Edf_sample_data : public Edf_sample_data_base {};
+
+// Explicit specialization for RGB case
+template<>
+struct Edf_sample_data<TCCM_RGB> : public Edf_sample_data_base
 {
-    tct_float4      xi;             ///< input: pseudo-random sample numbers in range [0, 1)
+    tct_float4_a16  xi;             ///< input: pseudo-random sample numbers in range [0, 1)
     tct_float3      k1;             ///< output: outgoing direction
     tct_float       pdf;            ///< output: pdf (non-projected hemisphere)
     tct_float3      edf_over_pdf;   ///< output: edf * dot(normal,k1) / pdf
@@ -1214,11 +1473,26 @@ struct alignas(16) Edf_sample_data
     tct_int         handle;         ///< output: handle of the sampled elemental EDF (lobe)
 };
 
+// Explicit specialization for spectral sampling case
+template<>
+struct Edf_sample_data<TCCM_SPECTRAL_SAMPLING> : public Edf_sample_data_base
+{
+    tct_float4_a16      xi;             ///< input: pseudo-random sample numbers in range [0, 1)
+    tct_float3          k1;             ///< output: outgoing direction
+    tct_spectral_sample pdf;            ///< output: pdf (non-projected hemisphere)
+    tct_spectral_sample edf_over_pdf;   ///< output: edf * dot(normal,k1) / pdf
+    Edf_event_type      event_type;     ///< output: the type of event for the generated sample
+    tct_int             handle;         ///< output: handle of the sampled elemental EDF (lobe)
+};
+
 /// Input and output structure for EDF evaluation data.
 struct alignas(16) Edf_evaluate_data_base {};
 
+template<Df_handle_slot_mode N, Target_code_color_mode C = TCCM_RGB>
+struct Edf_evaluate_data : public Edf_evaluate_data_base {};
+
 template<Df_handle_slot_mode N>
-struct Edf_evaluate_data : public Edf_evaluate_data_base
+struct Edf_evaluate_data<N, TCCM_RGB> : public Edf_evaluate_data_base
 {
     tct_float3      k1;             ///< input: outgoing direction
     tct_int         handle_offset;  ///< input: handle offset to allow the evaluation of more than
@@ -1229,8 +1503,20 @@ struct Edf_evaluate_data : public Edf_evaluate_data_base
     tct_float       pdf;                            ///< output: pdf (non-projected hemisphere)
 };
 
+template<Df_handle_slot_mode N>
+struct Edf_evaluate_data<N, TCCM_SPECTRAL_SAMPLING> : public Edf_evaluate_data_base
+{
+    tct_float3          k1;             ///< input: outgoing direction
+    tct_int             handle_offset;  ///< input: handle offset to allow the evaluation of more
+                                        ///<     than DF_HANDLE_SLOTS handles, calling 'evaluate'
+                                        ///<     multiple times
+    tct_float           cos;                            ///< output: dot(normal, k1)
+    tct_spectral_sample edf[static_cast<size_t>(N)];    ///< output: edf
+    tct_spectral_sample pdf;                            ///< output: pdf (non-projected hemisphere)
+};
+
 template<>
-struct Edf_evaluate_data<DF_HSM_POINTER> : public Edf_evaluate_data_base
+struct Edf_evaluate_data<DF_HSM_POINTER, TCCM_RGB> : public Edf_evaluate_data_base
 {
     tct_float3      k1;             ///< input: outgoing direction
     tct_int         handle_offset;  ///< input: handle offset to allow the evaluation of more than
@@ -1243,12 +1529,34 @@ struct Edf_evaluate_data<DF_HSM_POINTER> : public Edf_evaluate_data_base
 };
 
 template<>
-struct Edf_evaluate_data<DF_HSM_NONE> : public Edf_evaluate_data_base
+struct Edf_evaluate_data<DF_HSM_POINTER, TCCM_SPECTRAL_SAMPLING> : public Edf_evaluate_data_base
+{
+    tct_float3           k1;             ///< input: outgoing direction
+    tct_int              handle_offset;  ///< input: handle offset to allow the evaluation of more
+                                         ///<     than DF_HANDLE_SLOTS handles, calling 'evaluate'
+                                         ///<     multiple times
+    tct_int              handle_count;   ///< input: number of elements of 'edf'
+    tct_float            cos;            ///< output: dot(normal, k1)
+    tct_spectral_sample* edf;            ///< output: edf
+    tct_spectral_sample  pdf;            ///< output: pdf (non-projected hemisphere)
+};
+
+template<>
+struct Edf_evaluate_data<DF_HSM_NONE, TCCM_RGB> : public Edf_evaluate_data_base
 {
     tct_float3      k1;             ///< input: outgoing direction
     tct_float       cos;            ///< output: dot(normal, k1)
     tct_float3      edf;            ///< output: edf
     tct_float       pdf;            ///< output: pdf (non-projected hemisphere)
+};
+
+template<>
+struct Edf_evaluate_data<DF_HSM_NONE, TCCM_SPECTRAL_SAMPLING> : public Edf_evaluate_data_base
+{
+    tct_float3          k1;             ///< input: outgoing direction
+    tct_float           cos;            ///< output: dot(normal, k1)
+    tct_spectral_sample edf;            ///< output: edf
+    tct_spectral_sample pdf;            ///< output: pdf (non-projected hemisphere)
 };
 
 /// Input and output structure for EDF PDF calculation data.
@@ -1335,7 +1643,7 @@ using Edf_init_function_with_derivs = void(
 /// \param res_data         the resources
 /// \param arg_block_data   the target argument block data, if class compilation was used
 using Edf_sample_function = void(
-    Edf_sample_data               *data,
+    Edf_sample_data_base          *data,
     Shading_state_material const  *state,
     Resource_data const           *res_data,
     char const                    *arg_block_data);
@@ -1350,7 +1658,7 @@ using Edf_sample_function = void(
 /// \param res_data         the resources
 /// \param arg_block_data   the target argument block data, if class compilation was used
 using Edf_sample_function_with_derivs = void(
-    Edf_sample_data                           *data,
+    Edf_sample_data_base                      *data,
     Shading_state_material_with_derivs const  *state,
     Resource_data const                       *res_data,
     char const                                *arg_block_data);

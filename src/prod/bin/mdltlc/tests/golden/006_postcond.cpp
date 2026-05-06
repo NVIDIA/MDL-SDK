@@ -67,7 +67,12 @@ DAG_node const* Postcond::matcher(
     const mi::mdl::Distiller_options *options,
     Rule_result_code &result_code) const
 {
-    auto match_rule2 = [&] (DAG_node const *node, IDistiller_plugin_api::Match_properties &node_props) -> const DAG_node * { return node; };
+    auto match_rule2 = [&] (DAG_node const *node, IDistiller_plugin_api::Match_properties &node_props) -> const DAG_node * {
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 1 ,{ mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::No_match, ""});
+        }
+        return node;
+        };
 
 // 006_postcond.mdltl:8
 //RUID 918141
@@ -75,21 +80,49 @@ DAG_node const* Postcond::matcher(
 
         // match for bsdf_tint(tint, diffuse_reflection_bsdf(c1, r1))
         if (node_props1.sema != IDefinition::DS_INTRINSIC_DF_TINT || node_props1.arity != 2 || node_props1.type_kind != IType::TK_BSDF) {
+            if (event_handler != nullptr) {
+                fire_detailed_trace_event(*event_handler, 1, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_mismatch,
+                "bsdf_tint(tint, diffuse_reflection_bsdf(c1, r1))"});
+            }
             return match_rule2(node1, node_props1);
         }
         DAG_node const *node3 = e.get_compound_argument(node1, 0);
         DAG_node const *v_tint = node3; (void)v_tint;
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 1, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "tint"});
+        }
         DAG_node const *node5 = e.get_compound_argument(node1, 1);
         IDistiller_plugin_api::Match_properties node_props5;
         e.get_match_properties(node5, node_props5); 
         // match for diffuse_reflection_bsdf(c1, r1)
         if (node_props5.sema != IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF) {
+            if (event_handler != nullptr) {
+                fire_detailed_trace_event(*event_handler, 1, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_mismatch,
+                "diffuse_reflection_bsdf(c1, r1)"});
+            }
             return match_rule2(node1, node_props1);
         }
         DAG_node const *node6 = e.get_compound_argument(node5, 0);
         DAG_node const *v_c1 = node6; (void)v_c1;
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 1, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "c1"});
+        }
         DAG_node const *node8 = e.get_compound_argument(node5, 1);
         DAG_node const *v_r1 = node8; (void)v_r1;
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 1, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "r1"});
+        }
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 1, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "diffuse_reflection_bsdf(c1, r1)"});
+        }
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 1, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "bsdf_tint(tint, diffuse_reflection_bsdf(c1, r1))"});
+        }
         DAG_DbgInfo root_dbg_info = node1->get_dbg_info();
         (void) root_dbg_info;
         DAG_node const* v_c = e.create_binary(
@@ -97,8 +130,12 @@ DAG_node const* Postcond::matcher(
             v_tint,
             v_c1);
 
-        if (event_handler != nullptr)
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 1, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Rule_match,
+            ""});
+
             fire_match_event(*event_handler, 1);
+        }
         return e.create_call("::df::diffuse_reflection_bsdf(color,float,color,string)",
             IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF, Args_wrapper<4>::mk_args(
                 e, m_node_types, diffuse_reflection_bsdf, v_c, v_r1).args, 4, e.get_type_factory()->create_bsdf(), root_dbg_info);
@@ -111,13 +148,25 @@ DAG_node const* Postcond::matcher(
 
         // match for bsdf()
         if (node_props0.sema != IDefinition::DS_INVALID_REF_CONSTRUCTOR || node_props0.type_kind != IType::TK_BSDF) {
+            if (event_handler != nullptr) {
+                fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_mismatch,
+                "bsdf()"});
+            }
             return match_rule1(node0, node_props0);
+        }
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Call_pattern_match,
+            "bsdf()"});
         }
         DAG_DbgInfo root_dbg_info = node0->get_dbg_info();
         (void) root_dbg_info;
 
-        if (event_handler != nullptr)
+        if (event_handler != nullptr) {
+            fire_detailed_trace_event(*event_handler, 0, { mi::mdl::IRule_matcher_event::Detailed_trace_event_kind::Rule_match,
+            ""});
+
             fire_match_event(*event_handler, 0);
+        }
         return e.create_call("::df::diffuse_reflection_bsdf(color,float,color,string)",
             IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF, Args_wrapper<4>::mk_args(
                 e, m_node_types, diffuse_reflection_bsdf, e.create_color_constant(0,0,0),
@@ -179,6 +228,16 @@ void Postcond::fire_debug_print(
     Rule_info const &ri = g_rule_info[idx];
     event_handler.debug_print(plugin_api, "Postcond", ri.ruid, ri.rname, ri.fname,
         ri.fline, var_name, value);
+}
+
+void Postcond::fire_detailed_trace_event(
+    mi::mdl::IRule_matcher_event &event_handler,
+    std::size_t id,
+    mi::mdl::IRule_matcher_event::Detailed_trace_event trace_event)
+{
+    Rule_info const &ri = g_rule_info[id];
+    event_handler.detailed_trace_event("Postcond", ri.ruid, ri.rname, ri.fname, ri.fline,
+        trace_event);
 }
 
 

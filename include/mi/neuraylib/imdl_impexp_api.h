@@ -32,7 +32,7 @@
 #define MI_NEURAYLIB_IMDL_IMPEXP_API_H
 
 #include <mi/base/interface_declare.h>
-#include <mi/neuraylib/version.h> // MI_NEURAYLIB_DEPRECATED_ENUM_VALUE
+#include <mi/neuraylib/version.h> // for MI_NEURAYLIB_DEPRECATED_ENUM_VALUE
 
 namespace mi {
 
@@ -408,7 +408,7 @@ public:
     /// If the corresponding module has not been loaded, it will be loaded as a side effect. The
     /// method also performs an overload resolution on the deserialized function or material
     /// definition (as in
-    /// #mi::neuraylib::IModule::get_function_overloads(const char*,const IArray*)const).
+    /// #mi::neuraylib::IModule::get_function_overloads(const char*,const mi::IArray*)const).
     ///
     /// \see \ref mi_mdl_serialized_names
     ///
@@ -436,7 +436,7 @@ public:
     /// If the corresponding module has not been loaded, it will be loaded as a side effect. The
     /// method also performs an overload resolution on the deserialized function or material
     /// definition (as in
-    /// #mi::neuraylib::IModule::get_function_overloads(const char*,const IArray*)const).
+    /// #mi::neuraylib::IModule::get_function_overloads(const char*,const mi::IArray*)const).
     ///
     /// \see \ref mi_mdl_serialized_names
     ///
@@ -474,21 +474,6 @@ public:
     virtual IWriter* create_writer( const char* filename) const = 0;
 
     //@}
-
-    virtual Sint32 deprecated_export_canvas(
-        const char* filename,
-        const ICanvas* canvas,
-        Uint32 quality,
-        bool force_default_gamma) const = 0;
-
-#ifdef MI_NEURAYLIB_DEPRECATED_15_0
-    inline Sint32 export_canvas(
-        const char* filename,
-        const ICanvas* canvas,
-        Uint32 quality,
-        bool force_default_gamma = false) const
-    { return deprecated_export_canvas( filename, canvas, quality, force_default_gamma); }
-#endif
 };
 
 /// Represents a serialized function name.

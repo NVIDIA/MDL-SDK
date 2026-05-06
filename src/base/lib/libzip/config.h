@@ -94,7 +94,7 @@
 #define HAVE_SSIZE_T 1
 
 /* Define to 1 if you have the <stdbool.h> header file. */
-#ifdef _MSC_VER
+#if defined(_MSC_VER) && !defined(__clang__)
 /* MS compiler have no C99 */
 /* #undef HAVE_STDBOOL_H */
 #else

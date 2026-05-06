@@ -1,6 +1,169 @@
 Change Log
 ==========
 
+MDL SDK 2026.0.0 (391700.996): 01 Jun 2026
+-----------------------------------------------
+
+ABI compatible with the MDL SDK 2026.0.0 (391700.996) binary release
+(see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
+
+**Added and Changed Features**
+
+- MDL 1.11 Language Specification
+  - Updated version to 1.11.
+  - Added enumeration type `::df::backscatter_modifier` to modify backscattering behavior
+    of microfacet BSDFs.
+  - Added parameter `uniform backscatter_modifier backscatter` for the following BSDFs:
+    - `specular_bsdf`
+    - `simple_glossy_bsdf`
+    - `microfacet_beckmann_smith_bsdf`
+    - `microfacet_ggx_smith_bsdf`
+    - `microfacet_beckmann_vcavities_bsdf`
+    - `microfacet_ggx_vcavities_bsdf`
+    - `fresnel_factor`
+    - `directional_factor`
+    - `measured_curve_factor`
+    - `measured_factor`
+    - `fresnel_layer`
+    - `color_fresnel_layer`
+    - `custom_curve_layer`
+    - `color_custom_curve_layer`
+    - `measured_curve_layer`
+    - `color_measured_curve_layer`
+
+- General
+  - The recommended vcpkg version has been updated to git ID 7853666. This update includes
+    GLEW 2.3.1 and various security fixes for dependencies.
+  - Improved performance of `IMdl_module::is_valid()`.
+  - Added spectral rendering support. Refer to the MDL SDK Tutorial documentation
+    ("Example for spectral rendering") for integration details.
+    - New spectral color type: `tct_spectral_sample`.
+    - New spectral shading state types: `Shading_state_material_spectral` and
+      `Shading_state_material_spectral_with_derivs`.
+    - BSDF/EDF data structures (`Bsdf_sample_data`, `Bsdf_evaluate_data`, etc.) are now
+      templated on `Target_code_color_mode` to switch between RGB and spectral layouts.
+    - New texture runtime functions for up-sampling from RGB to spectral.
+    - New SDK compile-time constant MDL_DF_SPECTRAL_SAMPLES to select the number of
+      spectral samples processed per call (default is 5). It can be overrided through 
+      the new CMake option `MDL_DF_SPECTRAL_SAMPLES_OVERRIDE`.    
+    - New backend option `libbsdf_enable_spectral` enables spectral code generation on backends.
+    - Example runtimes and integrations for the native, HLSL, and GLSL backend.
+    - Spectral evaluation operates at the BSDF/EDF level only; all input data (colors,
+      textures, etc.) remain RGB, but the SDK provides built-in and custom means to upsample
+      them to spectral samples per wavelength.
+    - Refer to the MDL SDK Tutorial documentation ("Example for spectral rendering") for
+      integration details.
+  - The new CMake option `MDL_BUILD_SEPARATE_DEBUG_INFO` allows generating separate debug
+    information in release builds.
+  - The API reference documentation can now also be built with newer Doxygen versions,
+    although the recommended version has been unchanged.
+  - The thread-safety guarantees for transactions and database elements have been improved.
+    See documentation on `ITransaction` for details.
+  - The performance of internal accesses to database elements has been improved.
+  - The unused interfaces `Std_allocator` and `Default_allocator` have been deprecated.
+    Still available if `MI_NEURAYLIB_DEPRECATED_17_0` is defined.
+  - The support for `MI_NEURAYLIB_DEPRECATED_15_0` has been removed.
+  - The documentation for the `::base` and `::nvidia::core_definitions` modules has been
+    converted to Markdown format.
+  - Improved handling of I/O errors and invalid input in the OpenImageIO and DDS plugins.
+  - Added the API component `IExtension_api` which allows to register custom `IStruct` and
+    `IEnum` declarations.
+  - Added support for Ninja as CMake generator on Windows.
+
+- MDL Compiler and Backends
+  - Added backend option `libbsdf_enable_spectral` to enable spectral support.
+    When enabled, the BSDF data structures will use spectral sample types for IOR, BSDF,
+    pdf, and albedo fields. The texture runtime was extended with spectral support
+    functions, which can be left unimplemented (null pointers) if spectral mode is not
+    used. In spectral mode, the native runtime expects `Shading_state_material_spectral`
+    or `Shading_state_material_spectral_with_derivs` to be used, which contain a new field
+    for the currently active wavelengths. Other backends may use alternative mechanisms to
+    make the wavelengths available to the spectral support functions in the texture runtime.
+  - Improved HLSL/GLSL code generation.
+  - Added `MDL_JIT_DISASM_FILE` environment variable to dump native JIT disassembly to a
+    file for debugging.
+  - Changed alignment of texture results and matrices to 16-byte alignment.
+  - Added `glsl_include_for_api_types` GLSL backend option to emit an include directive of
+    the provided file name instead of the API types. This allows the use of custom API
+    types with additional fields. If this option is used, the `GL_GOOGLE_include_directive`
+    GLSL extension will be required.
+  - Handle integer division overflow gracefully in constant folding. A new warning is
+    issued: "integer overflow in expression `(int)min <op> -1` of type `int` results in
+    `<res>`"
+
+- MDL Distiller and Baker
+  - Improved distilling of rough transparent materials for the `rtx_distiller` target.
+  - Added support for blending of `bsdf()` (as well as BSDFs converted to `bsdf()` like
+    `measured_bsdf()`) for the `rtx_distiller` target.
+  - Added support for emission mixing for the `rtx_distiller` target.
+
+- MDL SDK examples
+  - The `df_native`, `df_vulkan`, and `dxr` examples now demonstrate the new MDL SDK
+    spectral rendering feature via the `--spectral` command-line option (default rendering
+    remains RGB).
+  - Example df_native:
+    - Added support for evaluation of hair-BSDFs on an analytical cylinder.
+  - Example df_native and dxr:
+    - Gamma correction now clips values to avoid NaNs.
+  - Example dxr:
+    - Added command line option `--load_plugin` to load additional plugins like custom
+      distiller plugins.
+    - Added command-line option `--show_camera`. In the camera panel, it shows world-space
+      position and focus (same convention as `--camera`).
+
+- MDL Core examples
+  - Clamp maximum path length to `[2,100]`.
+  - Example codegen:
+    - Generate code also for `volume.emission_intensity`.
+  - Example df_cuda:
+    - Harmonized command-line options: `-p` is now the MDL path (i.e., `--mdl_path`),
+      `--camera` is now the camera parameter (previously `-p`), and `--help` has been added.
+
+**Fixed Bugs**
+
+- General
+  - Fixed detection of MaterialX for the vcpkg x64-windows triplet.
+  - Fixed a rare build error in parallel builds on Windows for projects that embed a
+    Windows resource file.
+  - Fixed sentinel value of `IImage::get_uv_tile_id()` (was `2^32-1` instead of `2^64-1`).
+  - Fixed documentation regarding the sentinel value of methods returning `mi::Uint64`
+    (was documented as `-1` instead of `~0U`).
+  - Fixed a rare race condition related to the registration of struct categories and
+    struct/enum types.
+  - Fixed a rare crash/deadlock that can occur when committing or aborting a transaction
+    in connection with multiple scopes.
+  - Fixed corner cases for the assembly implementation of `mi::base::Atom32` and the
+    Linux/macOS variant of `mi::base::Condition::timed_wait()`, although no problems have
+    been observed in practice.
+  - Fixed transaction isolation property in case of `ITransaction::remove(...,false)` calls.
+  - Fixed unit test setup to support `CMAKE_TEST_LAUNCHER`.
+
+- MDL Compiler and Backends
+  - Fixed mangling/demangling of functions with arrays. The mangling name of arrays was
+    created wrongly and demangling was missing; however, the mangler still created unique
+    names for MDL functions, so this bug was not discovered and does not have any bad
+    effect other than poor readability, as the generated names could not be demangled.
+  - Fixed mangling/demangling of function instances (i.e., template instantiations). The
+    mangling name of instantiated functions with instantiated arrays was computed wrongly
+    and demangling was missing; however, the mangler still created unique names for MDL
+    functions, so this bug was not discovered and does not have any bad effect other than
+    poor readability, as the generated names could not be demangled.
+  - Fixed GLSL backend creating a double `const` modifier for type names, which was
+    flagged as a syntax error by the GLSL compiler.
+  - Fixed a crash in the material instance opacity analyzer due to a missing `break` in
+    a case statement.
+
+- MDL SDK examples
+  - Fixed a bug in the recently added support for subsurface sampling in example df_vulkan.
+  - Fixed recognition of MaterialX files, which also triggered on MDL modules containing
+    the substring `.mtlx`.
+  - Example DXR:
+    - Fixed intermittent texture cache race during parallel material loading.
+
+- MDL Core examples
+  - Example df_native:
+    - Fixed texture gamma mode being ignored.
+
 MDL SDK 2025.0.5 (387700.3418): 20 Feb 2026
 -----------------------------------------------
 

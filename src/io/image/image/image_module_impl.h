@@ -236,8 +236,6 @@ public:
     mi::neuraylib::ICanvas* create_miplevel(
         const mi::neuraylib::ICanvas* prev_canvas, float gamma_override) const;
 
-    mi::IMap* convert_legacy_options( mi::Uint32 quality, bool force_default_gamma) const;
-
     void dump() const;
 
 private:

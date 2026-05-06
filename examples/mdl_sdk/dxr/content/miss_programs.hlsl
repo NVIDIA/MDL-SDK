@@ -58,7 +58,15 @@ void RadianceMissProgram(inout RadianceHitInfo payload : SV_RayPayload)
         ? 1.0f
         : payload.last_bsdf_pdf / (payload.last_bsdf_pdf + light_pdf);
 
+    #if defined(MDL_SPECTRAL_RENDERING)
+    {
+        Spectral_sample rad_s = rgb_to_spectral(radiance, payload.spectral_wavelengths, true);
+        Spectral_sample contrib = mulcc(payload.weight, mulcf(rad_s, mis_weight));
+        payload.contribution += spectral_to_rgb(contrib, payload.spectral_wavelengths, false);
+    }
+    #else
     payload.contribution += payload.weight * radiance * mis_weight;
+    #endif
     add_flag(payload.flags, FLAG_DONE);
 }
 

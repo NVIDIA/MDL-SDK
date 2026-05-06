@@ -65,8 +65,6 @@
 
 #include "test_shared.h"
 
-#define GET_REFCOUNT(X) ((X) ? (X)->retain(), (X)->release() : 999)
-
 template <typename I>
 void test_generic( mi::neuraylib::ITransaction* transaction, const char* class_name)
 {
@@ -144,7 +142,7 @@ MI_TEST_AUTO_FUNCTION( test_class_factory )
         run_tests( neuray.get());
     }
 
-    neuray = nullptr;
+    neuray.reset();
     MI_CHECK( unload());
 }
 

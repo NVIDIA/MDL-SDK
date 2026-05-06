@@ -35,7 +35,6 @@
 
 #include <mi/base/config.h>
 #include <base/system/main/i_assert.h>
-#include <base/lib/mem/i_mem_allocatable.h>
 
 #include "i_thread_block.h"
 
@@ -62,14 +61,13 @@ namespace THREAD {
 ///
 /// Differences between #mi::base::Lock and this class:
 /// - Namespaces
-/// - This class is derived from MEM::Allocatable.
 /// - This class uses MI_ASSERT, the public API uses mi_base_assert.
 /// - This class uses a separate templated Block class that is shared with other locks and pulled in
 ///   via typedef, the public API uses a nested class.
 /// - In this class lock(), try_lock(), unlock() are public (probably for history reasons), the
 ///   public API enforces the use of Lock::Block.
 /// - This class has the check_is_owned() method.
-class Lock : public MEM::Allocatable
+class Lock
 {
 public:
     /// Constructor.
@@ -128,13 +126,12 @@ private:
 ///
 /// Differences between #mi::base::Recursive_lock and this class:
 /// - Namespaces
-/// - This class is derived from MEM::Allocatable.
 /// - This class uses MI_ASSERT, the public API uses mi_base_assert.
 /// - This class uses a separate templated Block class that is shared with other locks and pulled in
 ///   via typedef, the public API uses a nested class.
 /// - In this class lock(), try_lock(), unlock() are public (probably for history reasons), the
 ///   public API enforces the use of Recursive_lock::Block.
-class Recursive_lock : public MEM::Allocatable
+class Recursive_lock
 {
 public:
     /// Constructor.

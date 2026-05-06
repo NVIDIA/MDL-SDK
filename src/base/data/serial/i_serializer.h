@@ -124,8 +124,6 @@
 #include <mi/neuraylib/iserializer.h>
 #include <mi/neuraylib/ideserializer.h>
 
-#include <base/lib/cont/i_cont_array.h>
-#include <base/lib/mem/i_mem_allocatable.h>
 #include <base/data/db/i_db_transaction_id.h>
 #include <base/data/db/i_db_tag.h>
 
@@ -136,7 +134,6 @@
 
 namespace MI {
 
-namespace CONT { class Bitvector; class Dictionary; }
 
 namespace SERIAL {
 
@@ -216,8 +213,6 @@ public:
     /// Write out back more complex types (typically implemented by using the previous types).
     virtual void write(const DB::Tag& value) = 0;
     virtual void write(const char* value) = 0;
-    virtual void write(const CONT::Bitvector& value) = 0;
-    virtual void write(const CONT::Dictionary& value) = 0;
 
     /// Write out a size_t. This function is special because a size_t has a different size on a 32
     /// bit machine than on a 64 bit machine. The policy is as follows: A size_t will always be
@@ -235,8 +230,6 @@ public:
     /// These functions write out containers. Note that they assume that T is a Serializable object
     /// or a primitive type. For arrays of T*, T must be a Serializable. The class id of each
     /// element is serialized. This is needed if the elements are instances of subclasses of T.
-    template <typename T> void write(const CONT::Array<T>& array);
-    template <typename T> void write(const CONT::Array<T*>& array);
     template <typename T, typename A1, typename A2>
     void write(const std::vector< std::vector<T, A1>, A2>& array);
 
@@ -344,8 +337,6 @@ public:
     /// Read back more complex types (typically implemented by using the previous types).
     virtual void read(DB::Tag* value_pointer) = 0;
     virtual void read(char** value_pointer) = 0; ///< Use release() to free the memory.
-    virtual void read(CONT::Bitvector* value_type) = 0;
-    virtual void read(CONT::Dictionary* value_pointer) = 0;
 
     /// Read in a size_t. This function is special because a size_t has a different size on a 32
     /// bit machine than on a 64 bit machine. The policy is as follows: A size_t will always be
@@ -365,8 +356,6 @@ public:
 
     /// These functions read in containers. Note that they assume that T is a Serializable object or
     /// a primitive, for T* only Serializable.
-    template <typename T> void read(CONT::Array<T>* array);
-    template <typename T> void read(CONT::Array<T*>* array);
     template <typename T, typename A1, typename A2>
     void read(std::vector< std::vector<T, A1>, A2>* array);
 
@@ -458,8 +447,6 @@ template <typename T, Size DIM, typename S, typename = enable_if_serializer_t<S>
 void write(S* serial,const mi::math::Bbox_struct<T,DIM>& value);
 template <typename T, Size DIM, typename S, typename = enable_if_serializer_t<S>>
 void write(S* serial,const mi::math::Bbox<T,DIM>& value);
-void write(Serializer* serial, const CONT::Bitvector& value);
-void write(Serializer* serial, const CONT::Dictionary& value);
 void write(Serializer* serial, const DB::Transaction_id& value);
 void write(Serializer* serial, const Serializable& object);
 void write(mi::neuraylib::ISerializer* serial, const mi::neuraylib::ISerializable& object);
@@ -491,8 +478,6 @@ template <typename D, typename = enable_if_deserializer_t<D>> void read(D*, mi::
 template <typename T, Size DIM, typename D, typename = enable_if_deserializer_t<D>> void read(D* deser, mi::math::Vector_struct<T,DIM>* value_type);
 template <typename T, Size DIM, typename D, typename = enable_if_deserializer_t<D>> void read(D* deser, mi::math::Bbox_struct<T,DIM>* value_type);
 template <typename T, Size DIM, typename D, typename = enable_if_deserializer_t<D>> void read(D* deser, mi::math::Bbox<T,DIM>* value_type);
-void read(Deserializer* deser, CONT::Bitvector* value_type);
-void read(Deserializer* deser, CONT::Dictionary* value_pointer);
 void read(Deserializer* deser, DB::Transaction_id* value_pointer);
 void read(Deserializer* deser, Serializable* object);
 void read(mi::neuraylib::IDeserializer* deser, mi::neuraylib::ISerializable* object);
