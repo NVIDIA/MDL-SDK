@@ -13,7 +13,7 @@
 #    contributors may be used to endorse or promote products derived
 #    from this software without specific prior written permission.
 #
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
 # EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 # IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
 # PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -70,6 +70,7 @@ endfunction()
 # add unit tests using the template
 create_unit_test_template(NAME test_class_factory)
 create_unit_test_template(NAME test_db_elements)
+create_unit_test_template(NAME test_distilled_scene_data)
 create_unit_test_template(NAME test_icompiled_material USES_IDIFF)
 create_unit_test_template(NAME test_idatabase)
 create_unit_test_template(NAME test_idebug_configuration)

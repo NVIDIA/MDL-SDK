@@ -14,7 +14,7 @@
 #    contributors may be used to endorse or promote products derived
 #    from this software without specific prior written permission.
 #
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
 # EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 # IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
 # PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -34,12 +34,14 @@ import sys
 
 assert len(sys.argv) >= 1+5
 
-input_file     = sys.argv[1]
-output_file    = sys.argv[2]
-have_dot_arg   = sys.argv[3]
+input_file         = sys.argv[1]
+output_file        = sys.argv[2]
+
+have_dot_arg       = sys.argv[3]
 # Quote backslashes from Windows Paths
-dot_path_arg   = re.sub(r'\\',r'\\\\',sys.argv[4])
-image_path_arg = sys.argv[5]
+dot_path_arg       = re.sub(r'\\',r'\\\\',sys.argv[4])
+image_path_arg     = sys.argv[5]
+dot_batch_size_arg = sys.argv[6]
 
 # A non-empty path causes a warning, even if dot support itself is disabled.
 if have_dot_arg == "NO":
@@ -51,5 +53,6 @@ text = ''.join(buffer)
 text = re.compile('(HAVE_DOT\\s*=).*$',   re.M).sub('\\1 %s' % have_dot_arg,   text)
 text = re.compile('(DOT_PATH\\s*=).*$',   re.M).sub('\\1 %s' % dot_path_arg,   text)
 text = re.compile('(IMAGE_PATH\\s*=).*$', re.M).sub('\\1 %s' % image_path_arg, text)
+text += 'DOT_BATCH_SIZE = %s\n' % dot_batch_size_arg
 
 open(output_file, 'w', encoding="utf-8").write(text)

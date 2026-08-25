@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -88,8 +88,11 @@ layout(std140, set = 0, binding = BINDING_RENDER_PARAMS) uniform Render_params
     uint uMaxPathLength;
     uint uSamplesPerIteration;
     uint uProgressiveIteration;
-    uint uStretchTexCoordU;
-    uint uFlipTexCoordV;
+    uint uUvFlip;
+    vec2 uUvScale;
+    vec2 uUvOffset;
+    uint uUvRepeat;
+    uint uUvClamp;
     int uBsdfDataFlags;
 
     // Spectral rendering
@@ -557,10 +560,15 @@ bool intersect_sphere(vec3 ray_origin, vec3 ray_dir, out Ray_hit_info out_info)
 
     const float phi = atan(out_info.normal.x, out_info.normal.z);
     const float theta = acos(out_info.normal.y);
-    out_info.tex_coord = vec3(
-        (uStretchTexCoordU == 1 ? 0.5 : 1.0) * (phi * M_ONE_OVER_PI + 1.0),
-        (uFlipTexCoordV == 0) ? (1.0 - theta * M_ONE_OVER_PI) : theta * M_ONE_OVER_PI,
-        0.0);
+    vec2 tex_coord = vec2(
+        phi * M_ONE_OVER_PI + 1.0,
+        uUvFlip != 0 ? theta * M_ONE_OVER_PI : 1.0 - theta * M_ONE_OVER_PI);
+    tex_coord = tex_coord * uUvScale + uUvOffset;
+    if (uUvRepeat != 0)
+        tex_coord -= floor(tex_coord);
+    if (uUvClamp != 0)
+        tex_coord = clamp(tex_coord, 0.0, 1.0);
+    out_info.tex_coord = vec3(tex_coord, 0.0);
 
     const float sin_phi = sin(phi);
     const float cos_phi = cos(phi);
@@ -1038,8 +1046,8 @@ void trace_path(inout Ray_state ray_state, inout uint seed)
 //-------------------------------------------------------------------------------------------------
 void main()
 {
-    ivec2 image_size = imageSize(uBeautyBuffer);
-    if (gl_GlobalInvocationID.x > image_size.x || gl_GlobalInvocationID.y > image_size.y)
+    uvec2 image_size = uvec2(imageSize(uBeautyBuffer));
+    if (gl_GlobalInvocationID.x >= image_size.x || gl_GlobalInvocationID.y >= image_size.y)
         return;
 
     vec3 contribution = vec3(0.0);
@@ -1055,7 +1063,7 @@ void main()
     {
         uint seed = tea(
             16, /*magic (see OptiX path tracing example)*/
-            gl_GlobalInvocationID.y * uint(image_size.x) + gl_GlobalInvocationID.x,
+            gl_GlobalInvocationID.y * image_size.x + gl_GlobalInvocationID.x,
             uProgressiveIteration + iteration);
 
         vec2 resolution = vec2(image_size);

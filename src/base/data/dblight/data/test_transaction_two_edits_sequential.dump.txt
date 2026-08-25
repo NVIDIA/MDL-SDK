@@ -42,7 +42,7 @@ Count of all scopes: 1
 Index 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0, lowest open transaction ID = 0
 
 Count of all transactions: 1
-Index 0: scope ID = 0, pin count = 3, state = OPEN, next sequence number = 2, visibility ID = 4294967295
+Index 0: scope ID = 0, pin count = 2, state = OPEN, next sequence number = 2, visibility ID = 4294967295
 
 Count of infos by distinct names: 1
 Index 0: name = "foo", count = 2
@@ -63,7 +63,7 @@ Count of all scopes: 1
 Index 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0, lowest open transaction ID = 0
 
 Count of all transactions: 1
-Index 0: scope ID = 0, pin count = 4, state = OPEN, next sequence number = 3, visibility ID = 4294967295
+Index 0: scope ID = 0, pin count = 3, state = OPEN, next sequence number = 3, visibility ID = 4294967295
 
 Count of infos by distinct names: 1
 Index 0: name = "foo", count = 3
@@ -86,7 +86,7 @@ Count of all scopes: 1
 Index 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0, lowest open transaction ID = 0
 
 Count of all transactions: 1
-Index 0: scope ID = 0, pin count = 4, state = OPEN, next sequence number = 3, visibility ID = 4294967295
+Index 0: scope ID = 0, pin count = 2, state = OPEN, next sequence number = 3, visibility ID = 4294967295
 
 Count of infos by distinct names: 1
 Index 0: name = "foo", count = 3
@@ -109,7 +109,7 @@ Count of all scopes: 1
 Index 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0, lowest open transaction ID = 0
 
 Count of all transactions: 1
-Index 0: scope ID = 0, pin count = 5, state = OPEN, next sequence number = 3, visibility ID = 4294967295
+Index 0: scope ID = 0, pin count = 3, state = OPEN, next sequence number = 3, visibility ID = 4294967295
 
 Count of infos by distinct names: 1
 Index 0: name = "foo", count = 3
@@ -132,7 +132,7 @@ Count of all scopes: 1
 Index 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0, lowest open transaction ID = 0
 
 Count of all transactions: 1
-Index 0: scope ID = 0, pin count = 5, state = OPEN, next sequence number = 3, visibility ID = 4294967295
+Index 0: scope ID = 0, pin count = 2, state = OPEN, next sequence number = 3, visibility ID = 4294967295
 
 Count of infos by distinct names: 1
 Index 0: name = "foo", count = 3

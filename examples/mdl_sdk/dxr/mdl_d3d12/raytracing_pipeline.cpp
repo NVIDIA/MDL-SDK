@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -36,6 +36,50 @@
 
 namespace mi { namespace examples { namespace mdl_d3d12
 {
+
+namespace
+{
+    constexpr size_t tlas_instance_buffer_count = 4;
+
+    bool acceleration_structure_flags_allow_update(
+        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS flags)
+    {
+        return (flags & D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE) != 0;
+    }
+
+    D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS blas_build_flags(
+        Raytracing_acceleration_structure::Build_policy policy)
+    {
+        if (policy == Raytracing_acceleration_structure::Build_policy::Fast_build_allow_update)
+            return D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_BUILD |
+                D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE;
+
+        return D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
+    }
+
+    D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS tlas_build_flags(
+        Raytracing_acceleration_structure::Build_policy policy)
+    {
+        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS flags =
+            D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
+        if (policy ==  Raytracing_acceleration_structure::Build_policy::Fast_build_allow_update)
+            flags |= D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE;
+        return flags;
+    }
+
+    const char* build_policy_to_string(
+        Raytracing_acceleration_structure::Build_policy policy)
+    {
+        switch (policy)
+        {
+            case Raytracing_acceleration_structure::Build_policy::Fast_trace:
+                return "fast-trace";
+            case Raytracing_acceleration_structure::Build_policy::Fast_build_allow_update:
+                return "fast-build-allow-update";
+        }
+        return "unknown";
+    }
+}
 
 Raytracing_pipeline::Hitgroup::Hitgroup(
     std::string name,
@@ -616,6 +660,7 @@ Raytracing_acceleration_structure::Instance_handle::Instance_handle(
 
 Raytracing_acceleration_structure::Bottom_level::Bottom_level(std::string debug_name_suffix)
     : m_debug_name_suffix(debug_name_suffix)
+    , m_build_flags(static_cast<D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS>(0))
 {
 }
 
@@ -636,6 +681,10 @@ Raytracing_acceleration_structure::Raytracing_acceleration_structure(
     , m_debug_name(debug_name)
     , m_ray_type_count(ray_type_count)
     , m_geometry_contribution_multiplier_to_hit_record_index(ray_type_count)
+    , m_instance_buffer_index(0)
+    , m_build_policy(Build_policy::Fast_trace)
+    , m_top_level_build_flags(static_cast<D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS>(0))
+    , m_top_level_rebuild_required(false)
 {
     if (ray_type_count == 0) {
         log_error("Ray type count can not be zero: " + m_debug_name, SRC);
@@ -680,8 +729,9 @@ const Raytracing_acceleration_structure::Geometry_handle
         return Raytracing_acceleration_structure::Geometry_handle();
     }
 
-    if (m_instance_buffer) {
-        log_error("Acceleration structure already build. "
+    Bottom_level& bottom_level = m_bottom_level_structures[blas.m_index];
+    if (bottom_level.m_blas_resource) {
+        log_error("Bottom level acceleration structure already built. "
                     "Adding further geometries is not implemented: " + m_debug_name, SRC);
         return Raytracing_acceleration_structure::Geometry_handle();
     }
@@ -704,21 +754,46 @@ const Raytracing_acceleration_structure::Geometry_handle
 
     desc.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_NO_DUPLICATE_ANYHIT_INVOCATION;
 
-    m_bottom_level_structures[blas.m_index].m_geometry_descriptions.push_back(std::move(desc));
+    bottom_level.m_geometry_descriptions.push_back(std::move(desc));
     return Raytracing_acceleration_structure::Geometry_handle(
         this,
         blas.m_index,
-        m_bottom_level_structures[blas.m_index].m_geometry_descriptions.size() - 1);
+        bottom_level.m_geometry_descriptions.size() - 1);
+}
+
+// ------------------------------------------------------------------------------------------------
+
+void Raytracing_acceleration_structure::set_build_policy(Build_policy policy)
+{
+    m_build_policy = policy;
 }
 
 // ------------------------------------------------------------------------------------------------
 
 bool Raytracing_acceleration_structure::build_bottom_level_structure(
     D3DCommandList* command_list,
-    size_t blas_index)
+    size_t blas_index,
+    bool update)
 {
-    D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS buildFlags =
-        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
+    Bottom_level& blas = m_bottom_level_structures[blas_index];
+    const D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS desired_build_flags =
+        blas_build_flags(m_build_policy);
+    const bool perform_update =
+        update &&
+        blas.m_blas_resource &&
+        blas.m_build_flags == desired_build_flags &&
+        acceleration_structure_flags_allow_update(desired_build_flags);
+
+    D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS buildFlags = desired_build_flags;
+    if (perform_update)
+        buildFlags |= D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE;
+
+    if (perform_update && !blas.m_blas_resource)
+    {
+        log_error("Tried to update BLAS before it was built: " +
+            m_debug_name + blas.m_debug_name_suffix, SRC);
+        return false;
+    }
 
     D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS accel_inputs = {};
     accel_inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
@@ -734,26 +809,34 @@ bool Raytracing_acceleration_structure::build_bottom_level_structure(
         &accel_inputs, &prebuild_info);
 
 
-    Bottom_level& blas = m_bottom_level_structures[blas_index];
+    const UINT64 scratch_size = (perform_update && prebuild_info.UpdateScratchDataSizeInBytes != 0)
+        ? prebuild_info.UpdateScratchDataSizeInBytes
+        : prebuild_info.ScratchDataSizeInBytes;
+
     if (!blas.m_scratch_resource ||
-        blas.m_scratch_resource->GetDesc().Width < prebuild_info.ScratchDataSizeInBytes)
+        blas.m_scratch_resource->GetDesc().Width < scratch_size)
     {
         if (!allocate_resource(
             command_list,
             &blas.m_scratch_resource,
-            prebuild_info.ScratchDataSizeInBytes,
+            scratch_size,
             D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
             blas.m_debug_name_suffix + "_ScratchResource"))
             return false;
     }
 
-    if (!allocate_resource(
-        command_list,
-        &blas.m_blas_resource,
-        prebuild_info.ResultDataMaxSizeInBytes,
-        D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE,
-        blas.m_debug_name_suffix))
-        return false;
+    if (!blas.m_blas_resource ||
+        (!perform_update && blas.m_blas_resource->GetDesc().Width <
+            prebuild_info.ResultDataMaxSizeInBytes))
+    {
+        if (!allocate_resource(
+            command_list,
+            &blas.m_blas_resource,
+            prebuild_info.ResultDataMaxSizeInBytes,
+            D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE,
+            blas.m_debug_name_suffix))
+            return false;
+    }
 
     D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC build_desc = {};
     build_desc.Inputs = accel_inputs;
@@ -761,11 +844,15 @@ bool Raytracing_acceleration_structure::build_bottom_level_structure(
         blas.m_scratch_resource->GetGPUVirtualAddress();
     build_desc.DestAccelerationStructureData =
         blas.m_blas_resource->GetGPUVirtualAddress();
+    if (perform_update)
+        build_desc.SourceAccelerationStructureData =
+            blas.m_blas_resource->GetGPUVirtualAddress();
 
     auto resource_barrier = CD3DX12_RESOURCE_BARRIER::UAV(blas.m_blas_resource.Get());
     command_list->BuildRaytracingAccelerationStructure(&build_desc, 0, 0);
     command_list->ResourceBarrier(1, &resource_barrier);
 
+    blas.m_build_flags = desired_build_flags;
     return true;
 }
 
@@ -787,7 +874,7 @@ const Raytracing_acceleration_structure::Instance_handle
         return Raytracing_acceleration_structure::Instance_handle();
     }
 
-    if (m_instance_buffer)
+    if (!m_instance_buffers.empty())
     {
         log_error("Acceleration structure already build. "
                     "Adding further instances is not implemented: " + m_debug_name, SRC);
@@ -837,10 +924,48 @@ bool Raytracing_acceleration_structure::set_instance_transform(
 
 // ------------------------------------------------------------------------------------------------
 
+bool Raytracing_acceleration_structure::set_instance_bottom_level_structure(
+    Instance_handle& instance_handle,
+    const BLAS_handle& blas)
+{
+    if (instance_handle.m_acceleration_structure != this ||
+        instance_handle.m_instance_index >= m_instances.size() ||
+        instance_handle.m_blas_index >= m_bottom_level_structures.size() ||
+        blas.m_acceleration_structure != this ||
+        blas.m_index >= m_bottom_level_structures.size())
+    {
+        log_error("Tried to modify an invalid instance or assign an invalid bottom level "
+                    "accelerator structure of: " + m_debug_name, SRC);
+        return false;
+    }
+
+    const size_t previous_blas_index = instance_handle.m_blas_index;
+    const size_t previous_geometry_count =
+        m_bottom_level_structures[previous_blas_index].m_geometry_descriptions.size();
+    const size_t next_geometry_count =
+        m_bottom_level_structures[blas.m_index].m_geometry_descriptions.size();
+    if (previous_geometry_count != next_geometry_count)
+    {
+        log_error("Tried to assign a bottom level acceleration structure with a different "
+                    "geometry count to an existing instance of: " + m_debug_name, SRC);
+        return false;
+    }
+
+    if (instance_handle.m_blas_index != blas.m_index)
+    {
+        m_instance_blas_indices[instance_handle.m_instance_index] = blas.m_index;
+        instance_handle.m_blas_index = blas.m_index;
+        m_top_level_rebuild_required = true;
+    }
+    return true;
+}
+
+// ------------------------------------------------------------------------------------------------
+
 bool Raytracing_acceleration_structure::build_top_level_structure(
     D3DCommandList* command_list, bool update)
 {
-    if (m_instance_buffer && !update) {
+    if (!m_instance_buffers.empty() && !update) {
         log_error("Acceleration structure already build: " +
                     m_debug_name, SRC);
         return false;
@@ -865,84 +990,126 @@ bool Raytracing_acceleration_structure::build_top_level_structure(
                     blas.m_geometry_descriptions.size();
     }
 
-    // upload instance data to GPU
+    // Upload instance data to GPU. Keep a small ring of upload buffers alive because the TLAS
+    // build reads InstanceDescs asynchronously after this command list is submitted.
     size_t buffer_size = sizeof(D3D12_RAYTRACING_INSTANCE_DESC) * m_instances.size();
-    auto bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(buffer_size);
-    auto uploadHeapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
-    if (log_on_failure(m_app->get_device()->CreateCommittedResource(
-        &uploadHeapProperties,
-        D3D12_HEAP_FLAG_NONE,
-        &bufferDesc,
-        D3D12_RESOURCE_STATE_GENERIC_READ,
-        nullptr,
-        IID_PPV_ARGS(&m_instance_buffer)),
-        "Failed to allocate instance data buffer for: " + m_debug_name, SRC))
-        return false;
+    if (m_instance_buffers.empty())
+        m_instance_buffers.resize(tlas_instance_buffer_count);
 
-    set_debug_name(m_instance_buffer.Get(), m_debug_name + "_InstanceData");
+    ComPtr<ID3D12Resource>& instance_buffer = m_instance_buffers[m_instance_buffer_index];
+    m_instance_buffer_index = (m_instance_buffer_index + 1) % m_instance_buffers.size();
+    if (!instance_buffer || instance_buffer->GetDesc().Width < buffer_size)
+    {
+        auto bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(buffer_size);
+        auto uploadHeapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+        if (log_on_failure(m_app->get_device()->CreateCommittedResource(
+            &uploadHeapProperties,
+            D3D12_HEAP_FLAG_NONE,
+            &bufferDesc,
+            D3D12_RESOURCE_STATE_GENERIC_READ,
+            nullptr,
+            IID_PPV_ARGS(&instance_buffer)),
+            "Failed to allocate instance data buffer for: " + m_debug_name, SRC))
+            return false;
+
+        set_debug_name(instance_buffer.Get(), m_debug_name + "_InstanceData");
+    }
 
     void *p_mapped_data;
-    if (log_on_failure(m_instance_buffer->Map(0, nullptr, &p_mapped_data),
+    if (log_on_failure(instance_buffer->Map(0, nullptr, &p_mapped_data),
         "Failed to upload instance data for: " + m_debug_name, SRC))
         return false;
 
     memcpy(p_mapped_data, m_instances.data(), buffer_size);
-    m_instance_buffer->Unmap(0, nullptr);
+    instance_buffer->Unmap(0, nullptr);
 
     // create the actual top level structure
-    D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS buildFlags =
-        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE |
-        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE;
+    const D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS desired_build_flags =
+        tlas_build_flags(m_build_policy);
+    const bool perform_update =
+        update &&
+        !m_top_level_rebuild_required &&
+        m_top_level_structure &&
+        m_top_level_build_flags == desired_build_flags &&
+        acceleration_structure_flags_allow_update(desired_build_flags);
+    const bool build_flags_changed =
+        update &&
+        m_top_level_structure &&
+        m_top_level_build_flags != desired_build_flags;
 
-    if (update)
+    D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS buildFlags = desired_build_flags;
+    if (perform_update)
         buildFlags |= D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE;
+    if (build_flags_changed)
+    {
+        log_info("Rebuilding acceleration structure " + m_debug_name +
+            " (policy=" + build_policy_to_string(m_build_policy) + ")");
+    }
 
     D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS accel_inputs = {};
     accel_inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
     accel_inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
     accel_inputs.NumDescs = static_cast<UINT>(m_instances.size());
     accel_inputs.Flags = buildFlags;
-    accel_inputs.InstanceDescs = m_instance_buffer->GetGPUVirtualAddress();
+    accel_inputs.InstanceDescs = instance_buffer->GetGPUVirtualAddress();
 
     D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO prebuild_info = {};
     m_app->get_device()->GetRaytracingAccelerationStructurePrebuildInfo(
         &accel_inputs, &prebuild_info);
 
+    const UINT64 scratch_size = (perform_update && prebuild_info.UpdateScratchDataSizeInBytes != 0)
+        ? prebuild_info.UpdateScratchDataSizeInBytes
+        : prebuild_info.ScratchDataSizeInBytes;
+
     if (!m_scratch_resource ||
-        m_scratch_resource->GetDesc().Width < prebuild_info.ScratchDataSizeInBytes)
+        m_scratch_resource->GetDesc().Width < scratch_size)
     {
         if (!allocate_resource(
             command_list,
             &m_scratch_resource,
-            prebuild_info.ScratchDataSizeInBytes,
+            scratch_size,
             D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
             "_ScratchResource"))
             return false;
     }
-    if (!update && !allocate_resource(
-        command_list,
-        &m_top_level_structure,
-        prebuild_info.ResultDataMaxSizeInBytes,
-        D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE,
-        "_TLAS"))
-        return false;
+    const bool needs_tlas_allocation =
+        !m_top_level_structure ||
+        (!perform_update &&
+            m_top_level_structure->GetDesc().Width < prebuild_info.ResultDataMaxSizeInBytes);
+    if (needs_tlas_allocation)
+    {
+        if (!allocate_resource(
+            command_list,
+            &m_top_level_structure,
+            prebuild_info.ResultDataMaxSizeInBytes,
+            D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE,
+            "_TLAS"))
+            return false;
+    }
 
     D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC build_desc = {};
     build_desc.Inputs = accel_inputs;
     build_desc.ScratchAccelerationStructureData = m_scratch_resource->GetGPUVirtualAddress();
     build_desc.DestAccelerationStructureData = m_top_level_structure->GetGPUVirtualAddress();
 
-    if (!update)
+    const bool needs_tlas_srv_update =
+        needs_tlas_allocation || !m_top_level_structure_heap_index.is_valid();
+
+    if (!m_top_level_structure_heap_index.is_valid())
     {
-        assert(!m_top_level_structure_heap_index.is_valid());
         Descriptor_heap& resource_heap = *m_app->get_resource_descriptor_heap();
         m_top_level_structure_heap_index = resource_heap.reserve_views(1);
         assert(m_top_level_structure_heap_index.is_valid());
+    }
 
+    if (needs_tlas_srv_update)
+    {
+        Descriptor_heap& resource_heap = *m_app->get_resource_descriptor_heap();
         if (!resource_heap.create_shader_resource_view(this, m_top_level_structure_heap_index))
             return false;
     }
-    else
+
+    if (perform_update)
     {
         // in place update
         build_desc.SourceAccelerationStructureData = m_top_level_structure->GetGPUVirtualAddress();
@@ -952,6 +1119,8 @@ bool Raytracing_acceleration_structure::build_top_level_structure(
     command_list->BuildRaytracingAccelerationStructure(&build_desc, 0, 0);
     command_list->ResourceBarrier(1, &resource_barrier);
 
+    m_top_level_build_flags = desired_build_flags;
+    m_top_level_rebuild_required = false;
     return true;
 }
 
@@ -959,8 +1128,11 @@ bool Raytracing_acceleration_structure::build_top_level_structure(
 
 bool Raytracing_acceleration_structure::build(D3DCommandList* command_list)
 {
+    log_info("Building acceleration structure " + m_debug_name +
+        " (policy=" + build_policy_to_string(m_build_policy) + ")");
+
     for (size_t i = 0, n = m_bottom_level_structures.size(); i < n; ++i)
-        if (!build_bottom_level_structure(command_list, i)) return false;
+        if (!build_bottom_level_structure(command_list, i, false)) return false;
 
     return build_top_level_structure(command_list, false);
 }
@@ -974,9 +1146,19 @@ bool Raytracing_acceleration_structure::update(D3DCommandList* command_list)
 
 // ------------------------------------------------------------------------------------------------
 
+bool Raytracing_acceleration_structure::update_bottom_level_structures(D3DCommandList* command_list)
+{
+    for (size_t i = 0, n = m_bottom_level_structures.size(); i < n; ++i)
+        if (!build_bottom_level_structure(command_list, i, true)) return false;
+
+    return build_top_level_structure(command_list, true);
+}
+
+// ------------------------------------------------------------------------------------------------
+
 void Raytracing_acceleration_structure::release_static_scratch_buffers()
 {
-    if (!m_instance_buffer) {
+    if (m_instance_buffers.empty()) {
         log_warning("Acceleration structure is not yet build. "
                     "Call to release scratch buffers ignored: " + m_debug_name, SRC);
         return;
@@ -998,7 +1180,7 @@ size_t Raytracing_acceleration_structure::compute_hit_record_index(
     const Instance_handle& instance_handle,
     const Geometry_handle& geometry_handle)
 {
-    if (!m_instance_buffer) {
+    if (m_instance_buffers.empty()) {
         log_error("Acceleration structure is not yet build: " + m_debug_name, SRC);
         return false;
     }
@@ -1037,7 +1219,7 @@ size_t Raytracing_acceleration_structure::compute_hit_record_index(
 
 size_t Raytracing_acceleration_structure::get_hit_record_count() const
 {
-    if (!m_instance_buffer) {
+    if (m_instance_buffers.empty()) {
         log_error("Acceleration structure is not yet build: " + m_debug_name, SRC);
         return false;
     }
@@ -1056,7 +1238,7 @@ size_t Raytracing_acceleration_structure::get_hit_record_count() const
 bool Raytracing_acceleration_structure::get_shader_resource_view_description(
     D3D12_SHADER_RESOURCE_VIEW_DESC& desc) const
 {
-    if (!m_instance_buffer) {
+    if (m_instance_buffers.empty()) {
         log_error("Acceleration structure is not yet build: " + m_debug_name, SRC);
         return false;
     }

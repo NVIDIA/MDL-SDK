@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -304,6 +304,16 @@ public:
         IThread_context *ctx) = 0;
 
     /// Access messages of last resolver operation.
+    ///
+    /// For support of weak-relative module names: If a relative module name is not found, no error
+    /// message \em must be generated for correct operation. In case of a failed shadowing check
+    /// (see "Check 1" in section 2.2 of the MDL specification), a single error messages \em must
+    /// be generated for correct operation.
+    ///
+    /// For support of weak-relative file paths: If a relative file path is not found, a single
+    /// error message \em must be generated for correct operation. In case of a failed shadowing
+    /// check (see "Check 1" in section 2.2 of the MDL specification), two (or more) error messages
+    /// \em must be generated for correct operation.
     virtual Messages const &access_messages() const = 0;
 };
 

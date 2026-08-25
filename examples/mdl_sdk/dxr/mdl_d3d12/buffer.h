@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -44,7 +44,11 @@ namespace mi { namespace examples { namespace mdl_d3d12
     {
 
     public:
-        explicit Buffer(Base_application* app, size_t size_in_byte, std::string debug_name);
+        explicit Buffer(
+            Base_application* app,
+            size_t size_in_byte,
+            std::string debug_name,
+            D3D12_RESOURCE_FLAGS resource_flags = D3D12_RESOURCE_FLAG_NONE);
         virtual ~Buffer() = default;
 
         std::string get_debug_name() const override { return m_debug_name; }
@@ -64,6 +68,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
         }
 
         bool upload(D3DCommandList* command_list);
+        void transition_to(D3DCommandList* command_list, D3D12_RESOURCE_STATES state);
 
         ID3D12Resource* get_resource() const { return m_resource.Get(); }
 
@@ -76,6 +81,18 @@ namespace mi { namespace examples { namespace mdl_d3d12
             desc.Buffer.FirstElement = 0;
             desc.Buffer.NumElements = static_cast<UINT>(m_size_in_byte / 4);
             desc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_RAW;
+            desc.Buffer.StructureByteStride = 0;
+            return true;
+        }
+
+        bool get_unordered_access_view_description_raw(D3D12_UNORDERED_ACCESS_VIEW_DESC& desc) const
+        {
+            desc = {};
+            desc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+            desc.Format = DXGI_FORMAT_R32_TYPELESS;
+            desc.Buffer.FirstElement = 0;
+            desc.Buffer.NumElements = static_cast<UINT>(m_size_in_byte / 4);
+            desc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_RAW;
             desc.Buffer.StructureByteStride = 0;
             return true;
         }
@@ -101,8 +118,11 @@ namespace mi { namespace examples { namespace mdl_d3d12
     {
     public:
         explicit Structured_buffer(
-            Base_application* app, size_t element_count, std::string debug_name)
-            : Buffer(app, element_count * sizeof(TElement), debug_name)
+            Base_application* app,
+            size_t element_count,
+            std::string debug_name,
+            D3D12_RESOURCE_FLAGS resource_flags = D3D12_RESOURCE_FLAG_NONE)
+            : Buffer(app, element_count * sizeof(TElement), debug_name, resource_flags)
         {
         }
         virtual ~Structured_buffer() = default;
@@ -128,8 +148,12 @@ namespace mi { namespace examples { namespace mdl_d3d12
     class Vertex_buffer : public Structured_buffer<TVertex>
     {
     public:
-        explicit Vertex_buffer(Base_application* app, size_t element_count, std::string debug_name)
-            : Structured_buffer<TVertex>(app, element_count, debug_name)
+        explicit Vertex_buffer(
+            Base_application* app,
+            size_t element_count,
+            std::string debug_name,
+            D3D12_RESOURCE_FLAGS resource_flags = D3D12_RESOURCE_FLAG_NONE)
+            : Structured_buffer<TVertex>(app, element_count, debug_name, resource_flags)
         {
         }
         virtual ~Vertex_buffer() = default;

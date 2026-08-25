@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -34,7 +34,7 @@ namespace neuraylib {
 <div align="right">
     [\link mi_neuray_example_df_vulkan Previous\endlink]
     [\link mi_neuray_examples Up\endlink]
-    [\link mi_neuray_example_distilling Next\endlink]
+    [\link mi_neuray_example_baking Next\endlink]
 </div>
 
 This example shows how to enable and use automatic derivatives for texture filtering.
@@ -153,9 +153,13 @@ For detailed instructions, please refer to the \link mi_neuray_getting_started G
 \include df_cuda/example_df_cuda.h
 
 <b>Source Code Location:</b>
-  <tt>examples/mdl_sdk/shared/texture_support_cuda.h</tt>
+  <tt>texture_support_cuda.h</tt>
 
-\include shared/texture_support_cuda.h
+\if MDL_BIN_RELEASE
+  <tt>examples/mdl_sdk/shared/texture_support_cuda.h</tt>
+\else
+  <tt>src/render/baker/baker/texture_support_cuda.h</tt>
+\endif
 
 <b>Source Code Location:</b>
   <tt>examples/mdl_sdk/shared/example_cuda_shared.h</tt>
@@ -171,7 +175,7 @@ For detailed instructions, please refer to the \link mi_neuray_getting_started G
 <div align="right">
     [\link mi_neuray_example_df_vulkan Previous\endlink]
     [\link mi_neuray_examples Up\endlink]
-    [\link mi_neuray_example_distilling Next\endlink]
+    [\link mi_neuray_example_baking Next\endlink]
 </div>
 
 */

@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -184,7 +184,7 @@ void dump_metadata(mi::base::Handle<const mi::neuraylib::ITarget_code> code, std
     }
     out << "*/\n\n";
 
-    std::cout << "/* State usages:\n";
+    out << "/* State usages:\n";
 
     for (mi::Size i = 0, n = code->get_callable_function_count(); i < n; ++i) {
         mi::neuraylib::ITarget_code::State_usage state_usage =
@@ -194,11 +194,11 @@ void dump_metadata(mi::base::Handle<const mi::neuraylib::ITarget_code> code, std
         }
 
         char const *func_name = code->get_callable_function(i);
-        std::cout << "   Function \"" << func_name << "\"\n";
+        out << "   Function \"" << func_name << "\"\n";
 
         #define check_state_usage(x) \
             if ((state_usage & mi::neuraylib::ITarget_code::SU_ ## x) != 0) \
-                std::cout << "     - " #x << "\n"
+                out << "     - " #x << "\n"
 
         check_state_usage(POSITION             );
         check_state_usage(NORMAL               );
@@ -217,7 +217,7 @@ void dump_metadata(mi::base::Handle<const mi::neuraylib::ITarget_code> code, std
         #undef check_state_usage
     }
 
-    std::cout << "*/\n\n";
+    out << "*/\n\n";
 }
 
 static char const *opacity(mi::neuraylib::Material_opacity o)

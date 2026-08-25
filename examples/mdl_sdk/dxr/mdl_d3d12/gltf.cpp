@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -31,6 +31,10 @@
 #include "mdl_sdk.h"
 
 #include <fx/gltf.h>
+
+#include <algorithm>
+#include <cmath>
+#include <unordered_map>
 
 namespace mi { namespace examples { namespace mdl_d3d12
 {
@@ -205,7 +209,7 @@ void add_vertex_element(
 void guess_tangent(const DirectX::XMFLOAT3& normal, DirectX::XMFLOAT3& out_tangent)
 {
     const float yz = -normal.y * normal.z;
-    out_tangent = (std::fabsf(normal.z) > 0.99999f)
+    out_tangent = (std::abs(normal.z) > 0.99999f)
         ? DirectX::XMFLOAT3(-normal.x*normal.y, 1.0f - normal.y*normal.y, yz)
         : DirectX::XMFLOAT3(-normal.x*normal.z, yz, 1.0f - normal.z*normal.z);
 
@@ -351,10 +355,11 @@ void compute_tangent_frame(
             if ((s1 * s1 + t1 * t1) < 0.000001f && (s2 * s2 + t2 * t2) < 0.000001f)
                 continue;
 
-            if ((s1 * t2 - s2 * t1) < 0.000001f)
+            const float det = s1 * t2 - s2 * t1;
+            if (std::abs(det) < 0.000001f)
                 continue;
 
-            float r = 1.0f / (s1 * t2 - s2 * t1);
+            float r = 1.0f / det;
             DirectX::XMFLOAT3 sdir =
             {(t2 * x1 - t1 * x2) * r, (t2 * y1 - t1 * y2) * r, (t2 * z1 - t1 * z2) * r};
             DirectX::XMFLOAT3 tdir =
@@ -375,7 +380,6 @@ void compute_tangent_frame(
     size_t normal_offset = part.vertex_element_layout[1].byte_offset;
     size_t tangent_offset = part.vertex_element_layout[2].byte_offset;
 
-
     for (long a = 0; a < part.vertex_count; a++)
     {
         auto& v_t3 = *reinterpret_cast<DirectX::XMFLOAT3*>(
@@ -384,7 +388,7 @@ void compute_tangent_frame(
             vertex_buffer_part + a * vertex_stride + tangent_offset);
 
         // data is present and probably okay
-        if (length2(v_t3) > 0.9f && abs(v_t4.w) > 0.9f)
+        if (length2(v_t3) > 0.9f && std::abs(v_t4.w) > 0.9f)
             continue;
 
         auto& v_n = *reinterpret_cast<DirectX::XMFLOAT3*>(
@@ -416,6 +420,299 @@ void compute_tangent_frame(
         v_t3 = t;
         v_t4.w = sign;
     }
+}
+
+// ------------------------------------------------------------------------------------------------
+
+void clear_tangent_frame(IScene_loader::Primitive part, uint8_t* vertex_buffer_part)
+{
+    assert(part.vertex_element_layout[2].semantic == "TANGENT");
+    const size_t vertex_stride = get_vertex_stride(part);
+    const size_t tangent_offset = part.vertex_element_layout[2].byte_offset;
+    const DirectX::XMFLOAT4 zero = {0.0f, 0.0f, 0.0f, 0.0f};
+    for (size_t i = 0; i < part.vertex_count; ++i)
+    {
+        auto& tangent = *reinterpret_cast<DirectX::XMFLOAT4*>(
+            vertex_buffer_part + i * vertex_stride + tangent_offset);
+        tangent = zero;
+    }
+}
+
+// ------------------------------------------------------------------------------------------------
+
+uint32_t subdivide_primitive(
+    IScene_loader::Primitive& part,
+    std::vector<uint8_t>& vertex_buffer_part,
+    std::vector<uint32_t>& indices,
+    uint32_t levels,
+    const IScene_loader::Scene_options& options)
+{
+    if (levels == 0 || indices.empty())
+        return 0;
+
+    struct Triangle_split
+    {
+        uint8_t mask = 0;
+        uint32_t ab = 0;
+        uint32_t bc = 0;
+        uint32_t ca = 0;
+    };
+
+    assert(part.vertex_element_layout[0].semantic == "POSITION");
+    assert(part.vertex_element_layout[1].semantic == "NORMAL");
+    assert(part.vertex_element_layout[2].semantic == "TANGENT");
+    const size_t vertex_stride = get_vertex_stride(part);
+    const size_t position_offset = part.vertex_element_layout[0].byte_offset;
+    const size_t normal_offset = part.vertex_element_layout[1].byte_offset;
+    const size_t tangent_offset = part.vertex_element_layout[2].byte_offset;
+
+    auto make_edge_key = [](uint32_t a, uint32_t b) -> uint64_t
+    {
+        if (a > b)
+            std::swap(a, b);
+        return (static_cast<uint64_t>(a) << 32) | static_cast<uint64_t>(b);
+    };
+
+    auto position = [&](uint32_t vertex_index) -> DirectX::XMFLOAT3
+    {
+        const uint8_t* vertex = vertex_buffer_part.data() + vertex_index * vertex_stride;
+        return *reinterpret_cast<const DirectX::XMFLOAT3*>(vertex + position_offset);
+    };
+
+    auto object_edge_length2 = [&](uint32_t ia, uint32_t ib) -> float
+    {
+        const DirectX::XMFLOAT3 a = position(ia);
+        const DirectX::XMFLOAT3 b = position(ib);
+        const float dx = b.x - a.x;
+        const float dy = b.y - a.y;
+        const float dz = b.z - a.z;
+        return dx * dx + dy * dy + dz * dz;
+    };
+
+    float max_initial_object_edge2 = 0.0f;
+    for (size_t i = 0; i + 2 < indices.size(); i += 3)
+    {
+        const uint32_t a = indices[i + 0];
+        const uint32_t b = indices[i + 1];
+        const uint32_t c = indices[i + 2];
+
+        max_initial_object_edge2 = std::max(max_initial_object_edge2, object_edge_length2(a, b));
+        max_initial_object_edge2 = std::max(max_initial_object_edge2, object_edge_length2(b, c));
+        max_initial_object_edge2 = std::max(max_initial_object_edge2, object_edge_length2(c, a));
+    }
+
+    if (max_initial_object_edge2 <= 1.0e-12f)
+        return 0;
+
+    const float max_initial_object_edge = std::sqrt(max_initial_object_edge2);
+    const float edge_scale =  static_cast<float>(uint64_t{1} << levels);
+    const float target_edge_length = max_initial_object_edge / edge_scale;
+    const float split_epsilon = std::max(target_edge_length * 1.0e-5f, 1.0e-7f);
+    const float split_edge_length = target_edge_length + split_epsilon;
+    const float split_edge_length2 = split_edge_length * split_edge_length;
+
+    auto should_split_edge = [&](uint32_t ia, uint32_t ib) -> bool
+    {
+        return object_edge_length2(ia, ib) > split_edge_length2;
+    };
+
+    auto normalize_interpolated_vertex = [&](uint8_t* vertex)
+    {
+        auto& n = *reinterpret_cast<DirectX::XMFLOAT3*>(vertex + normal_offset);
+        if (length2(n) > 0.000001f)
+            n = normalize(n);
+
+        auto& t3 = *reinterpret_cast<DirectX::XMFLOAT3*>(vertex + tangent_offset);
+        if (length2(t3) > 0.000001f)
+            t3 = normalize(t3);
+
+        auto& t4 = *reinterpret_cast<DirectX::XMFLOAT4*>(vertex + tangent_offset);
+        t4.w = t4.w < 0.0f ? -1.0f : 1.0f;
+    };
+
+    auto is_float_value_kind = [](Scene_data::Value_kind kind) -> bool
+    {
+        return kind == Scene_data::Value_kind::Float ||
+            kind == Scene_data::Value_kind::Vector2 ||
+            kind == Scene_data::Value_kind::Vector3 ||
+            kind == Scene_data::Value_kind::Vector4 ||
+            kind == Scene_data::Value_kind::Color;
+    };
+
+    auto interpolate_vertex = [&](uint32_t ia, uint32_t ib) -> uint32_t
+    {
+        const uint32_t new_index =
+            static_cast<uint32_t>(vertex_buffer_part.size() / vertex_stride);
+
+        vertex_buffer_part.resize(vertex_buffer_part.size() + vertex_stride, 0);
+        uint8_t* vertices = vertex_buffer_part.data();
+        const uint8_t* vertex_a = vertices + ia * vertex_stride;
+        const uint8_t* vertex_b = vertices + ib * vertex_stride;
+        uint8_t* vertex_new = vertices + new_index * vertex_stride;
+
+        for (const auto& element : part.vertex_element_layout)
+        {
+            uint8_t* dst = vertex_new + element.byte_offset;
+            const uint8_t* src_a = vertex_a + element.byte_offset;
+            const uint8_t* src_b = vertex_b + element.byte_offset;
+
+            if (!is_float_value_kind(element.kind))
+            {
+                memcpy(dst, src_a, element.element_size);
+                continue;
+            }
+
+            float* dst_f = reinterpret_cast<float*>(dst);
+            const float* a_f = reinterpret_cast<const float*>(src_a);
+            const float* b_f = reinterpret_cast<const float*>(src_b);
+            const uint32_t component_count =
+                static_cast<uint32_t>(element.element_size / sizeof(float));
+            for (uint32_t c = 0; c < component_count; ++c)
+                dst_f[c] = 0.5f * (a_f[c] + b_f[c]);
+        }
+
+        normalize_interpolated_vertex(vertex_new);
+        return new_index;
+    };
+
+    uint32_t levels_performed = 0;
+    std::unordered_map<uint64_t, uint32_t> split_edges;
+    std::vector<Triangle_split> triangle_splits;
+    std::vector<uint32_t> next_indices;
+    for (uint32_t level = 0; level < levels; ++level)
+    {
+        constexpr uint32_t unresolved_midpoint = static_cast<uint32_t>(-1);
+        const size_t triangle_count = indices.size() / 3;
+        split_edges.clear();
+        split_edges.reserve(indices.size());
+        triangle_splits.clear();
+        triangle_splits.resize(triangle_count);
+
+        for (size_t i = 0, triangle = 0; i + 2 < indices.size(); i += 3, ++triangle)
+        {
+            const uint32_t a = indices[i + 0];
+            const uint32_t b = indices[i + 1];
+            const uint32_t c = indices[i + 2];
+            Triangle_split& split = triangle_splits[triangle];
+            split.mask = 0;
+
+            if (should_split_edge(a, b))
+            {
+                split_edges.emplace(make_edge_key(a, b), unresolved_midpoint);
+                split.mask |= 1;
+            }
+            if (should_split_edge(b, c))
+            {
+                split_edges.emplace(make_edge_key(b, c), unresolved_midpoint);
+                split.mask |= 2;
+            }
+            if (should_split_edge(c, a))
+            {
+                split_edges.emplace(make_edge_key(c, a), unresolved_midpoint);
+                split.mask |= 4;
+            }
+        }
+
+        if (split_edges.empty())
+            break;
+
+        vertex_buffer_part.reserve(vertex_buffer_part.size() + split_edges.size() * vertex_stride);
+
+        auto midpoint = [&](uint32_t ia, uint32_t ib) -> uint32_t
+        {
+            const uint64_t key = make_edge_key(ia, ib);
+            auto found = split_edges.find(key);
+            assert(found != split_edges.end());
+            if (found->second != unresolved_midpoint)
+                return found->second;
+
+            uint32_t new_index = interpolate_vertex(ia, ib);
+            found->second = new_index;
+            return new_index;
+        };
+
+        for (size_t i = 0, triangle = 0; i + 2 < indices.size(); i += 3, ++triangle)
+        {
+            Triangle_split& split = triangle_splits[triangle];
+            if (split.mask & 1)
+                split.ab = midpoint(indices[i + 0], indices[i + 1]);
+            if (split.mask & 2)
+                split.bc = midpoint(indices[i + 1], indices[i + 2]);
+            if (split.mask & 4)
+                split.ca = midpoint(indices[i + 2], indices[i + 0]);
+        }
+
+        next_indices.clear();
+        next_indices.reserve(indices.size() * 4);
+
+        auto push_triangle = [&](uint32_t a, uint32_t b, uint32_t c)
+        {
+            next_indices.push_back(a);
+            next_indices.push_back(b);
+            next_indices.push_back(c);
+        };
+
+        for (size_t i = 0, triangle = 0; i + 2 < indices.size(); i += 3, ++triangle)
+        {
+            const uint32_t a = indices[i + 0];
+            const uint32_t b = indices[i + 1];
+            const uint32_t c = indices[i + 2];
+            const Triangle_split& split = triangle_splits[triangle];
+
+            switch (split.mask)
+            {
+            case 0:
+                push_triangle(a, b, c);
+                break;
+            case 1:
+                push_triangle(a, split.ab, c);
+                push_triangle(split.ab, b, c);
+                break;
+            case 2:
+                push_triangle(b, split.bc, a);
+                push_triangle(split.bc, c, a);
+                break;
+            case 3:
+                push_triangle(split.ab, b, split.bc);
+                push_triangle(a, split.ab, c);
+                push_triangle(split.ab, split.bc, c);
+                break;
+            case 4:
+                push_triangle(c, split.ca, b);
+                push_triangle(split.ca, a, b);
+                break;
+            case 5:
+                push_triangle(split.ca, a, split.ab);
+                push_triangle(c, split.ca, b);
+                push_triangle(split.ca, split.ab, b);
+                break;
+            case 6:
+                push_triangle(split.bc, c, split.ca);
+                push_triangle(b, split.bc, a);
+                push_triangle(split.bc, split.ca, a);
+                break;
+            case 7:
+                push_triangle(a, split.ab, split.ca);
+                push_triangle(split.ab, b, split.bc);
+                push_triangle(split.ca, split.bc, c);
+                push_triangle(split.ab, split.bc, split.ca);
+                break;
+            }
+        }
+
+        indices.swap(next_indices);
+        part.vertex_count = vertex_buffer_part.size() / vertex_stride;
+        part.index_count = indices.size();
+        ++levels_performed;
+    }
+
+    if (levels_performed == 0)
+        return 0;
+
+    clear_tangent_frame(part, vertex_buffer_part.data());
+    compute_tangent_frame(part, vertex_buffer_part.data(), indices.data(), indices.size(), options);
+
+    return levels_performed;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -942,7 +1239,8 @@ bool Loader_gltf::load(Mdl_sdk& sdk, const std::string& file_name, const Scene_o
                         found_tangents = true;
                         auto vec4 = reinterpret_cast<DirectX::XMFLOAT4*>(dest_ptr);
                         auto vec3 = reinterpret_cast<DirectX::XMFLOAT3*>(dest_ptr);
-                        if (length2(*vec3) > 0.01 && fabsf(vec4->w) > 0.5f)
+
+                        if (length2(*vec3) > 0.01 && std::abs(vec4->w) > 0.5f)
                             *vec3 = normalize(*vec3);
                         else
                             fix_tangents = true;
@@ -965,28 +1263,30 @@ bool Loader_gltf::load(Mdl_sdk& sdk, const std::string& file_name, const Scene_o
             // get or generate index data
             size_t index_count, stride_index;
             auto p_first_index = get_index_data(doc, p, index_count, stride_index);
+            std::vector<uint32_t> primitive_indices;
 
             if (p_first_index)
             {
                 part.index_count = index_count;
+                primitive_indices.reserve(part.index_count);
                 if (stride_index == sizeof(uint32_t))
                 {
                     for (size_t i = 0; i < part.index_count; ++i)
-                        mesh.indices.push_back(
+                        primitive_indices.push_back(
                             static_cast<uint32_t>(
                                 read<uint32_t>(p_first_index + i * stride_index)));
                 }
                 else if (stride_index == sizeof(uint16_t))
                 {
                     for (size_t i = 0; i < part.index_count; ++i)
-                        mesh.indices.push_back(
+                        primitive_indices.push_back(
                             static_cast<uint32_t>(
                                 read<uint16_t>(p_first_index + i * stride_index)));
                 }
                 else if (stride_index == sizeof(uint8_t))
                 {
                     for (size_t i = 0; i < part.index_count; ++i)
-                        mesh.indices.push_back(
+                        primitive_indices.push_back(
                             static_cast<uint32_t>(
                                 read<uint8_t>(p_first_index + i * stride_index)));
                 }
@@ -999,8 +1299,9 @@ bool Loader_gltf::load(Mdl_sdk& sdk, const std::string& file_name, const Scene_o
             else
             {
                 part.index_count = part.vertex_count;
+                primitive_indices.reserve(part.index_count);
                 for (size_t i = 0; i < part.index_count; ++i)
-                    mesh.indices.push_back(static_cast<uint32_t>(i));
+                    primitive_indices.push_back(static_cast<uint32_t>(i));
             }
 
             // generate normals if not present (very simple)
@@ -1008,16 +1309,53 @@ bool Loader_gltf::load(Mdl_sdk& sdk, const std::string& file_name, const Scene_o
             {
                 compute_normals(
                     part, vertex_buffer_part.data(),
-                    mesh.indices.data() + part.index_offset, part.index_count);
+                    primitive_indices.data(), part.index_count);
             }
 
-            // generate tangents if not present (simple)
+            // generate tangents if not present (very simple)
             if (!found_tangents || fix_tangents)
             {
                 compute_tangent_frame(
-                    part, vertex_buffer_part.data(),
-                    mesh.indices.data() + part.index_offset, part.index_count, options);
+                    part,
+                    vertex_buffer_part.data(),
+                    primitive_indices.data(),
+                    primitive_indices.size(),
+                    options);
             }
+
+            if (options.displacement_subdivision > 0)
+            {
+                const size_t original_vertex_count = part.vertex_count;
+                const size_t original_index_count = part.index_count;
+
+                const uint32_t levels_performed = subdivide_primitive(
+                    part,
+                    vertex_buffer_part,
+                    primitive_indices,
+                    options.displacement_subdivision,
+                    options);
+
+                const std::string mesh_name = m.name.empty() ? "<unnamed>" : m.name;
+                log_info(
+                    "Mesh subdivision level " +
+                    std::to_string(options.displacement_subdivision) +
+                    " for glTF mesh '" + mesh_name + "': performed levels " +
+                    std::to_string(levels_performed) + ", vertices " +
+                    std::to_string(original_vertex_count) + " -> " +
+                    std::to_string(part.vertex_count) + ", triangles " +
+                    std::to_string(original_index_count / 3) + " -> " +
+                    std::to_string(part.index_count / 3) + ".");
+            }
+
+            part.vertex_buffer_byte_offset = mesh.vertex_data.size();
+            part.vertex_count = vertex_buffer_part.size() / vertex_stride;
+            part.index_offset = mesh.indices.size();
+            part.index_count = primitive_indices.size();
+
+            mesh.indices.insert(
+                mesh.indices.end(),
+                primitive_indices.begin(),
+                primitive_indices.end());
 
             // copy vertex buffer to mesh
             mesh.vertex_data.insert(
@@ -1385,7 +1723,7 @@ bool Loader_gltf::load(Mdl_sdk& sdk, const std::string& file_name, const Scene_o
             node.index = static_cast<size_t>(-1);
             apply_transform(node.local, src_child, options);
 
-            if (src_child.mesh >= 0 || src_child.mesh < doc.meshes.size())
+            if (src_child.mesh >= 0 && static_cast<size_t>(src_child.mesh) < doc.meshes.size())
             {
                 node.index = src_child.mesh;
                 bool empty = m_scene->meshes[node.index].primitives.size() == 0;
@@ -1396,7 +1734,7 @@ bool Loader_gltf::load(Mdl_sdk& sdk, const std::string& file_name, const Scene_o
                         (empty ? "_Node" : "_Mesh");
             }
 
-            if (src_child.camera >= 0 || src_child.camera < doc.cameras.size())
+            if (src_child.camera >= 0 && static_cast<size_t>(src_child.camera) < doc.cameras.size())
             {
                 node.kind = Node::Kind::Camera;
                 node.index = src_child.camera;

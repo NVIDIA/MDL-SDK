@@ -13,7 +13,7 @@
 #    contributors may be used to endorse or promote products derived
 #    from this software without specific prior written permission.
 #
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
 # EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 # IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
 # PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -162,6 +162,7 @@ if(MDL_BUILD_SDK_EXAMPLES)
     if(MDL_ENABLE_AXF_EXAMPLES AND ARCH_X64)
         add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/axf_to_mdl)
     endif()
+    add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/baking)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/calls)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/code_gen)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/compilation)
@@ -170,6 +171,7 @@ if(MDL_BUILD_SDK_EXAMPLES)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/discovery)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/distilling)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/distilling_target)
+    add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/entity_resolver)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/execution_native)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/generate_mdl_identifier)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/instantiation)

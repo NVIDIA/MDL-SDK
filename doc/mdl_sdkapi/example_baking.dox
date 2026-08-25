@@ -1,0 +1,191 @@
+/******************************************************************************
+ * Copyright (c) 2026, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+/*! \page mi_neuray_example_baking Example for Baking Material Sub-Expressions
+
+<div align="right">
+    [\link mi_neuray_example_derivatives Previous\endlink]
+    [\link mi_neuray_examples Up\endlink]
+    [\link mi_neuray_example_distilling Next\endlink]
+</div>
+
+This example shows how to bake selected sub-expressions of an MDL material into
+textures or constant values using the #mi::neuraylib::IBaker interface, without
+running the distiller.
+
+\section example_baking_new New Topics
+  - Baking material sub-expressions directly (without distilling)
+  - Automatic discovery of all bakeable paths in a compiled material
+  - Constant detection: distinguishing uniform from varying expressions
+  - Baking on GPU vs. CPU: choosing a #mi::neuraylib::Baker_resource
+  - Handling uvtile sequences and animated textures during baking
+  - Post-processing baked canvases (normal remapping, bool scaling)
+
+\section example_baking_descr Detailed Description
+
+<dl>
+    <dt><b>
+        Baking without distilling
+    </b></dt>
+    <dd><br>
+        While the distilling examples (see \ref mi_neuray_example_distilling) combine
+        material distillation with baking into a fixed target model, this example focuses
+        solely on baking: it compiles a material instance and bakes one or more of its
+        sub-expressions directly, without applying any distillation step first.<br><br>
+        The example acquires #mi::neuraylib::IMdl_distiller_api — the same interface
+        used for distilling — but only calls
+        #mi::neuraylib::IMdl_distiller_api::create_baker() on the original compiled
+        material to obtain an #mi::neuraylib::IBaker for each requested expression path.
+        Compilation is performed with instance compilation
+        (#mi::neuraylib::IMaterial_instance::DEFAULT_OPTIONS) so that constant
+        folding and inlining produce the most efficient representation for baking.
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+    <dt><b>
+        Selecting bake expressions
+    </b></dt>
+    <dd><br>
+        The set of expression paths to bake can be provided in three ways, selected at
+        the command line:<br>
+        1. <b>Explicit paths</b> via repeatable \c --expr flags
+           (e.g., \c --expr \c surface.scattering.tint). The example creates a baker
+           for each path, skipping any path that does not resolve on the compiled
+           material.<br>
+        2. <b>Automatic discovery</b> via \c --auto. The function \c collect_bake_paths()
+           walks the entire expression tree of the compiled material (see below) and
+           returns every leaf path whose type can be baked
+           (bool, float, color, or float vector with 2–4 components).<br>
+        3. <b>Curated default list</b> when neither flag is given. A small hard-coded
+           set of commonly useful paths (tint, roughness, normal, etc.) is tried, and
+           any path absent from the compiled material is silently skipped.
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+    <dt><b>
+        Automatic path discovery
+    </b></dt>
+    <dd><br>
+        The function \c collect_bake_paths() performs a depth-first traversal of the compiled
+        material's expression tree. Starting from the top-level body, it descends into
+        struct and BSDF/EDF/VDF constructor arguments, building dot-separated path
+        strings as it goes. A node is treated as a leaf — and its path recorded — when
+        its type satisfies \c is_bakeable_type(): \c TK_BOOL, \c TK_FLOAT, \c TK_COLOR,
+        or \c TK_VECTOR of float with size 2, 3, or 4. Temporaries are tracked with a
+        \c visited_temps bitmask to avoid re-expanding a shared sub-expression under
+        multiple parent paths, which would produce duplicate entries.
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+    <dt><b>
+        Choosing a baking device
+    </b></dt>
+    <dd><br>
+        The \c --baker_resource flag selects the execution device:
+        \c cpu (default), \c gpu, or \c gpu_with_cpu_fallback. The chosen value is
+        passed as the \c baker_resource argument to
+        #mi::neuraylib::IMdl_distiller_api::create_baker(). GPU baking uses CUDA and
+        requires an NVIDIA GPU. The \c gpu_with_cpu_fallback option automatically falls
+        back to the CPU baker when no suitable GPU is available, making it the safest
+        choice for applications that want to use the GPU when possible.
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+    <dt><b>
+        Baking uniform vs. varying expressions
+    </b></dt>
+    <dd><br>
+        After creating an #mi::neuraylib::IBaker, the example calls
+        #mi::neuraylib::IBaker::is_uniform() to determine whether the expression is
+        constant across all UV coordinates. Uniform expressions are baked with
+        #mi::neuraylib::IBaker::bake_constant(), which writes the scalar or color result
+        into an #mi::IData value of the appropriate type; the value is then printed to
+        stdout. Varying expressions are baked with
+        #mi::neuraylib::IBaker::bake_texture(), which fills an
+        #mi::neuraylib::ICanvas created via #mi::neuraylib::IImage_api::create_canvas()
+        using the pixel type reported by #mi::neuraylib::IBaker::get_pixel_type().
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+    <dt><b>
+        Constant detection
+    </b></dt>
+    <dd><br>
+        Even a varying expression may evaluate to the same value at every sample point
+        (e.g., a texture lookup driven by a constant UV offset). The example optionally
+        calls #mi::neuraylib::IBaker::bake_texture_with_constant_detection() instead of
+        #mi::neuraylib::IBaker::bake_texture(). When the baker finds that all sampled
+        values are identical, it sets the \c is_constant output flag, fills the
+        \c detected_value output, and returns without writing a texture; the constant
+        value is then printed instead of saving an image file. Constant detection can be
+        disabled with \c --no_constant_detection, which is useful when an image must
+        always be produced regardless of content.
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+    <dt><b>
+        Uvtile sequences and animated textures
+    </b></dt>
+    <dd><br>
+        When an expression references a uvtile sequence or animated texture, a single bake call
+        would only sample the UV range [0,1]×[0,1] at frame 0, missing the remaining
+        tiles and frames. The function \c build_canvases() traverses the expression
+        sub-tree looking for \c IValue_texture constants, reads the frame and u/v-tile
+        layout from the associated #mi::neuraylib::IImage, and populates a
+        \c Frame_uvtiles map. The outer baking loop then iterates over every
+        (frame, uvtile) pair, adjusting the UV range and animation time for each call
+        to #mi::neuraylib::IBaker::bake_texture(). Output filenames follow the
+        \c _frame\<N\> and \c _u\<U\>_v\<V\> suffix conventions. When the user supplies
+        \c --uv_range explicitly, tile and frame enumeration are suppressed and exactly
+        one image is produced for the specified range.
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+    <dt><b>
+        Post-processing baked canvases
+    </b></dt>
+    <dd><br>
+        Two post-processing steps are applied after a successful texture bake:<br><br>
+        <b>Normal map remapping:</b> MDL represents normals in the range [−1, 1], but
+        the conventional tangent-space normal map encoding is [0, 1]. When the bake
+        path ends in \c .normal, \c remap_normal() iterates over the \c Float32<3>
+        canvas and applies v' = (v + 1) × 0.5 to each component before export.<br><br>
+        <b>Bool canvas scaling:</b> Bool (Sint8) expressions are baked as raw byte
+        values 0 or 1. \c scale_bool_canvas() maps these to 0 and 255 so that the
+        resulting PNG is displayed as a standard black-and-white mask.
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+</dl>
+
+\section example_baking_source Example Source
+
+<b>Source Code Location:</b>
+  <tt>examples/mdl_sdk/baking/example_baking.cpp</tt>
+
+\include baking/example_baking.cpp
+
+<div align="right">
+    [\link mi_neuray_example_derivatives Previous\endlink]
+    [\link mi_neuray_examples Up\endlink]
+    [\link mi_neuray_example_distilling Next\endlink]
+</div>
+
+*/

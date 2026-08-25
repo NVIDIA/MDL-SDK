@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -178,6 +178,8 @@ void Gui_section_rendering::update(mi::neuraylib::ITransaction* /*transaction*/)
         &m_enable_animation, &default_false, Gui_control::Flags::None))
     {
         m_scene_data->enable_animiation = m_enable_animation ? 1u : 0u;
+        create_event(static_cast<mi::Size>(
+            Example_dxr_gui_event::Invalidate_displacement_geometry));
         m_scene_data->restart_progressive_rendering();
     }
 
@@ -186,6 +188,8 @@ void Gui_section_rendering::update(mi::neuraylib::ITransaction* /*transaction*/)
         &m_scene_data->meters_per_scene_unit, &m_options->meters_per_scene_unit,
         Gui_control::Flags::None, 0.0f))
     {
+        create_event(static_cast<mi::Size>(
+            Example_dxr_gui_event::Invalidate_displacement_geometry));
         m_scene_data->restart_progressive_rendering();
     }
 
@@ -956,6 +960,8 @@ void Gui_section_edit_material::update(mi::neuraylib::ITransaction* transaction)
         {
             // upload changes to the GPU and restart rendering
             m_scene_materials[m_bound_material_index]->update_material_parameters();
+            create_event(static_cast<mi::Size>(
+                Example_dxr_gui_event::Invalidate_displacement_geometry));
             m_scene_data->restart_progressive_rendering();
             // mark changes done
             m_internal_section.reset_update_state();

@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -773,7 +773,7 @@ public:
     /// \param       state     The layout state representing the current nesting within the
     ///                        argument value block. The default value is used for the top-level.
     ///
-    /// \return  the offset of the requested argument / element or \c "~mi::Size(0)" if the state
+    /// \return  the offset of the requested argument / element or ~0U if the state
     ///          is invalid.
     virtual Size get_layout(
         IValue::Kind &kind,
@@ -787,7 +787,7 @@ public:
     /// \param state  The layout state representing the current nesting within the argument
     ///               value block. The default value is used for the top-level.
     ///
-    /// \return  the layout state for the nested element or a state with \c "~mi::Uint32(0)" as
+    /// \return  the layout state for the nested element or a state with ~0U as
     ///          m_state_offs if the element is atomic.
     virtual Target_value_layout_state get_nested_state(
         Size i,

@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -87,6 +87,12 @@ public:
         IMAGE::Pixel_type& pixel_type,
         mi::Float32& gamma,
         Dds_compress_fmt& compress_format);
+
+    /// Checks that all surface byte sizes derived from the header fit into 32 bits.
+    static bool validate_surface_sizes(
+        const Header& header,
+        IMAGE::Pixel_type pixel_type,
+        Dds_compress_fmt compress_format);
 
     /// Loads a DDS image.
     ///
@@ -170,7 +176,7 @@ private:
     /// Returns the size of an surface with the given width and height and depth 1.
     ///
     /// Takes compression into account (if the surface is compressed).
-    mi::Uint32 get_layer_size( mi::Uint32 width, mi::Uint32 height);
+    mi::Size get_layer_size( mi::Uint32 width, mi::Uint32 height) const;
 
     /// Flips surface around X axis.
     void flip_surface( Surface& surface);
@@ -194,7 +200,7 @@ private:
     void reorder_rgb_or_rgba( Header& header);
 
     /// Swap two memory ranges.
-    static void swap( void* addr1, void* addr2, mi::Uint32 size);
+    static void swap( void* addr1, void* addr2, mi::Size size);
 
     /// Expand half data to float data.
     static void expand_half( std::vector<mi::Uint8>& buffer);

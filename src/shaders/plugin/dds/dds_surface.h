@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -58,7 +58,7 @@ public:
         mi::Uint32 w,
         mi::Uint32 h,
         mi::Uint32 d,
-        mi::Uint32 pixel_size,
+        mi::Size pixel_size,
         const mi::Uint8* pixels)
     {
         assert( w > 0);
@@ -101,10 +101,10 @@ public:
     mi::Uint32 get_depth() const { return m_depth; }
 
     /// Returns the size of the pixel data of the surface (possibly compressed).
-    mi::Uint32 get_size() const { return m_pixels.size(); };
+    mi::Size get_size() const { return m_pixels.size(); }
 
     /// Returns the number of elements of the surface (i.e. width * height * depth).
-    mi::Uint32 get_num_elements() const { return m_width * m_height * m_depth; }
+    mi::Size get_num_elements() const { return mi::Size( m_width) * m_height * m_depth; }
 
 private:
     /// Width of the surface

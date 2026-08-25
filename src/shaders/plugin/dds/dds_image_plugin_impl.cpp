@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -29,6 +29,7 @@
 #include "pch.h"
 
 #include "dds_image_plugin_impl.h"
+#include "dds_image.h"
 #include "dds_image_file_reader_impl.h"
 #include "dds_image_file_writer_impl.h"
 #include "dds_utilities.h"
@@ -133,6 +134,20 @@ mi::neuraylib::IImage_file* Image_plugin_impl::open_for_writing(
 
     // DDS cannot handle the combination of these features
     if( nr_of_layers > 1 && miplevels > 1)
+        return nullptr;
+
+    IMAGE::Pixel_type pixel_type_enum = IMAGE::convert_pixel_type_string_to_enum( pixel_type);
+    if( pixel_type_enum == IMAGE::PT_UNDEF)
+        return nullptr;
+
+    Header header{};
+    header.m_width = resolution_x;
+    header.m_height = resolution_y;
+    header.m_depth = nr_of_layers;
+    header.m_mipmap_count = miplevels;
+    if( is_cubemap)
+        header.m_caps2 = DDSF_CUBEMAP | DDSF_CUBEMAP_ALL_FACES;
+    if( !Image::validate_surface_sizes( header, pixel_type_enum, DXTC_none))
         return nullptr;
 
     return new Image_file_writer_impl(

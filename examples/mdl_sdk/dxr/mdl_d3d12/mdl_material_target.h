@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -38,6 +38,11 @@
 
 namespace mi { namespace examples { namespace mdl_d3d12
 {
+    /// Returns true if the compiled material's geometry.displacement expression can be nonzero.
+    bool compiled_material_contains_displacement(
+        mi::neuraylib::ITransaction* transaction,
+        const mi::neuraylib::ICompiled_material* compiled_material);
+
     class Base_application;
     class Mdl_sdk;
     class Mdl_material;
@@ -60,7 +65,8 @@ namespace mi { namespace examples { namespace mdl_d3d12
         VOLUME_SCATTERING_DIR_BIAS  = 1 << 7,
         CUTOUT_OPACITY              = 1 << 8,
         CAN_BE_THIN_WALLED          = 1 << 9,
-        HAS_AOVS                    = 1 << 10
+        HAS_AOVS                    = 1 << 10,
+        DISPLACEMENT                = 1 << 11
     };
 
     // --------------------------------------------------------------------------------------------
@@ -206,6 +212,12 @@ namespace mi { namespace examples { namespace mdl_d3d12
             return m_dxil_compiled_libraries;
         }
 
+        bool has_displacement() const { return m_has_displacement; }
+
+        IDxcBlob* get_displacement_compute_shader() const {
+            return m_displacement_compute_shader.Get();
+        }
+
         /// Get the start index of the resources belonging to material target.
         /// The index can be used directly in the shader code.
         uint32_t get_resource_heap_index() const
@@ -268,6 +280,8 @@ namespace mi { namespace examples { namespace mdl_d3d12
             mi::neuraylib::ILink_unit* link_unit,
             mi::neuraylib::IMdl_execution_context* context);
 
+        bool compile_displacement_compute_shader(IDxcBlob* cached_compute_shader = nullptr);
+
         Base_application* m_app;
         Mdl_sdk* m_sdk;
 
@@ -285,6 +299,9 @@ namespace mi { namespace examples { namespace mdl_d3d12
         std::string m_radiance_closest_hit_name;
         std::string m_shadow_any_hit_name;
         std::vector<Shader_library> m_dxil_compiled_libraries;
+        
+        bool m_has_displacement;
+        ComPtr<IDxcBlob> m_displacement_compute_shader;
 
         Descriptor_heap_handle m_first_resource_heap_handle;
         Descriptor_table m_resource_descriptor_table;

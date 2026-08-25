@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -166,7 +166,7 @@ public:
 /// - #mi::Float32 "fold_ternary_on_df": Fold all ternary operators of *df types, even in class
 ///   compilation mode. Default: \c false.
 /// - \c bool "ignore_noinline": If \c true, anno::noinline() annotations are ignored during
-///   material compilation. Note: This option implicitely sets the \c "rerun_inlining"
+///   material compilation. Note: This option implicitly sets the \c "rerun_inlining"
 ///   option to \c true. Default: \c false.
 /// - \c bool "rerun_inlining": If \c true, enables function inlining during
 ///   material compilation. Beware: This might significantly increase the compilation time.

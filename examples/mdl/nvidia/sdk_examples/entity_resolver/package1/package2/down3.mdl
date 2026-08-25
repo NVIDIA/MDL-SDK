@@ -1,0 +1,3 @@
+mdl 1.6;
+
+export int down3_f() { return 42; }

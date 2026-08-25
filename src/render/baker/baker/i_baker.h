@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -60,10 +60,6 @@ public:
     virtual const mi::neuraylib::ITarget_code* get_cpu_target_code() const = 0;
 
     virtual bool is_uniform() const = 0;
-};
-
-enum Baker_state_flags {
-    BAKER_STATE_POSITION_DIRECTION = 1u << 0  // state::position() is direction for spherical environment map
 };
 
 

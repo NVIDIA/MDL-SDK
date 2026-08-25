@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -136,6 +136,9 @@ namespace mi { namespace examples { namespace mdl_d3d12
         /// get the target code that contains this material.
         Mdl_material_target* get_target_code() const { return m_target; }
 
+        /// Returns whether the current material instance evaluates a nonzero displacement.
+        bool has_active_displacement() const { return m_has_active_displacement.load(); }
+
         /// get the argument layout of the class compilation argument data block
         /// or NULL if there is no layout in case of instance compilation.
         const mi::neuraylib::ITarget_value_layout* get_argument_layout() const;
@@ -181,6 +184,10 @@ namespace mi { namespace examples { namespace mdl_d3d12
         }
 
     private:
+        /// Update the current displacement activity using an instance-compiled probe.
+        bool update_active_displacement(
+            const mi::neuraylib::IMaterial_instance* material_instance);
+
         Base_application* m_app;
         Mdl_sdk* m_sdk;
         const uint32_t m_material_id;
@@ -209,6 +216,10 @@ namespace mi { namespace examples { namespace mdl_d3d12
 
         /// contains the actual shader code for material.
         Mdl_material_target* m_target;
+
+        /// Current per-material displacement state. This is separate from the target's
+        /// displacement capability because class compilation preserves editable parameters.
+        std::atomic<bool> m_has_active_displacement;
 
         /// constant buffer for function indices, material id and flags.
         Constant_buffer<Constants> m_constants;

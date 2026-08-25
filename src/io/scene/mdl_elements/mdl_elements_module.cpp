@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -1308,8 +1308,6 @@ mi::Sint32 Mdl_module::create_module_internal(
         return 1;
     }
 
-    lock.unlock();
-
     LOG::mod_log->debug( M_SCENE, LOG::Mod_log::C_DATABASE,
         "  Module (MDL name): \"%s\"", mdl_module_name.c_str());
     LOG::mod_log->debug( M_SCENE, LOG::Mod_log::C_DATABASE,
@@ -1318,12 +1316,12 @@ mi::Sint32 Mdl_module::create_module_internal(
         "  Module (core module name): \"%s\"", core_module_name);
 
     // Compile the module.
+    lock.unlock();
     mi::base::Handle<mi::mdl::IGenerated_code_dag> code_dag(
         generate_dag( transaction, mdl, module, context));
+    lock.lock();
     if( context->get_result() != 0)
         return context->get_result();
-
-    lock.lock();
 
     // Collect tags of imported modules, create DB elements on the fly if necessary. Use DAG imports
     // instead of AST imports since the former can be a true superset of the latter, e.g., contain

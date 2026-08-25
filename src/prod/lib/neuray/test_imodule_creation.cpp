@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -76,6 +76,41 @@ mi::Sint32 result = 0;
 
 
 // === Helper functions ============================================================================
+
+void create_archive_with_replaced_entry_name(
+    const std::string& source,
+    const std::string& target,
+    const std::string& old_name,
+    const std::string& new_name)
+{
+    MI_CHECK_EQUAL( old_name.size(), new_name.size());
+
+    std::ifstream input( fs::u8path( source), std::ios::binary);
+    MI_CHECK( input.good());
+
+    input.seekg( 0, std::ios::end);
+    std::streamoff size = input.tellg();
+    MI_CHECK( size >= 0);
+    input.seekg( 0, std::ios::beg);
+
+    std::string data( static_cast<size_t>( size), '\0');
+    input.read( data.data(), static_cast<std::streamsize>( data.size()));
+    MI_CHECK( input.good());
+
+    size_t replacement_count = 0;
+    size_t pos = 0;
+    while( (pos = data.find( old_name, pos)) != std::string::npos) {
+        data.replace( pos, old_name.size(), new_name);
+        pos += new_name.size();
+        ++replacement_count;
+    }
+    MI_CHECK_EQUAL( 2, replacement_count); // ZIP local header and central directory
+
+    std::ofstream output( fs::u8path( target), std::ios::binary);
+    MI_CHECK( output.good());
+    output.write( data.data(), static_cast<std::streamsize>( data.size()));
+    MI_CHECK( output.good());
+}
 
 mi::neuraylib::IAnnotation* create_string_annotation(
     mi::neuraylib::IValue_factory* vf,
@@ -2972,6 +3007,53 @@ void check_extract_archive( mi::neuraylib::INeuray* neuray)
     result = mdl_archive_api->extract_archive(
         archive.c_str(), DIR_PREFIX "/extracted-non-existing");
     MI_CHECK_EQUAL( 0, result);
+
+    // Create a malicious archive without adding a binary fixture. ZIP entry names occur in the
+    // local header and central directory, so replacing both with a same-length name keeps the
+    // archive structurally valid while exercising extraction path validation.
+    const char* malicious_entry_names[] = { "../zip_escape.mdl", "..\\zip_escape.mdl" };
+    for( size_t i = 0;
+         i < sizeof( malicious_entry_names) / sizeof( malicious_entry_names[0]);
+         ++i) {
+        std::string malicious_archive = std::string( DIR_PREFIX) + "/test_zip_slip.mdr";
+        std::string extraction_base   = std::string( DIR_PREFIX) + "/zip-slip";
+        std::string extraction_root   = extraction_base + "/root";
+        std::string escaped_file      = extraction_base + "/zip_escape.mdl";
+
+        fs::remove_all( fs::u8path( extraction_base));
+        create_archive_with_replaced_entry_name(
+            archive, malicious_archive, "test_archives.mdl", malicious_entry_names[i]);
+
+        mi::Sint32 zip_slip_result = mdl_archive_api->extract_archive(
+            malicious_archive.c_str(), extraction_root.c_str());
+        bool escaped_file_exists = fs::exists( fs::u8path( escaped_file));
+
+        fs::remove( fs::u8path( malicious_archive));
+        fs::remove_all( fs::u8path( extraction_base));
+
+        MI_CHECK_EQUAL( -2, zip_slip_result);
+        MI_CHECK( !escaped_file_exists);
+    }
+
+    // Dots inside a component are harmless and must not be rejected by an over-broad substring
+    // check for "..".
+    std::string valid_dots_archive = std::string( DIR_PREFIX) + "/test_valid_dots.mdr";
+    std::string valid_dots_base    = std::string( DIR_PREFIX) + "/valid-dots";
+    std::string valid_dots_file    = valid_dots_base + "/dots..validxx.mdl";
+
+    fs::remove_all( fs::u8path( valid_dots_base));
+    create_archive_with_replaced_entry_name(
+        archive, valid_dots_archive, "test_archives.mdl", "dots..validxx.mdl");
+
+    mi::Sint32 valid_dots_result = mdl_archive_api->extract_archive(
+        valid_dots_archive.c_str(), valid_dots_base.c_str());
+    bool valid_dots_file_exists = fs::exists( fs::u8path( valid_dots_file));
+
+    fs::remove( fs::u8path( valid_dots_archive));
+    fs::remove_all( fs::u8path( valid_dots_base));
+
+    MI_CHECK_EQUAL( 0, valid_dots_result);
+    MI_CHECK( valid_dots_file_exists);
 }
 
 void check_archive_get_manifest( mi::neuraylib::INeuray* neuray)

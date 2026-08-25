@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -66,6 +66,24 @@ public:
     /// \param prefix  the package prefix, '::' used as separator or NULL
     /// \param inst    the instance to mangle
     bool mangle(char const *prefix, Function_instance const &inst);
+
+    /// Mangle a synthesized MDL function (name + signature, no IDefinition).
+    ///
+    /// Equivalent to \ref mangle (prefix, def) for an MDL function definition,
+    /// except that the function's name and signature are passed directly. This
+    /// lets callers without an IDefinition (e.g. handwritten VM bytecode in the
+    /// mdlvmasm tool) emit the same Itanium-ABI mangled symbol that the MDL
+    /// frontend would produce for the same name and signature.
+    ///
+    /// \param prefix     the namespace prefix (e.g. "::my_module"), or NULL
+    /// \param name       the unqualified function name
+    /// \param func_type  the function type carrying the parameter list (and the
+    ///                   return type, which is not used by the mangling but kept
+    ///                   for symmetry with how MDL constructs IType_function)
+    bool mangle(
+        char const           *prefix,
+        char const           *name,
+        IType_function const *func_type);
 
     /// Mangle an MDL entity (non-function only).
     ///

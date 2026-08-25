@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -48,6 +48,12 @@ export int fd_texture_selector(
         = texture_2d("./resources/test.png", tex::gamma_default, "R") [[ unused() ]]
 ) { return 0; }
 
+// Test texture arrays in defaults.
+export int fd_texture_array(
+    uniform texture_2d[2] t = texture_2d[](
+        texture_2d("./resources/test.png"),
+        texture_2d("resources/test1001.png")) [[ unused() ]]
+) { return 0; }
 
 // Test that tag version changes of t changed the hash of the compiled material instance.
 export material md_textured(uniform texture_2d t = texture_2d("/mdl_elements/resources/test.png"))

@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -55,6 +55,7 @@ Mdl_material::Mdl_material(Base_application* app)
     , m_compiled_hash("")
     , m_resource_hash("")
     , m_target(nullptr)
+    , m_has_active_displacement(false)
     , m_constants(m_app, m_name + "_Constants")
     , m_argument_block_buffer(nullptr) // size is not known at this point
     , m_argument_block_data()
@@ -178,6 +179,41 @@ namespace // anonymous
         s << std::endl;
         return s.str();
     }
+}
+
+// ------------------------------------------------------------------------------------------------
+
+bool Mdl_material::update_active_displacement(
+    const mi::neuraylib::IMaterial_instance* material_instance)
+{
+    mi::base::Handle<mi::neuraylib::IMdl_execution_context> context(m_sdk->create_context());
+    context->set_option("ignore_noinline", true);
+    context->set_option("fold_meters_per_scene_unit", false);
+    context->set_option("rerun_inlining", true);
+
+    mi::base::Handle<mi::neuraylib::IType_factory> tf(
+        m_sdk->get_factory().create_type_factory(m_sdk->get_transaction().get()));
+    mi::base::Handle<const mi::neuraylib::IType_struct> material_target_type(
+        tf->create_struct(m_app->get_options()->material_type.c_str()));
+    context->set_option("target_type", material_target_type.get());
+
+    mi::base::Handle<mi::neuraylib::ICompiled_material> probe(
+        material_instance->create_compiled_material(
+            mi::neuraylib::IMaterial_instance::DEFAULT_OPTIONS, context.get()));
+    if (!m_sdk->log_messages(
+            "Probing active displacement failed: " + get_name(), context.get(), SRC) || !probe)
+    {
+        // Failing open preserves the existing behavior and cannot hide real displacement.
+        m_has_active_displacement.store(true);
+        return false;
+    }
+
+    m_has_active_displacement.store(m_sdk->get_transaction().execute<bool>(
+        [&](mi::neuraylib::ITransaction* transaction)
+        {
+            return compiled_material_contains_displacement(transaction, probe.get());
+        }));
+    return true;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -370,6 +406,21 @@ bool Mdl_material::recompile_material(mi::neuraylib::IMdl_execution_context* con
                 log_error("Distilling material failed, continue with original: " + get_name());
         }
 
+        const bool target_has_displacement = m_sdk->get_transaction().execute<bool>(
+            [&](mi::neuraylib::ITransaction* transaction)
+            {
+                return compiled_material_contains_displacement(
+                    transaction, compiled_material.get());
+            });
+        if (!mdl_options.use_class_compilation || !target_has_displacement)
+        {
+            m_has_active_displacement.store(target_has_displacement);
+        }
+        else if (!update_active_displacement(material_instance2.get()))
+        {
+            log_warning("Could not determine active displacement for: " + get_name());
+        }
+
         m_sdk->get_transaction().store(compiled_material.get(), m_compiled_db_name.c_str());
     }
 
@@ -505,6 +556,23 @@ uint8_t* Mdl_material::get_argument_data()
 
 void Mdl_material::update_material_parameters()
 {
+    if (m_sdk->get_options().use_class_compilation &&
+        m_target && m_target->has_displacement())
+    {
+        // The material editor keeps the DB call arguments in sync with the argument block.
+        // The instance-compiled probe relies on those arguments containing the current values.
+        mi::base::Handle<const mi::neuraylib::IFunction_call> function_call(
+            m_sdk->get_transaction().access<const mi::neuraylib::IFunction_call>(
+                m_instance_db_name.c_str()));
+        if (function_call)
+        {
+            mi::base::Handle<const mi::neuraylib::IMaterial_instance> material_instance(
+                function_call->get_interface<mi::neuraylib::IMaterial_instance>());
+            if (!material_instance || !update_active_displacement(material_instance.get()))
+                log_warning("Could not refresh active displacement for: " + get_name());
+        }
+    }
+
     m_argument_block_buffer->set_data(m_argument_block_data);
 
     // assuming material parameters do not change on a per frame basis ...

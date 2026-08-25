@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -31,7 +31,11 @@
 namespace mi { namespace examples { namespace mdl_d3d12
 {
 
-Buffer::Buffer(Base_application* app, size_t size_in_byte, std::string debug_name)
+Buffer::Buffer(
+    Base_application* app,
+    size_t size_in_byte,
+    std::string debug_name,
+    D3D12_RESOURCE_FLAGS resource_flags)
     : m_app(app)
     , m_debug_name(debug_name)
     , m_size_in_byte(size_in_byte)
@@ -59,7 +63,7 @@ Buffer::Buffer(Base_application* app, size_t size_in_byte, std::string debug_nam
 
     // Create a committed resource for the GPU resource in a default heap.
     auto heap_properties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
-    auto buffer_desc = CD3DX12_RESOURCE_DESC::Buffer(m_size_in_byte, D3D12_RESOURCE_FLAG_NONE);
+    auto buffer_desc = CD3DX12_RESOURCE_DESC::Buffer(m_size_in_byte, resource_flags);
     log_on_failure(m_app->get_device()->CreateCommittedResource(
         &heap_properties,
         D3D12_HEAP_FLAG_NONE,
@@ -112,6 +116,19 @@ bool Buffer::upload(D3DCommandList* command_list)
     command_list->ResourceBarrier(1, &resource_barrier);
     m_resource_latest_requested_state = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     return true;
+}
+
+// ------------------------------------------------------------------------------------------------
+
+void Buffer::transition_to(D3DCommandList* command_list, D3D12_RESOURCE_STATES state)
+{
+    if (m_resource_latest_requested_state == state)
+        return;
+
+    auto resource_barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+        m_resource.Get(), m_resource_latest_requested_state, state);
+    command_list->ResourceBarrier(1, &resource_barrier);
+    m_resource_latest_requested_state = state;
 }
 
 }}} // mi::examples::mdl_d3d12

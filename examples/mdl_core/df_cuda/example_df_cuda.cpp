@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -536,6 +536,11 @@ struct Options {
     float3 light_pos;
     float3 light_intensity;
 
+    // spectral rendering
+    bool  enable_spectral;
+    float spectral_min_wavelength;
+    float spectral_max_wavelength;
+
     std::string hdrfile;
     std::string outputfile;
     std::vector<std::string> material_names;
@@ -559,6 +564,9 @@ struct Options {
     , cam_pos(make_float3(0, 0, 3))
     , light_pos(make_float3(0, 0, 0))
     , light_intensity(make_float3(0, 0, 0))
+    , enable_spectral(false)
+    , spectral_min_wavelength(400.0f)
+    , spectral_max_wavelength(700.0f)
     , hdrfile("nvidia/sdk_examples/resources/environment.hdr")
     , outputfile("output.exr")
     , material_names()
@@ -836,6 +844,9 @@ static void render_scene(
     kernel_params.exposure_scale = powf(2.0f, options.exposure);
     kernel_params.disable_aa = options.no_aa;
     kernel_params.use_derivatives = options.enable_derivatives;
+    kernel_params.enable_spectral = options.enable_spectral ? 1u : 0u;
+    kernel_params.spectral_min_wavelength = options.spectral_min_wavelength;
+    kernel_params.spectral_max_wavelength = options.spectral_max_wavelength;
 
     // Setup camera
     float base_dist = length(options.cam_pos);
@@ -852,8 +863,15 @@ static void render_scene(
     std::vector<std::unique_ptr<Target_code> > target_codes;
     target_codes.push_back(std::move(target_code));
     CUfunction  cuda_function;
-    char const *ptx_name = options.enable_derivatives ?
-        "example_df_cuda_derivatives.ptx" : "example_df_cuda.ptx";
+    char const *ptx_name;
+    if (options.enable_spectral)
+        ptx_name = options.enable_derivatives
+            ? "example_df_cuda_spectral_derivatives.ptx"
+            : "example_df_cuda_spectral.ptx";
+    else
+        ptx_name = options.enable_derivatives
+            ? "example_df_cuda_derivatives.ptx"
+            : "example_df_cuda.ptx";
     std::string ptx_filename = find_resource_file(MDL_EXAMPLE_RELATIVE_DIRECTORY, ptx_name);
     CUmodule cuda_module = build_linked_kernel(
         target_codes, ptx_filename.c_str(), "render_sphere_kernel", &cuda_function);
@@ -1255,6 +1273,34 @@ static void render_scene(
                     }
                 }
 
+                if (options.enable_spectral)
+                {
+                    ImGui::Dummy(ImVec2(0.0f, 3.0f));
+                    ImGui::Text("Spectral Rendering");
+                    ImGui::Separator();
+
+                    if (ImGui::SliderFloat(
+                            "Min Wavelength (nm)",
+                            &kernel_params.spectral_min_wavelength, 380.0f, 780.0f))
+                    {
+                        if (kernel_params.spectral_max_wavelength <
+                            kernel_params.spectral_min_wavelength)
+                            kernel_params.spectral_max_wavelength =
+                                kernel_params.spectral_min_wavelength;
+                        kernel_params.iteration_start = 0;
+                    }
+                    if (ImGui::SliderFloat(
+                            "Max Wavelength (nm)",
+                            &kernel_params.spectral_max_wavelength, 380.0f, 780.0f))
+                    {
+                        if (kernel_params.spectral_min_wavelength >
+                            kernel_params.spectral_max_wavelength)
+                            kernel_params.spectral_min_wavelength =
+                                kernel_params.spectral_max_wavelength;
+                        kernel_params.iteration_start = 0;
+                    }
+                }
+
                 ImGui::PopItemWidth();
                 ImGui::End();
 
@@ -1469,6 +1515,13 @@ static void usage(const char *name)
         << "                            reflection), clamped to 2..100\n"
         << "--noaa                      disable pixel oversampling\n"
         << "-d                          enable use of derivatives\n"
+        << "--spectral                  enable spectral rendering mode\n"
+        << "--spectral_min_wavelength <nm>\n"
+        << "                            minimum wavelength for spectral rendering in nm\n"
+        << "                            (default: 400, range: 380-780)\n"
+        << "--spectral_max_wavelength <nm>\n"
+        << "                            maximum wavelength for spectral rendering in nm\n"
+        << "                            (default: 700, range: 380-780)\n"
         << "\n"
         << "Note: material names can end with an '*' as a wildcard\n";
 
@@ -1534,6 +1587,12 @@ int MAIN_UTF8(int argc, char* argv[])
                 options.no_aa = true;
             } else if (strcmp(opt, "-d") == 0) {
                 options.enable_derivatives = true;
+            } else if (strcmp(opt, "--spectral") == 0) {
+                options.enable_spectral = true;
+            } else if (strcmp(opt, "--spectral_min_wavelength") == 0 && i < argc - 1) {
+                options.spectral_min_wavelength = static_cast<float>(atof(argv[++i]));
+            } else if (strcmp(opt, "--spectral_max_wavelength") == 0 && i < argc - 1) {
+                options.spectral_max_wavelength = static_cast<float>(atof(argv[++i]));
             } else {
                 if (strcmp(opt, "-h") != 0 && strcmp(opt, "--help") != 0)
                     std::cout << "Unknown option: \"" << opt << "\"" << std::endl;
@@ -1560,6 +1619,8 @@ int MAIN_UTF8(int argc, char* argv[])
     {
         mi::Uint32 backend_options =
             options.enable_derivatives ? BACKEND_OPTIONS_ENABLE_DERIVATIVES : BACKEND_OPTIONS_NONE;
+        if (options.enable_spectral)
+            backend_options |= BACKEND_OPTIONS_ENABLE_SPECTRAL;
 
         // Initialize the material compiler with 16 result buffer slots ("texture results")
         Material_backend_compiler mc(

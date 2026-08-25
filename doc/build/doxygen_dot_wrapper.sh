@@ -14,7 +14,7 @@
 #    contributors may be used to endorse or promote products derived
 #    from this software without specific prior written permission.
 #
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
 # EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 # IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
 # PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -29,7 +29,7 @@
 
 # Wrapper script for dot. Modifies the input file for dot on-the-fly for improved visual appearance.
 
-FULL_FILENAME="$1"
+FULL_FILENAME="${@: -1}"
 
 # Remove all explicit line breaks and IIDs.
 sed @SED_I@ -E 's/\\l//g;s/0x[0-9a-f]{1,8}(, 0x[0-9a-f]{1,4}){2}(, 0x[0-9a-f]{1,2}){8}/\.\.\./g' "$FULL_FILENAME"

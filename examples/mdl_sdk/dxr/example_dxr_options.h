@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -37,6 +37,11 @@
 
 #include <example_shared.h>
 
+#ifdef MDL_ENABLE_MATERIALX
+// For MATERIALX_VERSION_INDEX and MATERIALX_GENERATE_INDEX
+#include <MaterialXCore/Library.h>
+#endif // MDL_ENABLE_MATERIALX
+
 namespace mi { namespace examples { namespace dxr
 {
     class Example_dxr_options : public mi::examples::mdl_d3d12::Base_options
@@ -59,6 +64,7 @@ namespace mi { namespace examples { namespace dxr
             , spectral_min_wavelength(400.0f)
             , spectral_max_wavelength(700.0f)
             , material_overrides()
+            , displacement_subdivision(0)
             , show_camera(false)
         {
             hdr_environment = mi::examples::mdl::find_resource_file(
@@ -84,6 +90,8 @@ namespace mi { namespace examples { namespace dxr
         float spectral_max_wavelength; // max spectral wavelength in [nm]
 
         std::vector<Material_override> material_overrides;
+
+        uint32_t displacement_subdivision;
 
         /// When true, the Camera panel lists world-space pose and a copy-ready `--camera` line.
         bool show_camera;
@@ -190,6 +198,11 @@ namespace mi { namespace examples { namespace dxr
         << "--mat_selective <selector> <qualified_name> Override material in the scene that is\n"
         << "                                            selected by the material name in gltf.\n"
 
+        << "--displacement_subdivision <num>  Tessellate meshes during scene loading for\n"
+        << "                                  finer MDL displacement detail. 0 keeps the\n"
+        << "                                  original mesh. (default: "
+                                      << defaults.displacement_subdivision << ")\n"
+
         << "--z_axis_up               Flip coordinate axis while loading the scene to (x, -z, y).\n"
 
         << "--uv_flip                 Flip texture coordinates from (u, 1-v) to (u, v).\n"
@@ -199,7 +212,7 @@ namespace mi { namespace examples { namespace dxr
 
         << "--uv_offset <x> <y>       Offset the scaled texture coordinates. (default: (0, 0)).\n"
 
-        << "--uv_saturate             Clamps the texture coordinates to (0, 1). (default: false).\n"
+        << "--uv_clamp                Clamps the texture coordinates to (0, 1). (default: false).\n"
 
         << "--uv_repeat               Wraps the texture coordinates to (0, 1). (default: false).\n"
 
@@ -491,6 +504,11 @@ namespace mi { namespace examples { namespace dxr
                     over.material = mi::examples::strings::wstr_to_str(argv[++i]);
                     options.material_overrides.push_back(over);
                 }
+                else if (wcscmp(opt, L"--displacement_subdivision") == 0 && i < argc - 1)
+                {
+                    options.displacement_subdivision =
+                        static_cast<uint32_t>(std::max(_wtoi(argv[++i]), 0));
+                }
                 else if (wcscmp(opt, L"--no_firefly_clamp") == 0)
                 {
                     options.firefly_clamp = false;
@@ -613,9 +631,9 @@ namespace mi { namespace examples { namespace dxr
                         static_cast<float>(_wtof(argv[++i]))
                     };
                 }
-                else if (wcscmp(opt, L"--uv_saturate") == 0)
+                else if (wcscmp(opt, L"--uv_clamp") == 0)
                 {
-                    options.uv_saturate = true;
+                    options.uv_clamp = true;
                 }
                 else if (wcscmp(opt, L"--uv_repeat") == 0)
                 {
@@ -789,7 +807,9 @@ namespace mi { namespace examples { namespace dxr
                     }
                     else if (wcscmp(opt, L"--materialxtest_mode") == 0)
                     {
+#if MATERIALX_VERSION_INDEX <= MATERIALX_GENERATE_INDEX(1, 39, 5)
                         options.uv_flip = false;
+#endif // MATERIALX_VERSION_INDEX <= MATERIALX_GENERATE_INDEX(1, 39, 5)
                         options.uv_scale = { 0.5f, 1.0f };
                         options.uv_offset = { 0.0f, 0.0f };
                         options.uv_repeat = true;

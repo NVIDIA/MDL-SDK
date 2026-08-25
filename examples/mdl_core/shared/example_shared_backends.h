@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -206,6 +206,203 @@ private:
 };
 
 
+/// Representation of a measured BSDF, holding the parsed reflection/transmission datasets
+/// loaded from an .mbsdf file.
+///
+/// The MDL Core does not provide a high-level loader for BSDF measurements, so the file is
+/// parsed manually here. The file format mirrors what the MDL SDK writes; see
+/// io/scene/bsdf_measurement/bsdf_measurement.cpp for the canonical reader implementation.
+class Bsdf_measurement_data
+{
+public:
+    /// Type of a single BSDF measurement sample.
+    enum Data_type {
+        BDT_SCALAR = 0,
+        BDT_RGB = 1
+    };
+
+    /// Which part of an MBSDF the data belongs to.
+    enum Part {
+        PART_REFLECTION = 0,
+        PART_TRANSMISSION = 1,
+        NUM_PARTS = 2
+    };
+
+    /// Data for one part (reflection or transmission) of an MBSDF.
+    struct Part_data
+    {
+        Part_data()
+            : resolution_theta(0)
+            , resolution_phi(0)
+            , type(BDT_SCALAR)
+            , valid(false)
+        {
+        }
+
+        std::vector<float> data;     // raw measurement data
+        mi::Uint32         resolution_theta;
+        mi::Uint32         resolution_phi;
+        Data_type          type;
+        bool               valid;
+    };
+
+    /// Constructor for an invalid measurement.
+    Bsdf_measurement_data()
+        : m_path()
+        , m_valid(false)
+    {
+    }
+
+    /// Constructor from an MDL IValue_bsdf_measurement.
+    Bsdf_measurement_data(
+        mi::mdl::IValue_bsdf_measurement const* bm,
+        mi::mdl::IEntity_resolver* resolver)
+        : m_path(bm->get_string_value())
+        , m_valid(false)
+    {
+        load(resolver);
+    }
+
+    /// Returns true, if the BSDF measurement was loaded successfully (at least one part valid).
+    bool is_valid() const { return m_valid; }
+
+    /// Returns true, if the given part contains valid measurement data.
+    bool has_part(Part part) const { return m_parts[part].valid; }
+
+    /// Get the data for the given part.
+    Part_data const& get_part(Part part) const { return m_parts[part]; }
+
+    /// Get the MDL resource url of the measurement.
+    char const* get_url() const { return m_path.c_str(); }
+
+private:
+    /// Read a line (up to and including the next '\n') from the given resource reader.
+    /// Returns false on read error. On EOF, returns true with an empty buffer.
+    static bool read_line(
+        mi::mdl::IMDL_resource_reader* reader,
+        std::string& line)
+    {
+        line.clear();
+        char c;
+        while (true) {
+            mi::Uint64 read = reader->read(&c, 1);
+            if (read == 0) {
+                // EOF
+                return true;
+            }
+            line.push_back(c);
+            if (c == '\n')
+                return true;
+        }
+    }
+
+    /// Reads a single Uint32 from the reader. Returns true on success.
+    static bool read_uint32(mi::mdl::IMDL_resource_reader* reader, mi::Uint32& value)
+    {
+        return reader->read(&value, sizeof(mi::Uint32)) == sizeof(mi::Uint32);
+    }
+
+    /// Reads one data block (type, resolution_theta, resolution_phi, raw float samples).
+    static bool read_data_block(mi::mdl::IMDL_resource_reader* reader, Part_data& part)
+    {
+        mi::Uint32 type_uint32 = 0;
+        if (!read_uint32(reader, type_uint32) || type_uint32 > 1)
+            return false;
+        part.type = (type_uint32 == 0) ? BDT_SCALAR : BDT_RGB;
+
+        if (!read_uint32(reader, part.resolution_theta) || part.resolution_theta == 0)
+            return false;
+        if (!read_uint32(reader, part.resolution_phi) || part.resolution_phi == 0)
+            return false;
+
+        mi::Uint64 num_channels = (part.type == BDT_RGB) ? 3u : 1u;
+        mi::Uint64 num_samples =
+            mi::Uint64(part.resolution_theta) *
+            mi::Uint64(part.resolution_theta) *
+            mi::Uint64(part.resolution_phi) *
+            num_channels;
+
+        part.data.resize(size_t(num_samples));
+        mi::Uint64 to_read = num_samples * sizeof(float);
+        if (reader->read(part.data.data(), to_read) != to_read)
+            return false;
+
+        part.valid = true;
+        return true;
+    }
+
+    /// Resolve the file via the entity resolver and parse it.
+    void load(mi::mdl::IEntity_resolver* resolver)
+    {
+        mi::base::Handle<mi::mdl::IMDL_resource_set> resource_set(
+            resolver->resolve_resource_file_name(
+                m_path.c_str(),
+                /*owner_file_path=*/ nullptr,
+                /*owner_name=*/ nullptr,
+                /*pos=*/ nullptr,
+                /*ctx=*/ nullptr));
+        if (!resource_set)
+            return;
+
+        if (resource_set->get_udim_mode() != mi::mdl::NO_UDIM || resource_set->get_count() != 1)
+            return;
+
+        mi::base::Handle<mi::mdl::IMDL_resource_element const> elem(resource_set->get_element(0));
+        if (!elem || elem->get_count() != 1)
+            return;
+
+        mi::base::Handle<mi::mdl::IMDL_resource_reader> reader(elem->open_reader(0));
+        if (!reader)
+            return;
+
+        // Magic strings (must include the trailing newline so they match the file format).
+        char const* magic_header       = "NVIDIA ARC MBSDF V1\n";
+        char const* magic_data         = "MBSDF_DATA=\n";
+        char const* magic_reflection   = "MBSDF_DATA_REFLECTION=\n";
+        char const* magic_transmission = "MBSDF_DATA_TRANSMISSION=\n";
+
+        std::string line;
+
+        // header
+        if (!read_line(reader.get(), line) || line != magic_header)
+            return;
+
+        // skip metadata until we hit a data section marker
+        while (line != magic_data &&
+               line != magic_reflection &&
+               line != magic_transmission)
+        {
+            if (!read_line(reader.get(), line))
+                return;
+            if (line.empty())
+                return;
+        }
+
+        // reflection data
+        if (line == magic_data || line == magic_reflection) {
+            if (!read_data_block(reader.get(), m_parts[PART_REFLECTION]))
+                return;
+            // try to read the next section marker (may be EOF)
+            if (!read_line(reader.get(), line))
+                return;
+        }
+
+        // transmission data
+        if (line == magic_transmission) {
+            if (!read_data_block(reader.get(), m_parts[PART_TRANSMISSION]))
+                return;
+        }
+
+        m_valid = m_parts[PART_REFLECTION].valid || m_parts[PART_TRANSMISSION].valid;
+    }
+
+private:
+    std::string m_path;
+    Part_data   m_parts[NUM_PARTS];
+    bool        m_valid;
+};
+
+
 /// Helper class to handle the string table of a target code, allowing it to grow
 /// when new user strings are registered.
 class String_constant_table
@@ -312,6 +509,8 @@ public:
         , m_cur_lambda()
         , m_textures()
         , m_texture_map()
+        , m_bsdf_measurements()
+        , m_bsdf_measurement_map()
         , m_string_constant_table()
     {
     }
@@ -321,6 +520,8 @@ public:
     {
         for (auto tex : m_textures)
             delete tex;
+        for (auto bm : m_bsdf_measurements)
+            delete bm;
     }
 
     /// Called for an enumerated texture resource.
@@ -348,17 +549,12 @@ public:
     }
 
     /// Called for an enumerated bsdf measurement resource.
+    /// Registers the measurement in this collection and in the current lambda, if set.
     ///
     /// \param t  the bsdf measurement resource or an invalid_ref
     virtual void bsdf_measurement(mi::mdl::IValue const* t) override
     {
-        auto bm = mi::mdl::as<mi::mdl::IValue_bsdf_measurement>(t);
-
-        // not supported in this example
-        std::cerr << "warning: Measured BSDFs are not supported by the MDL Core examples.\n"
-            "         However, the loaded material references the BSDF measurement:\n"
-            << "         " << bm->get_string_value() << "\n";
-        (void)t;
+        bsdf_measurement_impl(t);
     }
 
     /// Sets the current lambda used for registering the resources.
@@ -395,6 +591,11 @@ public:
         return m_textures;
     }
 
+    /// Returns the BSDF measurements list.
+    std::vector<Bsdf_measurement_data*> const& get_bsdf_measurements() const {
+        return m_bsdf_measurements;
+    }
+
     /// Returns the resource index for the given resource value usable by the target code resource
     /// handler for the corresponding resource type.
     ///
@@ -406,6 +607,8 @@ public:
         switch (resource->get_kind()) {
         case mi::mdl::IValue::VK_TEXTURE:
             return texture_impl(resource);
+        case mi::mdl::IValue::VK_BSDF_MEASUREMENT:
+            return bsdf_measurement_impl(resource);
         default:
             break;
         }
@@ -507,6 +710,57 @@ private:
         return mi::Uint32(index);
     }
 
+    /// Called for an enumerated bsdf measurement resource.
+    /// Registers the measurement in this collection and in the current lambda, if set.
+    ///
+    /// \param t  the bsdf measurement resource value
+    ///
+    /// \returns the resource index or 0 if no resource index can be returned
+    mi::Uint32 bsdf_measurement_impl(mi::mdl::IValue const* t)
+    {
+        mi::mdl::IValue_bsdf_measurement const* bm_val =
+            mi::mdl::as<mi::mdl::IValue_bsdf_measurement>(t);
+        if (bm_val == nullptr)
+            return 0;
+
+        // add the invalid measurement, if this is the first one
+        if (m_bsdf_measurements.empty()) {
+            m_bsdf_measurements.push_back(new Bsdf_measurement_data());
+        }
+
+        Bsdf_measurement_data* bm;
+        size_t index;
+
+        std::string cache_key = std::string(bm_val->get_string_value());
+        auto it = m_bsdf_measurement_map.find(cache_key);
+        if (it == m_bsdf_measurement_map.end()) {
+            bm = new Bsdf_measurement_data(bm_val, m_entity_resolver.get());
+            m_bsdf_measurements.push_back(bm);
+            index = m_bsdf_measurements.size() - 1;
+            m_bsdf_measurement_map[cache_key] = unsigned(index);
+            if (!bm->is_valid()) {
+                std::cerr << "warning: Failed to load BSDF measurement \""
+                          << bm_val->get_string_value() << "\".\n";
+            }
+        }
+        else {
+            index = size_t(it->second);
+            bm = m_bsdf_measurements[index];
+        }
+
+        // is there a lambda function to register the BSDF measurement?
+        if (m_cur_lambda) {
+            m_cur_lambda->map_bm_resource(
+                bm_val->get_kind(),
+                bm_val->get_string_value(),
+                bm_val->get_tag_value(),
+                index,
+                /*valid=*/ bm->is_valid());
+        }
+
+        return mi::Uint32(index);
+    }
+
     Resource_collection(Resource_collection const&) = delete;
     Resource_collection& operator=(Resource_collection const&) = delete;
 
@@ -528,6 +782,12 @@ private:
 
     /// Map from texture paths to indices into m_textures.
     std::map<std::string, unsigned> m_texture_map;
+
+    /// List of loaded BSDF measurements.
+    std::vector<Bsdf_measurement_data*> m_bsdf_measurements;
+
+    /// Map from BSDF measurement paths to indices into m_bsdf_measurements.
+    std::map<std::string, unsigned> m_bsdf_measurement_map;
 
     /// The string constant table, we allow it to grow by the user.
     mutable String_constant_table m_string_constant_table;
@@ -714,6 +974,16 @@ public:
     /// Get the texture at the given index.
     Texture_data const* get_texture(size_t index) const {
         return m_res_col.get_textures()[index];
+    }
+
+    /// Get the number of BSDF measurements in the resource collection.
+    size_t get_bsdf_measurement_count() const {
+        return m_res_col.get_bsdf_measurements().size();
+    }
+
+    /// Get the BSDF measurement at the given index.
+    Bsdf_measurement_data const* get_bsdf_measurement(size_t index) const {
+        return m_res_col.get_bsdf_measurements()[index];
     }
 
     /// Get the IGenerated_code_executable object.

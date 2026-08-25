@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -602,7 +602,8 @@ export material example_tiled(
 } in material(
     surface: material_surface(
         scattering: df::diffuse_reflection_bsdf(
-            tint: tex::lookup_color(base, float2(tex_coord.x, tex_coord.y))
+            tint: tex::lookup_color(base, float2(tex_coord.x, tex_coord.y),
+                    frame: state::animation_time())
         )
     )
 );
@@ -746,5 +747,36 @@ in material
             normal: bump
 
         )
+    )
+);
+
+// get a scalar checker pattern based on the UV coordinate.
+export float checker_mask(float scale = 8.0)
+{
+    float3 uvw = state::texture_coordinate(0);
+    float2 uv = float2(uvw.x, uvw.y) * scale;
+    bool x = (int(uv.x) & 1) != 0;
+    bool y = (int(uv.y) & 1) != 0;
+    return x == y ? 0.0 : 1.0;
+}
+
+// a material with a procedural checkerboard displacement.
+export material example_displacement(
+    bool enable_displacement = true,
+    color low_tint = color(0.08, 0.10, 0.14),
+    color high_tint = color(0.71, 0.62, 0.19),
+    float low_displacement = -0.035,
+    float high_displacement = 0.085,
+    float checker_scale = 10.0
+) = let {
+    float mask = checker_mask(checker_scale);
+    color tint = mask < 0.5 ? low_tint : high_tint;
+    float displacement = math::lerp(low_displacement, high_displacement, mask);
+} in material(
+    surface: material_surface(
+        scattering: df::diffuse_reflection_bsdf(tint: tint)
+    ),
+    geometry: material_geometry(
+        displacement: enable_displacement ? displacement * state::normal() : float3(0.0)
     )
 );

@@ -13,7 +13,7 @@
 #    contributors may be used to endorse or promote products derived
 #    from this software without specific prior written permission.
 #
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
 # EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 # IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
 # PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -185,6 +185,7 @@ function(TARGET_BUILD_SETUP)
                 "-fvisibility=hidden"
                 "-fno-strict-aliasing"
                 "$<$<STREQUAL:${MI_PLATFORM_NAME},linux-x86-64>:-march=nocona>"
+                "$<$<STREQUAL:${MI_PLATFORM_NAME},linux-aarch64>:-mtls-dialect=trad>"
                 "-Wall"
                 "-Werror=format-security"
                 "-Wformat"
@@ -1618,6 +1619,11 @@ function(CREATE_FROM_DOC_PRESET)
             @ONLY)
         # User dot wrapper.
         set(_DOT_PATH_ARG ${CMAKE_CURRENT_BINARY_DIR})
+        # The wrapper can only handle one file at a time.
+        set(_DOT_BATCH_SIZE_ARG 1)
+    else()
+        # Default value of doxygen 1.17.0
+        set(_DOT_BATCH_SIZE_ARG 50)
     endif()
 
     add_custom_target(
@@ -1630,12 +1636,10 @@ function(CREATE_FROM_DOC_PRESET)
             ${_HAVE_DOT_ARG}
             ${_DOT_PATH_ARG}
             ${_IMAGE_PATH_ARG}
+            ${_DOT_BATCH_SIZE_ARG}
         COMMAND
             ${MDL_DEPENDENCY_DOXYGEN_PATH}
             ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile
-        COMMAND
-            ${python_PATH}
-            ${MDL_BASE_FOLDER}/doc/build/doxygen_postprocess_css.py
         COMMENT
             ${CREATE_FROM_DOC_PRESET_COMMENT}
         VERBATIM

@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -93,6 +93,10 @@ namespace mi { namespace examples { namespace mdl_d3d12
         bool create_shader_resource_view(
             Buffer* buffer, bool raw, const Descriptor_heap_handle& handle);
 
+        /// Create a Shader Resource View (SRV) for an index buffer.
+        bool create_shader_resource_view(
+            Index_buffer* buffer, const Descriptor_heap_handle& handle);
+
         /// Create a Shader Resource View (SRV) at a given position on the heap.
         bool create_shader_resource_view(
             Texture* texture,
@@ -133,6 +137,10 @@ namespace mi { namespace examples { namespace mdl_d3d12
         /// Create an Unordered Access View (UAV) at a given position on the heap.
         bool create_unordered_access_view(
             Texture* texture, const Descriptor_heap_handle& handle);
+
+        /// Create a raw buffer Unordered Access View (UAV) at a given position on the heap.
+        bool create_unordered_access_view(
+            Buffer* buffer, bool raw, const Descriptor_heap_handle& handle);
 
         /// Create a Constant Buffer View (CBV) at a given position on the heap.
         bool create_constant_buffer_view(

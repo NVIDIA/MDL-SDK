@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -158,7 +158,7 @@ public:
     ///
     /// \param path    The path from the material root to the expression that should be returned,
     ///                e.g., \c "surface.scattering.tint".
-    /// \return        The sub-expression specificed by \p path, or \c nullptr in case of errors.
+    /// \return        The sub-expression specified by \p path, or \c nullptr in case of errors.
     virtual const IExpression* lookup_sub_expression( const char* path) const = 0;
 
     /// Looks up a sub-expression of the compiled material.
@@ -172,7 +172,7 @@ public:
     /// \tparam T      The interface type of the requested sub-expression.
     /// \param path    The path from the material root to the expression that should be returned,
     ///                e.g., \c "surface.scattering.tint".
-    /// \return        The sub-expression specificed by \p path, or \c nullptr in case of errors.
+    /// \return        The sub-expression specified by \p path, or \c nullptr in case of errors.
     template<class T>
     const T* lookup_sub_expression( const char* path) const
     {
@@ -396,6 +396,20 @@ public:
     virtual base::Uuid get_sub_expression_hash( const char* path) const = 0;
 
     //@}
+
+    /// Returns the number of resources referenced by this compiled material.
+    virtual Size get_resources_count() const = 0;
+
+    /// Returns a resource referenced by this compiled material.
+    ///
+    /// Due to a technical limitation all texture shapes except
+    /// #mi::neuraylib::IType_texture::TS_BSDF_DATA are reported as
+    /// #mi::neuraylib::IType_texture::TS_2D.
+    ///
+    /// \param index   The index of the resource.
+    /// \return        The resource, or \c nullptr if \p index is out of range or the resource at
+    ///                that index is not a texture, light profile, or BSDF measurement.
+    virtual const IValue_resource* get_resource( Size index) const = 0;
 };
 
 /**@}*/ // end group mi_neuray_mdl_elements

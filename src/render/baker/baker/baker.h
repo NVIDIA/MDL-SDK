@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -43,18 +43,32 @@
 
 #include <base/system/main/access_module.h>
 
+// The CMake option MDL_ENABLE_GPU_BAKER (source-release only) enables the GPU baker.
+// Mirror it to the in-source flag ENABLE_GPU_BAKING_OSS used throughout the rest of
+// the baker sources.
+#ifdef MDL_ENABLE_GPU_BAKER
+#define ENABLE_GPU_BAKING_OSS
+#endif
+
 
 #include <io/scene/mdl_elements/i_mdl_elements_value.h>
 
 #include "i_baker.h"
+#include "baker_shared.h"
 
 #include <base/lib/log/i_log_logger.h>
 #include <base/system/main/i_module_id.h>
 #define log_error(...) MI::LOG::mod_log->error(M_BAKER, MI::LOG::Mod_log::C_MISC, __VA_ARGS__)
 #define log_warning(...) MI::LOG::mod_log->warning(M_BAKER, MI::LOG::Mod_log::C_MISC, __VA_ARGS__)
+#define log_info(...) MI::LOG::mod_log->info(M_BAKER, MI::LOG::Mod_log::C_MISC, __VA_ARGS__)
 #define log_debug(...) MI::LOG::mod_log->debug(M_BAKER, MI::LOG::Mod_log::C_MISC, __VA_ARGS__)
 
 
+#if !defined(MDL_SOURCE_RELEASE) || defined(ENABLE_GPU_BAKING_OSS)
+// CUDA forwards
+struct CUctx_st;
+typedef struct CUctx_st *CUcontext;
+#endif
 
 namespace mi { namespace mdl { class IMDL; class ICode_generator_jit; } }
 
@@ -124,10 +138,24 @@ class Baker_module_impl : public Baker_module
 public:
     Baker_module_impl();
 
+    ~Baker_module_impl();
+
     bool init();
 
     void exit();
 
+
+#ifdef ENABLE_GPU_BAKING_OSS
+    /// Returns a per-device CUDA context for the open-source-release baker.
+    /// Lazily creates and caches the context. Returns nullptr if libcuda is
+    /// not loadable, the device id is invalid, or context creation fails.
+    CUcontext get_dev_context_oss(int gpu_dev_id) const;
+
+    /// Returns true if the CUDA driver and runtime libraries are loadable
+    /// and the given device id has a supported compute capability.
+    /// \param sm  on success, set to (major*10 + minor).
+    bool ensure_cuda_loaded_oss(int gpu_dev_id, unsigned& sm) const;
+#endif
 
     const IBaker_code* create_environment_baker_code(
         DB::Transaction* transaction,
@@ -211,8 +239,7 @@ private:
         mi::neuraylib::Baker_resource resource,
         mi::Uint32 gpu_device_id,
         std::string& pixel_type,
-        bool& is_uniform,
-        bool use_custom_cpu_tex_runtime) const;
+        bool& is_uniform) const;
 
 
 
@@ -221,6 +248,11 @@ private:
     mi::base::Handle<mi::mdl::IMDL> m_compiler;
     mi::base::Handle<mi::mdl::ICode_generator_jit> m_code_generator_jit;
 
+
+#ifdef ENABLE_GPU_BAKING_OSS
+    mutable mi::base::Lock m_dev_ctx_cache_oss_lock;
+    mutable std::map<int, CUcontext> m_dev_ctx_cache_oss;
+#endif
 };
 
 } // namespace BAKER

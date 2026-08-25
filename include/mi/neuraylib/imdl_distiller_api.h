@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -50,6 +50,10 @@ class ICompiled_material;
 */
 
 /// Identifies the resource(s) to be used by a baker.
+///
+/// The GPU baker is based on CUDA. An NVIDIA GPU with compute capability \c sm_50 or higher is
+/// needed. \if MDL_SOURCE_RELEASE Support for it needs to be enabled via the CMake option
+/// \c MDL_ENABLE_GPU_BAKER. \endif
 ///
 /// \see #mi::neuraylib::IMdl_distiller_api::create_baker()
 enum Baker_resource : Uint32 {
@@ -116,6 +120,11 @@ public:
     ///   dedicated transmissive lobe. If the source has a diffuse transmission, it will map to a
     ///   glossy transmission of roughness 1, potentially allowing the reconstruction of diffuse
     ///   transmissive or SSS contributions.
+    ///
+    /// - <tt>ovrtx</tt>: A target model for real-time path tracing. It preserves front and
+    ///   optional backface surfaces, emission, volume absorption and scattering, and maps surface
+    ///   scattering to a layered model with coat, glass transmission, glossy reflection,
+    ///   retroreflection or sheen, diffuse transmission, and diffuse reflection components.
     ///
     /// The following table contains the lists the target BSDF graphs using a pseudo-MDL notation.
     /// Note that the distiller is not guaranteed to create lobes not already contained in the
@@ -217,6 +226,42 @@ public:
     ///      <td>
     ///          A weighted_layer of any subset of the above construct
     ///          with an optional clearcoat on top.
+    ///      </td>
+    ///   </tr>
+    ///   <tr>
+    ///      <td>ovrtx</td>
+    ///      <td>
+    ///\code
+    ///  surface.scattering = custom_curve_layer(              // coat weighting parameters
+    ///    layer: microfacet_ggx_vcavities_bsdf,               // coat glossy reflection lobe
+    ///    base: weighted_layer(                               // glass transmission weight
+    ///      layer: bsdf_tint_ex(
+    ///        microfacet_ggx_vcavities_bsdf(scatter_reflect_transmit)),
+    ///      base: custom_curve_layer(                         // glossy weighting parameters
+    ///        layer: bsdf_directional_factor(
+    ///          microfacet_ggx_vcavities_bsdf),               // glossy reflection lobe
+    ///        base: weighted_layer(                           // retroreflection or sheen weight
+    ///          layer: backscattering_glossy_reflection_bsdf
+    ///                 or sheen_bsdf,
+    ///          base: weighted_layer(                         // diffuse transmission weight
+    ///            layer: diffuse_transmission_bsdf,
+    ///            base: weighted_layer(                       // base normal
+    ///              layer: diffuse_reflection_bsdf,
+    ///              base: bsdf()
+    ///            )
+    ///          )
+    ///        )
+    ///      )
+    ///    )
+    ///  )
+    ///  surface.emission = diffuse_edf
+    ///  backface.scattering = same structure as surface.scattering, bsdf(), or ()
+    ///  backface.emission = diffuse_edf
+    ///  volume = material_volume(vdf(), absorption, scattering)
+    ///  geometry = material_geometry(displacement, cutout_opacity, normal)
+    ///\endcode
+    ///          Lobes in this canonical structure can be zero-weighted or defaulted when the
+    ///          corresponding component is not present in the source material.
     ///      </td>
     ///   </tr>
     /// </table>
@@ -527,3 +572,4 @@ public:
 } // namespace mi
 
 #endif // MI_NEURAYLIB_IMDL_DISTILLER_H
+

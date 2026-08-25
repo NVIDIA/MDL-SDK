@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -4381,9 +4381,14 @@ typename SLWriterPass<BasePass>::Def_function *SLWriterPass<BasePass>::get_struc
         return it->second;
     }
 
-    // declare the constructor function
+    // declare the constructor function.
+    // Avoid double underscores here, as at least GLSL reserves them.
+    char const *type_name = type->get_sym()->get_name();
+    if (type_name[0] == '_') {
+        ++type_name;
+    }
     string constr_name("constr_", Base::m_alloc);
-    constr_name += type->get_sym()->get_name();
+    constr_name += type_name;
 
     // generate name in current scope to avoid name clashes
     Symbol *func_sym = Base::get_unique_sym(constr_name.c_str(), "constr");

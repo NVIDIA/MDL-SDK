@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -148,9 +148,14 @@ The example programs listed in this section take you through the following steps
 
 Distilling and baking enable you to optimize MDL materials for game engines and renderers with limited capabilities. The following examples provide an introduction to the MDL distilling mechanism and how to use it.
 
+- **Baking material sub-expressions:**
+
+  \subpage mi_neuray_example_baking
+  shows how to bake material sub-expressions to textures or constants without distilling.
+
 - **General introduction to distilling and baking:**
- 
-  \subpage mi_neuray_example_distilling 
+
+  \subpage mi_neuray_example_distilling
   Distilling of compiled materials and baking of material sub-expressions.
 
 - **Unity game engine -- distilling and baking:**
@@ -210,10 +215,12 @@ The following examples cover topics and use cases that may be important to your 
   
   \subpage mi_neuray_example_spectral_rendering
   shows how to integrate spectral rendering support into your rendering application
+
+- **Custom MDL entity resolver:**
+
+  \subpage mi_neuray_example_entity_resolver
+  shows how to implement a custom MDL entity resolver
   
 \subpage mi_neuray_example_topics
 
 */
-
-
-

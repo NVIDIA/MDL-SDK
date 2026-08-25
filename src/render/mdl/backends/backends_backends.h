@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -178,6 +178,9 @@ public:
 
     /// If true, enable code generation for spectral rendering.
     bool get_enable_spectral() const { return m_enable_spectral; }
+
+    /// If true, use the builtin resource handler when running native code
+    bool get_use_builtin_resource_handler() const { return m_use_builtin_resource_handler; }
 
     // Target is as structured language language.
     bool target_is_structured_language() const {

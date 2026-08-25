@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -1063,6 +1063,14 @@ BSDF_INLINE void microfacet_sample(
         data->bsdf_over_pdf = f_refl_c / f_refl;
     } else {
         prob = 1.0f - f_refl;
+        // A sample must not enter a branch with zero selection probability. This can happen
+        // when xi.z is exactly one and the Fresnel reflection probability is one. Reject it
+        // before forming 1 / prob, which would otherwise turn the zero transmission weight
+        // into 0 * Inf = NaN. The positive-form check also rejects a NaN probability.
+        if (!(prob > 0.0f)) {
+            absorb(data);
+            return;
+        }
         bool tir = false;
         bool dispersion = false;
         if (thin_walled) {

@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -53,8 +53,8 @@ void Dxt_decompressor::set_source_format(
     mi::Uint32 height)
 {
     m_source_format = format;
-    m_blocks_x = width  / BLOCK_PIXEL_DIM;
-    m_blocks_y = height / BLOCK_PIXEL_DIM;
+    m_blocks_x = width  == 0 ? 0 : (width  - 1) / BLOCK_PIXEL_DIM + 1;
+    m_blocks_y = height == 0 ? 0 : (height - 1) / BLOCK_PIXEL_DIM + 1;
 
     switch( m_source_format) {
         case DXTC1:
@@ -76,7 +76,10 @@ void Dxt_decompressor::set_target_format(
     assert( component_count == 3 || component_count == 4);
 
     m_target_component_count = component_count;
-    m_target_width = component_count * width;
+    mi::Uint32 padded_width = m_blocks_x * BLOCK_PIXEL_DIM;
+    if( padded_width < width)
+        padded_width = width;
+    m_target_width = component_count * padded_width;
     m_buffer.resize( BLOCK_PIXEL_DIM * m_target_width);
 }
 

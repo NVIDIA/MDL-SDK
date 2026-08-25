@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -358,9 +358,15 @@ public:
     MDL_JIT(llvm::orc::JITTargetMachineBuilder jtm_builder, llvm::DataLayout data_layout)
     : m_next_module_id(0)
     , m_uses_coff(jtm_builder.getTargetTriple().isOSBinFormatCOFF())
+    , m_reserve_alloc(jtm_builder.getTargetTriple().isAArch64())
     , m_object_layer(m_execution_session,
         // GetMemoryManager
-        [this]() { return std::make_unique<llvm::SectionMemoryManager>(&m_memory_mapper); })
+        // On AArch64 all sections are reserved as one contiguous block so that
+        // small-code-model ADRP references stay within the +/-4GB reach.
+        [this]() {
+            return std::make_unique<llvm::SectionMemoryManager>(
+                &m_memory_mapper, m_reserve_alloc);
+        })
     , m_compile_layer(
         m_execution_session,
         m_object_layer,
@@ -469,6 +475,12 @@ private:
 
     /// True, if the binary object format is COFF.
     bool m_uses_coff;
+
+    /// True, if section memory must be reserved as a single contiguous block.
+    /// Required on AArch64 so small-code-model ADRP references stay within the
+    /// +/-4GB reach; otherwise separate section allocations on large-memory
+    /// machines can overflow R_AARCH64_ADR_PREL_PG_HI21 relocations.
+    bool m_reserve_alloc;
 
     /// Execution session used to identify modules.
     llvm::orc::ExecutionSession m_execution_session;

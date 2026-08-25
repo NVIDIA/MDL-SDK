@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -159,20 +159,25 @@ bool Image_plugin_impl::init( mi::neuraylib::IPlugin_api* plugin_api)
     // Unfortunately, setting the global property first creates a default thread pool with N
     // threads, and then destroys them again right away. Still better than creating them implicitly
     // later, possibly without destroying them before the plugin is unloaded.
-    bool result = OIIO::attribute( "threads", 1);
+    [[maybe_unused]] bool result = OIIO::attribute( "threads", 1);
     assert( result);
 
     // Disable EXR internal thread pool via the global property. Calling OIIO::ImageInput::threads()
     // is too late since EXR threads might already be created in OIIO::ImageInput::open().
     result = OIIO::attribute( "exr_threads", -1);
     assert( result);
-    (void) result;
 
     // Explicitly request the C++ API from OpenEXR. The C API lacks support for luminance-chroma
     // images. (The default depends on the OpenEXR version and build time flags for OIIO.)
     result = OIIO::attribute( "openexr:core", 0);
     assert( result);
-    (void) result;
+    
+#if OIIO_VERSION >= OIIO_MAKE_VERSION(3,1,14)
+    // Clean up ustring memory during plugin unloading to avoid false positive with leak detectors
+    // like valgrind. 
+    result = OIIO::attribute( "ustring:cleanup", 1);
+    assert( result);
+#endif
 
 #ifdef NDEBUG
     // Disable printing of uncaught errors in release builds.

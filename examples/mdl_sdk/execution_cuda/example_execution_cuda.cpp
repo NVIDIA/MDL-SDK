@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -280,6 +280,7 @@ int MAIN_UTF8(int argc, char* argv[])
                 transaction.get(),
                 /*num_texture_results=*/ 0,
                 options.enable_derivatives,
+                /*enable_spectral=*/ false,
                 options.fold_ternary_on_df,
                 /*enable_axuiliary_output=*/ false,
                 /*enable_pdf=*/ true,

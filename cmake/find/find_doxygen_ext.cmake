@@ -13,7 +13,7 @@
 #    contributors may be used to endorse or promote products derived
 #    from this software without specific prior written permission.
 #
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
 # EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 # IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
 # PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -58,9 +58,9 @@ function(FIND_DOXYGEN_EXT)
 
     # check version
     STRING(REGEX MATCH "[0-9]+\\.[0-9]+\\.[0-9]+" _DOXYGEN_VERSION_STRING ${_DOXYGEN_VERSION_STRING})
-    if(NOT ${_DOXYGEN_VERSION_STRING} STREQUAL "1.9.4")
+    if(NOT ${_DOXYGEN_VERSION_STRING} STREQUAL "1.17.0")
         message(WARNING "Doxygen version ${_DOXYGEN_VERSION_STRING} is different from recommended"
-            " version 1.9.4.")
+            " version 1.17.0.")
     endif()
 
     find_program(_DOT_PATH NAMES dot HINTS ${GRAPHVIZ_DIR}/bin)

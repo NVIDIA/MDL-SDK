@@ -13,7 +13,7 @@
 #    contributors may be used to endorse or promote products derived
 #    from this software without specific prior written permission.
 #
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
 # EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 # IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
 # PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -38,6 +38,8 @@ set(_GENERATED_SOURCES
     ${_GENERATED_DIR}/dist_rules_transmissive_pbr.cpp
     ${_GENERATED_DIR}/dist_rules_ue.h
     ${_GENERATED_DIR}/dist_rules_ue.cpp
+    ${_GENERATED_DIR}/dist_rules_ovrtx.h
+    ${_GENERATED_DIR}/dist_rules_ovrtx.cpp
     )
 
 # scripts/files used to generate the sources above
@@ -45,6 +47,7 @@ set(_GENERATOR_FILES_ORIGINAL
     ${CMAKE_CURRENT_SOURCE_DIR}/dist_rules.mdltl
     ${CMAKE_CURRENT_SOURCE_DIR}/dist_rules_transmissive_pbr.mdltl
     ${CMAKE_CURRENT_SOURCE_DIR}/dist_rules_ue.mdltl
+    ${CMAKE_CURRENT_SOURCE_DIR}/dist_rules_ovrtx.mdltl
     )
 
 set(_GENERATOR_FILES ${_GENERATOR_FILES_ORIGINAL})
@@ -95,8 +98,8 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E make_directory ${_GENERATED_DIR}
 
 
-    COMMAND ${CMAKE_COMMAND} -E echo ${mdltlc_PATH} --generate --all-errors --output-dir ${_GENERATED_DIR} ${_GENERATOR_FILES}
-    COMMAND ${mdltlc_PATH} --generate --all-errors --output-dir ${_GENERATED_DIR} ${_GENERATOR_FILES}
+    COMMAND ${CMAKE_COMMAND} -E echo ${mdltlc_PATH} --mdl-path ${MDL_SRC_FOLDER}/shaders/mdl --generate --all-errors --output-dir ${_GENERATED_DIR} ${_GENERATOR_FILES}
+    COMMAND ${mdltlc_PATH} --mdl-path ${MDL_SRC_FOLDER}/shaders/mdl --generate --all-errors --output-dir ${_GENERATED_DIR} ${_GENERATOR_FILES}
     DEPENDS
         ${_GENERATOR_FILES_ORIGINAL}
         ${_MDL_CORE_HEADERS}

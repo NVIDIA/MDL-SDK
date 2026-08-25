@@ -59,3 +59,39 @@ Changes:
    for functions with OptForFuzzing attribute
  - added ptx80, ptx81, ptx82, ptx83, ptx84, ptx85, ptx86, ptx87, ptx88, ptx90, ptx91, ptx92, fixed
    sm_90 requieres ptx80
+ - backported llvm-project commit a62b86a3e66f6e328adc88bbd3a0c8b1991d35bb
+   "[AArch64,ELF] Restrict MOVZ/MOVK to non-PIC large code model" (PR #70178) to fix JIT on
+   AArch64 with PIC + large code model (used e.g. on macOS ARM64). Without it the backend emits
+   movz/movk sequences valid only for non-PIC, causing "invalid fixup for movz/movk instruction"
+   (AArch64ELFObjectWriter) at compile time and "Relocation type not implemented yet!"
+   (RuntimeDyldELF) at load time. Under PIC it now falls back to the small code model ADRP
+   sequences, which the ELF writer and RuntimeDyldELF fully support.
+   See mdl/jit/llvm/70178-restrict-movz-movk-non-pic-large.patch
+ - backported llvm-project commit 35b2b24e624bd172d1ef31736d7aef8538c4ac19
+   "Implement reserveAllocationSpace for SectionMemoryManager" (PR #71968), companion to the
+   PR #70178 fix above. Once the AArch64 backend falls back to small code model ADRP sequences
+   under PIC, JIT'd code must reach its GOT/data within the ADRP +/-4GB range. The default
+   SectionMemoryManager allocates code/rodata/rwdata in separate OS allocations, which on
+   large-memory machines (e.g. macOS ARM64) can land more than 4GB apart, triggering
+   "isInt<33>(Result) && \"overflow check failed for relocation\"" in
+   RuntimeDyldELF::resolveAArch64Relocation (R_AARCH64_ADR_PREL_PG_HI21). The backport adds
+   reserveAllocationSpace()/needsToReserveAllocationSpace() so that all sections of an object are
+   placed in a single contiguous reservation, keeping inter-section distances in range. Adapted
+   to 12.0.1: the RuntimeDyld::MemoryManager base uses uint32_t alignments (not the later Align
+   type) and this tree stores the mapper as a reference (MemoryMapper &MMapper). The behavior is
+   opt-in (default off); to enable it the SectionMemoryManager must be constructed with
+   ReserveAlloc = true (e.g. only on AArch64) in generator_jit/generator_jit_llvm.cpp.
+   See mdl/jit/llvm/71968-sectionmemorymanager-reserveallocationspace.patch
+ - neuray-local fix (no upstream commit): in AArch64MCInstLower::LowerSymbolOperand, dispatch on
+   the object file format (Triple::isOSBinFormatMachO) instead of the OS (Triple::isOSDarwin).
+   The JIT forces ELF output even on an arm64-apple-darwin triple; keying off isOSDarwin() made
+   the backend emit MachO relocation specifiers (VK_PAGE, VK_GOTPAGE, ...) into an ELF object.
+   After the PR #70178 fallback to small code model PIC this produced "invalid symbol kind for
+   ADRP relocation" and "invalid fixup for add (uimm12) instruction" (AArch64ELFObjectWriter) and
+   "Relocation type not implemented yet!" (RuntimeDyldELF). Selecting by container format makes
+   the forced-ELF Darwin path use lowerSymbolOperandELF, producing the standard small-model ELF
+   relocations (ADR_PREL_PG_HI21/ADD_ABS_LO12_NC and the GOT pair ADR_GOT_PAGE/LD64_GOT_LO12_NC)
+   that both the ELF writer and RuntimeDyldELF support. This mirrors the X86 backend and does not
+   change the calling convention (the triple stays Darwin, so DarwinPCS is preserved for calls
+   between JIT'd code and the host-compiled MDL runtime).
+   See mdl/jit/llvm/aarch64-mcinstlower-elf-on-darwin.patch

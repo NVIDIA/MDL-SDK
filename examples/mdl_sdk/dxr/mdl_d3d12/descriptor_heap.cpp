@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -49,7 +49,7 @@ Descriptor_heap_handle::Descriptor_heap_handle(Descriptor_heap* heap, size_t ind
 
 // ------------------------------------------------------------------------------------------------
 
-Descriptor_heap_handle Descriptor_heap_handle::create_offset(size_t offset)
+Descriptor_heap_handle Descriptor_heap_handle::create_offset(size_t offset) const
 {
     assert(is_valid());
     return Descriptor_heap_handle(m_descriptor_heap, m_index + offset);
@@ -318,6 +318,36 @@ bool Descriptor_heap::create_unordered_access_view(
 
 // ------------------------------------------------------------------------------------------------
 
+bool Descriptor_heap::create_unordered_access_view(
+    Buffer* buffer,
+    bool raw,
+    const Descriptor_heap_handle& handle)
+{
+    if (!handle.is_valid()) {
+        log_error("Heap Handle invalid while creating UAV to: " +
+            buffer->get_debug_name(), SRC);
+        return false;
+    }
+
+    if (!raw) {
+        log_error("Only raw buffer UAVs supported: " + m_debug_name, SRC);
+        return false;
+    }
+
+    D3D12_UNORDERED_ACCESS_VIEW_DESC desc;
+    if (!buffer->get_unordered_access_view_description_raw(desc))
+        return false;
+
+    std::lock_guard<std::mutex> lock(m_entries_mutex);
+    m_entries[handle].resource_name = buffer->get_debug_name();
+    m_entries[handle].resource_type = Entry::Kind::UAV;
+    m_app->get_device()->CreateUnorderedAccessView(
+        buffer->get_resource(), nullptr, &desc, handle.get_cpu_handle());
+    return true;
+}
+
+// ------------------------------------------------------------------------------------------------
+
 bool Descriptor_heap::create_render_target_view(
     Texture* texture,
     const Descriptor_heap_handle& handle)
@@ -362,6 +392,30 @@ bool Descriptor_heap::create_shader_resource_view(
 
     D3D12_SHADER_RESOURCE_VIEW_DESC desc;
     if (!buffer->get_shader_resource_view_description_raw(desc))
+        return false;
+
+    std::lock_guard<std::mutex> lock(m_entries_mutex);
+    m_entries[handle].resource_name = buffer->get_debug_name();
+    m_entries[handle].resource_type = Entry::Kind::SRV;
+    m_app->get_device()->CreateShaderResourceView(
+        buffer->get_resource(), &desc, handle.get_cpu_handle());
+    return true;
+}
+
+// ------------------------------------------------------------------------------------------------
+
+bool Descriptor_heap::create_shader_resource_view(
+    Index_buffer* buffer,
+    const Descriptor_heap_handle& handle)
+{
+    if (!handle.is_valid()) {
+        log_error("Heap Handle invalid while creating view to: " +
+            buffer->get_debug_name(), SRC);
+        return false;
+    }
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC desc;
+    if (!buffer->get_shader_resource_view_description(desc))
         return false;
 
     std::lock_guard<std::mutex> lock(m_entries_mutex);

@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -210,7 +210,7 @@ struct SceneConstants
     float2 uv_scale;
     float2 uv_offset;
     uint uv_repeat;
-    uint uv_saturate;
+    uint uv_clamp;
 
     // rotation of the environment [0, 1]
     float environment_rotation;
@@ -275,6 +275,7 @@ struct Env_Sample
 #define MATERIAL_CODE_FEATURE_CUTOUT_OPACITY                (1 << 8)
 #define MATERIAL_CODE_FEATURE_CAN_BE_THIN_WALLED            (1 << 9)
 #define MATERIAL_CODE_FEATURE_HAS_AOVS                      (1 << 10)
+#define MATERIAL_CODE_FEATURE_DISPLACEMENT                  (1 << 11)
 
 #define MATERIAL_FLAG_SINGLE_SIDED                          (1 << 0)
 
@@ -384,6 +385,15 @@ struct Material_constants
             return MDL_HAS_AOVS == 1;
         #else
             return has_feature(flags, MATERIAL_CODE_FEATURE_HAS_AOVS);
+        #endif
+    }
+
+    bool has_displacement()
+    {
+        #ifdef MDL_HAS_DISPLACEMENT
+            return MDL_HAS_DISPLACEMENT == 1;
+        #else
+            return has_feature(features, MATERIAL_CODE_FEATURE_DISPLACEMENT);
         #endif
     }
 

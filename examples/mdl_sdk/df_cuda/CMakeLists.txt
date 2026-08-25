@@ -13,7 +13,7 @@
 #    contributors may be used to endorse or promote products derived
 #    from this software without specific prior written permission.
 #
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
 # EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 # IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
 # PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -78,6 +78,8 @@ target_add_cuda_ptx_rule(TARGET ${PROJECT_NAME}
     CUDA_SOURCES
         "example_df_cuda.cu"
         "example_df_cuda_derivatives.cu"
+        "example_df_cuda_spectral.cu"
+        "example_df_cuda_spectral_derivatives.cu"
     FAST_MATH
     )
 

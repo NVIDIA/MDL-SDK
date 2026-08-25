@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -32,16 +32,25 @@
 #define MDL_D3D12_EXAMPLE_DXR_H
 
 #include "mdl_d3d12/base_application.h"
+#include "mdl_d3d12/scene.h"
+
+#include <memory>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace mi { namespace examples { namespace mdl_d3d12
 {
+    class Buffer;
     class Camera_controls;
     struct Descriptor_heap_handle;
     template<typename T> class Dynamic_constant_buffer;
     class Environment;
     class Mdl_material;
     class Mdl_material_description;
+    class Mdl_material_target;
+    class Mesh;
     class Raytracing_pipeline;
+    class Root_signature;
     class Scene;
     class Scene_node;
     class Shader_binding_tables;
@@ -115,7 +124,7 @@ namespace mi { namespace examples { namespace dxr
         DirectX::XMFLOAT2 uv_scale;
         DirectX::XMFLOAT2 uv_offset;
         uint32_t uv_repeat;
-        uint32_t uv_saturate;
+        uint32_t uv_clamp;
 
         /// rotation of the environment [0, 1]
         float environment_rotation;
@@ -254,7 +263,19 @@ namespace mi { namespace examples { namespace dxr
         /// Evaluates and applies the dynamic options.
         void apply_dynamic_options();
 
-        bool update_rendering_pipeline();
+        bool update_scene_data_infos(mdl_d3d12::D3DCommandList* command_list);
+        bool update_rendering_pipeline(bool skip_update_scene_data_infos = false);
+        bool update_displacement_compute_pipelines();
+        bool update_displacement_instance_activation();
+        bool create_normal_generation_pipeline();
+        bool ensure_normal_generation_face_normal_buffer(size_t triangle_count);
+        bool run_displacement_pass(
+            mdl_d3d12::D3DCommandList* command_list,
+            const mdl_d3d12::Render_args& args,
+            bool update_acceleration_structures);
+        void mark_active_displacement_dirty();
+        bool has_active_displacement();
+        bool has_displacement_capability();
 
         mdl_d3d12::Texture* m_frame_buffer;
         mdl_d3d12::Descriptor_heap_handle m_frame_buffer_uav;
@@ -278,6 +299,24 @@ namespace mi { namespace examples { namespace dxr
         mdl_d3d12::Shader_binding_tables* m_shader_binding_table[2];
         size_t m_active_pipeline_index; // pipeline and binding tables can be swapped after updates
         bool m_swap_next_frame;
+
+        std::unique_ptr<mdl_d3d12::Root_signature> m_displacement_root_signature;
+        std::unordered_map<std::string, mdl_d3d12::ComPtr<ID3D12PipelineState>>
+            m_displacement_pipeline_states;
+        uint32_t m_displacement_resource_heap_slot;
+        uint32_t m_displacement_scene_constants_slot;
+        uint32_t m_displacement_constants_slot;
+
+        std::unique_ptr<mdl_d3d12::Root_signature> m_normal_generation_root_signature;
+        mdl_d3d12::ComPtr<ID3D12PipelineState> m_normal_generation_face_pipeline_state;
+        mdl_d3d12::ComPtr<ID3D12PipelineState> m_normal_generation_pipeline_state;
+        uint32_t m_normal_generation_resource_heap_slot;
+        uint32_t m_normal_generation_constants_slot;
+        std::unique_ptr<mdl_d3d12::Buffer> m_normal_generation_face_normal_buffer;
+        mdl_d3d12::Descriptor_heap_handle m_normal_generation_face_normal_uav;
+        size_t m_normal_generation_face_normal_capacity;
+        std::unordered_set<mdl_d3d12::Mesh::Instance*> m_displacement_capable_instances;
+        bool m_displacement_geometry_dirty;
 
         mdl_d3d12::Scene* m_scene;
         mdl_d3d12::Dynamic_constant_buffer<Scene_constants>* m_scene_constants;

@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -157,7 +157,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
             , uv_scale(1.0f, 1.0f)
             , uv_offset(0.0f, 0.0f)
             , uv_repeat(false)
-            , uv_saturate(false)
+            , uv_clamp(false)
             , camera_pose_override(false)
             , camera_position(0.0f, 0.0f, 0.0f)
             , camera_focus(0.0f, 0.0f, 0.0f)
@@ -218,7 +218,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
         DirectX::XMFLOAT2 uv_scale;
         DirectX::XMFLOAT2 uv_offset;
         bool uv_repeat;
-        bool uv_saturate;
+        bool uv_clamp;
         bool camera_pose_override;
         DirectX::XMFLOAT3 camera_position;
         DirectX::XMFLOAT3 camera_focus;

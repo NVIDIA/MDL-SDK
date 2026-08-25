@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -89,6 +89,13 @@ namespace mi { namespace examples { namespace mdl_d3d12
             const std::string& debug_name,
             const std::map<std::string, std::string>* defines = nullptr,
             const std::vector<std::string>& entry_points = {});
+
+        ComPtr<IDxcBlob> compile_compute_shader_from_string(
+            const Base_options* options,
+            const std::string& shader_source,
+            const std::string& debug_name,
+            const std::map<std::string, std::string>* defines = nullptr,
+            const std::string& entry_point = "main");
 
     private:
 

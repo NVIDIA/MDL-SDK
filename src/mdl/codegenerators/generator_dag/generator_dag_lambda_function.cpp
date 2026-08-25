@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -1141,10 +1141,8 @@ void Resource_collector::visit_call(DAG_call const *call)
         if (bdk_multiscatter != IValue_texture::BDK_NONE) {
             // check whether multiscatter_tint is a constant zero color
             DAG_node const *multiscatter_tint = call->get_argument("multiscatter_tint");
-            if (multiscatter_tint != NULL &&
-                    multiscatter_tint->get_kind() == DAG_node::EK_CONSTANT) {
-                IValue_rgb_color const *val = as<IValue_rgb_color>(
-                        cast<DAG_constant>(multiscatter_tint)->get_value());
+            if (multiscatter_tint != NULL && is<DAG_constant>(multiscatter_tint)) {
+                IValue const *val = cast<DAG_constant>(multiscatter_tint)->get_value();
                 if (val != NULL && val->is_zero()) {
                     // no need to use multiscatter data textures for zero multiscatter tint
                     bdk_multiscatter = IValue_texture::BDK_NONE;

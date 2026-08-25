@@ -28,7 +28,7 @@ might work as well.
 <a name="thirdparty-dependencies-libs"></a>
 The following third-party libraries and tools are required to build the MDL SDK:
 
--   <a name="vcpkg">**vcpkg**</a> *(git commit ID 7853666)*  
+-   <a name="vcpkg">**vcpkg**</a> *(git commit ID 9d7f79f)*  
     [Vcpkg](https://vcpkg.io/en/getting-started.html) is the recommended way to
     install other dependencies like Boost, OpenImageIO, GLEW, GLFW, and Vulkan.
     The vcpkg version mentioned above corresponds to the versions mentioned for
@@ -42,14 +42,14 @@ The following third-party libraries and tools are required to build the MDL SDK:
     for further details. Add the vcpkg option *--triplet=x64-windows-static* to
     the *install* command. There is no need to run the *integrate* command.
 
--   **Boost** *(1.90.0)*  
+-   **Boost** *(1.91.0)*  
     Installation via [vcpkg](#vcpkg) is strongly recommended. Install the vcpkg
     packages *boost-algorithm*, *boost-core*, *boost-dynamic-bitset*,
     *boost-functional*, *boost-intrusive*, *boost-tokenizer*, and
     *boost-unordered*. Alternatively, you can also install all Boost modules
     with the *boost* package.
 
--   **OpenImageIO** *(3.0.9.1)*  
+-   **OpenImageIO** *(3.1.14.0)*  
     Installation via [vcpkg](#vcpkg) is strongly recommended. Install the vcpkg
     packages *openimageio[gif,openjpeg,tools,webp]*. You might want to install
     the package *minizip[core,zlib]* first the eliminate some unnecessary
@@ -72,7 +72,7 @@ message. See also the [CMake Options](#cmake-options).
 <a name="doc-build-tools"></a>
 The following tools are used to build the API reference documentation:
 
--   **Doxygen** *(1.9.4)*  
+-   **Doxygen** *(1.17.0)*  
     See the [Doxygen project page](https://sourceforge.net/projects/doxygen/) and
     the [archive of all releases](https://sourceforge.net/projects/doxygen/files/).
 
@@ -125,7 +125,7 @@ of examples is of no interest to you.
     package *glfw3*.  
 
 -   **NVIDIA CUDA Toolkit** *(12.x)*  
-    This dependency is required for all CUDA-based examples.  
+    This dependency is required by the GPU baker and for all CUDA-based examples.  
     Please follow the instructions on the
     [CUDA Developer Website](https://developer.nvidia.com/cuda-toolkit).
 
@@ -146,7 +146,7 @@ features.
     [Arnold Website](https://www.arnoldrenderer.com/arnold/download/) to
     download the Arnold SDK.
 
--   **MaterialX** *(github repository, tag: v1.39.4)*  
+-   **MaterialX** *(github repository, tag: v1.39.5)*  
     This dependency adds MaterialX support to the DXR example.  
     Note that the pre-build packages for Windows from
     [github](https://github.com/AcademySoftwareFoundation/MaterialX/releases)
@@ -519,6 +519,10 @@ The following options enable you to select the components to be built:
     [ON/OFF] enable/disable the MDL SDK itself. Disabling the MDL SDK can be
     useful if you are only interested in MDL Core.
 
+-   **MDL_ENABLE_GPU_BAKER**  
+    [ON/OFF] enable/disable the GPU baker in the MDL SDK. The GPU baker can be
+    disabled to avoid the CUDA dependency.
+
 -   **MDL_BUILD_OPENIMAGEIO_PLUGIN**  
     [ON/OFF] enable/disable the OpenImageIO plugin. Disabling the OpenImageIO
     plugin can be useful for advanced integrations to avoid the dependency on
@@ -568,7 +572,7 @@ The following options affect how various components are built:
 -   **MDL_BUILD_WITHOUT_CUDA_DRIVER**
     [ON/OFF] enable/disable building without a CUDA driver. Enabling this
     option essentially disables the undefined symbol check for CUDA-based
-    examples on Linux, which requires the CUDA driver being installed.
+    components on Linux, which requires the CUDA driver being installed.
 
 -   <a name="mdl-msvc-dynamic-runtime">**MDL_MSVC_DYNAMIC_RUNTIME**</a>  
     [ON/OFF] links binaries on Windows with the dynamic MSVC runtime (/MD or
@@ -617,11 +621,10 @@ To verify the build, run the examples as described above.
 
 The documentation is stored in the `doc/` subdirectory. There are two
 C++ APIs -- the __MDL SDK API__ and the __MDL Core API__ -- for which
-you need to generate the documentation with Doxygen. Please make sure
-to use the specified version 1.9.4.
+you need to generate the documentation with Doxygen.
 
 Additional documents are the MDL Specification (PDF) and the `base.mdl`
-and `core_definitions.mdl` documentation (HTML), which you do not
+and `core_definitions.mdl` documentation (Markdown), which you do not
 need to generate; they are a part of the source code release.
 
 1.  The tools required to build the documentation are listed

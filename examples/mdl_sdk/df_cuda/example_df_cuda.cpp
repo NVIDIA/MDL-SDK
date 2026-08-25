@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -482,6 +482,11 @@ struct Options {
     bool enable_bsdf_flags;
     mi::neuraylib::Df_flags allowed_scatter_mode;
 
+    // spectral rendering
+    bool  enable_spectral;
+    float spectral_min_wavelength;
+    float spectral_max_wavelength;
+
     std::string hdrfile;
     float hdr_rot;
     std::string outputfile;
@@ -513,6 +518,9 @@ struct Options {
     , light_intensity(make_float3(0, 0, 0))
     , enable_bsdf_flags(false)
     , allowed_scatter_mode(mi::neuraylib::DF_FLAGS_ALLOW_REFLECT_AND_TRANSMIT)
+    , enable_spectral(false)
+    , spectral_min_wavelength(400.0f)
+    , spectral_max_wavelength(700.0f)
     , hdrfile("nvidia/sdk_examples/resources/environment.hdr")
     , hdr_rot(0.0f)
     , outputfile("output.exr")
@@ -1014,6 +1022,9 @@ static void render_scene(
     kernel_params.disable_aa = options.no_aa;
     kernel_params.bsdf_data_flags = options.allowed_scatter_mode;
     kernel_params.use_derivatives = options.enable_derivatives;
+    kernel_params.enable_spectral = options.enable_spectral ? 1u : 0u;
+    kernel_params.spectral_min_wavelength = options.spectral_min_wavelength;
+    kernel_params.spectral_max_wavelength = options.spectral_max_wavelength;
     kernel_params.enable_auxiliary_output = options.enable_auxiliary_output;
     kernel_params.display_buffer_index = 0;
 
@@ -1040,8 +1051,15 @@ static void render_scene(
     std::vector<mi::base::Handle<const mi::neuraylib::ITarget_code> > target_codes;
     target_codes.push_back(target_code);
     CUfunction  cuda_function;
-    char const *ptx_name = options.enable_derivatives ?
-        "example_df_cuda_derivatives.ptx" : "example_df_cuda.ptx";
+    char const *ptx_name;
+    if (options.enable_spectral)
+        ptx_name = options.enable_derivatives
+            ? "example_df_cuda_spectral_derivatives.ptx"
+            : "example_df_cuda_spectral.ptx";
+    else
+        ptx_name = options.enable_derivatives
+            ? "example_df_cuda_derivatives.ptx"
+            : "example_df_cuda.ptx";
     std::string ptx_filename = mi::examples::mdl::find_resource_file(
         MDL_EXAMPLE_RELATIVE_DIRECTORY, ptx_name);
     CUmodule cuda_module = build_linked_kernel(
@@ -1532,6 +1550,34 @@ static void render_scene(
                     env_rot_degree -= floorf(env_rot_degree / 360.0f) * 360.f;
                     kernel_params.env_rotation = fmodf(env_rot_degree, 360.0f) / 180.0f * float(M_PI);
                     kernel_params.iteration_start = 0;
+                }
+
+                if (options.enable_spectral)
+                {
+                    ImGui::Dummy(ImVec2(0.0f, 3.0f));
+                    ImGui::Text("Spectral Rendering");
+                    ImGui::Separator();
+
+                    if (ImGui::SliderFloat(
+                            "Min Wavelength (nm)",
+                            &kernel_params.spectral_min_wavelength, 380.0f, 780.0f))
+                    {
+                        if (kernel_params.spectral_max_wavelength <
+                            kernel_params.spectral_min_wavelength)
+                            kernel_params.spectral_max_wavelength =
+                                kernel_params.spectral_min_wavelength;
+                        kernel_params.iteration_start = 0;
+                    }
+                    if (ImGui::SliderFloat(
+                            "Max Wavelength (nm)",
+                            &kernel_params.spectral_max_wavelength, 380.0f, 780.0f))
+                    {
+                        if (kernel_params.spectral_min_wavelength >
+                            kernel_params.spectral_max_wavelength)
+                            kernel_params.spectral_min_wavelength =
+                                kernel_params.spectral_max_wavelength;
+                        kernel_params.iteration_start = 0;
+                    }
                 }
 
                 ImGui::Dummy(ImVec2(0.0f, 3.0f));
@@ -2157,6 +2203,13 @@ static void usage(const char *name)
         << "--fold_ternary_on_df        fold all ternary operators on *df types (default: false)\n"
         << "--allowed_scatter_mode <m>  limits the allowed scatter mode to \"none\", \"reflect\", "
         << "\"transmit\" or \"reflect_and_transmit\" (default: restriction disabled)\n"
+        << "--spectral                  enable spectral rendering mode\n"
+        << "--spectral_min_wavelength <nm>\n"
+        << "                            minimum wavelength for spectral rendering in nm\n"
+        << "                            (default: 400, range: 380-780)\n"
+        << "--spectral_max_wavelength <nm>\n"
+        << "                            maximum wavelength for spectral rendering in nm\n"
+        << "                            (default: 700, range: 380-780)\n"
         << "\n"
         << "Note: material names can end with an '*' as a wildcard\n"
         << "      and alternatively, absolute MDLE file paths can be passed as material name\n";
@@ -2257,6 +2310,12 @@ int MAIN_UTF8(int argc, char* argv[])
                     std::cout << "Unknown allowed_scatter_mode: \"" << mode << "\"" << std::endl;
                     usage(argv[0]);
                 }
+            } else if (strcmp(opt, "--spectral") == 0) {
+                options.enable_spectral = true;
+            } else if (strcmp(opt, "--spectral_min_wavelength") == 0 && i < argc - 1) {
+                options.spectral_min_wavelength = static_cast<float>(atof(argv[++i]));
+            } else if (strcmp(opt, "--spectral_max_wavelength") == 0 && i < argc - 1) {
+                options.spectral_max_wavelength = static_cast<float>(atof(argv[++i]));
             } else if (strcmp(opt, "-v") == 0 || strcmp(opt, "--version") == 0) {
                 print_version_and_exit = true;
             } else {
@@ -2370,6 +2429,7 @@ int MAIN_UTF8(int argc, char* argv[])
 
         mi::base::Handle<mi::neuraylib::IMdl_backend_api> mdl_backend_api(
             neuray->get_api_component<mi::neuraylib::IMdl_backend_api>());
+
         {
             // Initialize the material compiler with 16 result buffer slots ("texture results")
             Material_compiler mc(
@@ -2379,6 +2439,7 @@ int MAIN_UTF8(int argc, char* argv[])
                 transaction.get(),
                 16,
                 options.enable_derivatives,
+                options.enable_spectral,
                 options.fold_ternary_on_df,
                 options.enable_auxiliary_output,
                 options.enable_pdf,

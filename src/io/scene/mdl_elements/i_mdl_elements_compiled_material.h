@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -58,6 +58,7 @@ class IType_factory;
 class IValue;
 class IValue_factory;
 class IValue_list;
+class IValue_resource;
 class Mdl_dag_converter;
 
 /// The class ID for the #Mdl_compiled_material class.
@@ -161,6 +162,12 @@ public:
 
     /// Returns the number of resource table entries.
     mi::Size get_resources_count() const;
+
+    /// Returns the \p index -th resource table entry as resource value.
+    ///
+    /// Due to a technical limitation (see MDL-1503) all texture shapes except TS_BSDF_DATA are
+    /// reported as TS_2D.
+    const IValue_resource* get_resource( mi::Size index) const;
 
     /// Returns the \p index -th resource table entry.
     const Resource_tag_tuple* get_resource_tag_tuple( mi::Size index) const;

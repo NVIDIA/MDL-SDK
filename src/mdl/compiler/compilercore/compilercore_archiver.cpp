@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -48,6 +48,33 @@ bool has_suffix(string const &str, char const *suffix)
 {
     size_t l = strlen(suffix);
     return str.size() >= l && str.compare(str.size() - l, l, suffix) == 0;
+}
+
+/// Return true if an archive entry denotes a relative path that cannot escape its destination.
+/// The caller has to normalize path separators to '/' before calling this function.
+bool is_safe_archive_entry_path(string const &path)
+{
+    if (path.empty() || is_path_absolute(path.c_str())) {
+        return false;
+    }
+
+    size_t start = 0;
+    for (;;) {
+        size_t end = path.find('/', start);
+        if (end == string::npos) {
+            end = path.size();
+        }
+
+        if (end - start == 2 && path[start] == '.' && path[start + 1] == '.') {
+            return false;
+        }
+
+        if (end == path.size()) {
+            break;
+        }
+        start = end + 1;
+    }
+    return true;
 }
 
 static const MDL_zip_container_header header_supported_read_version = MDL_zip_container_header(
@@ -1618,6 +1645,7 @@ void Archive_extractor::extract(
             }
 
             string path(name, get_allocator());
+            normalize_separators(path);
             size_t l = path.size();
 
             bool is_directory = false;
@@ -1625,6 +1653,16 @@ void Archive_extractor::extract(
                 // is a directory
                 is_directory = true;
                 path = path.substr(0, l - 1);
+            }
+
+            if (!is_safe_archive_entry_path(path)) {
+                error(
+                    INVALID_ARCHIVE_ENTRY_PATH,
+                    Error_params(get_allocator())
+                        .add(archive_name)
+                        .add(path.c_str()));
+                fire_event(IArchive_tool_event::EV_INVALID_PATH, path.c_str());
+                continue;
             }
 
             size_t pos = path.rfind('/');

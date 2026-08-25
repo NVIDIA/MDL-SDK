@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -244,6 +244,16 @@ namespace mi { namespace examples { namespace mdl_d3d12
     {
         // --------------------------------------------------------------------
 
+    public:
+        enum class Build_policy
+        {
+            Fast_trace,
+            Fast_build_allow_update
+        };
+
+        // --------------------------------------------------------------------
+
+    private:
         struct Bottom_level
         {
             explicit Bottom_level(std::string debug_name_suffix);
@@ -253,6 +263,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
             std::vector<D3D12_RAYTRACING_GEOMETRY_DESC> m_geometry_descriptions;
             ComPtr<ID3D12Resource> m_blas_resource;
             ComPtr<ID3D12Resource> m_scratch_resource;
+            D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS m_build_flags;
         };
 
         // --------------------------------------------------------------------
@@ -371,15 +382,26 @@ namespace mi { namespace examples { namespace mdl_d3d12
             UINT flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE,
             size_t instance_id = 0);
 
+        void set_build_policy(Build_policy policy);
+        Build_policy get_build_policy() const { return m_build_policy; }
+
         bool set_instance_transform(
             const Instance_handle& instance_handle,
             const DirectX::XMMATRIX& transform);
+
+        bool set_instance_bottom_level_structure(
+            Instance_handle& instance_handle,
+            const BLAS_handle& blas);
 
         /// Constructs the acceleration data structure.
         bool build(D3DCommandList* command_list);
 
         /// Update the acceleration data structure to handle new mesh transformations.
         bool update(D3DCommandList* command_list);
+
+        /// Update bottom-level acceleration structures after vertex buffer changes,
+        /// then update the top-level acceleration structure to reference the refreshed BLASes.
+        bool update_bottom_level_structures(D3DCommandList* command_list);
 
         /// After executing the command list that created to the acceleration structure,
         /// temporary data can be deleted. This will free all temporary buffers that are
@@ -429,12 +451,19 @@ namespace mi { namespace examples { namespace mdl_d3d12
 
         // has to match MultiplierForGeometryContributionToHitGroupIndex in TraceRay()-calls
         size_t m_geometry_contribution_multiplier_to_hit_record_index;
-        ComPtr<ID3D12Resource> m_instance_buffer;
+        size_t m_instance_buffer_index;
+        std::vector<ComPtr<ID3D12Resource>> m_instance_buffers;
         ComPtr<ID3D12Resource> m_top_level_structure;
         ComPtr<ID3D12Resource> m_scratch_resource;
         Descriptor_heap_handle m_top_level_structure_heap_index;
+        Build_policy m_build_policy;
+        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS m_top_level_build_flags;
+        bool m_top_level_rebuild_required;
 
-        bool build_bottom_level_structure(D3DCommandList* command_list, size_t blas_index);
+        bool build_bottom_level_structure(
+            D3DCommandList* command_list,
+            size_t blas_index,
+            bool update);
         bool build_top_level_structure(D3DCommandList* command_list, bool update);
 
         bool allocate_resource(

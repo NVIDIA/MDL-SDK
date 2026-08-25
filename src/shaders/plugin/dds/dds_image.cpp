@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -38,6 +38,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <limits>
 #include <memory>
 #include <string>
 
@@ -47,6 +48,104 @@
 namespace MI {
 
 namespace DDS {
+
+namespace {
+
+bool fits_in_uint32( mi::Size value)
+{
+    return value <= static_cast<mi::Size>( std::numeric_limits<mi::Uint32>::max());
+}
+
+mi::Size compute_layer_size(
+    IMAGE::Pixel_type pixel_type,
+    Dds_compress_fmt compress_format,
+    mi::Uint32 width,
+    mi::Uint32 height)
+{
+    if( compress_format != DXTC_none) {
+        mi::Size blocks_x = (mi::Size( width)  + 3) / 4;
+        mi::Size blocks_y = (mi::Size( height) + 3) / 4;
+        mi::Size block_size = (compress_format == DXTC1) ? 8 : 16;
+        return blocks_x * blocks_y * block_size;
+    }
+
+    return mi::Size( width) * height * IMAGE::get_bytes_per_pixel( pixel_type);
+}
+
+bool has_complete_legacy_cubemap_flags( const Header& header)
+{
+    mi::Uint32 cubemap_flags = DDSF_CUBEMAP | DDSF_CUBEMAP_ALL_FACES;
+    return (header.m_caps2 & cubemap_flags) == cubemap_flags;
+}
+
+bool has_any_legacy_cubemap_flags( const Header& header)
+{
+    return (header.m_caps2 & (DDSF_CUBEMAP | DDSF_CUBEMAP_ALL_FACES)) != 0;
+}
+
+bool is_dx10_cubemap(
+    const Header_dx10& header_dx10,
+    bool is_header_dx10)
+{
+    return is_header_dx10 && (header_dx10.m_misc_flag & DDS_RESOURCE_MISC_TEXTURECUBE);
+}
+
+bool normalize_header_dimensions(
+    Header& header,
+    const Header_dx10& header_dx10,
+    bool is_header_dx10)
+{
+    bool is_legacy_cubemap = has_complete_legacy_cubemap_flags( header);
+    if( !is_legacy_cubemap && has_any_legacy_cubemap_flags( header)) {
+        log( mi::base::MESSAGE_SEVERITY_ERROR,
+            "Unsupported DDS cubemap without all six face flags.");
+        return false;
+    }
+
+    bool is_cubemap = is_legacy_cubemap || is_dx10_cubemap( header_dx10, is_header_dx10);
+    if( is_cubemap) {
+        if( header.m_depth == 0)
+            header.m_depth = 6;
+        else if( header.m_depth != 6) {
+            log( mi::base::MESSAGE_SEVERITY_ERROR,
+                "DDS cubemaps must contain exactly six faces.");
+            return false;
+        }
+    } else if( header.m_depth == 0) {
+        // Apparently, there are some DDS files where this value is incorrectly set to 0 even though
+        // the files contains at least one layer.
+        header.m_depth = 1;
+    }
+
+    if( header.m_width == 0 || header.m_height == 0 || header.m_depth == 0) {
+        log( mi::base::MESSAGE_SEVERITY_ERROR, "DDS image dimensions must be non-zero.");
+        return false;
+    }
+
+    // For volume textures with more than one miplevel skip higher miplevels. The problem is that in
+    // DDS the depth of volume textures is halved in each miplevel, but it is constant in neuray
+    // (only width and height are halved).
+    if( header.m_depth > 1 && !is_cubemap && header.m_mipmap_count > 1)
+        header.m_mipmap_count = 1;
+
+    return true;
+}
+
+Texture_type get_texture_type(
+    const Header& header,
+    const Header_dx10& header_dx10,
+    bool is_header_dx10)
+{
+    if( has_complete_legacy_cubemap_flags( header))
+        return TEXTURE_CUBEMAP;
+    if( is_dx10_cubemap( header_dx10, is_header_dx10))
+        return TEXTURE_CUBEMAP;
+    if( header.m_caps2 & DDSF_VOLUME)
+        return TEXTURE_3D;
+    return TEXTURE_FLAT;
+}
+
+} // namespace
 
 
 Image::Image()
@@ -124,26 +223,11 @@ bool Image::load_header(
     if( header.m_mipmap_count == 0)
         header.m_mipmap_count = 1;
 
-    // Apparently, there are some DDS files where this value is incorrectly set to 0 even though
-    // the files contains at least one layer.
-    if( header.m_depth == 0) {
-        // Recognize cubemaps only if all six faces are present.
-        mi::Uint32 cubemap_flags = DDSF_CUBEMAP | DDSF_CUBEMAP_ALL_FACES;
-        header.m_depth = ((header.m_caps2 & cubemap_flags) == cubemap_flags) ? 6 : 1;
-    }
-
-    if( header.m_width == 0 || header.m_height == 0 || header.m_depth == 0) {
-        log( mi::base::MESSAGE_SEVERITY_ERROR, "DDS image dimensions must be non-zero.");
-        return false;
-    }
-
-    // For volume textures with more than one miplevel skip higher miplevels. The problem is that in
-    // DDS the depth of volume textures is halved in each miplevel, but it is constant in neuray
-    // (only width and height are halved).
-    if( header.m_depth > 1 && (header.m_caps2 & DDSF_CUBEMAP) == 0 && header.m_mipmap_count > 1)
-        header.m_mipmap_count = 1;
-
     compress_format = DXTC_none;
+    auto validate_header = [&]() {
+        return normalize_header_dimensions( header, header_dx10, is_header_dx10)
+            && validate_surface_sizes( header, pixel_type, compress_format);
+    };
 
 #define DDS_UNSUPPORTED(format) \
     case DDSF_##format: \
@@ -155,7 +239,7 @@ bool Image::load_header(
         log( mi::base::MESSAGE_SEVERITY_WARNING, "Experimental DDS subformat " #format "."); \
         pixel_type = our_format; \
         gamma = get_default_gamma( pixel_type); \
-        return true;
+        return validate_header();
 
     // Check the pixel format
     if( header.m_ddspf.m_flags & DDSF_FOURCC) {
@@ -167,15 +251,15 @@ bool Image::load_header(
             case DDSF_R32F:
                 pixel_type = IMAGE::PT_FLOAT32;
                 gamma = get_default_gamma( pixel_type);
-                return true;
+                return validate_header();
             case DDSF_A32B32G32R32F:
                 pixel_type = IMAGE::PT_COLOR; //-V1037 PVS
                 gamma = get_default_gamma( pixel_type);
-                return true;
+                return validate_header();
             case DDSF_A16B16G16R16F:
                 pixel_type = IMAGE::PT_COLOR;            // Note: the half data needs to be
                 gamma = get_default_gamma( pixel_type);  // converted to float first,
-                return true;
+                return validate_header();
 
             // Unsupported floating point formats
             DDS_UNSUPPORTED( R16F);
@@ -187,22 +271,23 @@ bool Image::load_header(
                 compress_format = DXTC1;
                 pixel_type = IMAGE::PT_RGBA;
                 gamma = get_default_gamma( pixel_type);
-                return true;
+                return validate_header();
             case FOURCC_DXT3:
                 compress_format = DXTC3;
                 pixel_type = IMAGE::PT_RGBA;
                 gamma = get_default_gamma( pixel_type);
-                return true;
+                return validate_header();
             case FOURCC_DXT5:
                 compress_format = DXTC5;
                 pixel_type = IMAGE::PT_RGBA;
                 gamma = get_default_gamma( pixel_type);
-                return true;
+                return validate_header();
 
             // DX10 header
             case FOURCC_DX10: {
                 is_header_dx10 = true;
-                return load_header_dx10( reader, header_dx10, pixel_type, gamma);
+                return load_header_dx10( reader, header_dx10, pixel_type, gamma)
+                    && validate_header();
             }
 
 
@@ -259,25 +344,25 @@ bool Image::load_header(
     if( header.m_ddspf.m_flags == DDSF_RGBA && header.m_ddspf.m_rgb_bit_count == 32) {
         pixel_type = IMAGE::PT_RGBA;
         gamma = get_default_gamma( pixel_type);
-        return true;
+        return validate_header();
     }
 
     if( header.m_ddspf.m_flags == DDSF_RGB  && header.m_ddspf.m_rgb_bit_count == 32) {
         pixel_type = IMAGE::PT_RGBA;
         gamma = get_default_gamma( pixel_type);
-        return true;
+        return validate_header();
     }
 
     if( header.m_ddspf.m_flags == DDSF_RGB  && header.m_ddspf.m_rgb_bit_count == 24) {
         pixel_type = IMAGE::PT_RGB;
         gamma = get_default_gamma( pixel_type);
-        return true;
+        return validate_header();
     }
 
     if( header.m_ddspf.m_rgb_bit_count == 8) {
         pixel_type = IMAGE::PT_SINT8;
         gamma = get_default_gamma( pixel_type);
-        return true;
+        return validate_header();
     }
 
     return false;
@@ -320,17 +405,23 @@ bool Image::load( mi::neuraylib::IReader* reader)
         reader, header, header_dx10, is_header_dx10, m_pixel_type, m_gamma, m_compress_format))
         return false;
 
+    m_texture_type = get_texture_type( header, header_dx10, is_header_dx10);
 
-    // Set the texture type (needed for is_cubemap()).
-    m_texture_type = TEXTURE_FLAT;
-    const mi::Uint32 cubemap_flags = DDSF_CUBEMAP | DDSF_CUBEMAP_ALL_FACES;
-    if( (header.m_caps2 & cubemap_flags) == cubemap_flags)
-        m_texture_type = TEXTURE_CUBEMAP;
-    if( header.m_caps2 & DDSF_VOLUME)
-        m_texture_type = TEXTURE_3D;
 
     bool halfs =    (header.m_ddspf.m_flags & DDSF_FOURCC)
                  && (header.m_ddspf.m_four_cc == DDSF_A16B16G16R16F);
+
+    if( !is_compressed() && (header.m_flags & DDSF_PITCH)) {
+        mi::Size tight_pitch = get_layer_size( header.m_width, header.m_height) / header.m_height;
+        if( halfs)
+            tight_pitch /= 2;
+        if( header.m_pitch != tight_pitch) {
+            std::string message = "Ignoring DDS row pitch " + std::to_string( header.m_pitch)
+                + " because it does not match tightly packed row size "
+                + std::to_string( tight_pitch) + '.';
+            log( mi::base::MESSAGE_SEVERITY_WARNING, message.c_str());
+        }
+    }
 
     if( !is_cubemap()) {
 
@@ -341,7 +432,7 @@ bool Image::load( mi::neuraylib::IReader* reader)
         // Loop over all miplevels
         for( mi::Uint32 s = 0; s < header.m_mipmap_count; ++s) {
 
-            mi::Uint32 size = get_layer_size( width, height) * depth;
+            mi::Size size = get_layer_size( width, height) * depth;
 
             // Import miplevel
             if( halfs)
@@ -359,7 +450,8 @@ bool Image::load( mi::neuraylib::IReader* reader)
 
             // Create miplevel
             Surface surface( width, height, depth, buffer.size(), buffer.data());
-            flip_surface( surface);
+            if( !is_compressed())
+                flip_surface( surface);
 
             m_texture.add_surface( surface);
 
@@ -377,7 +469,7 @@ bool Image::load( mi::neuraylib::IReader* reader)
 
         for( mi::Uint32 s = 0; s < header.m_mipmap_count; ++s) {
 
-            mi::Uint32 size = get_layer_size( width, height) * depth;
+            mi::Size size = get_layer_size( width, height) * depth;
             Surface surface( width, height, depth, size, nullptr);
             m_texture.add_surface( surface);
 
@@ -394,7 +486,7 @@ bool Image::load( mi::neuraylib::IReader* reader)
             // Loop over all miplevels
             for( mi::Uint32 s = 0; s < header.m_mipmap_count; ++s) {
 
-                mi::Uint32 size = get_layer_size( width, height);
+                mi::Size size = get_layer_size( width, height);
 
                 // Import miplevel of this face
                 if( halfs)
@@ -451,10 +543,16 @@ bool Image::save( mi::neuraylib::IWriter* writer)
 
     if( is_compressed()) {
         header.m_flags |= DDSF_LINEARSIZE;
-        header.m_pitch = m_texture.get_surface( 0).get_size();
+        mi::Size pitch = m_texture.get_surface( 0).get_size();
+        if( !fits_in_uint32( pitch))
+            return false;
+        header.m_pitch = static_cast<mi::Uint32>( pitch);
     } else {
         header.m_flags |= DDSF_PITCH;
-        header.m_pitch = ((get_width() * get_components() * 8 + 31) & ~31) >> 3;
+        mi::Size pitch = static_cast<mi::Size>( get_width()) * IMAGE::get_bytes_per_pixel( m_pixel_type);
+        if( !fits_in_uint32( pitch))
+            return false;
+        header.m_pitch = static_cast<mi::Uint32>( pitch);
     }
 
     if( m_texture_type == TEXTURE_3D) {
@@ -564,7 +662,7 @@ bool Image::save( mi::neuraylib::IWriter* writer)
             for( mi::Size s = 0; s < m_texture.get_num_surfaces(); ++s) {
 
                 Surface& surface = m_texture.get_surface( s);
-                mi::Uint32 size = get_layer_size( width, height);
+                mi::Size size = get_layer_size( width, height);
                 mi::Uint8* pixels = surface.get_pixels() + face * size;
 
                 // Export the miplevel of this face
@@ -586,19 +684,33 @@ bool Image::save( mi::neuraylib::IWriter* writer)
     return true;
 }
 
-mi::Uint32 Image::get_layer_size( mi::Uint32 width, mi::Uint32 height)
+mi::Size Image::get_layer_size( mi::Uint32 width, mi::Uint32 height) const
 {
-    return is_compressed()
-        ? ((width+3)/4) * ((height+3)/4) * (m_compress_format == DXTC1 ? 8 : 16)
-            : width * height * IMAGE::get_bytes_per_pixel( m_pixel_type);
+    return compute_layer_size( m_pixel_type, m_compress_format, width, height);
+}
+
+bool Image::validate_surface_sizes(
+    const Header& header,
+    IMAGE::Pixel_type pixel_type,
+    Dds_compress_fmt compress_format)
+{
+    mi::Size layer_size
+        = compute_layer_size( pixel_type, compress_format, header.m_width, header.m_height);
+    mi::Size size = layer_size * header.m_depth;
+    if( !fits_in_uint32( size)) {
+        log( mi::base::MESSAGE_SEVERITY_ERROR, "DDS image data is too large.");
+        return false;
+    }
+
+    return true;
 }
 
 void Image::flip_surface( Surface& surface)
 {
     if( !is_compressed()) {
 
-        mi::Uint32 layer_size = surface.get_size() / surface.get_depth();
-        mi::Uint32 row_size   = layer_size/surface.get_height();
+        mi::Size layer_size = surface.get_size() / surface.get_depth();
+        mi::Size row_size   = layer_size/surface.get_height();
 
         for( mi::Uint32 z = 0; z < surface.get_depth(); ++z) {
 
@@ -634,10 +746,10 @@ void Image::flip_surface( Surface& surface)
                 return;
         }
 
-        mi::Uint32 blocks_x   = surface.get_width()  / 4;
-        mi::Uint32 blocks_y   = surface.get_height() / 4;
-        mi::Uint32 row_size   = blocks_x * block_size;
-        mi::Uint32 layer_size = row_size * blocks_y;
+        mi::Uint32 blocks_x = (surface.get_width()  - 1) / 4 + 1;
+        mi::Uint32 blocks_y = (surface.get_height() - 1) / 4 + 1;
+        mi::Size row_size   = mi::Size( blocks_x) * block_size;
+        mi::Size layer_size = row_size * blocks_y;
 
         for( mi::Uint32 z = 0; z < surface.get_depth(); ++z) {
 
@@ -746,12 +858,12 @@ void Image::reorder_rgb_or_rgba( Header& header)
     for( mi::Uint32 s = 0; s < header.m_mipmap_count; ++s) {
 
         Surface& surface = m_texture.get_surface( s);
-        mi::Uint32 layer_size  = surface.get_size() / surface.get_depth();
-        mi::Uint32 row_size    = layer_size / surface.get_height();
+        mi::Size layer_size  = surface.get_size() / surface.get_depth();
+        mi::Size row_size    = layer_size / surface.get_height();
 
         for( mi::Uint32 z = 0; z < surface.get_depth(); ++z) {
 
-            mi::Uint32 offset = z * layer_size;
+            mi::Size offset   = z * layer_size;
             mi::Uint8* top    = surface.get_pixels() + offset;
 
             for( mi::Uint32 y = 0; y < surface.get_height(); ++y) {
@@ -806,7 +918,7 @@ void Image::reorder_rgb_or_rgba( Header& header)
         header.m_ddspf.m_a_bit_mask = 0xff000000;
 }
 
-void Image::swap( void* addr1, void* addr2, mi::Uint32 size)
+void Image::swap( void* addr1, void* addr2, mi::Size size)
 {
     std::vector<mi::Uint8> tmp((mi::Uint8*)addr1, (mi::Uint8*)addr1+size);
     memcpy( addr1, addr2, size);

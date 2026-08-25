@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -213,6 +213,8 @@ struct MDLMaterial
     , radiance_hit_group(radiance_hit_group)
     , callable_base_index(callable_base_index)
     , d_mdl_textures(0)
+    , d_mdl_frames(0)
+    , d_mdl_tex_descs(0)
     , d_mdl_tex_handler(0)
     , d_scene_data_infos(0)
     {
@@ -226,11 +228,15 @@ struct MDLMaterial
     , mdl_textures(std::move(other.mdl_textures))
     , scene_data_infos(std::move(other.scene_data_infos))
     , d_mdl_textures(other.d_mdl_textures)
+    , d_mdl_frames(other.d_mdl_frames)
+    , d_mdl_tex_descs(other.d_mdl_tex_descs)
     , d_mdl_tex_handler(other.d_mdl_tex_handler)
     , d_scene_data_infos(other.d_scene_data_infos)
     {
         other.mat_info = nullptr;
         other.d_mdl_textures = 0;
+        other.d_mdl_frames = 0;
+        other.d_mdl_tex_descs = 0;
         other.d_mdl_tex_handler = 0;
         other.d_scene_data_infos = 0;
     }
@@ -241,6 +247,10 @@ struct MDLMaterial
             delete mat_info;
         if (d_mdl_tex_handler)
             cudaFree(reinterpret_cast<void*>(d_mdl_tex_handler));
+        if (d_mdl_tex_descs)
+            cudaFree(reinterpret_cast<void*>(d_mdl_tex_descs));
+        if (d_mdl_frames)
+            cudaFree(reinterpret_cast<void*>(d_mdl_frames));
         if (d_mdl_textures)
             cudaFree(reinterpret_cast<void*>(d_mdl_textures));
         if (d_scene_data_infos)
@@ -257,9 +267,40 @@ struct MDLMaterial
     CUdeviceptr get_device_texture_handler()
     {
         if (!d_mdl_tex_handler) {
+            // Wrap each texture in a trivial 1-frame / 1-tile descriptor — the
+            // examples use only single (non-uvtile, non-animated) textures. The
+            // per-frame array and the flat per-tile array are uploaded first so
+            // the descriptors can reference their device addresses.
+            const size_t count = mdl_textures.size();
             Texture_handler tex_handler = {};
-            tex_handler.num_textures = mdl_textures.size();
-            tex_handler.textures = reinterpret_cast<Texture const *>(get_device_textures());
+            tex_handler.num_textures = count;
+            if (count > 0) {
+                std::vector<Tex_frame>    frames(count);
+                std::vector<Texture_desc> descs(count);
+                for (size_t k = 0; k < count; ++k) {
+                    frames[k].frame_number     = 0;
+                    frames[k].grid.min_u       = 0;
+                    frames[k].grid.min_v       = 0;
+                    frames[k].grid.count_u     = 1;
+                    frames[k].grid.count_v     = 1;
+                    frames[k].grid.tile_offset = static_cast<unsigned>(k);
+                }
+
+                CUdeviceptr d_tiles = get_device_textures();
+                d_mdl_frames = gpuMemDup(frames);
+                for (size_t k = 0; k < count; ++k) {
+                    descs[k].frames      = reinterpret_cast<Tex_frame const *>(d_mdl_frames) + k;
+                    descs[k].tiles       = reinterpret_cast<Texture const *>(d_tiles);
+                    descs[k].is_valid    = 1;
+                    descs[k].is_uvtile   = 0;
+                    descs[k].num_frames  = 1;
+                    descs[k].first_frame = 0;
+                    descs[k].last_frame  = 0;
+                    descs[k].pad         = 0;
+                }
+                d_mdl_tex_descs = gpuMemDup(descs);
+                tex_handler.texture_descs = reinterpret_cast<Texture_desc const *>(d_mdl_tex_descs);
+            }
             d_mdl_tex_handler = gpuMemDup(tex_handler);
         }
         return d_mdl_tex_handler;
@@ -280,6 +321,8 @@ struct MDLMaterial
 
 private:
     CUdeviceptr                 d_mdl_textures;
+    CUdeviceptr                 d_mdl_frames;
+    CUdeviceptr                 d_mdl_tex_descs;
     CUdeviceptr                 d_mdl_tex_handler;
     CUdeviceptr                 d_scene_data_infos;
 };

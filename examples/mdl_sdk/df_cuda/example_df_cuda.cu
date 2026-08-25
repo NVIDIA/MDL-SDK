@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -32,6 +32,67 @@
 #include <math.h>
 
 #include "example_df_cuda.h"
+
+#ifdef ENABLE_SPECTRAL
+// Suppress the dummy spectral runtime stubs in texture_support_cuda.h. We provide real
+// implementations further down that read the wavelengths from the spectral shading state
+// and perform proper spectral upsampling.
+#define TEX_SUPPORT_NO_DUMMY_SPECTRAL
+
+// Pre-include the neuraylib target types so we can forward-declare the real spectral runtime
+// functions before texture_support_cuda.h initializes the texture vtable that references them.
+#include <mi/neuraylib/target_code_types.h>
+
+extern "C" __device__ void rgb_to_spectral_ior(
+    mi::neuraylib::tct_spectral_sample             *result,
+    mi::neuraylib::Texture_handler_base const      *self_base,
+    mi::neuraylib::Shading_state_material          *state,
+    float const                                     rgb[3]);
+extern "C" __device__ void rgb_to_spectral_ior_deriv(
+    mi::neuraylib::tct_spectral_sample                  *result,
+    mi::neuraylib::Texture_handler_base const           *self_base,
+    mi::neuraylib::Shading_state_material_with_derivs   *state,
+    float const                                          rgb[3]);
+extern "C" __device__ void rgb_to_spectral_reflectance(
+    mi::neuraylib::tct_spectral_sample             *result,
+    mi::neuraylib::Texture_handler_base const      *self_base,
+    mi::neuraylib::Shading_state_material          *state,
+    float const                                     rgb[3]);
+extern "C" __device__ void rgb_to_spectral_reflectance_deriv(
+    mi::neuraylib::tct_spectral_sample                  *result,
+    mi::neuraylib::Texture_handler_base const           *self_base,
+    mi::neuraylib::Shading_state_material_with_derivs   *state,
+    float const                                          rgb[3]);
+extern "C" __device__ void rgb_to_spectral_luminance(
+    mi::neuraylib::tct_spectral_sample             *result,
+    mi::neuraylib::Texture_handler_base const      *self_base,
+    mi::neuraylib::Shading_state_material          *state,
+    float const                                     rgb[3]);
+extern "C" __device__ void rgb_to_spectral_luminance_deriv(
+    mi::neuraylib::tct_spectral_sample                  *result,
+    mi::neuraylib::Texture_handler_base const           *self_base,
+    mi::neuraylib::Shading_state_material_with_derivs   *state,
+    float const                                          rgb[3]);
+extern "C" __device__ void rgb_to_spectral_volume_coefficient(
+    mi::neuraylib::tct_spectral_sample             *result,
+    mi::neuraylib::Texture_handler_base const      *self_base,
+    mi::neuraylib::Shading_state_material          *state,
+    float const                                     rgb[3]);
+extern "C" __device__ void rgb_to_spectral_volume_coefficient_deriv(
+    mi::neuraylib::tct_spectral_sample                  *result,
+    mi::neuraylib::Texture_handler_base const           *self_base,
+    mi::neuraylib::Shading_state_material_with_derivs   *state,
+    float const                                          rgb[3]);
+extern "C" __device__ void get_wavelengths(
+    mi::neuraylib::tct_spectral_sample             *result,
+    mi::neuraylib::Texture_handler_base const      *self_base,
+    mi::neuraylib::Shading_state_material          *state);
+extern "C" __device__ void get_wavelengths_deriv(
+    mi::neuraylib::tct_spectral_sample                  *result,
+    mi::neuraylib::Texture_handler_base const           *self_base,
+    mi::neuraylib::Shading_state_material_with_derivs   *state);
+#endif
+
 #include "texture_support_cuda.h"
 
 // To reuse this sample code for the MDL SDK and MDL Core the corresponding namespaces are used.
@@ -49,6 +110,20 @@
 // Spectral rendering enabled or disabled
 #define TCCM_RGB 0               // No spectral sampling, use RGB
 #define TCCM_SPECTRAL_SAMPLING 1 // Spectral sampling, use spectral samples 
+
+// Color mode for the BSDF/EDF data structures.
+// The MDL backend's "libbsdf_enable_spectral" option controls which color mode the generated
+// MDL functions expect, so this define MUST match how the PTX file was generated
+// (see CMakeLists.txt and the host side).
+#ifdef ENABLE_SPECTRAL
+#define BSDF_TCCM TCCM_SPECTRAL_SAMPLING
+typedef tct_spectral_sample Color_sample;
+typedef tct_spectral_sample Pdf_sample;
+#else
+#define BSDF_TCCM TCCM_RGB
+typedef float3 Color_sample;
+typedef float  Pdf_sample;
+#endif
 
 // for LPE support there different options for the renderer, for CUDA a renderer provided buffer
 // can be used to retrieve the contributions of the individual handles (named lobes)
@@ -79,7 +154,11 @@ typedef Edf_sample_function_with_derivs                     Edf_sample_func;
 typedef Edf_evaluate_function_with_derivs                   Edf_evaluate_func;
 typedef Edf_pdf_function_with_derivs                        Edf_pdf_func;
 typedef Edf_auxiliary_function_with_derivs                  Edf_auxiliary_func;
+#ifdef ENABLE_SPECTRAL
+typedef Shading_state_material_spectral_with_derivs         Mdl_state;
+#else
 typedef Shading_state_material_with_derivs                  Mdl_state;
+#endif
 typedef Texture_handler_deriv                               Tex_handler;
 #define TEX_VTABLE                                          tex_deriv_vtable
 #else
@@ -94,7 +173,11 @@ typedef Edf_sample_function                                 Edf_sample_func;
 typedef Edf_evaluate_function                               Edf_evaluate_func;
 typedef Edf_pdf_function                                    Edf_pdf_func;
 typedef Edf_auxiliary_function                              Edf_auxiliary_func;
+#ifdef ENABLE_SPECTRAL
+typedef Shading_state_material_spectral                     Mdl_state;
+#else
 typedef Shading_state_material                              Mdl_state;
+#endif
 typedef Texture_handler                                     Tex_handler;
 #define TEX_VTABLE                                          tex_vtable
 #endif
@@ -102,8 +185,8 @@ typedef Texture_handler                                     Tex_handler;
 // Custom structure representing the resources used by the generated code of a target code object.
 struct Target_code_data
 {
-    size_t       num_textures;      // number of elements in the textures field
-    Texture      *textures;         // a list of Texture objects, if used
+    size_t       num_textures;      // number of elements in the texture_descs field
+    Texture_desc *texture_descs;    // a list of Texture_desc objects, if used
 
     size_t       num_mbsdfs;        // number of elements in the mbsdfs field
     Mbsdf        *mbsdfs;           // a list of mbsdfs objects, if used
@@ -177,7 +260,7 @@ struct Mdl_resource_handler
         const Kernel_params& params, const Mdl_function_index& index)
     {
         m_tex_handler.num_textures = params.tc_data[index.x].num_textures;
-        m_tex_handler.textures = params.tc_data[index.x].textures;
+        m_tex_handler.texture_descs = params.tc_data[index.x].texture_descs;
         m_tex_handler.num_mbsdfs = params.tc_data[index.x].num_mbsdfs;
         m_tex_handler.mbsdfs = params.tc_data[index.x].mbsdfs;
         m_tex_handler.num_lightprofiles = params.tc_data[index.x].num_lightprofiles;
@@ -342,6 +425,340 @@ __device__ inline float3 cross(const float3 &u, const float3 &v)
         u.x * v.y - u.y * v.x);
 }
 
+//-------------------------------------------------------------------------------------------------
+// Color_sample / Pdf_sample helpers
+//
+// In RGB mode Color_sample == float3 / Pdf_sample == float, in spectral mode they are
+// tct_spectral_sample. The helpers below abstract over both so the path tracer can use the same
+// code regardless of color mode.
+//-------------------------------------------------------------------------------------------------
+
+#ifdef ENABLE_SPECTRAL
+
+__device__ inline tct_spectral_sample make_color_sample(float v)
+{
+    tct_spectral_sample s;
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        s.values[i] = v;
+    return s;
+}
+
+__device__ inline tct_spectral_sample addcc(
+    const tct_spectral_sample &a, const tct_spectral_sample &b)
+{
+    tct_spectral_sample r;
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        r.values[i] = a.values[i] + b.values[i];
+    return r;
+}
+
+__device__ inline tct_spectral_sample mulcc(
+    const tct_spectral_sample &a, const tct_spectral_sample &b)
+{
+    tct_spectral_sample r;
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        r.values[i] = a.values[i] * b.values[i];
+    return r;
+}
+
+__device__ inline tct_spectral_sample mulcf(const tct_spectral_sample &a, float b)
+{
+    tct_spectral_sample r;
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        r.values[i] = a.values[i] * b;
+    return r;
+}
+
+__device__ inline float get_main_pdf(const tct_spectral_sample &p)
+{
+    return p.values[0];
+}
+
+// D65 standard illuminant SPD, 360-830 nm in 5 nm steps (95 entries).
+// Scaled so that the luminance integral (Y channel) equals 1.
+__constant__ float s_cie_d65[95] = {
+    6.462114e-06f, 6.839740e-06f, 7.217367e-06f, 7.070938e-06f,
+    6.924510e-06f, 7.248223e-06f, 7.571951e-06f, 9.519149e-06f,
+    1.146636e-05f, 1.207124e-05f, 1.267613e-05f, 1.281093e-05f,
+    1.294573e-05f, 1.247813e-05f, 1.201053e-05f, 1.327021e-05f,
+    1.452989e-05f, 1.537108e-05f, 1.621241e-05f, 1.626811e-05f,
+    1.632381e-05f, 1.611929e-05f, 1.591492e-05f, 1.598850e-05f,
+    1.606207e-05f, 1.556936e-05f, 1.507664e-05f, 1.511419e-05f,
+    1.515188e-05f, 1.504436e-05f, 1.493684e-05f, 1.472817e-05f,
+    1.451950e-05f, 1.472027e-05f, 1.492118e-05f, 1.469367e-05f,
+    1.446616e-05f, 1.444122e-05f, 1.441642e-05f, 1.413611e-05f,
+    1.385581e-05f, 1.360185e-05f, 1.334788e-05f, 1.331004e-05f,
+    1.327220e-05f, 1.278016e-05f, 1.228811e-05f, 1.237960e-05f,
+    1.247109e-05f, 1.244288e-05f, 1.241468e-05f, 1.228302e-05f,
+    1.215136e-05f, 1.184583e-05f, 1.154031e-05f, 1.156876e-05f,
+    1.159720e-05f, 1.134278e-05f, 1.108836e-05f, 1.110137e-05f,
+    1.111438e-05f, 1.125732e-05f, 1.140026e-05f, 1.112358e-05f,
+    1.084691e-05f, 1.025367e-05f, 9.660451e-06f, 9.791236e-06f,
+    9.922021e-06f, 1.011183e-05f, 1.030166e-05f, 9.418694e-06f,
+    8.535733e-06f, 9.109474e-06f, 9.683216e-06f, 1.004356e-05f,
+    1.040391e-05f, 9.607591e-06f, 8.811283e-06f, 7.621443e-06f,
+    6.431617e-06f, 7.844023e-06f, 9.256429e-06f, 9.019315e-06f,
+    8.782200e-06f, 8.846020e-06f, 8.909840e-06f, 8.573684e-06f,
+    8.237542e-06f, 7.718434e-06f, 7.199340e-06f, 7.579100e-06f,
+    7.958860e-06f, 8.157816e-06f, 8.356785e-06f
+};
+
+__device__ inline float lookup_d65(float lambda)
+{
+    float f = (lambda - 360.0f) / (830.0f - 360.0f);
+    if (f < 0.0f || f > 1.0f)
+        return 0.0f;
+    f *= float(95 - 1);
+    int b0 = min(int(f), 95 - 1);
+    int b1 = (b0 < (95 - 1)) ? (b0 + 1) : b0;
+    float w1 = f - float(b0);
+    return s_cie_d65[b0] * (1.0f - w1) + s_cie_d65[b1] * w1;
+}
+
+// RGB-to-spectral conversion.
+// Uses Jendersie - "Fast Spectral Upsampling of Volume Attenuation Coefficients".
+__device__ inline tct_spectral_sample rgb_to_spectral(
+    const float3 &rgb, const tct_spectral_sample &lambdas, bool is_emission)
+{
+    tct_spectral_sample s;
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+    {
+        float lambda = lambdas.values[i];
+        s.values[i] = (lambda < 485.0f) ? rgb.z : ((lambda < 595.9f) ? rgb.y : rgb.x);
+
+        // for emission, apply spectral illuminant
+        if (is_emission)
+            s.values[i] *= lookup_d65(lambda);
+    }
+    return s;
+}
+
+// Convert a spectral sample to linear RGB.
+__device__ inline float3 spectral_to_rgb(
+    const tct_spectral_sample &values,
+    const tct_spectral_sample &lambdas,
+    bool is_reflectivity,
+    const Kernel_params &params)
+{
+    float3 xyz = make_float3(0.0f, 0.0f, 0.0f);
+
+    // weight by CIE XYZ color matching functions
+    // (Wyman et al - "Simple Analytic Approximations to the CIE XYZ Color Matching Functions")
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+    {
+        const float lambda = lambdas.values[i];
+        if (lambda < 360.0f || lambda > 830.0f)
+            continue;
+
+        // for reflectivity values multiply by the spectral whitepoint of the RGB color space
+        // (normalized to luminance 1)
+        const float factor = is_reflectivity ? lookup_d65(lambda) : 1.0f;
+        {
+            const float p1 = (lambda - 442.0f) * ((lambda < 442.0f) ? 0.0624f : 0.0374f);
+            const float p2 = (lambda - 599.8f) * ((lambda < 599.8f) ? 0.0264f : 0.0323f);
+            const float p3 = (lambda - 501.1f) * ((lambda < 501.1f) ? 0.0490f : 0.0382f);
+            xyz.x += (0.362f * expf(-0.5f * p1 * p1)
+                    + 1.056f * expf(-0.5f * p2 * p2)
+                    - 0.065f * expf(-0.5f * p3 * p3)) * values.values[i] * factor;
+        }
+        {
+            const float p1 = (lambda - 568.8f) * ((lambda < 568.8f) ? 0.0213f : 0.0247f);
+            const float p2 = (lambda - 530.9f) * ((lambda < 530.9f) ? 0.0613f : 0.0322f);
+            xyz.y += (0.821f * expf(-0.5f * p1 * p1)
+                    + 0.286f * expf(-0.5f * p2 * p2)) * values.values[i] * factor;
+        }
+        {
+            const float p1 = (lambda - 437.0f) * ((lambda < 437.0f) ? 0.0845f : 0.0278f);
+            const float p2 = (lambda - 459.0f) * ((lambda < 459.0f) ? 0.0385f : 0.0725f);
+            xyz.z += (1.217f * expf(-0.5f * p1 * p1)
+                    + 0.681f * expf(-0.5f * p2 * p2)) * values.values[i] * factor;
+        }
+    }
+
+    // apply scaling from radiometric to photometric units
+    xyz *= 683.002f;
+
+    // MDL_DF_SPECTRAL_SAMPLES samples uniformly on wavelength range
+    if (params.spectral_max_wavelength != params.spectral_min_wavelength)
+        xyz *= (params.spectral_max_wavelength - params.spectral_min_wavelength)
+             / float(MDL_DF_SPECTRAL_SAMPLES);
+
+    // convert to linear sRGB
+    return make_float3(
+        dot(xyz, make_float3( 3.240600f, -1.537200f, -0.498600f)),
+        dot(xyz, make_float3(-0.968900f,  1.875800f,  0.041500f)),
+        dot(xyz, make_float3( 0.055700f, -0.204000f,  1.057000f)));
+}
+
+//-------------------------------------------------------------------------------------------------
+// Spectral runtime functions called by libbsdf for spectral upsampling of MDL color values.
+//
+// These override the default-zero stubs from texture_support_cuda.h with real implementations
+// that read the wavelengths from the spectral shading state and perform proper spectral
+// upsampling. Without these, every BSDF that uses a color material parameter would return zero
+// in spectral mode, which causes the rendered image to be black.
+//-------------------------------------------------------------------------------------------------
+
+__device__ inline tct_spectral_sample state_spectral_wavelengths(
+    const Shading_state_material *state)
+{
+    return static_cast<const Shading_state_material_spectral *>(state)->spectral_wavelengths;
+}
+
+__device__ inline tct_spectral_sample state_spectral_wavelengths(
+    const Shading_state_material_with_derivs *state)
+{
+    return static_cast<const Shading_state_material_spectral_with_derivs *>(state)
+        ->spectral_wavelengths;
+}
+
+// Spectral upsampling of an IOR value
+// (piecewise-linear with point samples at 435, 546 and 700 nm for blue, green and red).
+__device__ inline tct_spectral_sample rgb_to_spectral_ior_impl(
+    const tct_spectral_sample &lambdas, const float rgb[3])
+{
+    tct_spectral_sample s;
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+    {
+        const float lambda = lambdas.values[i];
+        if (lambda > 546.0f)
+        {
+            const float t = fminf((lambda - 546.0f) * (1.0f / (700.0f - 546.0f)), 1.0f);
+            s.values[i] = t * rgb[0] + (1.0f - t) * rgb[1];
+        }
+        else
+        {
+            const float t = fmaxf((lambda - 435.0f) * (1.0f / (546.0f - 435.0f)), 0.0f);
+            s.values[i] = t * rgb[1] + (1.0f - t) * rgb[2];
+        }
+    }
+    return s;
+}
+
+// Spectral upsampling of a reflectance / volume coefficient value
+// (Jendersie - "Fast Spectral Upsampling of Volume Attenuation Coefficients").
+__device__ inline tct_spectral_sample rgb_to_spectral_jendersie(
+    const tct_spectral_sample &lambdas, const float rgb[3], bool is_emission)
+{
+    tct_spectral_sample s;
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+    {
+        const float lambda = lambdas.values[i];
+        s.values[i] = (lambda < 485.0f) ? rgb[2] : ((lambda < 595.9f) ? rgb[1] : rgb[0]);
+        if (is_emission)
+            s.values[i] *= lookup_d65(lambda);
+    }
+    return s;
+}
+
+extern "C" __device__ void rgb_to_spectral_ior(
+    tct_spectral_sample        *result,
+    Texture_handler_base const *self_base,
+    Shading_state_material     *state,
+    float const                 rgb[3])
+{
+    *result = rgb_to_spectral_ior_impl(state_spectral_wavelengths(state), rgb);
+}
+
+extern "C" __device__ void rgb_to_spectral_ior_deriv(
+    tct_spectral_sample                 *result,
+    Texture_handler_base const          *self_base,
+    Shading_state_material_with_derivs  *state,
+    float const                          rgb[3])
+{
+    *result = rgb_to_spectral_ior_impl(state_spectral_wavelengths(state), rgb);
+}
+
+extern "C" __device__ void rgb_to_spectral_reflectance(
+    tct_spectral_sample        *result,
+    Texture_handler_base const *self_base,
+    Shading_state_material     *state,
+    float const                 rgb[3])
+{
+    *result = rgb_to_spectral_jendersie(
+        state_spectral_wavelengths(state), rgb, /*is_emission=*/false);
+}
+
+extern "C" __device__ void rgb_to_spectral_reflectance_deriv(
+    tct_spectral_sample                 *result,
+    Texture_handler_base const          *self_base,
+    Shading_state_material_with_derivs  *state,
+    float const                          rgb[3])
+{
+    *result = rgb_to_spectral_jendersie(
+        state_spectral_wavelengths(state), rgb, /*is_emission=*/false);
+}
+
+extern "C" __device__ void rgb_to_spectral_luminance(
+    tct_spectral_sample        *result,
+    Texture_handler_base const *self_base,
+    Shading_state_material     *state,
+    float const                 rgb[3])
+{
+    *result = rgb_to_spectral_jendersie(
+        state_spectral_wavelengths(state), rgb, /*is_emission=*/true);
+}
+
+extern "C" __device__ void rgb_to_spectral_luminance_deriv(
+    tct_spectral_sample                 *result,
+    Texture_handler_base const          *self_base,
+    Shading_state_material_with_derivs  *state,
+    float const                          rgb[3])
+{
+    *result = rgb_to_spectral_jendersie(
+        state_spectral_wavelengths(state), rgb, /*is_emission=*/true);
+}
+
+extern "C" __device__ void rgb_to_spectral_volume_coefficient(
+    tct_spectral_sample        *result,
+    Texture_handler_base const *self_base,
+    Shading_state_material     *state,
+    float const                 rgb[3])
+{
+    *result = rgb_to_spectral_jendersie(
+        state_spectral_wavelengths(state), rgb, /*is_emission=*/false);
+}
+
+extern "C" __device__ void rgb_to_spectral_volume_coefficient_deriv(
+    tct_spectral_sample                 *result,
+    Texture_handler_base const          *self_base,
+    Shading_state_material_with_derivs  *state,
+    float const                          rgb[3])
+{
+    *result = rgb_to_spectral_jendersie(
+        state_spectral_wavelengths(state), rgb, /*is_emission=*/false);
+}
+
+extern "C" __device__ void get_wavelengths(
+    tct_spectral_sample        *result,
+    Texture_handler_base const *self_base,
+    Shading_state_material     *state)
+{
+    *result = state_spectral_wavelengths(state);
+}
+
+extern "C" __device__ void get_wavelengths_deriv(
+    tct_spectral_sample                 *result,
+    Texture_handler_base const          *self_base,
+    Shading_state_material_with_derivs  *state)
+{
+    *result = state_spectral_wavelengths(state);
+}
+
+#else // !ENABLE_SPECTRAL
+
+__device__ inline float3 make_color_sample(float v)
+{
+    return make_float3(v, v, v);
+}
+
+__device__ inline float3 addcc(const float3 &a, const float3 &b) { return a + b; }
+__device__ inline float3 mulcc(const float3 &a, const float3 &b) { return a * b; }
+__device__ inline float3 mulcf(const float3 &a, float b)         { return a * b; }
+__device__ inline float   get_main_pdf(float p)                  { return p; }
+
+#endif // ENABLE_SPECTRAL
+
 // Random number generator based on the OptiX SDK
 template<uint32_t N>
 static __forceinline__ __device__ uint32_t tea(uint32_t v0, uint32_t v1)
@@ -478,8 +895,8 @@ __device__ inline void normalize(auxiliary_data& data)
 
 struct Ray_state
 {
-    float3 contribution;
-    float3 weight;
+    float3 contribution;            // accumulated radiance, always in linear sRGB
+    Color_sample weight;            // path throughput; spectral or RGB depending on color mode
     float3 pos, pos_rx, pos_ry;
     float3 dir, dir_rx, dir_ry;
     bool inside;
@@ -487,7 +904,49 @@ struct Ray_state
     int intersection;
     uint32_t lpe_current_state;
     auxiliary_data* aux;
+#ifdef ENABLE_SPECTRAL
+    // wavelengths sampled for this path (in nm)
+    tct_spectral_sample spectral_wavelengths;
+    // running ratios pdf[i] / pdf[0] used for hero-wavelength MIS
+    float spectral_pdf_ratios[MDL_DF_SPECTRAL_SAMPLES - 1];
+#endif
 };
+
+
+#ifdef ENABLE_SPECTRAL
+// Update spectral PDF ratios after a BSDF sample event and return the MIS weight scaling factor.
+// Mirrors the implementation in df_native and df_vulkan.
+__device__ inline float update_spectral_pdf_ratios(
+    Ray_state &ray_state,
+    const tct_spectral_sample &pdfs,
+    bool specular,
+    bool specular_dispersion)
+{
+    // The main wavelength has been used for sampling, so the MIS weight is
+    // w = p[0] / sum(p) = 1 / (sum(p) / p[0])
+    // for pdf p up to this point in the path.
+    // Here we update the pdf ratios, compute the new weight and return the factor that
+    // changes from the old to the new weight.
+
+    if (specular && !specular_dispersion) // specular without dispersion: nothing to do
+        return 1.0f;
+
+    if (!specular_dispersion && pdfs.values[0] <= 0.0f) // really has zero probability
+        return 0.0f;
+
+    float inv_w_old = 1.0f;
+    float inv_w_new = 1.0f;
+    const float inv_p0 = specular_dispersion ? 0.0f : (1.0f / pdfs.values[0]);
+    for (int i = 1; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+    {
+        inv_w_old += ray_state.spectral_pdf_ratios[i - 1];
+        ray_state.spectral_pdf_ratios[i - 1] *= pdfs.values[i] * inv_p0;
+        inv_w_new += ray_state.spectral_pdf_ratios[i - 1];
+    }
+
+    return inv_w_old / inv_w_new;
+}
+#endif // ENABLE_SPECTRAL
 
 
 struct Ray_hit_info
@@ -833,10 +1292,14 @@ __device__ inline uint32_t lpe_transition(
 }
 
 // add direct contribution, e.g., for emission, direct light hits
+//
+// `contrib` is given in the active color mode (spectral or RGB). When spectral, it is converted
+// to linear RGB at the boundary where it enters `ray_state.contribution`.
 __device__ inline void accumulate_contribution(
     Transition_type light_event,
     uint32_t light_global_tag_id,
-    const float3& contrib,
+    const Color_sample& contrib,
+    bool is_reflectivity,
     Ray_state &ray_state,
     const Kernel_params &params)
 {
@@ -848,14 +1311,23 @@ __device__ inline void accumulate_contribution(
     // add contribution the when the reached state is a final state for the selected LPE
     // here we only have one LPE buffer, but more can be added easily by checking different LPEs
     if ((params.lpe_final_mask[next_state] & (1 << params.lpe_ouput_expression)) != 0)
+    {
+#ifdef ENABLE_SPECTRAL
+        ray_state.contribution += spectral_to_rgb(
+            contrib, ray_state.spectral_wavelengths, is_reflectivity, params);
+#else
+        (void)is_reflectivity;
         ray_state.contribution += contrib;
+#endif
+    }
 }
 
 // add contribution for next event estimations
 __device__ inline void accumulate_next_event_contribution(
     Transition_type scatter_event, uint32_t material_global_tag_id,
     Transition_type light_event, uint32_t light_global_tag_id,
-    const float3& contrib,
+    const Color_sample& contrib,
+    bool is_reflectivity,
     Ray_state &ray_state,
     const Kernel_params &params)
 {
@@ -872,7 +1344,15 @@ __device__ inline void accumulate_next_event_contribution(
     // add contribution the when the reached state is a final state for the selected LPE
     // here we only have one LPE buffer, but more can be added easily by checking different LPEs
     if ((params.lpe_final_mask[next_state] & (1 << params.lpe_ouput_expression)) != 0)
+    {
+#ifdef ENABLE_SPECTRAL
+        ray_state.contribution += spectral_to_rgb(
+            contrib, ray_state.spectral_wavelengths, is_reflectivity, params);
+#else
+        (void)is_reflectivity;
         ray_state.contribution += contrib;
+#endif
+    }
 }
 
 // evaluate if certain shading point (pos) is visible to a light direction by casting a shadow ray.
@@ -901,22 +1381,25 @@ __device__ inline bool trace_shadow(
         if (!is_valid(func_idx))
             return false;
 
-        // create state
-        Mdl_state state = {
-            shadow_hit.normal,
-            shadow_hit.normal,
-            shadow_hit.position,
-            0.0f,
-            shadow_hit.texture_coords,
-            &shadow_hit.tangent_u,
-            &shadow_hit.tangent_v,
-            texture_results,
-            params.tc_data[func_idx.x].ro_data_segment,
-            identity,
-            identity,
-            0,
-            1.0f
-        };
+        // create state (field-by-field so both Shading_state_material and
+        // Shading_state_material_spectral are handled uniformly)
+        Mdl_state state;
+        state.normal                = shadow_hit.normal;
+        state.geom_normal           = shadow_hit.normal;
+        state.position              = shadow_hit.position;
+        state.animation_time        = 0.0f;
+        state.text_coords           = shadow_hit.texture_coords;
+        state.tangent_u             = &shadow_hit.tangent_u;
+        state.tangent_v             = &shadow_hit.tangent_v;
+        state.text_results          = texture_results;
+        state.ro_data_segment       = params.tc_data[func_idx.x].ro_data_segment;
+        state.world_to_object       = identity;
+        state.object_to_world       = identity;
+        state.object_id             = 0;
+        state.meters_per_scene_unit = 1.0f;
+#ifdef ENABLE_SPECTRAL
+        state.spectral_wavelengths  = ray_state.spectral_wavelengths;
+#endif
 
         // access textures and other resource data
         // expect that the target code index is the same for all functions of a material
@@ -960,12 +1443,24 @@ __device__ inline bool trace_scene(
             // primary ray miss, add environment contribution
             const float2 uv = environment_coords(ray_state.dir, params);
             const float4 texval = tex2D<float4>(params.env_tex, uv.x, uv.y);
+            const float3 env_radiance =
+                make_float3(texval.x, texval.y, texval.z) * params.env_intensity;
 
             // add contribution, if `CL` is a valid path
+            // (primary-ray miss: weight is still 1, so we just feed the env radiance)
+#ifdef ENABLE_SPECTRAL
+            const Color_sample env_spec = rgb_to_spectral(
+                env_radiance, ray_state.spectral_wavelengths, /*is_emission=*/true);
             accumulate_contribution(
                 TRANSITION_LIGHT, params.env_gtag /* light group 'env' */,
-                make_float3(texval.x, texval.y, texval.z) * params.env_intensity,
+                env_spec, /*is_reflectivity=*/false,
                 ray_state, params);
+#else
+            accumulate_contribution(
+                TRANSITION_LIGHT, params.env_gtag /* light group 'env' */,
+                env_radiance, /*is_reflectivity=*/false,
+                ray_state, params);
+#endif
         }
         return false;
     }
@@ -980,22 +1475,25 @@ __device__ inline bool trace_scene(
     if (!is_valid(func_idx))
         return false;
 
-    // create state
-    Mdl_state state = {
-        hit.normal,
-        hit.normal,
-        hit.position,
-        0.0f,
-        hit.texture_coords,
-        &hit.tangent_u,
-        &hit.tangent_v,
-        texture_results,
-        params.tc_data[func_idx.x].ro_data_segment,
-        identity,
-        identity,
-        0,
-        1.0f
-    };
+    // create state (field-by-field so both Shading_state_material and
+    // Shading_state_material_spectral are handled uniformly)
+    Mdl_state state;
+    state.normal                = hit.normal;
+    state.geom_normal           = hit.normal;
+    state.position              = hit.position;
+    state.animation_time        = 0.0f;
+    state.text_coords           = hit.texture_coords;
+    state.tangent_u             = &hit.tangent_u;
+    state.tangent_v             = &hit.tangent_v;
+    state.text_results          = texture_results;
+    state.ro_data_segment       = params.tc_data[func_idx.x].ro_data_segment;
+    state.world_to_object       = identity;
+    state.object_to_world       = identity;
+    state.object_id             = 0;
+    state.meters_per_scene_unit = 1.0f;
+#ifdef ENABLE_SPECTRAL
+    state.spectral_wavelengths  = ray_state.spectral_wavelengths;
+#endif
 
     // access textures and other resource data
     // expect that the target code index is the same for all functions of a material
@@ -1038,10 +1536,11 @@ __device__ inline bool trace_scene(
                                                 // has to match eval_data.handle_count and
                                                 // aux_data.handle_count)
 
-        float3 result_buffer_0[df_eval_slots];  // used for bsdf_diffuse, albedo_diffue, and edf
-        float3 result_buffer_1[df_eval_slots];  // used for bsdf_glossy, albedo_glossy
-        float3 result_buffer_2[df_eval_slots];  // used for normal
-        float3 result_buffer_3[df_eval_slots];  // used for roughness
+        // result buffers for BSDF/EDF data; spectral mode uses tct_spectral_sample, RGB uses float3
+        Color_sample result_buffer_0[df_eval_slots];  // bsdf_diffuse, albedo_diffuse, edf
+        Color_sample result_buffer_1[df_eval_slots];  // bsdf_glossy, albedo_glossy
+        float3       result_buffer_2[df_eval_slots];  // normal (always RGB-style)
+        float3       result_buffer_3[df_eval_slots];  // roughness (always float3)
     #elif DF_HANDLE_SLOTS == DF_HSM_NONE
         // handles are ignored, all parts of the BSDF are returned at once without loops (fastest)
         const unsigned df_eval_slots = 1;
@@ -1053,6 +1552,8 @@ __device__ inline bool trace_scene(
 
     // apply volume attenuation after first bounce
     // (assuming uniform absorption coefficient and ignoring scattering coefficient)
+#ifndef ENABLE_SPECTRAL
+    // TODO SPECTRAL: do proper spectral handling here
     if (ray_state.intersection > 0)
     {
         func_idx = get_mdl_function_index(material.volume_absorption);
@@ -1065,6 +1566,7 @@ __device__ inline bool trace_scene(
             ray_state.weight.z *= abs_coeff.z > 0.0f ? expf(-abs_coeff.z * hit.distance) : 1.0f;
         }
     }
+#endif // !ENABLE_SPECTRAL
 
     // for thin_walled materials there is no 'inside'
     bool thin_walled = false;
@@ -1077,18 +1579,20 @@ __device__ inline bool trace_scene(
     func_idx = get_mdl_function_index((thin_walled && ray_state.inside_cutout) ? material.backface_edf : material.edf);
     if (is_valid(func_idx))
     {
-        // evaluate intensity expression
-        float3 emission_intensity = make_float3(0.0, 0.0, 0.0);
+        // evaluate intensity expression. With spectral rendering, the generated MDL function
+        // returns a tct_spectral_sample, otherwise a float3.
+        Color_sample emission_intensity = make_color_sample(0.0f);
         Mdl_function_index intensity_func_idx = get_mdl_function_index(
             (thin_walled && ray_state.inside_cutout) ? material.backface_emission_intensity : material.emission_intensity);
         if (is_valid(intensity_func_idx))
         {
-            emission_intensity = as_expression_typed<float3>(intensity_func_idx)(
+            emission_intensity = as_expression_typed<Color_sample>(intensity_func_idx)(
                 &state, &mdl_resources.data, arg_block);
         }
 
         // evaluate EDF
-        Edf_evaluate_data<(Df_handle_slot_mode) DF_HANDLE_SLOTS> eval_data;
+        Edf_evaluate_data<(Df_handle_slot_mode) DF_HANDLE_SLOTS,
+                          (Target_code_color_mode) BSDF_TCCM> eval_data;
         eval_data.k1 = make_float3(-ray_state.dir.x, -ray_state.dir.y, -ray_state.dir.z);
 
         #if DF_HANDLE_SLOTS == DF_HSM_POINTER
@@ -1116,14 +1620,17 @@ __device__ inline bool trace_scene(
             for (unsigned lobe = 0; (lobe < df_eval_slots) &&
                 ((offset + lobe) < edf_mtag_to_gtag_map_size); ++lobe)
             {
-                // add emission contribution
+                // add emission contribution: weight * intensity * edf_value
+                #if DF_HANDLE_SLOTS == DF_HSM_NONE
+                    const Color_sample edf_val = eval_data.edf;
+                #else
+                    const Color_sample edf_val = eval_data.edf[lobe];
+                #endif
+                const Color_sample contrib =
+                    mulcc(ray_state.weight, mulcc(emission_intensity, edf_val));
                 accumulate_contribution(
                     TRANSITION_EMISSION, edf_mtag_to_gtag_map[offset + lobe],
-                    #if DF_HANDLE_SLOTS == DF_HSM_NONE
-                        eval_data.edf * emission_intensity,
-                    #else
-                        eval_data.edf[lobe] * emission_intensity,
-                    #endif
+                    contrib, /*is_reflectivity=*/false,
                     ray_state, params);
             }
 
@@ -1145,13 +1652,28 @@ __device__ inline bool trace_scene(
         // reuse memory for function data
         union
         {
-            Bsdf_sample_data<> sample_data;
-            Bsdf_evaluate_data<(Df_handle_slot_mode)DF_HANDLE_SLOTS> eval_data;
-            Bsdf_pdf_data<> pdf_data;
-            Bsdf_auxiliary_data<(Df_handle_slot_mode)DF_HANDLE_SLOTS> aux_data;
+            Bsdf_sample_data<(Target_code_color_mode)BSDF_TCCM> sample_data;
+            Bsdf_evaluate_data<(Df_handle_slot_mode)DF_HANDLE_SLOTS,
+                               (Target_code_color_mode)BSDF_TCCM> eval_data;
+            Bsdf_pdf_data<(Target_code_color_mode)BSDF_TCCM> pdf_data;
+            Bsdf_auxiliary_data<(Df_handle_slot_mode)DF_HANDLE_SLOTS,
+                                (Target_code_color_mode)BSDF_TCCM> aux_data;
         };
 
         // initialize shared fields
+#ifdef ENABLE_SPECTRAL
+        // In spectral mode all spectral samples must be set explicitly.
+        if (ray_state.inside && !thin_walled)
+        {
+            sample_data.ior1 = make_color_sample(BSDF_USE_MATERIAL_IOR);
+            sample_data.ior2 = make_color_sample(1.0f);
+        }
+        else
+        {
+            sample_data.ior1 = make_color_sample(1.0f);
+            sample_data.ior2 = make_color_sample(BSDF_USE_MATERIAL_IOR);
+        }
+#else
         if (ray_state.inside && !thin_walled)
         {
             sample_data.ior1.x = BSDF_USE_MATERIAL_IOR;
@@ -1162,6 +1684,7 @@ __device__ inline bool trace_scene(
             sample_data.ior1 = make_float3(1.0f, 1.0f, 1.0f);
             sample_data.ior2.x = BSDF_USE_MATERIAL_IOR;
         }
+#endif
         sample_data.k1 = make_float3(-ray_state.dir.x, -ray_state.dir.y, -ray_state.dir.z);
 
         // if requested, fill auxiliary buffers
@@ -1194,13 +1717,23 @@ __device__ inline bool trace_scene(
                     // to keep it simpler, the individual albedo and normals are averaged
                     // however, the parts can also be used separately, e.g. for LPEs
                     #if DF_HANDLE_SLOTS == DF_HSM_NONE
-                        ray_state.aux->albedo += aux_data.albedo_diffuse + aux_data.albedo_glossy;
-                        ray_state.aux->normal += aux_data.normal;
+                        const Color_sample albedo =
+                            addcc(aux_data.albedo_diffuse, aux_data.albedo_glossy);
+                        const float3 normal = aux_data.normal;
                     #else
-                        ray_state.aux->albedo += aux_data.albedo_diffuse[lobe] +
-                                                 aux_data.albedo_glossy[lobe];
-                        ray_state.aux->normal += aux_data.normal[lobe];
+                        const Color_sample albedo =
+                            addcc(aux_data.albedo_diffuse[lobe], aux_data.albedo_glossy[lobe]);
+                        const float3 normal = aux_data.normal[lobe];
                     #endif
+#ifdef ENABLE_SPECTRAL
+                    // aux buffers are RGB; convert spectral albedo to linear sRGB (reflectivity)
+                    ray_state.aux->albedo += spectral_to_rgb(
+                        albedo, ray_state.spectral_wavelengths,
+                        /*is_reflectivity=*/true, params);
+#else
+                    ray_state.aux->albedo += albedo;
+#endif
+                    ray_state.aux->normal += normal;
                     ray_state.aux->num++;
                 }
 
@@ -1258,8 +1791,15 @@ __device__ inline bool trace_scene(
                         transition_diffuse = TRANSITION_SCATTER_DT;
                     }
 
-                    // sample weight
-                    const float3 w = ray_state.weight * f;
+                    // sample weight: weight * f, in active color mode. Point-light radiance is
+                    // RGB and treated as emission for the spectral upsample.
+#ifdef ENABLE_SPECTRAL
+                    const Color_sample f_color = rgb_to_spectral(
+                        f, ray_state.spectral_wavelengths, /*is_emission=*/true);
+                    const Color_sample w = mulcc(ray_state.weight, f_color);
+#else
+                    const Color_sample w = ray_state.weight * f;
+#endif
 
                     // iterate over all lobes (tags that appear in the df)
                     for (unsigned lobe = 0; (lobe < df_eval_slots) &&
@@ -1268,26 +1808,26 @@ __device__ inline bool trace_scene(
                         // get the `global tag` of the lobe
                         unsigned material_lobe_gtag = bsdf_mtag_to_gtag_map[offset + lobe];
 
+                        #if DF_HANDLE_SLOTS == DF_HSM_NONE
+                            const Color_sample bsdf_d = eval_data.bsdf_diffuse;
+                            const Color_sample bsdf_g = eval_data.bsdf_glossy;
+                        #else
+                            const Color_sample bsdf_d = eval_data.bsdf_diffuse[lobe];
+                            const Color_sample bsdf_g = eval_data.bsdf_glossy[lobe];
+                        #endif
+
                         // add diffuse contribution
                         accumulate_next_event_contribution(
                             transition_diffuse, material_lobe_gtag,
                             TRANSITION_LIGHT, params.point_light_gtag, // light group
-                            #if DF_HANDLE_SLOTS == DF_HSM_NONE
-                                eval_data.bsdf_diffuse * w,
-                            #else
-                                eval_data.bsdf_diffuse[lobe] * w,
-                            #endif
+                            mulcc(bsdf_d, w), /*is_reflectivity=*/false,
                             ray_state, params);
 
                         // add glossy contribution
                         accumulate_next_event_contribution(
                             transition_glossy, material_lobe_gtag,
                             TRANSITION_LIGHT, params.point_light_gtag, // light group
-                            #if DF_HANDLE_SLOTS == DF_HSM_NONE
-                                eval_data.bsdf_glossy * w,
-                            #else
-                                eval_data.bsdf_glossy[lobe] * w,
-                            #endif
+                            mulcc(bsdf_g, w), /*is_reflectivity=*/false,
                             ray_state, params);
                     }
 
@@ -1339,8 +1879,10 @@ __device__ inline bool trace_scene(
                     as_bsdf_evaluate(func_idx)(
                         &eval_data, &state, &mdl_resources.data, arg_block);
 
+                    const float bsdf_main_pdf = get_main_pdf(eval_data.pdf);
                     const float mis_weight =
-                        (params.mdl_test_type == MDL_TEST_EVAL) ? 1.0f : pdf / (pdf + eval_data.pdf);
+                        (params.mdl_test_type == MDL_TEST_EVAL) ? 1.0f
+                            : pdf / (pdf + bsdf_main_pdf);
 
                     // we know if we reflect or transmit
                     if (dot(light_dir, ray_state.inside_cutout ? -hit.normal : hit.normal) > 0.0f) {
@@ -1351,8 +1893,15 @@ __device__ inline bool trace_scene(
                         transition_diffuse = TRANSITION_SCATTER_DT;
                     }
 
-                    // sample weight
-                    const float3 w = ray_state.weight * f * mis_weight;
+                    // sample weight: weight * f * mis_weight, in active color mode. Env radiance
+                    // is RGB and treated as emission for the spectral upsample.
+#ifdef ENABLE_SPECTRAL
+                    const Color_sample f_color = rgb_to_spectral(
+                        f, ray_state.spectral_wavelengths, /*is_emission=*/true);
+                    const Color_sample w = mulcf(mulcc(ray_state.weight, f_color), mis_weight);
+#else
+                    const Color_sample w = ray_state.weight * f * mis_weight;
+#endif
 
                     // iterate over all lobes (tags that appear in the df)
                     for (unsigned lobe = 0; (lobe < df_eval_slots) &&
@@ -1361,26 +1910,26 @@ __device__ inline bool trace_scene(
                         // get the `global tag` of the lobe
                         unsigned material_lobe_gtag = bsdf_mtag_to_gtag_map[offset + lobe];
 
+                        #if DF_HANDLE_SLOTS == DF_HSM_NONE
+                            const Color_sample bsdf_d = eval_data.bsdf_diffuse;
+                            const Color_sample bsdf_g = eval_data.bsdf_glossy;
+                        #else
+                            const Color_sample bsdf_d = eval_data.bsdf_diffuse[lobe];
+                            const Color_sample bsdf_g = eval_data.bsdf_glossy[lobe];
+                        #endif
+
                         // add diffuse contribution
                         accumulate_next_event_contribution(
                             transition_diffuse, material_lobe_gtag,
                             TRANSITION_LIGHT, params.env_gtag, // light group 'env'
-                            #if DF_HANDLE_SLOTS == DF_HSM_NONE
-                                eval_data.bsdf_diffuse * w,
-                            #else
-                                eval_data.bsdf_diffuse[lobe] * w,
-                            #endif
+                            mulcc(bsdf_d, w), /*is_reflectivity=*/false,
                             ray_state, params);
 
                         // add glossy contribution
                         accumulate_next_event_contribution(
                             transition_glossy, material_lobe_gtag,
                             TRANSITION_LIGHT, params.env_gtag, // light group 'env'
-                            #if DF_HANDLE_SLOTS == DF_HSM_NONE
-                                eval_data.bsdf_glossy * w,
-                            #else
-                                eval_data.bsdf_glossy[lobe] * w,
-                            #endif
+                            mulcc(bsdf_g, w), /*is_reflectivity=*/false,
                             ray_state, params);
                     }
 
@@ -1405,14 +1954,39 @@ __device__ inline bool trace_scene(
                 return false;
 
             ray_state.dir = sample_data.k2;
-            ray_state.weight *= sample_data.bsdf_over_pdf;
-
 
             const bool transmission = (sample_data.event_type & BSDF_EVENT_TRANSMISSION) != 0;
             if (transmission)
                 ray_state.inside = !ray_state.inside;
 
             const bool is_specular = (sample_data.event_type & BSDF_EVENT_SPECULAR) != 0;
+
+#ifdef ENABLE_SPECTRAL
+            {
+                // detect specular dispersion (specular transmission with wavelength-varying IOR)
+                bool specular_dispersion = false;
+                if (is_specular && transmission && !thin_walled)
+                {
+                    for (int si = 1; si < MDL_DF_SPECTRAL_SAMPLES; ++si)
+                    {
+                        if (sample_data.ior1.values[si] != sample_data.ior1.values[0] ||
+                            sample_data.ior2.values[si] != sample_data.ior2.values[0])
+                        {
+                            specular_dispersion = true;
+                            break;
+                        }
+                    }
+                }
+
+                const float ratio_factor = update_spectral_pdf_ratios(
+                    ray_state, sample_data.pdf, is_specular, specular_dispersion);
+                ray_state.weight = mulcf(
+                    mulcc(ray_state.weight, sample_data.bsdf_over_pdf),
+                    ratio_factor);
+            }
+#else
+            ray_state.weight *= sample_data.bsdf_over_pdf;
+#endif
 
             Transition_type next;
             if (is_specular)
@@ -1462,10 +2036,10 @@ __device__ inline bool trace_scene(
                     // get pdf corresponding to the materials BSDF
                     as_bsdf_pdf(func_idx)(&pdf_data, &state, &mdl_resources.data, arg_block);
 
-                    bsdf_pdf = pdf_data.pdf;
+                    bsdf_pdf = get_main_pdf(pdf_data.pdf);
                 }
                 else
-                    bsdf_pdf = sample_data.pdf;
+                    bsdf_pdf = get_main_pdf(sample_data.pdf);
 
                 if (is_specular || bsdf_pdf > 0.0f)
                 {
@@ -1473,10 +2047,17 @@ __device__ inline bool trace_scene(
                         (params.mdl_test_type == MDL_TEST_SAMPLE) ? 1.0f :
                             bsdf_pdf / (pdf + bsdf_pdf);
 
-                    float3 specular_contrib = ray_state.weight * f * mis_weight;
+#ifdef ENABLE_SPECTRAL
+                    const Color_sample f_color = rgb_to_spectral(
+                        f, ray_state.spectral_wavelengths, /*is_emission=*/true);
+                    const Color_sample specular_contrib = mulcf(
+                        mulcc(ray_state.weight, f_color), mis_weight);
+#else
+                    const Color_sample specular_contrib = ray_state.weight * f * mis_weight;
+#endif
                     accumulate_contribution(
                         TRANSITION_LIGHT, params.env_gtag /* light group 'env' */,
-                        specular_contrib,
+                        specular_contrib, /*is_reflectivity=*/false,
                         ray_state, params);
                 }
             }
@@ -1519,7 +2100,25 @@ __device__ inline render_result render_scene(
 
     Ray_state ray_state;
     ray_state.contribution = make_float3(0.0f, 0.0f, 0.0f);
-    ray_state.weight = make_float3(1.0f, 1.0f, 1.0f);
+    ray_state.weight = make_color_sample(1.0f);
+#ifdef ENABLE_SPECTRAL
+    {
+        // uniform stratified wavelength sampling across the configured range
+        float xi = rnd(seed);
+        for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        {
+            xi += 1.0f / float(MDL_DF_SPECTRAL_SAMPLES);
+            if (xi > 1.0f) xi -= 1.0f;
+            ray_state.spectral_wavelengths.values[i] =
+                params.spectral_min_wavelength
+                + xi * (params.spectral_max_wavelength - params.spectral_min_wavelength);
+        }
+
+        // initialize the spectral PDF ratios
+        for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES - 1; ++i)
+            ray_state.spectral_pdf_ratios[i] = 1.0f;
+    }
+#endif
     ray_state.pos = ray_state.pos_rx = ray_state.pos_ry = params.cam_pos;
     ray_state.dir = normalize(
         params.cam_dir * params.cam_focal + params.cam_right * r    + params.cam_up * aspect * u);

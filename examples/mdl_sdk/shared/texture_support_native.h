@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -32,6 +32,9 @@
 #define TEXTURE_SUPPORT_H
 
 #include "example_shared.h"
+
+#include <cstring>
+#include <vector>
 
 #define USE_SMOOTHERSTEP_FILTER
 
@@ -57,22 +60,39 @@ struct Texture
         // for now, we only support floating point rgba
         check_success(strcmp(canvas->get_type(), "Color") == 0);
 
-        mi::base::Handle < const mi::neuraylib::ITile> tile(canvas->get_tile());
-
         size.x = canvas->get_resolution_x();
         size.y = canvas->get_resolution_y();
         size.z = canvas->get_layers_size();
 
-        data = static_cast<const mi::Float32*> (tile->get_data());
+        // Layer 0 tile data (used directly by 2D lookups).
+        mi::base::Handle<const mi::neuraylib::ITile> tile(canvas->get_tile());
+        data = static_cast<const mi::Float32*>(tile->get_data());
+
+        // 3D textures (e.g. BSDF data textures like SHEEN_MULTISCATTER or
+        // GGX_SMITH_MULTISCATTER) carry their depth as canvas layers. Concatenate
+        // all layers into one buffer so the 3D lookups can index across w.
+        if (size.z > 1) {
+            const size_t layer_floats = size_t(size.x) * size_t(size.y) * ncomp;
+            data_3d.resize(layer_floats * size_t(size.z));
+            for (mi::Uint32 z = 0; z < size.z; ++z) {
+                mi::base::Handle<const mi::neuraylib::ITile> layer_tile(canvas->get_tile(z));
+                std::memcpy(
+                    data_3d.data() + layer_floats * z,
+                    layer_tile->get_data(),
+                    layer_floats * sizeof(mi::Float32));
+            }
+        }
     }
 
     mi::base::Handle<const mi::neuraylib::ICanvas> canvas;
 
-    mi::Float32 const       *data;  // texture data for fast access
+    mi::Float32 const        *data;     // layer 0 tile data, valid for the lifetime of `canvas`
 
-    mi::Uint32_3_struct     size;   // size of the texture
+    std::vector<mi::Float32>  data_3d;  // contiguous all-layer storage for 3D lookups (size.z > 1)
 
-    mi::Uint32              ncomp;  // components per pixel
+    mi::Uint32_3_struct       size;     // size of the texture (x, y, layers)
+
+    mi::Uint32                ncomp;    // components per pixel
 
 };
 
@@ -253,6 +273,73 @@ void tex_lookup2D(
     store_result4(res, mi::math::lerp(c1, c2, vfrac));
 }
 
+void tex_lookup3D(
+    mi::Float32                   res[4],
+    Texture const                 &tex,
+    const mi::Float32             uvw[3],
+    mi::neuraylib::Tex_wrap_mode  wrap_u,
+    mi::neuraylib::Tex_wrap_mode  wrap_v,
+    mi::neuraylib::Tex_wrap_mode  wrap_w,
+    const mi::Float32             crop_u[2],
+    const mi::Float32             crop_v[2],
+    const mi::Float32             crop_w[2])
+{
+    // BSDF data textures (and any other 3D texture) need data from every layer.
+    // For 2D textures (size.z == 1), data_3d is empty and we fall back to layer 0.
+    const mi::Float32 *texdata = tex.data_3d.empty() ? tex.data : tex.data_3d.data();
+
+    const mi::Float32 crop_dx = crop_u[1] - crop_u[0];
+    const mi::Float32 crop_dy = crop_v[1] - crop_v[0];
+    const mi::Float32 crop_dz = crop_w[1] - crop_w[0];
+
+    const mi::Sint32 crop_offset_x = (mi::Sint32) f2u_rz(u2f_rn(tex.size.x - 1) * crop_u[0]);
+    const mi::Sint32 crop_offset_y = (mi::Sint32) f2u_rz(u2f_rn(tex.size.y - 1) * crop_v[0]);
+    const mi::Sint32 crop_offset_z = (mi::Sint32) f2u_rz(u2f_rn(tex.size.z - 1) * crop_w[0]);
+
+    const mi::Uint32 crop_resx = std::max(f2u_rz(u2f_rn(tex.size.x) * crop_dx), 1u);
+    const mi::Uint32 crop_resy = std::max(f2u_rz(u2f_rn(tex.size.y) * crop_dy), 1u);
+    const mi::Uint32 crop_resz = std::max(f2u_rz(u2f_rn(tex.size.z) * crop_dz), 1u);
+
+    const float U = uvw[0] * crop_resx - 0.5f;
+    const float V = uvw[1] * crop_resy - 0.5f;
+    const float W = uvw[2] * crop_resz - 0.5f;
+
+    const mi::Uint32 U0 = texremap(crop_resx, wrap_u, crop_offset_x, U);
+    const mi::Uint32 U1 = texremap(crop_resx, wrap_u, crop_offset_x, U + 1.0f);
+    const mi::Uint32 V0 = texremap(crop_resy, wrap_v, crop_offset_y, V);
+    const mi::Uint32 V1 = texremap(crop_resy, wrap_v, crop_offset_y, V + 1.0f);
+    const mi::Uint32 W0 = texremap(crop_resz, wrap_w, crop_offset_z, W);
+    const mi::Uint32 W1 = texremap(crop_resz, wrap_w, crop_offset_z, W + 1.0f);
+
+    const mi::Uint32 layer_stride = tex.size.x * tex.size.y * tex.ncomp;
+    const mi::Uint32 row_stride   = tex.size.x * tex.ncomp;
+
+    auto fetch = [&](mi::Uint32 u, mi::Uint32 v, mi::Uint32 w) -> mi::Float32_4 {
+        const mi::Uint32 idx = w * layer_stride + v * row_stride + u * tex.ncomp;
+        return mi::Float32_4(texdata[idx + 0], texdata[idx + 1], texdata[idx + 2], texdata[idx + 3]);
+    };
+
+    mi::Float32 ufrac = U - mi::math::floor(U);
+    mi::Float32 vfrac = V - mi::math::floor(V);
+    mi::Float32 wfrac = W - mi::math::floor(W);
+
+#ifdef USE_SMOOTHERSTEP_FILTER
+    ufrac *= ufrac*ufrac*(ufrac*(ufrac*6.0f - 15.0f) + 10.0f);
+    vfrac *= vfrac*vfrac*(vfrac*(vfrac*6.0f - 15.0f) + 10.0f);
+    wfrac *= wfrac*wfrac*(wfrac*(wfrac*6.0f - 15.0f) + 10.0f);
+#endif
+
+    const mi::Float32_4 c00 = mi::math::lerp(fetch(U0, V0, W0), fetch(U1, V0, W0), ufrac);
+    const mi::Float32_4 c10 = mi::math::lerp(fetch(U0, V1, W0), fetch(U1, V1, W0), ufrac);
+    const mi::Float32_4 c01 = mi::math::lerp(fetch(U0, V0, W1), fetch(U1, V0, W1), ufrac);
+    const mi::Float32_4 c11 = mi::math::lerp(fetch(U0, V1, W1), fetch(U1, V1, W1), ufrac);
+
+    const mi::Float32_4 c0 = mi::math::lerp(c00, c10, vfrac);
+    const mi::Float32_4 c1 = mi::math::lerp(c01, c11, vfrac);
+
+    store_result4(res, mi::math::lerp(c0, c1, wfrac));
+}
+
 /// Implementation of \c tex::lookup_float4() for a texture_2d texture.
 void tex_lookup_float4_2d(
     mi::Float32 result[4],
@@ -389,7 +476,7 @@ void tex_texel_float4_2d(
 /// Implementation of \c tex::lookup_float4() for a texture_3d texture.
 void tex_lookup_float4_3d(
     mi::Float32 result[4],
-    const mi::neuraylib::Texture_handler_base *self,
+    const mi::neuraylib::Texture_handler_base *self_base,
     mi::Uint32 texture_idx,
     const mi::Float32 coord[3],
     mi::neuraylib::Tex_wrap_mode wrap_u,
@@ -400,10 +487,16 @@ void tex_lookup_float4_3d(
     const mi::Float32 crop_w[2],
     mi::Float32 frame)
 {
-    result[0] = 0.0f;
-    result[1] = 0.0f;
-    result[2] = 0.0f;
-    result[3] = 1.0f;
+    Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
+
+    if (texture_idx == 0 || texture_idx - 1 >= self->num_textures) {
+        // invalid texture returns zero
+        store_result4(result, 0.0f);
+        return;
+    }
+
+    Texture const &tex = self->textures[texture_idx - 1];
+    tex_lookup3D(result, tex, coord, wrap_u, wrap_v, wrap_w, crop_u, crop_v, crop_w);
 }
 
 /// Implementation of \c tex::lookup_float3() for a texture_3d texture.
@@ -420,23 +513,39 @@ void tex_lookup_float3_3d(
     const mi::Float32 crop_w[2],
     mi::Float32 frame)
 {
-    result[0] = 0.0f;
-    result[1] = 0.0f;
-    result[2] = 0.0f;
+    mi::Float32 c[4];
+    tex_lookup_float4_3d(c, self, texture_idx, coord, wrap_u, wrap_v, wrap_w, crop_u, crop_v, crop_w, frame);
+    result[0] = c[0];
+    result[1] = c[1];
+    result[2] = c[2];
 }
 
 /// Implementation of \c tex::texel_float4() for a texture_3d texture.
 void tex_texel_float4_3d(
     mi::Float32 result[4],
-    const mi::neuraylib::Texture_handler_base *self,
+    const mi::neuraylib::Texture_handler_base *self_base,
     mi::Uint32 texture_idx,
     const mi::Sint32 coord[3],
     float frame)
 {
-    result[0] = 0.0f;
-    result[1] = 0.0f;
-    result[2] = 0.0f;
-    result[3] = 1.0f;
+    Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
+
+    if (texture_idx == 0 || texture_idx - 1 >= self->num_textures) {
+        // invalid texture returns zero
+        store_result4(result, 0.0f);
+        return;
+    }
+
+    Texture const &tex = self->textures[texture_idx - 1];
+    const mi::Float32 *texdata = tex.data_3d.empty() ? tex.data : tex.data_3d.data();
+
+    const mi::Uint32 idx =
+        (mi::Uint32(coord[2]) * tex.size.y * tex.size.x +
+         mi::Uint32(coord[1]) * tex.size.x +
+         mi::Uint32(coord[0])) * tex.ncomp;
+
+    store_result4(result,
+        mi::Float32_4(texdata[idx + 0], texdata[idx + 1], texdata[idx + 2], texdata[idx + 3]));
 }
 
 /// Implementation of \c tex::lookup_float4() for a texture_cube texture.
@@ -496,9 +605,20 @@ void tex_resolution_3d(
     mi::Uint32 texture_idx,
     float frame)
 {
-    result[0] = 0;
-    result[1] = 0;
-    result[2] = 0;
+    Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
+
+    if (texture_idx == 0 || texture_idx - 1 >= self->num_textures) {
+        // invalid texture returns zero
+        result[0] = 0;
+        result[1] = 0;
+        result[2] = 0;
+        return;
+    }
+
+    Texture const &tex = self->textures[texture_idx - 1];
+    result[0] = tex.size.x;
+    result[1] = tex.size.y;
+    result[2] = tex.size.z;
 }
 
 /// Implementation of \c tex::texture_isvalid() function.

@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -37,7 +37,6 @@
 #include <cstring>
 #include <map>
 #include <string>
-using namespace std::string_literals;
 
 #include <mi/base/handle.h>
 #include <mi/base/types.h>
@@ -80,19 +79,18 @@ class IResource_register {
 public:
     /// Register a texture index.
     ///
-    /// \param index        the texture index
-    /// \param is_resolved  true, if this texture has been resolved and exists in the Neuray DB
-    /// \param name         the DB name of the texture at this index, if the texture has been
-    ///                     resolved, the unresolved mdl url of the texture otherwise
-    /// \param owner_module the owner module name of the texture
-    /// \param gamma        the gamma value of the texture
-    /// \param selector     the selector of the texture
-    /// \param type         the type of the texture
-    /// \param df_data_kind the \c DF data kind of the texture
+    /// \param index         the texture index
+    /// \param name          the DB name of the texture at this index
+    /// \param mdl_url       the MDL URL of the texture, without owner prefix
+    /// \param owner_module  the owner module name of the texture (empty for absolute MDL URL)
+    /// \param gamma         the gamma value of the texture
+    /// \param selector      the selector of the texture
+    /// \param type          the type of the texture
+    /// \param df_data_kind  the \c DF data kind of the texture
     virtual void register_texture(
         size_t                                     index,
-        bool                                       is_resolved,
         char const                                 *name,
+        char const                                 *mdl_url,
         char const                                 *owner_module,
         float                                      gamma,
         char const                                 *selector,
@@ -117,15 +115,14 @@ public:
 
     /// Register a light profile.
     ///
-    /// \param index        the light profile index
-    /// \param is_resolved  true, if this resource has been resolved and exists in the Neuray DB
-    /// \param name         the DB name of this index, if this resource has been resolved,
-    ///                     the unresolved mdl url otherwise
-    /// \param owner_module the owner module name of the resource
+    /// \param index         the light profile index
+    /// \param name          the DB name of this index
+    /// \param mdl_url       the MDL URL of this index, without owner prefix
+    /// \param owner_module  the owner module name of the resource (empty for absolute MDL URL)
     virtual void register_light_profile(
         size_t                                     index,
-        bool                                       is_resolved,
         char const                                 *name,
+        char const                                 *mdl_url,
         char const                                 *owner_module) = 0;
 
     /// Updates an already registered resource when it is encountered again.
@@ -146,15 +143,14 @@ public:
 
     /// Register a BSDF measurement.
     ///
-    /// \param index        the BSDF measurement index
-    /// \param is_resolved  true, if this resource has been resolved and exists in the Neuray DB
-    /// \param name         the DB name of this index, if this resource has been resolved,
-    ///                     the unresolved mdl url otherwise
-    /// \param owner_module the owner module name of the resource
+    /// \param index         the BSDF measurement index
+    /// \param name          the DB name of this index
+    /// \param mdl_url       the MDL URL of this index, without owner prefix
+    /// \param owner_module  the owner module name of the resource (empty for absolute MDL URL)
     virtual void register_bsdf_measurement(
         size_t                                     index,
-        bool                                       is_resolved,
         char const                                 *name,
+        char const                                 *mdl_url,
         char const                                 *owner_module) = 0;
 
     /// Updates an already registered resource when it is encountered again.
@@ -211,6 +207,12 @@ namespace // anonymous
 class Function_enumerator : public mi::mdl::ILambda_resource_enumerator {
 public:
     typedef std::map<std::string, size_t>  Resource_index_map;
+
+    struct Resource_name {
+        std::string name;  ///< the name of the DB element (if existing)
+        std::string url;   ///< MDL file path
+        std::string owner; ///< Owner module (empty for absolute MDL file paths)
+    };
 
     /// Constructor.
     ///
@@ -286,7 +288,7 @@ public:
         if (m_register.get_texture_count() == 0) {
             // index 0 is always the only invalid texture index
             m_register.register_texture(
-                0, false, "", "", 0.0f, "",
+                0, "", "", "", 0.0f, "",
                 mi::neuraylib::ITarget_code::Texture_shape_invalid,
                 mi::mdl::IValue_texture::BDK_NONE);
         }
@@ -301,19 +303,18 @@ public:
                 tag_value = m_lambda->get_resource_tag(tex);
             }
 
-            char const *name = nullptr;
-            bool is_resolved = false;
+            Resource_name resource;
 
             mi::mdl::IValue_texture::Bsdf_data_kind kind = tex->get_bsdf_data_kind();
             if (kind != mi::mdl::IValue_texture::BDK_NONE) {
+                const char* df_name = Df_data_helper::get_texture_db_name(kind);
                 if (m_store_df_data) {
                     Df_data_helper helper(m_db_transaction);
                     tag_value = static_cast<int>(helper.store_df_data(kind).get_uint());
-                    is_resolved = tag_value != 0;
+                    resource.name = df_name;
+                } else {
+                    resource.url = df_name;
                 }
-                name = Df_data_helper::get_texture_db_name(kind);
-            } else {
-                is_resolved = tag_value != 0;
             }
 
             // TODO
@@ -336,21 +337,22 @@ public:
             }
 
             if (valid || m_keep_unresolved_resources) {
-                if (!name)
-                    name = resource_to_name(tag_value, tex);
+                if (resource.name.empty() && resource.url.empty())
+                    resource = resource_to_name_url_owner(tag_value, tex);
 
                 mi::mdl::IValue_texture::gamma_mode gamma_mode = tex->get_gamma_mode();
                 mi::mdl::IType_texture::Shape shape = tex->get_type()->get_shape();
                 const char* selector = tex->get_selector();
+                std::string selector_string = selector ? selector : "";
 
                 bool new_entry = true;
                 size_t tex_idx;
                 if (m_resource_index_map) {
                     std::string resource_key =
-                        std::string(name) + '_' +
-                        std::to_string(unsigned(gamma_mode)) + '_' +
-                        std::to_string(unsigned(shape)) + "_" +
-                        selector;
+                        get_resource_key(resource) + '|' +
+                        std::to_string(unsigned(gamma_mode)) + '|' +
+                        std::to_string(unsigned(shape)) + '|' +
+                        selector_string;
                     Resource_index_map::const_iterator it(m_resource_index_map->find(resource_key));
                     if (it == m_resource_index_map->end()) {
                         // new entry
@@ -374,11 +376,11 @@ public:
                         (gamma_mode == mi::mdl::IValue_texture::gamma_linear ? 1.0f : 2.2f);
                     m_register.register_texture(
                         tex_idx,
-                        is_resolved,
-                        name,
-                        /*owner_module=*/"",
+                        resource.name.c_str(),
+                        resource.url.c_str(),
+                        resource.owner.c_str(),
                         gamma,
-                        selector,
+                        selector_string.c_str(),
                         get_texture_shape(tex->get_type()),
                         tex->get_bsdf_data_kind());
                 } else {
@@ -457,7 +459,7 @@ public:
     {
         if (m_register.get_light_profile_count() == 0) {
             // index 0 is always the only invalid light profile index
-            m_register.register_light_profile(0, /*is_resolved=*/false, "", "");
+            m_register.register_light_profile(0, "", "", "");
         }
 
         if (mi::mdl::IValue_resource const *r = mi::mdl::as<mi::mdl::IValue_resource>(v)) {
@@ -474,7 +476,7 @@ public:
                 m_db_transaction, DB::Tag(tag_value), valid, power, maximum);
 
             if (valid || m_keep_unresolved_resources) {
-                char const *name = resource_to_name(tag_value, r);
+                Resource_name resource = resource_to_name_url_owner(tag_value, r);
                 if (m_additional_lambda) {
                     m_additional_lambda->map_lp_resource(
                         r->get_kind(),
@@ -489,12 +491,14 @@ public:
                 bool new_entry = true;
                 size_t lp_idx;
                 if (m_resource_index_map) {
-                    Resource_index_map::const_iterator it(m_resource_index_map->find(name));
+                    std::string resource_key = get_resource_key(resource);
+                    Resource_index_map::const_iterator it(m_resource_index_map->find(resource_key));
                     if (it == m_resource_index_map->end()) {
                         // new entry
                         lp_idx = ++m_lp_idx;
                         new_entry = true;
-                        m_resource_index_map->insert(Resource_index_map::value_type(name, lp_idx));
+                        m_resource_index_map->insert(
+                            Resource_index_map::value_type(resource_key, lp_idx));
                     } else {
                         // known
                         lp_idx = it->second;
@@ -509,7 +513,10 @@ public:
 
                 if (new_entry) {
                     m_register.register_light_profile(
-                        lp_idx, /*is_resolved=*/tag_value != 0, name, "");
+                        lp_idx,
+                        resource.name.c_str(),
+                        resource.url.c_str(),
+                        resource.owner.c_str());
                 }
                 else {
                     m_register.update_light_profile(lp_idx);
@@ -555,7 +562,7 @@ public:
     {
         if (m_register.get_bsdf_measurement_count() == 0) {
             // index 0 is always the only invalid bsdf measurement index
-            m_register.register_bsdf_measurement(0, /*is_resolved=*/false, "", "");
+            m_register.register_bsdf_measurement(0, "", "", "");
         }
 
         if (mi::mdl::IValue_resource const *r = mi::mdl::as<mi::mdl::IValue_resource>(v)) {
@@ -570,7 +577,7 @@ public:
             MDL::get_bsdf_measurement_attributes(m_db_transaction, DB::Tag(tag_value), valid);
 
             if (valid || m_keep_unresolved_resources) {
-                char const *name = resource_to_name(tag_value, r);
+                Resource_name resource = resource_to_name_url_owner(tag_value, r);
                 if (m_additional_lambda) {
                     m_additional_lambda->map_bm_resource(
                         r->get_kind(), r->get_string_value(), tag_value, m_bm_idx, /*valid=*/true);
@@ -579,12 +586,14 @@ public:
                 bool new_entry = true;
                 size_t bm_idx;
                 if (m_resource_index_map) {
-                    Resource_index_map::const_iterator it(m_resource_index_map->find(name));
+                    std::string resource_key = get_resource_key(resource);
+                    Resource_index_map::const_iterator it(m_resource_index_map->find(resource_key));
                     if (it == m_resource_index_map->end()) {
                         // new entry
                         bm_idx = ++m_bm_idx;
                         new_entry = true;
-                        m_resource_index_map->insert(Resource_index_map::value_type(name, bm_idx));
+                        m_resource_index_map->insert(
+                            Resource_index_map::value_type(resource_key, bm_idx));
                     } else {
                         // known
                         bm_idx = it->second;
@@ -598,7 +607,10 @@ public:
 
                 if (new_entry) {
                     m_register.register_bsdf_measurement(
-                        bm_idx, /*is_resolved=*/tag_value != 0, name, "");
+                        bm_idx,
+                        resource.name.c_str(),
+                        resource.url.c_str(),
+                        resource.owner.c_str());
                 } else {
                     m_register.update_bsdf_measurement(bm_idx);
                 }
@@ -623,16 +635,32 @@ public:
 
 private:
 
-    /// Get the DB name of a resource.
-    char const *resource_to_name(int tag_value, mi::mdl::IValue_resource const *r)
+    static std::string get_resource_key(Resource_name const &resource)
     {
-        DB::Tag tag = DB::Tag(tag_value);
-        char const *name = m_db_transaction->tag_to_name(tag);
-        if (name)
-            return name;
-        if (m_keep_unresolved_resources)
-            return r->get_string_value();
-        return "";
+        return resource.name + '|' + resource.url + '|' + resource.owner;
+    }
+
+    /// Get the DB name, MDL URL, and owner module of a resource.
+    Resource_name resource_to_name_url_owner(
+        int tag_value,
+        mi::mdl::IValue_resource const *resource)
+    {
+        Resource_name result;
+
+        if (tag_value != 0) {
+            DB::Tag tag = DB::Tag(tag_value);
+            char const *name = m_db_transaction->tag_to_name(tag);
+            if (name)
+                result.name = name;
+        }
+
+        char const *url = resource->get_string_value();
+        if (!url)
+            return result;
+
+        result.url = MDL::strip_resource_owner_prefix(url);
+        result.owner = MDL::get_resource_owner_prefix(url);
+        return result;
     }
 
     /// Get the ITargetcode::Texture_shape from a MDL type.
@@ -1398,41 +1426,62 @@ private:
 /// A simple name register for target code.
 class Target_code_register : public IResource_register {
 public:
+    /// Base class for every resource entry
     struct Res_entry {
+        /// Constructor.
+        ///
+        /// \param index             the resource index
+        /// \param name              the DB name of the resource at this index
+        /// \param mdl_url           the MDL URL of the resource, without owner prefix
+        /// \param owner_module      the owner module name of the resource
+        /// \param is_body_resource  true if the resource is coming from the body of a material
+        ///                          (not solely from material arguments)
         Res_entry(
-            size_t                                   index,
-            std::string const                        &name,
-            std::string const                        &owner_module,
-            bool                                     is_resolved,
-            bool                                     is_body_resource)
+            size_t            index,
+            std::string const &name,
+            std::string const &mdl_url,
+            std::string const &owner_module,
+            bool              is_body_resource)
         : m_index(index)
         , m_name(name)
+        , m_mdl_url(mdl_url)
         , m_owner_module(owner_module)
-        , m_is_resolved(is_resolved)
-        , m_is_body_resource(is_body_resource || name.empty()) // empty resource is body
+        , m_is_body_resource(is_body_resource || (name.empty() && mdl_url.empty()))
         {
         }
 
         size_t       m_index;
         std::string  m_name;
+        std::string  m_mdl_url;
         std::string  m_owner_module;
-        bool         m_is_resolved;
         bool         m_is_body_resource;
     };
 
-
+    /// A texture entry in the texture resource table.
     struct Texture_entry : public Res_entry {
+        /// Constructor.
+        ///
+        /// \param index             the texture index
+        /// \param name              the DB name of the texture at this index
+        /// \param mdl_url           the MDL URL of the texture, without owner prefix
+        /// \param owner_module      the owner module name of the texture
+        /// \param is_body_resource  true if the texture is coming from the body of a material
+        ///                          (not solely from material arguments)
+        /// \param gamma             the gamma value of the texture
+        /// \param selector          the selector of the texture
+        /// \param type              the type of the texture
+        /// \param df_data_kind      the data kind of the texture
         Texture_entry(
             size_t                                     index,
             std::string const                          &name,
+            std::string const                          &mdl_url,
             std::string const                          &owner_module,
-            bool                                       is_resolved,
             bool                                       is_body_resource,
             float                                      gamma,
             std::string const                          &selector,
             mi::neuraylib::ITarget_code::Texture_shape type,
             mi::mdl::IValue_texture::Bsdf_data_kind    df_data_kind)
-        : Res_entry(index, name, owner_module, is_resolved, is_body_resource)
+        : Res_entry(index, name, mdl_url, owner_module, is_body_resource)
         , m_gamma(gamma)
         , m_selector(selector)
         , m_type(type)
@@ -1468,30 +1517,29 @@ public:
 
     /// Register a texture index.
     ///
-    /// \param index        the texture index
-    /// \param is_resolved  true, if this texture has been resolved and exists in the Neuray DB
-    /// \param name         the DB name of the texture at this index, if the texture has been
-    ///                     resolved, the unresolved mdl url of the texture otherwise
-    /// \param owner_module the owner module name of the texture
-    /// \param gamma        the gamma value of the texture
-    /// \param selector     the selector of the texture
-    /// \param type         the type of the texture
+    /// \param index         the texture index
+    /// \param name          the DB name of the texture at this index
+    /// \param mdl_url       the MDL URL of the texture, without owner prefix
+    /// \param owner_module  the owner module name of the texture (empty for absolute MDL URL)
+    /// \param gamma         the gamma value of the texture
+    /// \param selector      the selector of the texture
+    /// \param type          the type of the texture
     void register_texture(
         size_t                                     index,
-        bool                                       is_resolved,
         char const                                 *name,
+        char const                                 *mdl_url,
         char const                                 *owner_module,
         float                                      gamma,
         char const                                 *selector,
         mi::neuraylib::ITarget_code::Texture_shape type,
-        mi::mdl::IValue_texture::Bsdf_data_kind    df_data_kind) override
+        mi::mdl::IValue_texture::Bsdf_data_kind    df_data_kind) final
     {
         m_texture_table.push_back(
             Texture_entry(
                 index,
                 name,
+                mdl_url,
                 owner_module,
-                is_resolved,
                 !m_in_argument_mode,
                 gamma,
                 selector,
@@ -1506,7 +1554,7 @@ public:
     /// Updates an already registered resource when it is encountered again.
     ///
     /// \param index        the texture index
-    void update_texture(size_t index) override
+    void update_texture(size_t index) final
     {
         for (auto& it : m_texture_table)
         {
@@ -1519,7 +1567,7 @@ public:
     }
 
     /// Return the number of texture resources.
-    size_t get_texture_count() const override
+    size_t get_texture_count() const final
     {
         return m_texture_table.size();
     }
@@ -1530,26 +1578,25 @@ public:
     ///
     /// \return           The body texture count or \c ~0ull, if the value is invalid due to
     ///                   more than one call to a link unit add function.
-    size_t get_body_texture_count() const override
+    size_t get_body_texture_count() const final
     {
         return m_body_texture_count;
     }
 
     /// Register a light profile.
     ///
-    /// \param index  the light profile index
-    /// \param is_resolved  true, if this resource has been resolved and exists in the Neuray DB
-    /// \param name         the DB name of this index, if this resource has been resolved,
-    ///                     the unresolved mdl url otherwise
-    /// \param owner_module the owner module name of the resource
+    /// \param index         the light profile index
+    /// \param name          the DB name of this index
+    /// \param mdl_url       the MDL URL of this index, without owner prefix
+    /// \param owner_module  the owner module name of the resource (empty for absolute MDL URL)
     void register_light_profile(
         size_t                                     index,
-        bool                                       is_resolved,
         char const                                 *name,
-        char const                                 *owner_module) override
+        char const                                 *mdl_url,
+        char const                                 *owner_module) final
     {
         m_light_profile_table.push_back(
-            Res_entry(index, name, owner_module, is_resolved, !m_in_argument_mode));
+            Res_entry(index, name, mdl_url, owner_module, !m_in_argument_mode));
 
         // Is a body resource and body resources count has not been marked as invalid?
         if (!m_in_argument_mode && m_body_light_profile_count != ~0ull)
@@ -1559,7 +1606,7 @@ public:
     /// Updates an already registered resource when it is encountered again.
     ///
     /// \param index        the texture index
-    void update_light_profile(size_t index) override
+    void update_light_profile(size_t index) final
     {
         for (auto& it : m_light_profile_table)
         {
@@ -1572,7 +1619,7 @@ public:
     }
 
     /// Return the number of light profile resources.
-    size_t get_light_profile_count() const override
+    size_t get_light_profile_count() const final
     {
         return m_light_profile_table.size();
     }
@@ -1583,26 +1630,25 @@ public:
     ///
     /// \return           The body light profile count or \c ~0ull, if the value is invalid due to
     ///                   more than one call to a link unit add function.
-    size_t get_body_light_profile_count() const override
+    size_t get_body_light_profile_count() const final
     {
         return m_body_light_profile_count;
     }
 
     /// Register a BSDF measurement.
     ///
-    /// \param index        the BSDF measurement index
-    /// \param is_resolved  true, if this resource has been resolved and exists in the Neuray DB
-    /// \param name         the DB name of this index, if this resource has been resolved,
-    ///                     the unresolved mdl url otherwise
-    /// \param owner_module the owner module name of the resource
+    /// \param index         the BSDF measurement index
+    /// \param name          the DB name of this index
+    /// \param mdl_url       the MDL URL of this index, without owner prefix
+    /// \param owner_module  the owner module name of the resource (empty for absolute MDL URL)
     void register_bsdf_measurement(
         size_t                                     index,
-        bool                                       is_resolved,
         char const                                 *name,
-        char const                                 *owner_module) override
+        char const                                 *mdl_url,
+        char const                                 *owner_module) final
     {
         m_bsdf_measurement_table.push_back(
-            Res_entry(index, name, owner_module, is_resolved, !m_in_argument_mode));
+            Res_entry(index, name, mdl_url, owner_module, !m_in_argument_mode));
 
         // Is a body resource and body resources count has not been marked as invalid?
         if (!m_in_argument_mode && m_body_bsdf_measurement_count != ~0ull)
@@ -1613,7 +1659,7 @@ public:
     /// Updates an already registered resource when it is encountered again.
     ///
     /// \param index        the texture index
-    void update_bsdf_measurement(size_t index) override
+    void update_bsdf_measurement(size_t index) final
     {
         for (auto& it : m_bsdf_measurement_table)
         {
@@ -1626,7 +1672,7 @@ public:
     }
 
     /// Return the number of BSDF measurement resources.
-    size_t get_bsdf_measurement_count() const override
+    size_t get_bsdf_measurement_count() const final
     {
         return m_bsdf_measurement_table.size();
     }
@@ -1637,7 +1683,7 @@ public:
     ///
     /// \return           The body BSDF measurement count or \c ~0ull, if the value is invalid due to
     ///                   more than one call to a link unit add function.
-    size_t get_body_bsdf_measurement_count() const override
+    size_t get_body_bsdf_measurement_count() const final
     {
         return m_body_bsdf_measurement_count;
     }
@@ -1707,8 +1753,9 @@ static void fill_resource_tables(Target_code_register const &tc_reg, Target_code
     for (const auto & entry : txt_table) {
         tc->add_texture_index(
             entry.m_index,
-            entry.m_is_resolved ? entry.m_name : "",
-            !entry.m_is_resolved ? entry.m_name : "",
+            entry.m_name,
+            entry.m_mdl_url,
+            entry.m_owner_module,
             entry.m_gamma,
             entry.m_selector,
             entry.m_type,
@@ -1723,8 +1770,9 @@ static void fill_resource_tables(Target_code_register const &tc_reg, Target_code
     for (const auto & entry : lp_table) {
         tc->add_light_profile_index(
             entry.m_index,
-            entry.m_is_resolved ? entry.m_name : "",
-            !entry.m_is_resolved ? entry.m_name : "",
+            entry.m_name,
+            entry.m_mdl_url,
+            entry.m_owner_module,
             entry.m_is_body_resource);
     }
 
@@ -1733,8 +1781,9 @@ static void fill_resource_tables(Target_code_register const &tc_reg, Target_code
     for (const auto & entry : bm_table) {
         tc->add_bsdf_measurement_index(
             entry.m_index,
-            entry.m_is_resolved ? entry.m_name : "",
-            !entry.m_is_resolved ? entry.m_name : "",
+            entry.m_name,
+            entry.m_mdl_url,
+            entry.m_owner_module,
             entry.m_is_body_resource);
     }
 
@@ -2121,7 +2170,7 @@ Link_unit::Link_unit(
 : m_compiler(llvm_be.get_compiler())
 , m_be_kind(llvm_be.get_kind())
 , m_unit(llvm_be.create_link_unit(context))
-, m_target_code(new Target_code(llvm_be.get_strings_mapped_to_ids(), m_be_kind))
+, m_target_code(new Target_code(llvm_be.get_strings_mapped_to_ids(), llvm_be.get_use_builtin_resource_handler(), llvm_be.get_kind()))
 , m_transaction(transaction)
 , m_tc_reg(new Target_code_register())
 , m_res_index_map()

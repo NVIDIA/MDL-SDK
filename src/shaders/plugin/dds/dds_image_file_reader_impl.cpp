@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -41,6 +41,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <vector>
 
 namespace MI {
 
@@ -60,6 +61,13 @@ Image_file_reader_impl::Image_file_reader_impl(
         m_pixel_type,
         m_gamma,
         compress_format);
+
+    if(    m_is_valid
+        && m_is_header_dx10
+        && (m_header_dx10.m_misc_flag & DDS_RESOURCE_MISC_TEXTURECUBE)) {
+        log( mi::base::MESSAGE_SEVERITY_ERROR, "Unsupported DDS cubemap with DX10 header");
+        m_is_valid = false;
+    }
 }
 
 const char* Image_file_reader_impl::get_type() const
@@ -128,35 +136,47 @@ mi::neuraylib::ITile* Image_file_reader_impl::read(
     // Non compressed images
     if( !m_image.is_compressed()) {
 
-        mi::Uint32 bytes_per_pixel = get_bytes_per_pixel( m_pixel_type);
-        mi::Uint32 bytes_per_layer = image_width * image_height * bytes_per_pixel;
+        mi::Size bytes_per_pixel = get_bytes_per_pixel( m_pixel_type);
+        mi::Size bytes_per_layer = mi::Size( image_width) * image_height * bytes_per_pixel;
         copy_from_dds_to_tile(
             surface.get_pixels() + z * bytes_per_layer, image_width, image_height, tile.get());
 
     } else {
 
         // Compressed images
-        mi::Uint32 bytes_per_pixel = get_bytes_per_pixel( m_pixel_type);
-        size_t bytes_per_layer = (size_t)image_width * image_height * bytes_per_pixel;
+        mi::Size bytes_per_pixel = get_bytes_per_pixel( m_pixel_type);
+        mi::Size bytes_per_layer = mi::Size( image_width) * image_height * bytes_per_pixel;
 
         Dxt_decompressor decompressor;
         decompressor.set_source_format( m_image.get_compressed_format(), image_width, image_height);
         decompressor.set_target_format( get_components_per_pixel( m_pixel_type), image_width);
 
         mi::Uint32 block_height = decompressor.get_block_dimension();
-        size_t bytes_per_block = (size_t)image_width * block_height * bytes_per_pixel;
+        mi::Size bytes_per_scanline = mi::Size( image_width) * bytes_per_pixel;
 
-        const mi::Uint8* const src = surface.get_pixels() + z * surface.get_size() / 6;
-        const mi::Uint8* const buffer1 = decompressor.get_buffer();
-        auto* const buffer2 = new mi::Uint8[bytes_per_layer];
+        mi::Size bytes_per_compressed_layer = surface.get_size() / surface.get_depth();
+        const mi::Uint8* src = surface.get_pixels() + z * bytes_per_compressed_layer;
+        std::vector<mi::Uint8> buffer2( bytes_per_layer);
 
         for( mi::Uint32 block = 0; block < decompressor.get_block_count_y(); ++block) {
             decompressor.decompress_blockline( src, block);
-            memcpy( buffer2 + block * bytes_per_block, buffer1, bytes_per_block);
+            mi::Uint32 src_y = block * block_height;
+            if( src_y >= image_height)
+                break;
+
+            mi::Uint32 rows = std::min( block_height, image_height - src_y);
+            for( mi::Uint32 row = 0; row < rows; ++row) {
+                mi::Uint32 dest_y = m_image.is_cubemap()
+                    ? src_y + row
+                    : image_height - 1 - (src_y + row);
+                memcpy(
+                    buffer2.data() + mi::Size( dest_y) * bytes_per_scanline,
+                    decompressor.get_scanline( row),
+                    bytes_per_scanline);
+            }
         }
 
-        copy_from_dds_to_tile( buffer2, image_width, image_height, tile.get());
-        delete[] buffer2;
+        copy_from_dds_to_tile( buffer2.data(), image_width, image_height, tile.get());
     }
 
     return tile.extract();

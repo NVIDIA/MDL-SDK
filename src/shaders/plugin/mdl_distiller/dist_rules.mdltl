@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -280,6 +280,8 @@ rules Elide_tint_rules topdown {
         --> bsdf_tint( c * tint, base) repeat_rules if tint == tintt;
     bsdf_tint( c, bsdf_tint_ex(tint,tintt,base))
         --> bsdf_tint_ex( c * tint, c * tintt, base) repeat_rules;
+    bsdf_tint( c, bsdf_conditional_operator(cond, bsdf1, bsdf2))
+        --> bsdf_conditional_operator(cond, bsdf_tint(c, bsdf1), bsdf_tint(c, bsdf2)) repeat_rules;
     bsdf_tint( c, bsdf_mix_1(w,df)) --> bsdf_mix_1( w, bsdf_tint( c, df));
     bsdf_tint( c, bsdf_color_mix_1(w,df)) --> bsdf_color_mix_1( w, bsdf_tint( c, df));
     bsdf_tint( c, bsdf_mix_2(w1,df1,w2,df2))

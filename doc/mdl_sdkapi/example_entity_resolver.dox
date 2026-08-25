@@ -1,0 +1,148 @@
+/******************************************************************************
+ * Copyright (c) 2026, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+/*! \page mi_neuray_example_entity_resolver Example for a custom MDL entity resolver
+
+<div align="right">
+    [\link mi_neuray_example_spectral_rendering Previous\endlink]
+    [\link mi_neuray_examples Up\endlink]
+</div>
+
+This example shows how to implement a custom MDL entity resolver.
+
+\section mi_neuray_example_entity_resolver_new New Topics
+
+  - Virtual file system abstraction
+  - Resolving modules
+  - Resolving resources
+  - Limitations of the example
+
+\section mi_neuray_example_entity_resolver_descr Detailed Description
+
+<dl>
+<dt><b>Virtual file system abstraction</b></dt>
+<dd><br>
+The example uses an \c IFilesystem interface as an abstraction of a file system to demonstrate which
+operations are necessary to implement a custom entity resolver. At the minimum, one needs to be
+able to check for the existence of files, and to open files. Two implementation are provided:
+\c Os_file_system directly passes all queries to \c fopen(), and \c Virtual_file_system serves all
+queries from its own state. The first one is used by the default, the second one can be enabled by
+passing \c --virtual_fs to the example.
+<!-- Workaround to prevent a layout problem after dd tags. -->
+</dd>
+
+<dt><b>Resolving modules</b></dt>
+<dd><br>
+A successful resolver operation for modules returns an instance of
+#mi::neuraylib::IMdl_resolved_module. Such an implementation returns the name of the module, its
+filename, and provides a reader. The reader should be constructed lazily.
+
+The resolver operation starts with a check for \c "." and \c ".." as module name components. In
+practice, the compiler enforces these rules for modules. It is still repeatedly here for clarity
+and consistency with resources, which \em do need these checks.
+
+Absolute module names can be simply looked up in the search paths. A relative module name is
+converted into an absolute module name and filename using the provided owner name and owner file
+path. However, a simple existence check is not sufficient here. If the module exists, we still need
+to check whether it is shadowed by an absolute module name (see "Check 1" in section 2.2. of [\ref
+MDLLS]). Note that for correct support of weak-relative module names, a single error message \em
+needs to be provided in the context.
+<!-- Workaround to prevent a layout problem after dd tags. -->
+</dd>
+
+<dt><b>Resolving resources</b></dt>
+<dd><br>
+For simplicity, this example does not implement support for uv-tiles or animated textures. A
+successful resolver operation returns an instance of #mi::neuraylib::IMdl_resolved_resource which
+references (given these limitations) a single instance of
+#mi::neuraylib::IMdl_resolved_resource_element. It also means that when implementing the former
+interface, the file path mask is identical to the file path, and the filename mask is identical to
+the filename. For resources, it is strongly recommended to construct the reader lazily when
+requested (or implement the reader in such a way that all I/O operations like opening the
+underlying stream done lazily).
+
+The resolver operation starts with a check for \c "." and \c ".." as file path components. For
+resources, these checks are actually mandatory since they are not enforced by the compiler.
+
+The remainder of the resolver operation for resources is quite similar to that of modules. Absolute
+resource file paths can be simply looked up in the search paths. A relative resource file path is
+converted into an absolute resource file path and filename using the provided owner name and owner
+file path. However, a simple existence check is not sufficient here. If the resource exists, we
+still need to check whether it is shadowed by an absolute resource file path (see "Check 1" in
+section 2.2. of [\ref MDLLS]).
+
+Note that resolving of resources requires an additional error message compared to modules (where
+the compiler adds one in a generic way).
+<!-- Workaround to prevent a layout problem after dd tags. -->
+</dd>
+
+<dt><b>Limitations of the example</b></dt>
+<dd><br>
+As mentioned, the example does not support uv-tiles or animated textures. Adding support for that
+requires extending the file system abstraction to support the enumeration of directories. In
+settings where that is not easily possible, the resolver needs to fall back to probing potential
+files for existence, which can be expensive and is error-prone.
+
+Furthermore, the implementation of #mi::neuraylib::IMdl_resolved_resource_element needs to be
+extended to support an array of uv-tiles, including the mapping from to index to u- and
+v-coordinates. The implementation of #mi::neuraylib::IMdl_resolved_resource needs to be extended to
+support an array of animated textures. The correct file path mask and filename mask need to be
+returned.
+
+A second limitation of this example is the lack of support for MDLE and MDL archives. Adding support
+for that requires a larger extension of the file system abstraction to deal with containers and
+members thereof. In particular the implementation of these functions can be quite involving. Both
+require additional consistency checks. In addition, the lookup rules for MDLE are completely
+different.
+<!-- Workaround to prevent a layout problem after dd tags. -->
+</dd>
+</dl>
+
+\section example_entity_resolver Example Source
+
+<b>Source Code Location:</b>
+  <tt>examples/mdl_sdk/entity_resolver/example_entity_resolver.cpp</tt>
+
+\include entity_resolver/example_entity_resolver.cpp
+
+<b>Source Code Location:</b>
+  <tt>examples/mdl_sdk/entity_resolver/entity_resolver.h</tt>
+
+\include entity_resolver/entity_resolver.h
+
+<b>Source Code Location:</b>
+  <tt>examples/mdl_sdk/entity_resolver/entity_resolver.cpp</tt>
+
+\include entity_resolver/entity_resolver.cpp
+
+<div align="right">
+    [\link mi_neuray_example_spectral_rendering Previous\endlink]
+    [\link mi_neuray_examples Up\endlink]
+</div>
+
+*/

@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -38,6 +38,11 @@
 #include <math.h>
 
 #include <mi/mdl/mdl_target_types.h>
+
+#ifndef M_PI
+    #define M_PI            3.14159265358979323846
+#endif
+#define M_ONE_OVER_PI       0.318309886183790671538
 
 #define USE_SMOOTHERSTEP_FILTER
 
@@ -64,6 +69,20 @@ struct Texture
     float3               inv_size;           // the inverse values of the size of the texture
 };
 
+// Custom structure representing an MDL BSDF measurement.
+struct Mbsdf
+{
+    unsigned            has_data[2];            // true if there is a measurement for this part
+    cudaTextureObject_t eval_data[2];           // uses filter mode cudaFilterModeLinear
+    float               max_albedo[2];          // max albedo used to limit the multiplier
+    float*              sample_data[2];         // CDFs for sampling a BSDF measurement
+    float*              albedo_data[2];         // max albedo for each theta (isotropic)
+
+    uint2           angular_resolution[2];      // size of the dataset, needed for texel access
+    float2          inv_angular_resolution[2];  // the inverse values of the size of the dataset
+    unsigned        num_channels[2];            // number of color channels (1 or 3)
+};
+
 
 // The texture handler structure required by the MDL SDK with custom additional fields.
 struct Texture_handler : Texture_handler_base {
@@ -72,6 +91,11 @@ struct Texture_handler : Texture_handler_base {
                                         // (without the invalid texture)
     Texture const *textures;            // the textures used by the material
                                         // (without the invalid texture)
+
+    size_t         num_mbsdfs;          // the number of mbsdfs used by the material
+                                        // (without the invalid mbsdf)
+    Mbsdf const   *mbsdfs;              // the mbsdfs used by the material
+                                        // (without the invalid mbsdf)
 };
 
 // The texture handler structure required by the MDL SDK with custom additional fields.
@@ -81,6 +105,11 @@ struct Texture_handler_deriv : mi::mdl::Texture_handler_deriv_base {
                                        // (without the invalid texture)
     Texture const *textures;           // the textures used by the material
                                        // (without the invalid texture)
+
+    size_t         num_mbsdfs;         // the number of mbsdfs used by the material
+                                       // (without the invalid mbsdf)
+    Mbsdf const   *mbsdfs;             // the mbsdfs used by the material
+                                       // (without the invalid mbsdf)
 };
 
 
@@ -591,16 +620,39 @@ extern "C" __device__ float df_light_profile_pdf(
 // ------------------------------------------------------------------------------------------------
 // BSDF Measurements
 //
-// Note:  Measured BSDFs are not implemented for the MDL Core examples.
-//        See the MDL SDK counterpart for details.
+// Ported from the MDL SDK counterpart (texture_support_cuda.h) so MDL Core examples can also
+// render materials that use measured BSDFs (via the ::df::bsdf_measurement_* runtime functions).
 // ------------------------------------------------------------------------------------------------
+
+// Binary search through a CDF.
+__device__ inline unsigned sample_cdf(
+    const float* cdf,
+    unsigned cdf_size,
+    float xi)
+{
+    unsigned li = 0;
+    unsigned ri = cdf_size - 1;
+    unsigned m = (li + ri) / 2;
+    while (ri > li)
+    {
+        if (xi < cdf[m])
+            ri = m;
+        else
+            li = m + 1;
+
+        m = (li + ri) / 2;
+    }
+
+    return m;
+}
 
 // Implementation of df::bsdf_measurement_isvalid() for an MBSDF.
 extern "C" __device__ bool df_bsdf_measurement_isvalid(
     Texture_handler_base const *self_base,
     unsigned                    bsdf_measurement_idx)
 {
-    return false;
+    Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
+    return bsdf_measurement_idx != 0 && bsdf_measurement_idx - 1 < self->num_mbsdfs;
 }
 
 // Implementation of df::bsdf_measurement_resolution() function needed by generated code,
@@ -613,9 +665,59 @@ extern "C" __device__ void df_bsdf_measurement_resolution(
     unsigned                    bsdf_measurement_idx,
     Mbsdf_part                  part)
 {
-    result[0] = 0;
-    result[1] = 0;
-    result[2] = 0;
+    Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
+
+    if (bsdf_measurement_idx == 0 || bsdf_measurement_idx - 1 >= self->num_mbsdfs)
+    {
+        // invalid MBSDF returns zero
+        result[0] = 0;
+        result[1] = 0;
+        result[2] = 0;
+        return;
+    }
+
+    Mbsdf const &bm = self->mbsdfs[bsdf_measurement_idx - 1];
+    const unsigned part_idx = static_cast<unsigned>(part);
+
+    // check for the part
+    if (part_idx > 1 || bm.has_data[part_idx] == 0)
+    {
+        result[0] = 0;
+        result[1] = 0;
+        result[2] = 0;
+        return;
+    }
+
+    // pass out the information
+    result[0] = bm.angular_resolution[part_idx].x;
+    result[1] = bm.angular_resolution[part_idx].y;
+    result[2] = bm.num_channels[part_idx];
+}
+
+
+__device__ inline float3 bsdf_compute_uvw(const float theta_phi_in[2],
+                                          const float theta_phi_out[2])
+{
+    // assuming each phi is between -pi and pi
+    float u = theta_phi_out[1] - theta_phi_in[1];
+    if (u < 0.0) u += float(2.0 * M_PI);
+    if (u > float(1.0 * M_PI)) u = float(2.0 * M_PI) - u;
+    u *= float(M_ONE_OVER_PI);
+
+    const float v = theta_phi_out[0] * float(2.0 / M_PI);
+    const float w = theta_phi_in[0] * float(2.0 / M_PI);
+
+    return make_float3(u, v, w);
+}
+
+template<typename T>
+__device__ inline T bsdf_measurement_lookup(const cudaTextureObject_t& eval_volume,
+                                            const float theta_phi_in[2],
+                                            const float theta_phi_out[2])
+{
+    // 3D volume on the GPU (phi_delta x theta_out x theta_in)
+    const float3 uvw = bsdf_compute_uvw(theta_phi_in, theta_phi_out);
+    return tex3D<T>(eval_volume, uvw.x, uvw.y, uvw.z);
 }
 
 // Implementation of df::bsdf_measurement_evaluate() for an MBSDF.
@@ -627,7 +729,38 @@ extern "C" __device__ void df_bsdf_measurement_evaluate(
     float const                 theta_phi_out[2],
     Mbsdf_part                  part)
 {
-    store_result3(result, 0.0f);
+    Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
+
+    if (bsdf_measurement_idx == 0 || bsdf_measurement_idx - 1 >= self->num_mbsdfs)
+    {
+        // invalid MBSDF returns zero
+        store_result3(result, 0.0f);
+        return;
+    }
+
+    const Mbsdf& bm = self->mbsdfs[bsdf_measurement_idx - 1];
+    const unsigned part_idx = static_cast<unsigned>(part);
+
+    // check for the parts
+    if (part_idx > 1 || bm.has_data[part_idx] == 0)
+    {
+        store_result3(result, 0.0f);
+        return;
+    }
+
+    // handle channels
+    if (bm.num_channels[part_idx] == 3)
+    {
+        const float4 sample = bsdf_measurement_lookup<float4>(
+            bm.eval_data[part_idx], theta_phi_in, theta_phi_out);
+        store_result3(result, sample.x, sample.y, sample.z);
+    }
+    else
+    {
+        const float sample = bsdf_measurement_lookup<float>(
+            bm.eval_data[part_idx], theta_phi_in, theta_phi_out);
+        store_result3(result, sample);
+    }
 }
 
 // Implementation of df::bsdf_measurement_sample() for an MBSDF.
@@ -642,6 +775,90 @@ extern "C" __device__ void df_bsdf_measurement_sample(
     result[0] = -1.0f;  // negative theta means absorption
     result[1] = -1.0f;
     result[2] = 0.0f;
+
+    Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
+    if (bsdf_measurement_idx == 0 || bsdf_measurement_idx - 1 >= self->num_mbsdfs)
+        return;  // invalid MBSDFs returns zero
+
+    const Mbsdf& bm = self->mbsdfs[bsdf_measurement_idx - 1];
+    unsigned part_idx = static_cast<unsigned>(part);
+
+    if (part_idx > 1 || bm.has_data[part_idx] == 0)
+        return;  // check for the part
+
+    // CDF data
+    uint2 res = bm.angular_resolution[part_idx];
+    const float* sample_data = bm.sample_data[part_idx];
+    if (res.x < 1 || res.y < 1)
+        return;  // invalid resolution
+
+    unsigned idx_theta_out = unsigned(theta_phi_out[0] * float(M_ONE_OVER_PI * 2.0f) * float(res.x));
+    idx_theta_out = min(idx_theta_out, res.x - 1);
+
+    // sample theta_in
+    //-------------------------------------------
+    float xi0 = xi[0];
+    const float* cdf_theta = sample_data + idx_theta_out * res.x;
+    unsigned idx_theta_in = sample_cdf(cdf_theta, res.x, xi0);       // binary search
+
+    float prob_theta = cdf_theta[idx_theta_in];
+    if (idx_theta_in > 0)
+    {
+        const float tmp = cdf_theta[idx_theta_in - 1];
+        prob_theta -= tmp;
+        xi0 -= tmp;
+    }
+    xi0 /= prob_theta;  // rescale for re-usage
+
+    // sample phi
+    //-------------------------------------------
+    float xi1 = xi[1];
+    const float* cdf_phi = sample_data +
+                           (res.x * res.x) +                                // CDF theta block
+                           (idx_theta_out * res.x + idx_theta_in) * res.y;  // selected CDF phi
+
+    // select which half-circle to choose with probability 0.5
+    const bool flip = (xi1 > 0.5f);
+    if (flip)
+        xi1 = 1.0f - xi1;
+    xi1 *= 2.0f;
+
+    unsigned idx_phi = sample_cdf(cdf_phi, res.y, xi1);           // binary search
+    float prob_phi = cdf_phi[idx_phi];
+    if (idx_phi > 0)
+    {
+        const float tmp = cdf_phi[idx_phi - 1];
+        prob_phi -= tmp;
+        xi1 -= tmp;
+    }
+    xi1 /= prob_phi;  // rescale for re-usage
+
+    // compute direction
+    //-------------------------------------------
+    const float2 inv_res = bm.inv_angular_resolution[part_idx];
+
+    const float s_theta = float(0.5 * M_PI) * inv_res.x;
+    const float s_phi   = float(1.0 * M_PI) * inv_res.y;
+
+    const float cos_theta_0 = cosf(float(idx_theta_in)      * s_theta);
+    const float cos_theta_1 = cosf(float(idx_theta_in + 1u) * s_theta);
+
+    const float cos_theta = cos_theta_0 * (1.0f - xi1) + cos_theta_1 * xi1;
+    result[0] = acosf(cos_theta);
+    result[1] = (float(idx_phi) + xi0) * s_phi;
+
+    if (flip)
+        result[1] = float(2.0 * M_PI) - result[1];  // phi \in [0, 2pi]
+
+    // align phi
+    result[1] += (theta_phi_out[1] > 0) ? theta_phi_out[1] : (float(2.0 * M_PI) + theta_phi_out[1]);
+    if (result[1] > float(2.0 * M_PI)) result[1] -= float(2.0 * M_PI);
+    if (result[1] > float(1.0 * M_PI)) result[1] = float(-2.0 * M_PI) + result[1];  // to [-pi, pi]
+
+    // compute pdf
+    //-------------------------------------------
+    result[2] = prob_theta * prob_phi * 0.5f
+                / (s_phi * (cos_theta_0 - cos_theta_1));
 }
 
 // Implementation of df::bsdf_measurement_pdf() for an MBSDF.
@@ -652,7 +869,89 @@ extern "C" __device__ float df_bsdf_measurement_pdf(
     float const                 theta_phi_out[2],
     Mbsdf_part                  part)
 {
-    return 0.0f;
+    Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
+
+    if (bsdf_measurement_idx == 0 || bsdf_measurement_idx - 1 >= self->num_mbsdfs)
+        return 0.0f;  // invalid MBSDF returns zero
+
+    const Mbsdf& bm = self->mbsdfs[bsdf_measurement_idx - 1];
+    unsigned part_idx = static_cast<unsigned>(part);
+
+    // check for the part
+    if (part_idx > 1 || bm.has_data[part_idx] == 0)
+        return 0.0f;
+
+    // CDF data and resolution
+    const float* sample_data = bm.sample_data[part_idx];
+    uint2 res = bm.angular_resolution[part_idx];
+
+    // compute indices in the CDF data
+    float3 uvw = bsdf_compute_uvw(theta_phi_in, theta_phi_out); // phi_delta, theta_out, theta_in
+    unsigned idx_theta_in = unsigned(uvw.z * float(res.x));
+    unsigned idx_theta_out  = unsigned(uvw.y * float(res.x));
+    unsigned idx_phi   = unsigned(uvw.x * float(res.y));
+    idx_theta_in  = min(idx_theta_in, res.x - 1);
+    idx_theta_out = min(idx_theta_out, res.x - 1);
+    idx_phi   = min(idx_phi, res.y - 1);
+
+    // get probability to select theta_in
+    const float* cdf_theta = sample_data + idx_theta_out * res.x;
+    float prob_theta = cdf_theta[idx_theta_in];
+    if (idx_theta_in > 0)
+    {
+        const float tmp = cdf_theta[idx_theta_in - 1];
+        prob_theta -= tmp;
+    }
+
+    // get probability to select phi
+    const float* cdf_phi = sample_data +
+        (res.x * res.x) +                                // CDF theta block
+        (idx_theta_out * res.x + idx_theta_in) * res.y;  // selected CDF phi
+    float prob_phi = cdf_phi[idx_phi];
+    if (idx_phi > 0)
+    {
+        const float tmp = cdf_phi[idx_phi - 1];
+        prob_phi -= tmp;
+    }
+
+    // compute probability to select a position in the sphere patch
+    float2 inv_res = bm.inv_angular_resolution[part_idx];
+
+    const float s_theta = float(0.5 * M_PI) * inv_res.x;
+    const float s_phi = float(1.0 * M_PI) * inv_res.y;
+
+    const float cos_theta_0 = cosf(float(idx_theta_in)      * s_theta);
+    const float cos_theta_1 = cosf(float(idx_theta_in + 1u) * s_theta);
+
+    return prob_theta * prob_phi * 0.5f
+        / (s_phi * (cos_theta_0 - cos_theta_1));
+}
+
+
+__device__ inline void df_bsdf_measurement_albedo(
+    float                       result[2],          // output: max (in case of color) albedo
+                                                    // for the selected direction ([0]) and
+                                                    // global ([1])
+    Texture_handler const       *self,
+    unsigned                    bsdf_measurement_idx,
+    float const                 theta_phi[2],
+    Mbsdf_part                  part)
+{
+    const Mbsdf& bm = self->mbsdfs[bsdf_measurement_idx - 1];
+    const unsigned part_idx = static_cast<unsigned>(part);
+
+    // check for the part
+    if (part_idx > 1 || bm.has_data[part_idx] == 0)
+        return;
+
+    const uint2 res = bm.angular_resolution[part_idx];
+    if (res.x < 1)
+        return;
+
+    unsigned idx_theta = unsigned(theta_phi[0] * float(2.0 / M_PI) * float(res.x));
+    idx_theta = min(idx_theta, res.x - 1u);
+    result[0] = bm.albedo_data[part_idx][idx_theta];
+    result[1] = bm.max_albedo[part_idx];
 }
 
 // Implementation of df::bsdf_measurement_albedos() for an MBSDF.
@@ -665,7 +964,28 @@ extern "C" __device__ void df_bsdf_measurement_albedos(
     unsigned                    bsdf_measurement_idx,
     float const                 theta_phi[2])
 {
-    store_result4(result, 0.0f);
+    result[0] = 0.0f;
+    result[1] = 0.0f;
+    result[2] = 0.0f;
+    result[3] = 0.0f;
+
+    Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
+    if (bsdf_measurement_idx == 0 || bsdf_measurement_idx - 1 >= self->num_mbsdfs)
+        return;  // invalid MBSDF returns zero
+
+    df_bsdf_measurement_albedo(
+        &result[0],
+        self,
+        bsdf_measurement_idx,
+        theta_phi,
+        mi::mdl::stdlib::mbsdf_data_reflection);
+
+    df_bsdf_measurement_albedo(
+        &result[2],
+        self,
+        bsdf_measurement_idx,
+        theta_phi,
+        mi::mdl::stdlib::mbsdf_data_transmission);
 }
 
 

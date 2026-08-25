@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -4516,6 +4516,8 @@ Module const *NT_analysis::load_module_to_import(
                 &rel_name->access_position(),
                 &m_ctx));
 
+            // A failed consistency check produces two error messages. Do not run the fallback
+            // code path in such a case.
             if (is_weak &&
                 !import_result.is_valid_interface() &&
                 messages.get_error_message_count() == 1)
@@ -18631,15 +18633,26 @@ void NT_analysis::handle_resource_url(
 
             string murl(url, get_allocator());
 
+            bool is_weak    = false;
             bool is_weak_16 = false;
-            if (m_module.get_mdl_version() >= IMDL::MDL_VERSION_1_6) {
-                // from MDL 1.6 weak imports do not exists
-                if (murl[0] != '/' &&
-                    murl[0] != '.' &&
-                    murl.rfind(".mdle:") == string::npos) {
-                        is_weak_16 = true;
-                        // previous weak imports are relative now
-                        murl = "./" + murl;
+
+            // from MDL 1.6 weak resource references do not exist
+            if (murl[0] != '/' &&
+                murl[0] != '.' &&
+                murl.rfind(".mdle:") == string::npos) {
+                is_weak = true;
+                if (m_module.get_mdl_version() >= IMDL::MDL_VERSION_1_6) {
+                    is_weak_16 = true;
+                }
+
+                if (!is_weak_16 && is_empty(m_module.get_filename())) {
+                    // in string based modules weak resources always resolved to absolute
+                    // prior to 1.6
+                    murl = "/" + murl;
+                    is_weak = false;
+                } else {
+                    // previous weak resources are relative now
+                    murl = "./" + murl;
                 }
             }
 
@@ -18649,6 +18662,43 @@ void NT_analysis::handle_resource_url(
                 m_module.get_name(),
                 m_module.get_filename(),
                 &m_ctx));
+
+            // A failed consistency check produces two error messages. Do not run the fallback
+            // code path in such a case.
+            if (is_weak &&
+                !res.is_valid_interface() &&
+                messages.get_error_message_count() == 1)
+            {
+                if (is_weak_16) {
+                    // copy the error message, which is otherwise lost
+                    copy_resolver_messages_to_module(messages, /*is_resource=*/true);
+                }
+                // clear previous messages
+                messages.clear();
+
+                // resolving a formally weak reference failed, check if it is absolute
+                mi::base::Handle<IMDL_resource_set> abs_res(resolver.resolve_resource(
+                    lit->access_position(),
+                    murl.c_str() + 1,
+                    m_module.get_name(),
+                    m_module.get_filename(),
+                    &m_ctx));
+                if (is_weak_16) {
+                    if (abs_res.is_valid_interface()) {
+                        // .. and add a note
+                        add_note(
+                            POSSIBLE_ABSOLUTE_IMPORT,
+                            lit->access_position(),
+                            Error_params(*this).add(murl.c_str() + 1));
+                    } else {
+                        // do not generate a second error
+                        messages.clear();
+                    }
+                } else {
+                    // prior to 1.6, we allow weak resources to be resolved as absolute
+                    res = abs_res;
+                }
+            }
 
             // copy messages
             copy_resolver_messages_to_module(messages, /*is_resource=*/ true);
@@ -18662,26 +18712,6 @@ void NT_analysis::handle_resource_url(
 
             if (messages.get_error_message_count() > 0 || !res.is_valid_interface()) {
                 resource_exists = false;
-
-                if (is_weak_16 &&
-                    !res.is_valid_interface() &&
-                    messages.get_error_message_count() == 1)
-                {
-                    // resolving a formally weak reference failed, check if it is absolute
-                    mi::base::Handle<IMDL_resource_set> res(resolver.resolve_resource(
-                        lit->access_position(),
-                        murl.c_str() + 1,
-                        m_module.get_name(),
-                        m_module.get_filename(),
-                        &m_ctx));
-                    if (res.is_valid_interface()) {
-                        // .. and add a note
-                        add_note(
-                            POSSIBLE_ABSOLUTE_IMPORT,
-                            lit->access_position(),
-                            Error_params(*this).add(murl.c_str() + 1));
-                    }
-                }
 
                 // Resolver failed. This is bad, because letting the name unchanged
                 // might lead to "wrong" fixes later. One possible solution would be to

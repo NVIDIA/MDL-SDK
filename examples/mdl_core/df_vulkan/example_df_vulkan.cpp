@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -32,6 +32,9 @@
 
 #include "example_shared_backends.h"
 #include "example_vulkan_shared.h"
+
+#include <mi/base/config.h>
+#include <mi/mdl/mdl_target_types.h>
 
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
@@ -60,10 +63,20 @@ static const uint32_t g_binding_material_textures_2d = 8;
 static const uint32_t g_binding_material_textures_3d = 9;
 static const uint32_t g_binding_ro_data_buffer = 10;
 static const uint32_t g_binding_argument_block_buffer = 11;
+static const uint32_t g_binding_mbsdf_part_data = 12;
+static const uint32_t g_binding_mbsdf_eval_data = 13;
+static const uint32_t g_binding_mbsdf_sample_data = 14;
+static const uint32_t g_binding_mbsdf_albedo_data = 15;
 
 static const uint32_t g_set_ro_data_buffer = 0;
 static const uint32_t g_set_argument_block_buffer = 0;
 static const uint32_t g_set_material_textures = 0;
+static const uint32_t g_set_mbsdf_data = 0;
+
+// Upper bound on the number of (measurement, part) slots that can be bound at once.
+// Each MDL bsdf_measurement contributes two slots (reflection + transmission), so this
+// caps the number of distinct measurements per material at g_max_num_mbsdf_parts / 2.
+static const uint32_t g_max_num_mbsdf_parts = 32;
 
 // Command line options structure.
 struct Options
@@ -97,6 +110,11 @@ struct Options
     bool enable_bsdf_flags = false;
     mi::mdl::Df_flags allowed_scatter_mode = mi::mdl::DF_FLAGS_ALLOW_REFLECT_AND_TRANSMIT;
     std::vector<std::string> additional_mdl_paths;
+
+    // Spectral rendering
+    bool enable_spectral = false;
+    float spectral_min_wavelength = 400.0f;
+    float spectral_max_wavelength = 700.0f;
 };
 
 Vulkan_buffer create_storage_buffer(
@@ -154,6 +172,327 @@ Vulkan_buffer create_storage_buffer(
 //------------------------------------------------------------------------------
 // MDL-Vulkan resource interop
 //------------------------------------------------------------------------------
+
+// Plain-old-data mirror of the GLSL struct MbsdfPartData (std430 layout) in mdl_runtime.glsl.
+// Each MDL bsdf_measurement contributes two of these (reflection + transmission); a part
+// without source data leaves has_data = 0 and the runtime returns the invalid-measurement
+// values without touching the corresponding eval/sample/albedo slot.
+struct Mbsdf_part_data
+{
+    uint32_t angular_resolution_theta;
+    uint32_t angular_resolution_phi;
+    float    inv_angular_resolution_theta;
+    float    inv_angular_resolution_phi;
+    uint32_t num_channels;
+    uint32_t has_data;
+    float    max_albedo;
+    float    _pad;
+};
+static_assert(sizeof(Mbsdf_part_data) == 32,
+    "Mbsdf_part_data must match the std430 layout in mdl_runtime.glsl");
+
+// All Vulkan resources backing one MDL bsdf_measurement. Each measurement has two parts
+// (reflection, transmission); a part with no data leaves its slots empty (no Vulkan resources
+// allocated) -- the per-part metadata SSBO carries the has_data flag that the runtime checks.
+struct Mbsdf
+{
+    Vulkan_texture eval_data[2] = {};          // 3D RGBA32F sampled image per part
+    Vulkan_buffer  sample_data_buffer[2] = {}; // SSBO holding the CDFs
+    Vulkan_buffer  albedo_data_buffer[2] = {}; // SSBO holding the per-theta_in albedo
+    Mbsdf_part_data part_data[2] = {};
+
+    void destroy(VkDevice device)
+    {
+        for (int p = 0; p < 2; ++p)
+        {
+            eval_data[p].destroy(device);
+            sample_data_buffer[p].destroy(device);
+            albedo_data_buffer[p].destroy(device);
+        }
+    }
+};
+
+// Builds the CDFs / albedo / 3D eval volume for one part (reflection or transmission) of an
+// MDL bsdf_measurement and uploads them to Vulkan. Returns false if the upload failed; a part
+// without source data is reported as success with has_data = 0 (and no Vulkan resources).
+//
+// The CDF math and data layout exactly mirror the CUDA core counterpart in
+// prod/mdl_examples/mdl_core/shared/example_cuda_shared.h::prepare_core_mbsdf_part() so that
+// the GLSL runtime can use the same lookup formulas as the CUDA runtime.
+bool prepare_mbsdf_part_vk(
+    VkDevice device,
+    VkPhysicalDevice physical_device,
+    VkQueue queue,
+    VkCommandPool command_pool,
+    Bsdf_measurement_data::Part part,
+    const Bsdf_measurement_data& bsdf_measurement,
+    Mbsdf& mbsdf_out)
+{
+    const uint32_t part_idx = static_cast<uint32_t>(part);
+
+    // no data for this part: leave has_data = 0 (default) and skip Vulkan resource creation
+    if (!bsdf_measurement.has_part(part))
+        return true;
+
+    const Bsdf_measurement_data::Part_data& dataset = bsdf_measurement.get_part(part);
+
+    const uint32_t res_x = dataset.resolution_theta;
+    const uint32_t res_y = dataset.resolution_phi;
+    const uint32_t num_channels =
+        dataset.type == Bsdf_measurement_data::BDT_SCALAR ? 1u : 3u;
+
+    Mbsdf_part_data& pd = mbsdf_out.part_data[part_idx];
+    pd.angular_resolution_theta = res_x;
+    pd.angular_resolution_phi = res_y;
+    pd.inv_angular_resolution_theta = 1.0f / float(res_x);
+    pd.inv_angular_resolution_phi = 1.0f / float(res_y);
+    pd.num_channels = num_channels;
+
+    const float* src_data = dataset.data.data();
+
+    // ------------------------------------------------------------------------------------
+    // Build the two-stage CDF used for importance sampling: first theta_out given theta_in,
+    // then phi_delta given (theta_in, theta_out). The maximum colour channel is used as the
+    // "probability" for colour-valued measurements.
+    const uint32_t cdf_theta_size = res_x * res_x;
+    const size_t sample_data_size = size_t(cdf_theta_size) + size_t(cdf_theta_size) * res_y;
+
+    std::vector<float> sample_data(sample_data_size);
+    std::vector<float> albedo_data(res_x);
+
+    float* sample_data_theta = sample_data.data();
+    float* sample_data_phi = sample_data.data() + cdf_theta_size;
+
+    const float s_theta = static_cast<float>(M_PI * 0.5) / float(res_x);
+    const float s_phi = static_cast<float>(M_PI) / float(res_y);
+
+    float max_albedo = 0.0f;
+    for (uint32_t t_in = 0; t_in < res_x; ++t_in)
+    {
+        float sum_theta = 0.0f;
+        float sintheta0_sqd = 0.0f;
+        for (uint32_t t_out = 0; t_out < res_x; ++t_out)
+        {
+            const float sintheta1 = std::sin(float(t_out + 1) * s_theta);
+            const float sintheta1_sqd = sintheta1 * sintheta1;
+
+            // BSDFs are symmetric: f(w_in, w_out) = f(w_out, w_in); average both samples.
+            const float mu = (sintheta1_sqd - sintheta0_sqd) * s_phi * 0.5f;
+            sintheta0_sqd = sintheta1_sqd;
+
+            const uint32_t offset_phi  = (t_in * res_x + t_out) * res_y;
+            const uint32_t offset_phi2 = (t_out * res_x + t_in) * res_y;
+
+            float sum_phi = 0.0f;
+            for (uint32_t p_out = 0; p_out < res_y; ++p_out)
+            {
+                const uint32_t idx  = offset_phi  + p_out;
+                const uint32_t idx2 = offset_phi2 + p_out;
+
+                float value = 0.0f;
+                if (num_channels == 3)
+                {
+                    value = std::max(std::max(src_data[3 * idx + 0], src_data[3 * idx + 1]),
+                                     std::max(src_data[3 * idx + 2], 0.0f))
+                          + std::max(std::max(src_data[3 * idx2 + 0], src_data[3 * idx2 + 1]),
+                                     std::max(src_data[3 * idx2 + 2], 0.0f));
+                }
+                else
+                {
+                    value = std::max(src_data[idx], 0.0f) + std::max(src_data[idx2], 0.0f);
+                }
+
+                sum_phi += value * mu;
+                sample_data_phi[idx] = sum_phi;
+            }
+
+            // normalize phi CDF
+            for (uint32_t p_out = 0; p_out < res_y; ++p_out)
+            {
+                const uint32_t idx = offset_phi + p_out;
+                sample_data_phi[idx] = (sum_phi > 0.0f) ? (sample_data_phi[idx] / sum_phi) : 0.0f;
+            }
+
+            sum_theta += sum_phi;
+            sample_data_theta[t_in * res_x + t_out] = sum_theta;
+        }
+
+        if (sum_theta > max_albedo)
+            max_albedo = sum_theta;
+        albedo_data[t_in] = sum_theta;
+
+        // normalize theta CDF
+        for (uint32_t t_out = 0; t_out < res_x; ++t_out)
+        {
+            const uint32_t idx = t_in * res_x + t_out;
+            sample_data_theta[idx] = (sum_theta > 0.0f) ? (sample_data_theta[idx] / sum_theta) : 0.0f;
+        }
+    }
+    pd.max_albedo = max_albedo;
+
+    // Upload CDF and albedo to device-local SSBOs.
+    mbsdf_out.sample_data_buffer[part_idx] = create_storage_buffer(
+        device, physical_device, queue, command_pool,
+        sample_data.data(), sample_data_size * sizeof(float));
+    mbsdf_out.albedo_data_buffer[part_idx] = create_storage_buffer(
+        device, physical_device, queue, command_pool,
+        albedo_data.data(), albedo_data.size() * sizeof(float));
+
+    // ------------------------------------------------------------------------------------
+    // Build the eval volume (phi_delta x theta_out x theta_in). To keep a single sampler3D
+    // array on the GLSL side we always upload as RGBA32F; for 1-channel data the scalar is
+    // replicated into RGB so that the same `.rgb` lookup works for both 1- and 3-channel
+    // measurements.
+    std::vector<float> lookup_data(size_t(4) * res_y * res_x * res_x);
+    for (uint32_t t_in = 0; t_in < res_x; ++t_in)
+    {
+        for (uint32_t t_out = 0; t_out < res_x; ++t_out)
+        {
+            const uint32_t offset_phi  = (t_in * res_x + t_out) * res_y;
+            const uint32_t offset_phi2 = (t_out * res_x + t_in) * res_y;
+            for (uint32_t p_out = 0; p_out < res_y; ++p_out)
+            {
+                const uint32_t idx  = offset_phi  + p_out;
+                const uint32_t idx2 = offset_phi2 + p_out;
+                if (num_channels == 3)
+                {
+                    lookup_data[4 * idx + 0] = (src_data[3 * idx + 0] + src_data[3 * idx2 + 0]) * 0.5f;
+                    lookup_data[4 * idx + 1] = (src_data[3 * idx + 1] + src_data[3 * idx2 + 1]) * 0.5f;
+                    lookup_data[4 * idx + 2] = (src_data[3 * idx + 2] + src_data[3 * idx2 + 2]) * 0.5f;
+                    lookup_data[4 * idx + 3] = 1.0f;
+                }
+                else
+                {
+                    const float v = (src_data[idx] + src_data[idx2]) * 0.5f;
+                    lookup_data[4 * idx + 0] = v;
+                    lookup_data[4 * idx + 1] = v;
+                    lookup_data[4 * idx + 2] = v;
+                    lookup_data[4 * idx + 3] = 1.0f;
+                }
+            }
+        }
+    }
+
+    // Create the 3D image. The extent matches the (phi, theta_out, theta_in) layout used by
+    // the CUDA cudaMalloc3DArray() path, so the same uvw = (phi_delta/pi, theta_out*2/pi,
+    // theta_in*2/pi) coordinates can be used in GLSL.
+    Vulkan_texture& eval_tex = mbsdf_out.eval_data[part_idx];
+    {
+        VkImageCreateInfo image_create_info = {};
+        image_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+        image_create_info.imageType = VK_IMAGE_TYPE_3D;
+        image_create_info.format = VK_FORMAT_R32G32B32A32_SFLOAT;
+        image_create_info.extent = { res_y, res_x, res_x };
+        image_create_info.mipLevels = 1;
+        image_create_info.arrayLayers = 1;
+        image_create_info.samples = VK_SAMPLE_COUNT_1_BIT;
+        image_create_info.tiling = VK_IMAGE_TILING_OPTIMAL;
+        image_create_info.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+        image_create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        image_create_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+        VK_CHECK(vkCreateImage(device, &image_create_info, nullptr, &eval_tex.image));
+
+        eval_tex.device_memory = allocate_and_bind_image_memory(
+            device, physical_device, eval_tex.image, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    }
+
+    {
+        const size_t staging_size = lookup_data.size() * sizeof(float);
+        Staging_buffer staging_buffer(
+            device, physical_device, staging_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+
+        void* mapped = staging_buffer.map_memory();
+        std::memcpy(mapped, lookup_data.data(), staging_size);
+        staging_buffer.unmap_memory();
+
+        Temporary_command_buffer command_buffer(device, command_pool);
+        command_buffer.begin();
+
+        transitionImageLayout(command_buffer.get(),
+            /*image=*/           eval_tex.image,
+            /*src_access_mask=*/ 0,
+            /*dst_access_mask=*/ VK_ACCESS_TRANSFER_WRITE_BIT,
+            /*old_layout=*/      VK_IMAGE_LAYOUT_UNDEFINED,
+            /*new_layout=*/      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            /*src_stage_mask=*/  VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+            /*dst_stage_mask=*/  VK_PIPELINE_STAGE_TRANSFER_BIT);
+
+        VkBufferImageCopy copy_region = {};
+        copy_region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        copy_region.imageSubresource.layerCount = 1;
+        copy_region.imageExtent = { res_y, res_x, res_x };
+
+        vkCmdCopyBufferToImage(command_buffer.get(), staging_buffer.get(),
+            eval_tex.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy_region);
+
+        transitionImageLayout(command_buffer.get(),
+            /*image=*/           eval_tex.image,
+            /*src_access_mask=*/ VK_ACCESS_TRANSFER_WRITE_BIT,
+            /*dst_access_mask=*/ VK_ACCESS_SHADER_READ_BIT,
+            /*old_layout=*/      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            /*new_layout=*/      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            /*src_stage_mask=*/  VK_PIPELINE_STAGE_TRANSFER_BIT,
+            /*dst_stage_mask=*/  VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+
+        command_buffer.end_and_submit(queue);
+    }
+
+    VkImageViewCreateInfo image_view_create_info = {};
+    image_view_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    image_view_create_info.image = eval_tex.image;
+    image_view_create_info.viewType = VK_IMAGE_VIEW_TYPE_3D;
+    image_view_create_info.format = VK_FORMAT_R32G32B32A32_SFLOAT;
+    image_view_create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    image_view_create_info.subresourceRange.baseMipLevel = 0;
+    image_view_create_info.subresourceRange.levelCount = 1;
+    image_view_create_info.subresourceRange.baseArrayLayer = 0;
+    image_view_create_info.subresourceRange.layerCount = 1;
+
+    VK_CHECK(vkCreateImageView(
+        device, &image_view_create_info, nullptr, &eval_tex.image_view));
+
+    pd.has_data = 1;
+    return true;
+}
+
+// Loads the bsdf_measurement identified by mbsdf_index from the target code, computes the CDFs
+// and uploads everything (eval volume, CDF SSBO, albedo SSBO) to Vulkan. Both reflection and
+// transmission parts are handled; a part that has no source data leaves has_data = 0 in its
+// metadata entry and does not allocate any Vulkan resources for that part.
+Mbsdf create_material_mbsdf(
+    VkDevice device,
+    VkPhysicalDevice physical_device,
+    VkQueue queue,
+    VkCommandPool command_pool,
+    const Target_code* target_code,
+    size_t mbsdf_index)
+{
+    Mbsdf mbsdf;
+
+    const Bsdf_measurement_data* bsdf_measurement = target_code->get_bsdf_measurement(mbsdf_index);
+    if (!bsdf_measurement || !bsdf_measurement->is_valid())
+    {
+        std::cerr << "Failed to access bsdf_measurement resource at index "
+                  << mbsdf_index << "; rendering it as the invalid measurement.\n";
+        return mbsdf;
+    }
+
+    if (!prepare_mbsdf_part_vk(device, physical_device, queue, command_pool,
+        Bsdf_measurement_data::PART_REFLECTION, *bsdf_measurement, mbsdf))
+    {
+        std::cerr << "Failed to upload reflection part of bsdf_measurement index "
+                  << mbsdf_index << "\n";
+    }
+    if (!prepare_mbsdf_part_vk(device, physical_device, queue, command_pool,
+        Bsdf_measurement_data::PART_TRANSMISSION, *bsdf_measurement, mbsdf))
+    {
+        std::cerr << "Failed to upload transmission part of bsdf_measurement index "
+                  << mbsdf_index << "\n";
+    }
+
+    return mbsdf;
+}
 
 // Creates the image and image view for the given texture index.
 Vulkan_texture create_material_texture(
@@ -416,6 +755,10 @@ private:
         uint32_t samples_per_iteration;
         uint32_t progressive_iteration;
         uint32_t bsdf_data_flags;
+
+        // Spectral rendering
+        float spectral_min_wavelength;
+        float spectral_max_wavelength;
     };
 
 private:
@@ -497,6 +840,14 @@ private:
     std::vector<Vulkan_texture> m_material_textures_2d;
     std::vector<Vulkan_texture> m_material_textures_3d;
     std::unique_ptr<Argument_block> m_argument_block;
+
+    // Measured BSDF resources. Each entry corresponds to one MDL bsdf_measurement
+    // (skipping the always-invalid slot 0); each measurement contributes two slots
+    // (reflection, transmission) into the per-part metadata SSBO m_mbsdf_part_data_buffer
+    // and into the bindless eval/sample/albedo descriptor arrays.
+    std::vector<Mbsdf> m_mbsdfs;
+    Vulkan_buffer m_mbsdf_part_data_buffer; // single SSBO holding 2 * m_mbsdfs.size() entries
+    VkSampler m_mbsdf_sampler = VK_NULL_HANDLE;
 
     Render_params m_render_params;
     bool m_restart_progressive = true; // Restart progressive rendering in the next frame
@@ -594,6 +945,55 @@ void Df_vulkan_app::init_resources()
         }
     }
 
+    // Load measured BSDFs and upload their CDFs, albedo and eval volumes. Index 0 is the
+    // invalid measurement and is skipped (it maps to slot -1 in the per-part SSBO and is
+    // handled by the runtime via the explicit bm_idx <= 0 check).
+    if (m_target_code->get_bsdf_measurement_count() > 1)
+    {
+        const size_t num_mbsdfs = m_target_code->get_bsdf_measurement_count() - 1;
+        if (num_mbsdfs > g_max_num_mbsdf_parts / 2)
+        {
+            std::cerr << "Too many bsdf_measurement resources (" << num_mbsdfs
+                      << "); raise g_max_num_mbsdf_parts in example_df_vulkan.cpp.\n";
+            exit_failure();
+        }
+
+        m_mbsdfs.reserve(num_mbsdfs);
+        for (size_t i = 1; i < m_target_code->get_bsdf_measurement_count(); ++i)
+        {
+            m_mbsdfs.push_back(create_material_mbsdf(
+                m_device, m_physical_device, m_graphics_queue, m_command_pool,
+                m_target_code, i));
+        }
+
+        // Pack all per-(measurement, part) metadata into one std430 SSBO. Order matches the
+        // slot calculation in mdl_runtime.glsl: slot = 2 * (bm_idx - 1) + part.
+        std::vector<Mbsdf_part_data> part_data;
+        part_data.reserve(m_mbsdfs.size() * 2);
+        for (const Mbsdf& mb : m_mbsdfs)
+        {
+            part_data.push_back(mb.part_data[0]);
+            part_data.push_back(mb.part_data[1]);
+        }
+        m_mbsdf_part_data_buffer = create_storage_buffer(
+            m_device, m_physical_device, m_graphics_queue, m_command_pool,
+            part_data.data(), part_data.size() * sizeof(Mbsdf_part_data));
+
+        // Shared sampler for all measured-BSDF eval volumes: linear filtering with clamp,
+        // matching the cudaTextureDesc settings used by the CUDA example.
+        VkSamplerCreateInfo sampler_create_info = {};
+        sampler_create_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+        sampler_create_info.magFilter = VK_FILTER_LINEAR;
+        sampler_create_info.minFilter = VK_FILTER_LINEAR;
+        sampler_create_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+        sampler_create_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        sampler_create_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        sampler_create_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        sampler_create_info.unnormalizedCoordinates = VK_FALSE;
+        VK_CHECK(vkCreateSampler(
+            m_device, &sampler_create_info, nullptr, &m_mbsdf_sampler));
+    }
+
     create_descriptor_set_layouts();
     create_pipeline_layouts();
     create_accumulation_images();
@@ -608,6 +1008,8 @@ void Df_vulkan_app::init_resources()
     m_render_params.max_path_length = m_options.max_path_length;
     m_render_params.samples_per_iteration = m_options.samples_per_iteration;
     m_render_params.bsdf_data_flags = m_options.allowed_scatter_mode;
+    m_render_params.spectral_min_wavelength = m_options.spectral_min_wavelength;
+    m_render_params.spectral_max_wavelength = m_options.spectral_max_wavelength;
 
     m_render_params.point_light_pos = m_options.light_pos;
     m_render_params.point_light_intensity = m_options.light_enabled
@@ -681,6 +1083,11 @@ void Df_vulkan_app::cleanup_resources()
         texture.destroy(m_device);
     for (Vulkan_texture& texture : m_material_textures_2d)
         texture.destroy(m_device);
+    for (Mbsdf& mbsdf : m_mbsdfs)
+        mbsdf.destroy(m_device);
+    m_mbsdf_part_data_buffer.destroy(m_device);
+    if (m_mbsdf_sampler != VK_NULL_HANDLE)
+        vkDestroySampler(m_device, m_mbsdf_sampler, nullptr);
     m_ro_data_buffer.destroy(m_device);
     m_argument_block_buffer.destroy(m_device);
     m_argument_block_staging_buffers.clear();
@@ -813,7 +1220,7 @@ void Df_vulkan_app::render(VkCommandBuffer command_buffer, uint32_t frame_index,
     vkCmdWriteTimestamp(command_buffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, m_query_pool, frame_index * 2);
 
     uint32_t group_count_x = (m_image_width + g_local_size_x - 1) / g_local_size_x;
-    uint32_t group_count_y = (m_image_width + g_local_size_y - 1) / g_local_size_y;
+    uint32_t group_count_y = (m_image_height + g_local_size_y - 1) / g_local_size_y;
     vkCmdDispatch(command_buffer, group_count_x, group_count_y, 1);
 
     vkCmdWriteTimestamp(command_buffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, m_query_pool, frame_index * 2 + 1);
@@ -1024,6 +1431,25 @@ void Df_vulkan_app::do_settings_and_stats_gui()
     changed |= ImGui::DragFloat("Point Light Intensity", &m_render_params.point_light_intensity, 10.0f, 0.0f, std::numeric_limits<float>::max());
     changed |= ImGui::DragFloat("Environment Intensity", &m_render_params.environment_intensity_factor, 0.01f, 0.0f, std::numeric_limits<float>::max());
     ImGui::Spacing();
+
+    if (m_options.enable_spectral)
+    {
+        ImGui::Text("Spectral Rendering:");
+        ImGui::Separator();
+        if (ImGui::SliderFloat("Min Wavelength (nm)", &m_render_params.spectral_min_wavelength, 380.0f, 780.0f))
+        {
+            if (m_render_params.spectral_max_wavelength < m_render_params.spectral_min_wavelength)
+                m_render_params.spectral_max_wavelength = m_render_params.spectral_min_wavelength;
+            changed = true;
+        }
+        if (ImGui::SliderFloat("Max Wavelength (nm)", &m_render_params.spectral_max_wavelength, 380.0f, 780.0f))
+        {
+            if (m_render_params.spectral_min_wavelength > m_render_params.spectral_max_wavelength)
+                m_render_params.spectral_min_wavelength = m_render_params.spectral_max_wavelength;
+            changed = true;
+        }
+        ImGui::Spacing();
+    }
 
     ImGui::Text("Material parameters:");
     ImGui::Separator();
@@ -1286,13 +1712,25 @@ VkShaderModule Df_vulkan_app::create_path_trace_shader_module()
     defines.push_back("MDL_SET_MATERIAL_TEXTURES_3D=" + std::to_string(g_set_material_textures));
     defines.push_back("MDL_SET_MATERIAL_ARGUMENT_BLOCK=" + std::to_string(g_set_argument_block_buffer));
     defines.push_back("MDL_SET_MATERIAL_RO_DATA_SEGMENT=" + std::to_string(g_set_ro_data_buffer));
+    defines.push_back("MDL_SET_MBSDF_DATA=" + std::to_string(g_set_mbsdf_data));
     defines.push_back("MDL_BINDING_MATERIAL_TEXTURES_2D=" + std::to_string(g_binding_material_textures_2d));
     defines.push_back("MDL_BINDING_MATERIAL_TEXTURES_3D=" + std::to_string(g_binding_material_textures_3d));
     defines.push_back("MDL_BINDING_MATERIAL_ARGUMENT_BLOCK=" + std::to_string(g_binding_argument_block_buffer));
     defines.push_back("MDL_BINDING_MATERIAL_RO_DATA_SEGMENT=" + std::to_string(g_binding_ro_data_buffer));
+    defines.push_back("MDL_BINDING_MBSDF_PART_DATA=" + std::to_string(g_binding_mbsdf_part_data));
+    defines.push_back("MDL_BINDING_MBSDF_EVAL_DATA=" + std::to_string(g_binding_mbsdf_eval_data));
+    defines.push_back("MDL_BINDING_MBSDF_SAMPLE_DATA=" + std::to_string(g_binding_mbsdf_sample_data));
+    defines.push_back("MDL_BINDING_MBSDF_ALBEDO_DATA=" + std::to_string(g_binding_mbsdf_albedo_data));
+    defines.push_back("MDL_NUM_MBSDFS=" + std::to_string(m_mbsdfs.size()));
 
     if (m_options.tex_results_cache_size > 0)
         defines.push_back("NUM_TEX_RESULTS=" + std::to_string(m_options.tex_results_cache_size));
+
+    if (m_options.enable_spectral)
+    {
+        defines.push_back("MDL_SPECTRAL_RENDERING");
+        defines.push_back("MDL_DF_SPECTRAL_SAMPLES=" MI_BASE_STRINGIZE(MDL_DF_SPECTRAL_SAMPLES));
+    }
 
     if (m_options.enable_ro_segment)
         defines.push_back("USE_RO_DATA_SEGMENT");
@@ -1358,6 +1796,13 @@ void Df_vulkan_app::create_descriptor_set_layouts()
         bindings.push_back(make_binding(g_binding_aux_roughness_buffer, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1));
         bindings.push_back(make_binding(g_binding_ro_data_buffer, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1));
         bindings.push_back(make_binding(g_binding_argument_block_buffer, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1));
+        // Measured BSDF resources. The eval/sample/albedo bindings are sized for the worst
+        // case (g_max_num_mbsdf_parts slots) and use the PARTIALLY_BOUND bit so materials
+        // that do not reference any measurement -- or only some slots -- still validate.
+        bindings.push_back(make_binding(g_binding_mbsdf_part_data, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1));
+        bindings.push_back(make_binding(g_binding_mbsdf_eval_data, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, g_max_num_mbsdf_parts));
+        bindings.push_back(make_binding(g_binding_mbsdf_sample_data, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, g_max_num_mbsdf_parts));
+        bindings.push_back(make_binding(g_binding_mbsdf_albedo_data, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, g_max_num_mbsdf_parts));
 
         VkDescriptorSetLayoutCreateInfo descriptor_set_layout_create_info = {};
         descriptor_set_layout_create_info.sType
@@ -1368,6 +1813,13 @@ void Df_vulkan_app::create_descriptor_set_layouts()
         std::vector<VkDescriptorBindingFlags> binding_flags(bindings.size(), 0);
         binding_flags[3] = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT; // g_binding_material_textures_2d
         binding_flags[4] = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT; // g_binding_material_textures_3d
+        // MBSDF eval / sample / albedo arrays are sparsely populated (a part with no source
+        // data leaves its slot empty); they require the partially-bound flag, and we set the
+        // metadata SSBO the same way so it can be skipped entirely when no MBSDFs are loaded.
+        binding_flags[12] = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT; // g_binding_mbsdf_part_data
+        binding_flags[13] = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT; // g_binding_mbsdf_eval_data
+        binding_flags[14] = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT; // g_binding_mbsdf_sample_data
+        binding_flags[15] = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT; // g_binding_mbsdf_albedo_data
 
         VkDescriptorSetLayoutBindingFlagsCreateInfoEXT descriptor_set_layout_binding_flags = {};
         descriptor_set_layout_binding_flags.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO_EXT;
@@ -1698,11 +2150,13 @@ void Df_vulkan_app::create_environment_map()
 void Df_vulkan_app::create_descriptor_pool_and_sets()
 {
     // Reserve enough space. This is way too much, but sizing them perfectly
-    // would make the code less readable.
+    // would make the code less readable. The counts also include MBSDF resources
+    // (a worst-case g_max_num_mbsdf_parts eval samplers + 2*g_max_num_mbsdf_parts
+    // CDF/albedo SSBOs + 1 metadata SSBO per descriptor set).
     const VkDescriptorPoolSize pool_sizes[] = {
         { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 100 },
-        { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
-        { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 100 },
+        { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 + m_image_count * g_max_num_mbsdf_parts },
+        { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 100 + m_image_count * (1 + 2 * g_max_num_mbsdf_parts) },
         { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 100 }
     };
 
@@ -1749,9 +2203,18 @@ void Df_vulkan_app::create_descriptor_pool_and_sets()
     std::vector<VkWriteDescriptorSet> descriptor_writes;
 
     // Reserve enough space. This is way too much, but sizing them perfectly
-    // would make the code less readable.
-    descriptor_buffer_infos.reserve(100);
-    descriptor_image_infos.reserve(1000);
+    // would make the code less readable. We must NOT let either vector reallocate
+    // during population: descriptor_writes[i] stores raw pointers into these vectors
+    // (via &descriptor_buffer_infos.back() / &descriptor_image_infos.back()), so a
+    // reallocation would invalidate those pointers before vkUpdateDescriptorSets()
+    // is called. Each frame writes up to:
+    //   * a handful of fixed buffer/image infos, plus
+    //   * 1 part-data buffer info + g_max_num_mbsdf_parts * 2 mbsdf SSBO infos, and
+    //   * 2D/3D material textures + g_max_num_mbsdf_parts mbsdf eval image infos.
+    descriptor_buffer_infos.reserve(
+        100 + size_t(m_image_count) * (1 + size_t(g_max_num_mbsdf_parts) * 2));
+    descriptor_image_infos.reserve(
+        1000 + size_t(m_image_count) * size_t(g_max_num_mbsdf_parts));
 
     for (uint32_t i = 0; i < m_image_count; i++)
     {
@@ -1884,6 +2347,99 @@ void Df_vulkan_app::create_descriptor_pool_and_sets()
             descriptor_write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
             descriptor_write.pBufferInfo = &descriptor_buffer_infos.back();
             descriptor_writes.push_back(descriptor_write);
+        }
+
+        // Measured BSDF resources. Only written if at least one measurement is loaded;
+        // otherwise the corresponding GLSL bindings are skipped via MDL_NUM_MBSDFS == 0
+        // and the partially-bound flag on the descriptor set layout.
+        if (!m_mbsdfs.empty() && m_mbsdf_part_data_buffer.buffer)
+        {
+            // Per-(measurement, part) metadata SSBO. Slot ordering matches the GLSL
+            // mbsdf_part_slot(bm_idx, part) = 2 * (bm_idx - 1) + part formula.
+            VkDescriptorBufferInfo part_data_buffer_info = {};
+            part_data_buffer_info.buffer = m_mbsdf_part_data_buffer.buffer;
+            part_data_buffer_info.range = VK_WHOLE_SIZE;
+            descriptor_buffer_infos.push_back(part_data_buffer_info);
+
+            VkWriteDescriptorSet part_data_write = {};
+            part_data_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            part_data_write.dstSet = m_path_trace_descriptor_sets[i];
+            part_data_write.dstBinding = g_binding_mbsdf_part_data;
+            part_data_write.descriptorCount = 1;
+            part_data_write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+            part_data_write.pBufferInfo = &descriptor_buffer_infos.back();
+            descriptor_writes.push_back(part_data_write);
+
+            // For each (measurement, part) pair: write the corresponding eval texture,
+            // CDF SSBO, and albedo SSBO. Parts without source data (has_data == 0) are
+            // skipped; the runtime checks has_data and returns the invalid-measurement
+            // result for them.
+            for (size_t mb = 0; mb < m_mbsdfs.size(); ++mb)
+            {
+                const Mbsdf& mbsdf = m_mbsdfs[mb];
+                for (uint32_t part = 0; part < 2; ++part)
+                {
+                    if (mbsdf.part_data[part].has_data == 0)
+                        continue;
+
+                    const uint32_t slot = static_cast<uint32_t>(2 * mb + part);
+
+                    // Eval volume (3D sampled image).
+                    {
+                        VkDescriptorImageInfo image_info = {};
+                        image_info.sampler = m_mbsdf_sampler;
+                        image_info.imageView = mbsdf.eval_data[part].image_view;
+                        image_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                        descriptor_image_infos.push_back(image_info);
+
+                        VkWriteDescriptorSet w = {};
+                        w.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                        w.dstSet = m_path_trace_descriptor_sets[i];
+                        w.dstBinding = g_binding_mbsdf_eval_data;
+                        w.dstArrayElement = slot;
+                        w.descriptorCount = 1;
+                        w.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+                        w.pImageInfo = &descriptor_image_infos.back();
+                        descriptor_writes.push_back(w);
+                    }
+
+                    // Sample (CDF) SSBO.
+                    {
+                        VkDescriptorBufferInfo bi = {};
+                        bi.buffer = mbsdf.sample_data_buffer[part].buffer;
+                        bi.range = VK_WHOLE_SIZE;
+                        descriptor_buffer_infos.push_back(bi);
+
+                        VkWriteDescriptorSet w = {};
+                        w.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                        w.dstSet = m_path_trace_descriptor_sets[i];
+                        w.dstBinding = g_binding_mbsdf_sample_data;
+                        w.dstArrayElement = slot;
+                        w.descriptorCount = 1;
+                        w.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+                        w.pBufferInfo = &descriptor_buffer_infos.back();
+                        descriptor_writes.push_back(w);
+                    }
+
+                    // Albedo SSBO.
+                    {
+                        VkDescriptorBufferInfo bi = {};
+                        bi.buffer = mbsdf.albedo_data_buffer[part].buffer;
+                        bi.range = VK_WHOLE_SIZE;
+                        descriptor_buffer_infos.push_back(bi);
+
+                        VkWriteDescriptorSet w = {};
+                        w.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                        w.dstSet = m_path_trace_descriptor_sets[i];
+                        w.dstBinding = g_binding_mbsdf_albedo_data;
+                        w.dstArrayElement = slot;
+                        w.descriptorCount = 1;
+                        w.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+                        w.pBufferInfo = &descriptor_buffer_infos.back();
+                        descriptor_writes.push_back(w);
+                    }
+                }
+            }
         }
     }
 
@@ -2066,7 +2622,14 @@ void print_usage(char const* prog_name)
         << "  --hide_gui                  hide the settings gui. Can be toggled with SPACE\n"
         << "  --allowed_scatter_mode <m>  limits the allowed scatter mode to \"none\", \"reflect\",\n"
         << "                              \"transmit\" or \"reflect_and_transmit\"\n"
-        << "                              (default: restriction disabled)"
+        << "                              (default: restriction disabled)\n"
+        << "  --spectral                  enable spectral rendering mode\n"
+        << "  --spectral_min_wavelength <nm>\n"
+        << "                              minimum wavelength for spectral rendering in nm\n"
+        << "                              (default: 400, range: 380-780)\n"
+        << "  --spectral_max_wavelength <nm>\n"
+        << "                              maximum wavelength for spectral rendering in nm\n"
+        << "                              (default: 700, range: 380-780)"
         << std::endl;
 
     exit(EXIT_FAILURE);
@@ -2142,6 +2705,12 @@ void parse_command_line(int argc, char* argv[], Options& options)
                 options.dump_glsl = true;
             else if (arg == "--hide_gui")
                 options.hide_gui = true;
+            else if (arg == "--spectral")
+                options.enable_spectral = true;
+            else if (arg == "--spectral_min_wavelength" && i < argc - 1)
+                options.spectral_min_wavelength = static_cast<float>(std::atof(argv[++i]));
+            else if (arg == "--spectral_max_wavelength" && i < argc - 1)
+                options.spectral_max_wavelength = static_cast<float>(std::atof(argv[++i]));
             else if (arg == "--allowed_scatter_mode" && i < argc - 1)
             {
                 options.enable_bsdf_flags = true;
@@ -2194,6 +2763,8 @@ int MAIN_UTF8(int argc, char* argv[])
         mi::Uint32 backend_options = BACKEND_OPTIONS_ENABLE_AUX; // We always enable auxilary functions in this example
         if (options.enable_ro_segment)
             backend_options |= BACKEND_OPTIONS_ENABLE_RO_SEGMENT;
+        if (options.enable_spectral)
+            backend_options |= BACKEND_OPTIONS_ENABLE_SPECTRAL;
 
         std::unordered_map<std::string, std::string> additional_backend_options;
         additional_backend_options.emplace(MDL_JIT_OPTION_GLSL_VERSION, "450");
@@ -2204,6 +2775,17 @@ int MAIN_UTF8(int argc, char* argv[])
         additional_backend_options.emplace(MDL_JIT_OPTION_GLSL_UNIFORM_SSBO_SET, std::to_string(g_set_ro_data_buffer));
         additional_backend_options.emplace(MDL_JIT_OPTION_MAX_CONST_DATA, std::to_string(options.max_const_data));
         additional_backend_options.emplace(MDL_JIT_OPTION_LIBBSDF_FLAGS_IN_BSDF_DATA, options.enable_bsdf_flags ? "true" : "false");
+
+        // Make the MDL backend emit an "#include "mdl_target_code_types.glsl"" directive at the
+        // top of the generated GLSL instead of redeclaring State_core / BSDF data / EDF data
+        // structs. This is required so that the path tracer (which uses the same include) and
+        // the MDL generated GLSL agree on the exact field layout of these API types. Otherwise
+        // mangled function signatures would differ across the two shader fragments and the
+        // glslang linker would not be able to match function declarations to bodies. This is
+        // especially important in spectral mode, where State_core has an extra
+        // "spectral_wavelengths" field that the MDL backend does not know about.
+        additional_backend_options.emplace(
+            MDL_JIT_OPTION_GLSL_INCLUDE_FOR_API_TYPES, "mdl_target_code_types.glsl");
 
         Material_backend_compiler material_be_compiler(
             mdl_compiler.get(),

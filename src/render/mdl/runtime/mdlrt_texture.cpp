@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -316,13 +316,22 @@ mi::Float32_4 interpolate_biquintic(
         const unsigned int z_layer = ((i == 0) ? texi1_z : texi0_z) + layer_offset;
 
         mi::math::Color col(0.f, 0.f, 0.f, 1.f);
-        mi::math::Color c0, c1, c2, c3;
-        canvas.lookup(c0, texi.x, texi.y, z_layer);
-        canvas.lookup(c1, texi.z, texi.y, z_layer);
-        canvas.lookup(c2, texi.x, texi.w, z_layer);
-        canvas.lookup(c3, texi.z, texi.w, z_layer);
 
-        col = c0 * st.x + c1 * st.y + c2 * st.z + c3 * st.w;
+        mi::math::Color c[4];
+        canvas.lookup(c[0], texi.x, texi.y, z_layer);
+        canvas.lookup(c[1], texi.z, texi.y, z_layer);
+        canvas.lookup(c[2], texi.x, texi.w, z_layer);
+        canvas.lookup(c[3], texi.z, texi.w, z_layer);
+
+        if(gamma_val != 1.0f) {
+            for (unsigned int j = 0; j < 4; ++j) {
+                c[j].r = gamma_func(c[j].r, gamma_val);
+                c[j].g = gamma_func(c[j].g, gamma_val);
+                c[j].b = gamma_func(c[j].b, gamma_val);
+            }
+        }
+
+        col = c[0] * st.x + c[1] * st.y + c[2] * st.z + c[3] * st.w;
         rgba = mi::Float32_4(col.r, col.g, col.b, col.a);
 
         // 3D textures loop twice
@@ -330,18 +339,12 @@ mi::Float32_4 interpolate_biquintic(
             rgba2 = rgba;
         else
             break;
-   }
-
+    }
 
     // 3D textures lerp between two layer results
     if(lerp_z != 0.f)
         rgba += (rgba2-rgba)*lerp_z;
 
-    if(gamma_val != 1.0f) {
-        rgba.x = gamma_func(rgba.x, gamma_val);
-        rgba.y = gamma_func(rgba.y, gamma_val);
-        rgba.z = gamma_func(rgba.z, gamma_val);
-    }
     return rgba;
 }
 

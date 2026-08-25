@@ -13,7 +13,7 @@
 #    contributors may be used to endorse or promote products derived
 #    from this software without specific prior written permission.
 #
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
 # EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 # IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
 # PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -255,6 +255,7 @@ endif()
 # check for dependencies
 # pre-declare all options that are used
 # in order to show them in CMake-Gui, even the script stops because of an error.
+option(MDL_ENABLE_GPU_BAKER "Enable the GPU baker (default ON, except on macOS which lacks CUDA support). Turn OFF to drop the CUDA build dependency; BAKE_ON_GPU then fails (use BAKE_ON_GPU_WITH_CPU_FALLBACK or BAKE_ON_CPU)." ${NOT_MACOSX})
 option(MDL_ENABLE_CUDA_EXAMPLES "Enable examples that require CUDA." ${NOT_MACOSX})
 option(MDL_ENABLE_OPENGL_EXAMPLES "Enable examples that require OpenGL." ON)
 option(MDL_ENABLE_QT_EXAMPLES "Enable examples that require Qt." ${ARCH_X64})
@@ -292,7 +293,7 @@ evaluate(NEED_BOOST      TRUE)
 evaluate(NEED_OIIO       ((MDL_BUILD_SDK AND MDL_BUILD_OPENIMAGEIO_PLUGIN) OR MDL_BUILD_CORE_EXAMPLES))
 
 evaluate(ANY_EXAMPLE     ((MDL_BUILD_SDK AND MDL_BUILD_SDK_EXAMPLES) OR MDL_BUILD_CORE_EXAMPLES))
-evaluate(NEED_CUDA       (ANY_EXAMPLE AND MDL_ENABLE_CUDA_EXAMPLES))
+evaluate(NEED_CUDA       ((ANY_EXAMPLE AND MDL_ENABLE_CUDA_EXAMPLES) OR MDL_ENABLE_GPU_BAKER))
 evaluate(NEED_OPENGL     (ANY_EXAMPLE AND MDL_ENABLE_OPENGL_EXAMPLES))
 evaluate(NEED_VULKAN     (ANY_EXAMPLE AND MDL_ENABLE_VULKAN_EXAMPLES))
 evaluate(NEED_GLFW       (NEED_OPENGL OR NEED_VULKAN))
@@ -388,6 +389,7 @@ if(MDL_BUILD_DOCUMENTATION AND EXISTS ${MDL_BASE_FOLDER}/cmake/find/find_doxygen
 endif()
 
 if(MDL_LOG_PLATFORM_INFOS)
+    message(STATUS "[INFO] MDL_ENABLE_GPU_BAKER:                     ${MDL_ENABLE_GPU_BAKER}")
     message(STATUS "[INFO] MDL_ENABLE_OPENGL_EXAMPLES:               ${MDL_ENABLE_OPENGL_EXAMPLES}")
     message(STATUS "[INFO] MDL_ENABLE_CUDA_EXAMPLES:                 ${MDL_ENABLE_CUDA_EXAMPLES}")
     message(STATUS "[INFO] MDL_ENABLE_VULKAN_EXAMPLES:               ${MDL_ENABLE_VULKAN_EXAMPLES}")

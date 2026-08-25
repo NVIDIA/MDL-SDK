@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -65,8 +65,8 @@ typedef Texture_handler Tex_handler;
 // Custom structure representing the resources used by the generated code of a target code object.
 struct Target_code_data
 {
-    size_t       num_textures;      // number of elements in the textures field
-    Texture     *textures;          // a list of Texture objects, if used
+    size_t       num_textures;      // number of elements in the texture_descs field
+    Texture_desc *texture_descs;    // a list of Texture_desc objects, if used
     char const  *ro_data_segment;   // the read-only data segment, if used
 };
 
@@ -161,8 +161,8 @@ extern "C" __global__ void evaluate_mat_expr(
 
     Tex_handler tex_handler;
     tex_handler.vtable       = &TEX_VTABLE;   // only required in 'vtable' mode, otherwise NULL
-    tex_handler.num_textures = tc_data_list[tc_idx].num_textures;
-    tex_handler.textures     = tc_data_list[tc_idx].textures;
+    tex_handler.num_textures  = tc_data_list[tc_idx].num_textures;
+    tex_handler.texture_descs = tc_data_list[tc_idx].texture_descs;
 
     Resource_data res_data_pair = {
         NULL, reinterpret_cast<Texture_handler_base *>(&tex_handler) };

@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -40,7 +40,7 @@ rules Make_simple_for_ue4 bottomup {
     microfacet_ggx_vcavities_bsdf(_,_,tint,_,_,mode) --> diffuse_transmission_bsdf(tint)
         if mode == scatter_transmit;
 
-    microfacet_ggx_vcavities_bsdf(ru,rv,tint,_,t,mode,bs,handle) -->
+    microfacet_ggx_vcavities_bsdf(ru,rv,tint,_,t,mode,_bs,_handle) -->
                 custom_curve_layer( nvidia::distilling_support::refl_from_ior(option( global_float_ior)),
                     1.0,5.0,1.0, microfacet_ggx_vcavities_bsdf(ru,rv,tint,color(0.0),t), diffuse_transmission_bsdf(tint))
         if mode == scatter_reflect_transmit;
@@ -537,6 +537,8 @@ rules Elide_tint_for_ue4 topdown {
 //    bsdf_tint( c, microfacet_ggx_vcavities_bsdf(ru,rv,tint,_,t)) --> microfacet_ggx_vcavities_bsdf( ru,rv,nvidia::distilling_support::directional_coloring(c,tint,1.),color(0.0),t) skip_recursion;
     bsdf_tint( c, bsdf_tint(tint,base)) --> bsdf_tint( c * tint, base) repeat_rules;
     bsdf_tint( c, bsdf_tint_ex(tint,tintt,base)) --> bsdf_tint_ex( c * tint, c * tintt, base) repeat_rules;
+    bsdf_tint( c, bsdf_conditional_operator(cond, bsdf1, bsdf2))
+        --> bsdf_conditional_operator(cond, bsdf_tint(c, bsdf1), bsdf_tint(c, bsdf2)) repeat_rules;
     bsdf_tint( c, bsdf_mix_2(w1,df1,w2,df2))
         --> bsdf_mix_2( w1, bsdf_tint( c, df1), w2, bsdf_tint( c, df2));
     bsdf_tint( c, custom_curve_layer(f0,f90,e,w,layer,base,n))

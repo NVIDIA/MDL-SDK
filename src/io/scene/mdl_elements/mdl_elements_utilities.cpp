@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -6088,9 +6088,7 @@ void Resource_updater::update_resource_literals( const mi::mdl::DAG_node* node)
 
         case mi::mdl::DAG_node::EK_CONSTANT: {
             const auto* constant = cast<mi::mdl::DAG_constant>( node);
-            const mi::mdl::IValue_resource* resource
-                = as<mi::mdl::IValue_resource>( constant->get_value());
-            update_resource_literals( resource);
+            update_resource_literals( constant->get_value());
             return;
         }
 
@@ -6172,6 +6170,36 @@ void Resource_updater::update_resource_literals( const mi::mdl::IDefinition* def
     visit( decl);
 }
 
+void Resource_updater::update_resource_literals( const mi::mdl::IValue* value)
+{
+    if( !value)
+        return;
+
+    const auto* resource = as<mi::mdl::IValue_resource>( value);
+    if( resource) {
+        update_resource_literals( resource);
+        return;
+    }
+
+    const auto* value_array = as<mi::mdl::IValue_array>( value);
+    if( !value_array)
+        return;
+
+    const mi::mdl::IType_array* type_array = value_array->get_type();
+    const mi::mdl::IType* element_type = type_array->get_element_type();
+    if( !as<mi::mdl::IType_resource>( element_type))
+        return;
+
+    mi::Size n = value_array->get_component_count();
+    for( mi::Size i = 0; i < n; ++i) {
+        const mi::mdl::IValue* component
+            = value_array->get_value( static_cast<int>( i));
+        const mi::mdl::IValue_resource* component_resource
+            = as<mi::mdl::IValue_resource>( component);
+        update_resource_literals( component_resource);
+    }
+}
+
 void Resource_updater::update_resource_literals( const mi::mdl::IValue_resource* resource)
 {
     if( !resource)
@@ -6201,8 +6229,7 @@ void Resource_updater::update_resource_literals( const mi::mdl::IValue_resource*
 
 mi::mdl::IExpression* Resource_updater::post_visit( mi::mdl::IExpression_literal* expr)
 {
-    const mi::mdl::IValue_resource* resource = as<mi::mdl::IValue_resource>( expr->get_value());
-    update_resource_literals( resource);
+    update_resource_literals( expr->get_value());
     return expr;
 }
 
@@ -7851,47 +7878,47 @@ template class Call_evaluator<mi::mdl::ILambda_function>;
 
 // *************************************************************************************************
 
-Message::Message(const mi::mdl::IMessage *message)
-    : m_severity(convert_severity(message->get_severity()))
-    , m_code(message->get_code())
-    , m_message(message->get_string())
+Message::Message( const mi::mdl::IMessage* message)
+  : m_severity( convert_severity( message->get_severity())),
+    m_code( message->get_code()),
+    m_message( message->get_string())
 {
-    switch (message->get_class())
-    {
-    case 'A':
-        m_kind = MSG_COMPILER_ARCHIVE_TOOL;
-        break;
-    case 'C':
-        m_kind = MSG_COMPILER_CORE;
-        break;
-    case 'J':
-        m_kind = MSG_COMPILER_BACKEND;
-        break;
-    default:
-        m_kind = MSG_UNCATEGORIZED;
-        break;
+    switch( message->get_class()) {
+        case 'A':
+            m_kind = MSG_COMPILER_ARCHIVE_TOOL;
+            break;
+        case 'C':
+            m_kind = MSG_COMPILER_CORE;
+            break;
+        case 'J':
+            m_kind = MSG_COMPILER_BACKEND;
+            break;
+        default:
+            m_kind = MSG_UNCATEGORIZED;
+            break;
     }
 
     std::string msg;
     const char* file = message->get_file();
-    if (file && file[0])
+    if( file && file[0])
         msg += file;
 
     const mi::mdl::Position* position = message->get_position();
-    mi::Uint32 line = position->get_start_line();
+    mi::Uint32 line   = position->get_start_line();
     mi::Uint32 column = position->get_start_column();
-    if (line > 0)
+    if( line > 0)
         msg += '(' + std::to_string( line) + ',' + std::to_string( column) + ')';
-    if ((file && file[0]) || (line > 0))
+    if( (file && file[0]) || (line > 0))
         msg += ": ";
 
-    // add message number
-    msg += message->get_class() + std::to_string( message->get_code()) + ' ';
+    // add class and code unless uncategorized
+    if( m_kind != MSG_UNCATEGORIZED)
+        msg += message->get_class() + std::to_string( message->get_code()) + ' ';
 
     m_message = msg + m_message;
 
-    for (size_t i = 0; i < message->get_note_count(); ++i)
-        m_notes.emplace_back( message->get_note(i));
+    for( size_t i = 0, n = message->get_note_count(); i < n; ++i)
+        m_notes.emplace_back( message->get_note( i));
 }
 
 namespace {
@@ -8519,6 +8546,73 @@ mi::mdl::IValue_texture::gamma_mode convert_gamma_float_to_enum( mi::Float32 gam
    if( gamma == 2.2f)
        return mi::mdl::IValue_texture::gamma_srgb;
    return mi::mdl::IValue_texture::gamma_default;
+}
+
+mi::Float32 convert_rtt_kind_to_gamma( mi::mdl::Resource_tag_tuple::Kind kind)
+{
+    switch( kind) {
+        case mi::mdl::Resource_tag_tuple::RK_TEXTURE_GAMMA_DEFAULT: return 0.0f;
+        case mi::mdl::Resource_tag_tuple::RK_TEXTURE_GAMMA_LINEAR:  return 1.0f;
+        case mi::mdl::Resource_tag_tuple::RK_TEXTURE_GAMMA_SRGB:    return 2.2f;
+
+        case mi::mdl::Resource_tag_tuple::RK_BSDF_MEASUREMENT:
+        case mi::mdl::Resource_tag_tuple::RK_LIGHT_PROFILE:
+            return 0.0f;
+
+        case mi::mdl::Resource_tag_tuple::RK_BAD:
+        case mi::mdl::Resource_tag_tuple::RK_INVALID_REF:
+        case mi::mdl::Resource_tag_tuple::RK_STRING:
+        case mi::mdl::Resource_tag_tuple::RK_SIMPLE_GLOSSY_MULTISCATTER:
+        case mi::mdl::Resource_tag_tuple::RK_BACKSCATTERING_GLOSSY_MULTISCATTER:
+        case mi::mdl::Resource_tag_tuple::RK_BECKMANN_SMITH_MULTISCATTER:
+        case mi::mdl::Resource_tag_tuple::RK_GGX_SMITH_MULTISCATTER:
+        case mi::mdl::Resource_tag_tuple::RK_BECKMANN_VC_MULTISCATTER:
+        case mi::mdl::Resource_tag_tuple::RK_GGX_VC_MULTISCATTER:
+        case mi::mdl::Resource_tag_tuple::RK_WARD_GEISLER_MORODER_MULTISCATTER:
+        case mi::mdl::Resource_tag_tuple::RK_SHEEN_MULTISCATTER:
+        case mi::mdl::Resource_tag_tuple::RK_MICROFLAKE_SHEEN_GENERAL:
+        case mi::mdl::Resource_tag_tuple::RK_MICROFLAKE_SHEEN_MULTISCATTER:
+            ASSERT( M_SCENE, false);
+            return 0.0f;
+    }
+
+    ASSERT( M_SCENE, false);
+    return 0.0f;
+}
+
+IType_texture::Shape convert_rtt_kind_to_texture_shape( mi::mdl::Resource_tag_tuple::Kind kind)
+{
+    switch( kind) {
+        case mi::mdl::Resource_tag_tuple::RK_TEXTURE_GAMMA_DEFAULT:
+        case mi::mdl::Resource_tag_tuple::RK_TEXTURE_GAMMA_LINEAR:
+        case mi::mdl::Resource_tag_tuple::RK_TEXTURE_GAMMA_SRGB:
+            // Always return TS_2D independent of the actual shape due to technical limitation of
+            // Resource_tag_tuple::Kind.
+            return IType_texture::TS_2D;
+
+        case mi::mdl::Resource_tag_tuple::RK_SIMPLE_GLOSSY_MULTISCATTER:
+        case mi::mdl::Resource_tag_tuple::RK_BACKSCATTERING_GLOSSY_MULTISCATTER:
+        case mi::mdl::Resource_tag_tuple::RK_BECKMANN_SMITH_MULTISCATTER:
+        case mi::mdl::Resource_tag_tuple::RK_GGX_SMITH_MULTISCATTER:
+        case mi::mdl::Resource_tag_tuple::RK_BECKMANN_VC_MULTISCATTER:
+        case mi::mdl::Resource_tag_tuple::RK_GGX_VC_MULTISCATTER:
+        case mi::mdl::Resource_tag_tuple::RK_WARD_GEISLER_MORODER_MULTISCATTER:
+        case mi::mdl::Resource_tag_tuple::RK_SHEEN_MULTISCATTER:
+        case mi::mdl::Resource_tag_tuple::RK_MICROFLAKE_SHEEN_GENERAL:
+        case mi::mdl::Resource_tag_tuple::RK_MICROFLAKE_SHEEN_MULTISCATTER:
+            return IType_texture::TS_BSDF_DATA;
+
+        case mi::mdl::Resource_tag_tuple::RK_BSDF_MEASUREMENT:
+        case mi::mdl::Resource_tag_tuple::RK_LIGHT_PROFILE:
+        case mi::mdl::Resource_tag_tuple::RK_BAD:
+        case mi::mdl::Resource_tag_tuple::RK_INVALID_REF:
+        case mi::mdl::Resource_tag_tuple::RK_STRING:
+            ASSERT( M_SCENE, false);
+            return IType_texture::TS_2D;
+    }
+
+    ASSERT( M_SCENE, false);
+    return IType_texture::TS_2D;
 }
 
 // ********** Name parsing/splitting ***************************************************************

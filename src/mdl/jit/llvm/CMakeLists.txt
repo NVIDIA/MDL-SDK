@@ -13,7 +13,7 @@
 #    contributors may be used to endorse or promote products derived
 #    from this software without specific prior written permission.
 #
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
 # EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 # IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
 # PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -28,6 +28,12 @@
 
 # name of the target and the resulting library
 set(PROJECT_NAME mdl-jit-llvm)
+
+# for DEPFILE usage in dist/cmake/modules/TableGen.cmake
+# unclear which setting is better, let's go with the history behavior
+if(POLICY CMP0116)
+    cmake_policy(SET CMP0116 OLD)
+endif()
 
 # ensure that a generated file from an old LLVM version does not exist
 if(EXISTS ${CMAKE_CURRENT_BINARY_DIR}/dist/include/llvm/Support/DataTypes.h)
@@ -263,6 +269,7 @@ function(LLVM_TARGET_SETUP)
                 "-fPIC"
                 "$<$<CONFIG:Release>:-fno-semantic-interposition>"
                 "-fvisibility=hidden"
+                "$<$<STREQUAL:${MI_PLATFORM_NAME},linux-aarch64>:-mtls-dialect=trad>"
                 "-w"
                 "-Wno-misleading-indentation"
             )

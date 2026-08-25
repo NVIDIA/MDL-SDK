@@ -1,5 +1,5 @@
 /******************************************************************************
- * Copyright (c) 2017-2026, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2026, NVIDIA CORPORATION. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -26,9 +26,10 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
-// examples/mdl_sdk/shared/texture_support_cuda.h
-//
-// This file contains the implementations and the vtables of the texture access functions.
+// This file contains the implementations and the vtables of the texture access
+// functions. The texture runtime is UDIM- and animation-aware: each MDL texture
+// index resolves through a Texture_desc describing its animation frames and, per
+// frame, a grid of uv-tiles (see the structures below).
 
 #ifndef TEXTURE_SUPPORT_CUDA_H
 #define TEXTURE_SUPPORT_CUDA_H
@@ -86,6 +87,42 @@ struct Texture
     float3               inv_size;           // the inverse values of the size of the texture
 };
 
+// UDIM + animation support
+// ------------------------------------------------------------------------------------------------
+// A single MDL texture index can resolve to multiple animation frames, each of which can be a grid
+// of uv-tiles (UDIM). The structures below describe that hierarchy on top of the per-tile Texture
+// leaf above.
+
+// Per-frame uv-tile grid: the bounding rectangle of present tiles, row-major over
+// (count_u x count_v). Tile (u,v) lives at flat index tile_offset + (v-min_v)*count_u + (u-min_u).
+// Missing tiles are stored as a zero Texture (filtered_object==0) and treated as black.
+struct Uv_grid {
+    int      min_u;
+    int      min_v;
+    unsigned count_u;
+    unsigned count_v;
+    unsigned tile_offset;   // base index into the flat Texture[] array (tiles)
+};
+
+// One animation frame: its real MDL frame number plus its uv-tile grid.
+struct Tex_frame {
+    unsigned frame_number;  // real MDL frame number (not the dense frame ID)
+    Uv_grid  grid;
+};
+
+// Per-MDL-texture descriptor stored in the handler array (one per texture used by the material).
+// All fields are 4-byte; the pointers (8-byte) are placed first.
+struct Texture_desc {
+    Tex_frame const *frames;      // device ptr, length num_frames, ascending frame_number
+    Texture   const *tiles;       // device ptr, flat array of all tiles across all frames
+    unsigned         is_valid;    // 0 => non-2D / failed upload => lookups return black
+    unsigned         is_uvtile;   // 0 => single tile, skip u/v flooring
+    unsigned         num_frames;  // >= 1
+    unsigned         first_frame; // frames[0].frame_number            (for tex_frame)
+    unsigned         last_frame;  // frames[num_frames-1].frame_number (for tex_frame)
+    unsigned         pad;         // explicit padding to an 8-byte multiple
+};
+
 // Custom structure representing an MDL BSDF measurement.
 struct Mbsdf
 {
@@ -132,9 +169,9 @@ struct Lightprofile
 struct Texture_handler : Texture_handler_base {
     // additional data for the texture access functions can be provided here
 
-    size_t         num_textures;        // the number of textures used by the material
+    size_t              num_textures;   // the number of textures used by the material
                                         // (without the invalid texture)
-    Texture const *textures;            // the textures used by the material
+    Texture_desc const *texture_descs;  // per-texture descriptors (UDIM/animation),
                                         // (without the invalid texture)
 
     size_t         num_mbsdfs;          // the number of mbsdfs used by the material
@@ -152,9 +189,9 @@ struct Texture_handler : Texture_handler_base {
 struct Texture_handler_deriv : mi::neuraylib::Texture_handler_deriv_base {
     // additional data for the texture access functions can be provided here
 
-    size_t         num_textures;        // the number of textures used by the material
+    size_t              num_textures;   // the number of textures used by the material
                                         // (without the invalid texture)
-    Texture const *textures;            // the textures used by the material
+    Texture_desc const *texture_descs;  // per-texture descriptors (UDIM/animation),
                                         // (without the invalid texture)
 
     size_t         num_mbsdfs;          // the number of mbsdfs used by the material
@@ -266,25 +303,237 @@ __device__ inline void store_result3(float res[3], float v0, float v1, float v2)
 #ifdef USE_SMOOTHERSTEP_FILTER
 // Modify texture coordinates to get better texture filtering,
 // see http://www.iquilezles.org/www/articles/texture/texture.htm
-#define APPLY_SMOOTHERSTEP_FILTER()                                                         \
-    do {                                                                                    \
-        u = u * tex.size.x + 0.5f;                                                          \
-        v = v * tex.size.y + 0.5f;                                                          \
-                                                                                            \
-        float u_i = floorf(u), v_i = floorf(v);                                             \
-        float u_f = u - u_i;                                                                \
-        float v_f = v - v_i;                                                                \
-        u_f = u_f * u_f * u_f * (u_f * (u_f * 6.f - 15.f) + 10.f);                          \
-        v_f = v_f * v_f * v_f * (v_f * (v_f * 6.f - 15.f) + 10.f);                          \
-        u = u_i + u_f;                                                                      \
-        v = v_i + v_f;                                                                      \
-                                                                                            \
-        u = (u - 0.5f) * tex.inv_size.x;                                                    \
-        v = (v - 0.5f) * tex.inv_size.y;                                                    \
-    } while ( 0 )
-#else
-#define APPLY_SMOOTHERSTEP_FILTER()
+__device__ inline void baker_oss_apply_smootherstep(Texture const &t, float &u, float &v)
+{
+    u = u * t.size.x + 0.5f;
+    v = v * t.size.y + 0.5f;
+
+    float u_i = floorf(u), v_i = floorf(v);
+    float u_f = u - u_i;
+    float v_f = v - v_i;
+    u_f = u_f * u_f * u_f * (u_f * (u_f * 6.f - 15.f) + 10.f);
+    v_f = v_f * v_f * v_f * (v_f * (v_f * 6.f - 15.f) + 10.f);
+    u = u_i + u_f;
+    v = v_i + v_f;
+
+    u = (u - 0.5f) * t.inv_size.x;
+    v = (v - 0.5f) * t.inv_size.y;
+}
 #endif
+
+
+// ------------------------------------------------------------------------------------------------
+// UDIM + animation helpers
+// ------------------------------------------------------------------------------------------------
+
+#define BAKER_OSS_INVALID_FRAME 0xFFFFFFFFu
+
+// Resolve floor/ceil frame IDs for a (possibly animated) texture, matching the
+// CPU runtime's Texture::get_frame_ids(): exact integer frame-number lookups
+// with clamping to the [first_frame, last_frame] range. A side with no exact
+// matching frame number is returned as BAKER_OSS_INVALID_FRAME (=> black),
+// reproducing the CPU's map.find()-miss behavior for sparse frame numbers.
+__device__ inline void baker_oss_select_frame_ids(
+    Texture_desc const &d, float frame, unsigned &lo, unsigned &hi, float &w)
+{
+    w = 0.0f;
+    if (d.num_frames <= 1) {                 // not animated: always frame ID 0
+        lo = hi = 0;
+        return;
+    }
+    if (frame < float(d.first_frame) || frame > float(d.last_frame)) {
+        lo = hi = BAKER_OSS_INVALID_FRAME;   // out of range => black
+        return;
+    }
+    const int fi = (int)floorf(frame);
+    const int ci = (int)ceilf(frame);
+    lo = hi = BAKER_OSS_INVALID_FRAME;
+    for (unsigned f = 0; f < d.num_frames; ++f) {
+        const int fn = (int)d.frames[f].frame_number;
+        if (fn == fi) lo = f;
+        if (fn == ci) hi = f;
+    }
+    w = frame - floorf(frame);
+}
+
+// Floor-only frame ID, matching Texture::get_frame_id() (used by texel/resolution).
+__device__ inline unsigned baker_oss_floor_frame_id(Texture_desc const &d, float frame)
+{
+    if (d.num_frames <= 1) return 0;
+    if (frame < 0.0f)      return BAKER_OSS_INVALID_FRAME;
+    const int fi = (int)floorf(frame);
+    for (unsigned f = 0; f < d.num_frames; ++f)
+        if ((int)d.frames[f].frame_number == fi)
+            return f;
+    return BAKER_OSS_INVALID_FRAME;
+}
+
+// Index the uv-tile grid for a frame and return the per-tile Texture leaf, or
+// nullptr for an out-of-grid or missing (black) tile.
+__device__ inline Texture const *baker_oss_tile_at(
+    Texture_desc const &d, unsigned frame_id, int tu, int tv)
+{
+    Uv_grid const &g = d.frames[frame_id].grid;
+    const int cu = tu - g.min_u;
+    const int cv = tv - g.min_v;
+    if (cu < 0 || cv < 0 || (unsigned)cu >= g.count_u || (unsigned)cv >= g.count_v)
+        return nullptr;
+    Texture const *t = &d.tiles[g.tile_offset + (unsigned)cv * g.count_u + (unsigned)cu];
+    if (t->filtered_object == 0)
+        return nullptr;                      // missing tile
+    return t;
+}
+
+// Select the per-tile Texture leaf for a continuous coord (UDIM aware). For
+// uv-tile textures the integer part of (u,v) selects the tile and the coords
+// are remapped to tile-local [0,1); missing/out-of-grid tiles return nullptr.
+__device__ inline Texture const *baker_oss_select_tile(
+    Texture_desc const &d, unsigned frame_id, float &u, float &v)
+{
+    Uv_grid const &g = d.frames[frame_id].grid;
+    if (!d.is_uvtile)
+        return &d.tiles[g.tile_offset];
+
+    const int tu = (int)floorf(u);
+    const int tv = (int)floorf(v);
+    u -= floorf(u);
+    v -= floorf(v);
+    return baker_oss_tile_at(d, frame_id, tu, tv);
+}
+
+// Select a tile by explicit integer uv-tile coordinates (texel/resolution).
+__device__ inline Texture const *baker_oss_tile_by_uvtile(
+    Texture_desc const &d, unsigned frame_id, int const uv_tile[2])
+{
+    Uv_grid const &g = d.frames[frame_id].grid;
+    if (!d.is_uvtile)
+        return &d.tiles[g.tile_offset];
+    return baker_oss_tile_at(d, frame_id, uv_tile[0], uv_tile[1]);
+}
+
+// Apply wrap+crop (mirrors WRAP_AND_CROP_OR_RETURN_BLACK but returns a flag so
+// the caller can fold a CLIP-out-of-range result into a black sample instead of
+// returning from the whole function — required for frame blending).
+__device__ inline bool baker_oss_wrap_crop(
+    float &val, float inv_dim, Tex_wrap_mode wrap_mode, float const crop_vals[2])
+{
+    if (wrap_mode == mi::neuraylib::TEX_WRAP_REPEAT &&
+        crop_vals[0] == 0.0f && crop_vals[1] == 1.0f) {
+        // default sampler behavior
+    } else {
+        if (wrap_mode == mi::neuraylib::TEX_WRAP_REPEAT)
+            val = val - floorf(val);
+        else {
+            if (wrap_mode == mi::neuraylib::TEX_WRAP_CLIP && (val < 0.0f || val >= 1.0f))
+                return false;
+            else if (wrap_mode == mi::neuraylib::TEX_WRAP_MIRRORED_REPEAT) {
+                float fl = floorf(val);
+                if ((int(fl) & 1) != 0) val = 1.0f - (val - fl);
+                else                    val = val - fl;
+            }
+            float inv_hdim = 0.5f * inv_dim;
+            val = fminf(fmaxf(val, inv_hdim), 1.f - inv_hdim);
+        }
+        val = val * (crop_vals[1] - crop_vals[0]) + crop_vals[0];
+    }
+    return true;
+}
+
+// Sample one 2D tile (filtered) for a given frame ID. Returns black on invalid
+// frame, missing tile, or CLIP-out-of-range.
+__device__ inline float4 baker_oss_lookup_frame_2d(
+    Texture_desc const &d, unsigned frame_id, float u, float v,
+    Tex_wrap_mode wrap_u, Tex_wrap_mode wrap_v,
+    float const crop_u[2], float const crop_v[2])
+{
+    if (frame_id == BAKER_OSS_INVALID_FRAME)
+        return make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+    Texture const *t = baker_oss_select_tile(d, frame_id, u, v);
+    if (!t)
+        return make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+    if (!baker_oss_wrap_crop(u, t->inv_size.x, wrap_u, crop_u) ||
+        !baker_oss_wrap_crop(v, t->inv_size.y, wrap_v, crop_v))
+        return make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+
+#ifdef USE_SMOOTHERSTEP_FILTER
+    baker_oss_apply_smootherstep(*t, u, v);
+#endif
+    return tex2D<float4>(t->filtered_object, u, v);
+}
+
+// Blends two frame samples; reproduces Texture_2d::lookup_float4()'s linear
+// frame interpolation. UDIM textures force wrap=clamp / crop=[0,1] (matching CPU).
+__device__ inline float4 baker_oss_lookup_2d(
+    Texture_desc const &d, float const coord[2],
+    Tex_wrap_mode wrap_u, Tex_wrap_mode wrap_v,
+    float const crop_u[2], float const crop_v[2], float frame)
+{
+    unsigned lo, hi; float w;
+    baker_oss_select_frame_ids(d, frame, lo, hi, w);
+
+    const float full_crop[2] = { 0.0f, 1.0f };
+    const Tex_wrap_mode eu = d.is_uvtile ? mi::neuraylib::TEX_WRAP_CLAMP : wrap_u;
+    const Tex_wrap_mode ev = d.is_uvtile ? mi::neuraylib::TEX_WRAP_CLAMP : wrap_v;
+    float const *cu = d.is_uvtile ? full_crop : crop_u;
+    float const *cv = d.is_uvtile ? full_crop : crop_v;
+
+    float4 c = baker_oss_lookup_frame_2d(d, lo, coord[0], coord[1], eu, ev, cu, cv);
+    if (lo != hi) {
+        float4 c1 = baker_oss_lookup_frame_2d(d, hi, coord[0], coord[1], eu, ev, cu, cv);
+        c.x = (1.f - w) * c.x + w * c1.x;
+        c.y = (1.f - w) * c.y + w * c1.y;
+        c.z = (1.f - w) * c.z + w * c1.z;
+        c.w = (1.f - w) * c.w + w * c1.w;
+    }
+    return c;
+}
+
+// Sample one 2D tile with derivatives (tex2DGrad) for a given frame ID.
+__device__ inline float4 baker_oss_lookup_deriv_frame_2d(
+    Texture_desc const &d, unsigned frame_id, tct_deriv_float2 const *coord,
+    Tex_wrap_mode wrap_u, Tex_wrap_mode wrap_v,
+    float const crop_u[2], float const crop_v[2])
+{
+    if (frame_id == BAKER_OSS_INVALID_FRAME)
+        return make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+    float u = coord->val.x, v = coord->val.y;
+    Texture const *t = baker_oss_select_tile(d, frame_id, u, v);
+    if (!t)
+        return make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+    if (!baker_oss_wrap_crop(u, t->inv_size.x, wrap_u, crop_u) ||
+        !baker_oss_wrap_crop(v, t->inv_size.y, wrap_v, crop_v))
+        return make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+#ifdef USE_SMOOTHERSTEP_FILTER
+    baker_oss_apply_smootherstep(*t, u, v);
+#endif
+    return tex2DGrad<float4>(t->filtered_object, u, v, coord->dx, coord->dy);
+}
+
+// Derivative variant of baker_oss_lookup_2d (with frame interpolation).
+__device__ inline float4 baker_oss_lookup_deriv_2d(
+    Texture_desc const &d, tct_deriv_float2 const *coord,
+    Tex_wrap_mode wrap_u, Tex_wrap_mode wrap_v,
+    float const crop_u[2], float const crop_v[2], float frame)
+{
+    unsigned lo, hi; float w;
+    baker_oss_select_frame_ids(d, frame, lo, hi, w);
+
+    const float full_crop[2] = { 0.0f, 1.0f };
+    const Tex_wrap_mode eu = d.is_uvtile ? mi::neuraylib::TEX_WRAP_CLAMP : wrap_u;
+    const Tex_wrap_mode ev = d.is_uvtile ? mi::neuraylib::TEX_WRAP_CLAMP : wrap_v;
+    float const *cu = d.is_uvtile ? full_crop : crop_u;
+    float const *cv = d.is_uvtile ? full_crop : crop_v;
+
+    float4 c = baker_oss_lookup_deriv_frame_2d(d, lo, coord, eu, ev, cu, cv);
+    if (lo != hi) {
+        float4 c1 = baker_oss_lookup_deriv_frame_2d(d, hi, coord, eu, ev, cu, cv);
+        c.x = (1.f - w) * c.x + w * c1.x;
+        c.y = (1.f - w) * c.y + w * c1.y;
+        c.z = (1.f - w) * c.z + w * c1.z;
+        c.w = (1.f - w) * c.w + w * c1.w;
+    }
+    return c;
+}
 
 
 // Implementation of tex::lookup_float4() for a texture_2d texture.
@@ -297,7 +546,7 @@ extern "C" __device__ void tex_lookup_float4_2d(
     Tex_wrap_mode const         wrap_v,
     float const                 crop_u[2],
     float const                 crop_v[2],
-    float                       /*frame*/)
+    float                       frame)
 {
     Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
 
@@ -307,14 +556,10 @@ extern "C" __device__ void tex_lookup_float4_2d(
         return;
     }
 
-    Texture const &tex = self->textures[texture_idx - 1];
-    float u = coord[0], v = coord[1];
-    WRAP_AND_CROP_OR_RETURN_BLACK(u, tex.inv_size.x, wrap_u, crop_u, store_result4);
-    WRAP_AND_CROP_OR_RETURN_BLACK(v, tex.inv_size.y, wrap_v, crop_v, store_result4);
+    Texture_desc const &d = self->texture_descs[texture_idx - 1];
+    if (!d.is_valid) { store_result4(result, 0.0f); return; }
 
-    APPLY_SMOOTHERSTEP_FILTER();
-
-    store_result4(result, tex2D<float4>(tex.filtered_object, u, v));
+    store_result4(result, baker_oss_lookup_2d(d, coord, wrap_u, wrap_v, crop_u, crop_v, frame));
 }
 
 // Implementation of tex::lookup_float4() for a texture_2d texture.
@@ -327,7 +572,7 @@ extern "C" __device__ void tex_lookup_deriv_float4_2d(
     Tex_wrap_mode const         wrap_v,
     float const                 crop_u[2],
     float const                 crop_v[2],
-    float                       /*frame*/)
+    float                       frame)
 {
     Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
 
@@ -337,14 +582,10 @@ extern "C" __device__ void tex_lookup_deriv_float4_2d(
         return;
     }
 
-    Texture const &tex = self->textures[texture_idx - 1];
-    float u = coord->val.x, v = coord->val.y;
-    WRAP_AND_CROP_OR_RETURN_BLACK(u, tex.inv_size.x, wrap_u, crop_u, store_result4);
-    WRAP_AND_CROP_OR_RETURN_BLACK(v, tex.inv_size.y, wrap_v, crop_v, store_result4);
+    Texture_desc const &d = self->texture_descs[texture_idx - 1];
+    if (!d.is_valid) { store_result4(result, 0.0f); return; }
 
-    APPLY_SMOOTHERSTEP_FILTER();
-
-    store_result4(result, tex2DGrad<float4>(tex.filtered_object, u, v, coord->dx, coord->dy));
+    store_result4(result, baker_oss_lookup_deriv_2d(d, coord, wrap_u, wrap_v, crop_u, crop_v, frame));
 }
 
 // Implementation of tex::lookup_float3() for a texture_2d texture.
@@ -357,7 +598,7 @@ extern "C" __device__ void tex_lookup_float3_2d(
     Tex_wrap_mode const         wrap_v,
     float const                 crop_u[2],
     float const                 crop_v[2],
-    float                       /*frame*/)
+    float                       frame)
 {
     Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
 
@@ -367,14 +608,10 @@ extern "C" __device__ void tex_lookup_float3_2d(
         return;
     }
 
-    Texture const &tex = self->textures[texture_idx - 1];
-    float u = coord[0], v = coord[1];
-    WRAP_AND_CROP_OR_RETURN_BLACK(u, tex.inv_size.x, wrap_u, crop_u, store_result3);
-    WRAP_AND_CROP_OR_RETURN_BLACK(v, tex.inv_size.y, wrap_v, crop_v, store_result3);
+    Texture_desc const &d = self->texture_descs[texture_idx - 1];
+    if (!d.is_valid) { store_result3(result, 0.0f); return; }
 
-    APPLY_SMOOTHERSTEP_FILTER();
-
-    store_result3(result, tex2D<float4>(tex.filtered_object, u, v));
+    store_result3(result, baker_oss_lookup_2d(d, coord, wrap_u, wrap_v, crop_u, crop_v, frame));
 }
 
 // Implementation of tex::lookup_float3() for a texture_2d texture.
@@ -387,7 +624,7 @@ extern "C" __device__ void tex_lookup_deriv_float3_2d(
     Tex_wrap_mode const         wrap_v,
     float const                 crop_u[2],
     float const                 crop_v[2],
-    float                       /*frame*/)
+    float                       frame)
 {
     Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
 
@@ -397,25 +634,20 @@ extern "C" __device__ void tex_lookup_deriv_float3_2d(
         return;
     }
 
-    Texture const &tex = self->textures[texture_idx - 1];
-    float u = coord->val.x, v = coord->val.y;
-    WRAP_AND_CROP_OR_RETURN_BLACK(u, tex.inv_size.x, wrap_u, crop_u, store_result3);
-    WRAP_AND_CROP_OR_RETURN_BLACK(v, tex.inv_size.y, wrap_v, crop_v, store_result3);
+    Texture_desc const &d = self->texture_descs[texture_idx - 1];
+    if (!d.is_valid) { store_result3(result, 0.0f); return; }
 
-    APPLY_SMOOTHERSTEP_FILTER();
-
-    store_result3(result, tex2DGrad<float4>(tex.filtered_object, u, v, coord->dx, coord->dy));
+    store_result3(result, baker_oss_lookup_deriv_2d(d, coord, wrap_u, wrap_v, crop_u, crop_v, frame));
 }
 
 // Implementation of tex::texel_float4() for a texture_2d texture.
-// Note: uvtile and/or animated textures are not supported
 extern "C" __device__ void tex_texel_float4_2d(
     float                       result[4],
     Texture_handler_base const *self_base,
     unsigned                    texture_idx,
     int const                   coord[2],
-    int const                   /*uv_tile*/[2],
-    float                       /*frame*/)
+    int const                   uv_tile[2],
+    float                       frame)
 {
     Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
 
@@ -425,12 +657,19 @@ extern "C" __device__ void tex_texel_float4_2d(
         return;
     }
 
-    Texture const &tex = self->textures[texture_idx - 1];
+    Texture_desc const &d = self->texture_descs[texture_idx - 1];
+    if (!d.is_valid) { store_result4(result, 0.0f); return; }
+
+    const unsigned frame_id = baker_oss_floor_frame_id(d, frame);
+    if (frame_id == BAKER_OSS_INVALID_FRAME) { store_result4(result, 0.0f); return; }
+
+    Texture const *tex = baker_oss_tile_by_uvtile(d, frame_id, uv_tile);
+    if (!tex) { store_result4(result, 0.0f); return; }
 
     store_result4(result, tex2D<float4>(
-        tex.unfiltered_object,
-        float(coord[0]) * tex.inv_size.x,
-        float(coord[1]) * tex.inv_size.y));
+        tex->unfiltered_object,
+        float(coord[0]) * tex->inv_size.x,
+        float(coord[1]) * tex->inv_size.y));
 }
 
 // Implementation of tex::lookup_float4() for a texture_3d texture.
@@ -445,7 +684,7 @@ extern "C" __device__ void tex_lookup_float4_3d(
     float const                 crop_u[2],
     float const                 crop_v[2],
     float const                 crop_w[2],
-    float                       /*frame*/)
+    float                       frame)
 {
     Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
 
@@ -455,7 +694,11 @@ extern "C" __device__ void tex_lookup_float4_3d(
         return;
     }
 
-    Texture const &tex = self->textures[texture_idx - 1];
+    Texture_desc const &d = self->texture_descs[texture_idx - 1];
+    if (!d.is_valid) { store_result4(result, 0.0f); return; }
+    const unsigned frame_id = baker_oss_floor_frame_id(d, frame);
+    if (frame_id == BAKER_OSS_INVALID_FRAME) { store_result4(result, 0.0f); return; }
+    Texture const &tex = d.tiles[d.frames[frame_id].grid.tile_offset];
 
     float u = coord[0], v = coord[1], w = coord[2];
     WRAP_AND_CROP_OR_RETURN_BLACK(u, tex.inv_size.x, wrap_u, crop_u, store_result4);
@@ -477,7 +720,7 @@ extern "C" __device__ void tex_lookup_float3_3d(
     float const                 crop_u[2],
     float const                 crop_v[2],
     float const                 crop_w[2],
-    float                       /*frame*/)
+    float                       frame)
 {
     Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
 
@@ -487,7 +730,11 @@ extern "C" __device__ void tex_lookup_float3_3d(
         return;
     }
 
-    Texture const &tex = self->textures[texture_idx - 1];
+    Texture_desc const &d = self->texture_descs[texture_idx - 1];
+    if (!d.is_valid) { store_result3(result, 0.0f); return; }
+    const unsigned frame_id = baker_oss_floor_frame_id(d, frame);
+    if (frame_id == BAKER_OSS_INVALID_FRAME) { store_result3(result, 0.0f); return; }
+    Texture const &tex = d.tiles[d.frames[frame_id].grid.tile_offset];
 
     float u = coord[0], v = coord[1], w = coord[2];
     WRAP_AND_CROP_OR_RETURN_BLACK(u, tex.inv_size.x, wrap_u, crop_u, store_result3);
@@ -503,7 +750,7 @@ extern "C" __device__ void tex_texel_float4_3d(
     Texture_handler_base const *self_base,
     unsigned                    texture_idx,
     const int                   coord[3],
-    float                       /*frame*/)
+    float                       frame)
 {
     Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
 
@@ -513,7 +760,11 @@ extern "C" __device__ void tex_texel_float4_3d(
         return;
     }
 
-    Texture const &tex = self->textures[texture_idx - 1];
+    Texture_desc const &d = self->texture_descs[texture_idx - 1];
+    if (!d.is_valid) { store_result4(result, 0.0f); return; }
+    const unsigned frame_id = baker_oss_floor_frame_id(d, frame);
+    if (frame_id == BAKER_OSS_INVALID_FRAME) { store_result4(result, 0.0f); return; }
+    Texture const &tex = d.tiles[d.frames[frame_id].grid.tile_offset];
 
     store_result4(result, tex3D<float4>(
         tex.unfiltered_object,
@@ -537,7 +788,9 @@ extern "C" __device__ void tex_lookup_float4_cube(
         return;
     }
 
-    Texture const &tex = self->textures[texture_idx - 1];
+    Texture_desc const &d = self->texture_descs[texture_idx - 1];
+    if (!d.is_valid) { store_result4(result, 0.0f); return; }
+    Texture const &tex = d.tiles[d.frames[0].grid.tile_offset];
 
     store_result4(result, texCubemap<float4>(tex.filtered_object, coord[0], coord[1], coord[2]));
 }
@@ -557,32 +810,37 @@ extern "C" __device__ void tex_lookup_float3_cube(
         return;
     }
 
-    Texture const &tex = self->textures[texture_idx - 1];
+    Texture_desc const &d = self->texture_descs[texture_idx - 1];
+    if (!d.is_valid) { store_result3(result, 0.0f); return; }
+    Texture const &tex = d.tiles[d.frames[0].grid.tile_offset];
 
     store_result3(result, texCubemap<float4>(tex.filtered_object, coord[0], coord[1], coord[2]));
 }
 
 // Implementation of resolution_2d function needed by generated code.
-// Note: uvtile and/or animated textures are not supported
 extern "C" __device__ void tex_resolution_2d(
     int                         result[2],
     Texture_handler_base const *self_base,
     unsigned                    texture_idx,
-    int const                   /*uv_tile*/[2],
-    float                       /*frame*/)
+    int const                   uv_tile[2],
+    float                       frame)
 {
     Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
 
-    if ( texture_idx == 0 || texture_idx - 1 >= self->num_textures ) {
-        // invalid texture returns zero
-        result[0] = 0;
-        result[1] = 0;
-        return;
-    }
+    result[0] = 0;
+    result[1] = 0;
 
-    Texture const &tex = self->textures[texture_idx - 1];
-    result[0] = tex.size.x;
-    result[1] = tex.size.y;
+    if ( texture_idx == 0 || texture_idx - 1 >= self->num_textures )
+        return;  // invalid texture returns zero
+
+    Texture_desc const &d = self->texture_descs[texture_idx - 1];
+    if (!d.is_valid) return;
+    const unsigned frame_id = baker_oss_floor_frame_id(d, frame);
+    if (frame_id == BAKER_OSS_INVALID_FRAME) return;
+    Texture const *tex = baker_oss_tile_by_uvtile(d, frame_id, uv_tile);
+    if (!tex) return;
+    result[0] = tex->size.x;
+    result[1] = tex->size.y;
 }
 
 // Implementation of resolution_3d function needed by generated code.
@@ -590,19 +848,22 @@ extern "C" __device__ void tex_resolution_3d(
     int                         result[3],
     Texture_handler_base const *self_base,
     unsigned                    texture_idx,
-    float                       /*frame*/)
+    float                       frame)
 {
     Texture_handler const* self = static_cast<Texture_handler const*>(self_base);
 
-    if (texture_idx == 0 || texture_idx - 1 >= self->num_textures) {
-        // invalid texture returns zero
-        result[0] = 0;
-        result[1] = 0;
-        result[2] = 0;
-        return;
-    }
+    result[0] = 0;
+    result[1] = 0;
+    result[2] = 0;
 
-    Texture const& tex = self->textures[texture_idx - 1];
+    if (texture_idx == 0 || texture_idx - 1 >= self->num_textures)
+        return;  // invalid texture returns zero
+
+    Texture_desc const &d = self->texture_descs[texture_idx - 1];
+    if (!d.is_valid) return;
+    const unsigned frame_id = baker_oss_floor_frame_id(d, frame);
+    if (frame_id == BAKER_OSS_INVALID_FRAME) return;
+    Texture const& tex = d.tiles[d.frames[frame_id].grid.tile_offset];
     result[0] = tex.size.x;
     result[1] = tex.size.y;
     result[2] = tex.size.z;
@@ -615,18 +876,29 @@ extern "C" __device__ bool tex_texture_isvalid(
 {
     Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
 
-    return texture_idx != 0 && texture_idx - 1 < self->num_textures;
+    return texture_idx != 0 && texture_idx - 1 < self->num_textures
+        && self->texture_descs[texture_idx - 1].is_valid != 0;
 }
 
-// Implementation of frame function needed by generated code.
-// Note: frames are not implemented for the MDL SDK examples.
+// Implementation of frame function needed by generated code: returns the
+// [first, last] frame numbers of the texture's animation (0,0 if not animated
+// or invalid).
 extern "C" __device__ void tex_frame(
     int                         result[2],
-    Texture_handler_base const */*self_base*/,
-    unsigned                    /*texture_idx*/)
+    Texture_handler_base const *self_base,
+    unsigned                    texture_idx)
 {
+    Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
+
     result[0] = 0;
     result[1] = 0;
+    if ( texture_idx == 0 || texture_idx - 1 >= self->num_textures )
+        return;
+    Texture_desc const &d = self->texture_descs[texture_idx - 1];
+    if (!d.is_valid)
+        return;
+    result[0] = (int)d.first_frame;
+    result[1] = (int)d.last_frame;
 }
 
 

@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -407,6 +407,7 @@ Mesh::Geometry::Geometry(
     , m_vertex_count(primitive.vertex_count)
     , m_index_offset(static_cast<uint32_t>(primitive.index_offset))
     , m_index_count(primitive.index_count)
+    , m_normal_adjacency_offset(0)
     , m_scene_data_info_offset(0)
     , m_vertex_layout(primitive.vertex_element_layout.size())
 {
@@ -494,9 +495,14 @@ Mesh::Mesh(
     : m_app(app)
     , m_name(mesh_desc.name)
     , m_vertex_buffer(new Vertex_buffer<uint8_t>(
-        app, mesh_desc.vertex_data.size(), mesh_desc.name + "_VertexBuffer"))
+        app,
+        mesh_desc.vertex_data.size(),
+        mesh_desc.name + "_VertexBuffer",
+        D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS))
     , m_index_buffer(new Index_buffer(
         app, mesh_desc.indices.size(), mesh_desc.name + "_IndexBuffer"))
+    , m_normal_adjacency_offsets_buffer(nullptr)
+    , m_normal_adjacency_triangles_buffer(nullptr)
     , m_acceleration_structur(acceleration_structure)
     , m_blas()
     , m_geometries()
@@ -506,11 +512,38 @@ Mesh::Mesh(
     m_blas = m_acceleration_structur->add_bottom_level_structure(mesh_desc.name + "_BLAS");
 
     m_local_aabb = Bounding_box::Invalid;
+    std::vector<uint32_t> normal_adjacency_offsets;
+    std::vector<uint32_t> normal_adjacency_triangles;
 
     for (size_t i = 0, n = mesh_desc.primitives.size(); i < n; ++i)
     {
         m_geometries.push_back(Mesh::Geometry(app, *this, mesh_desc.primitives[i], i));
         Mesh::Geometry& part = m_geometries.back();
+        part.m_normal_adjacency_offset = normal_adjacency_offsets.size();
+
+        std::vector<std::vector<uint32_t>> incident_triangle_corners(part.get_vertex_count());
+        const uint32_t* indices = mesh_desc.indices.data() + part.get_index_offset();
+        for (size_t local_index = 0; local_index + 2 < part.get_index_count(); local_index += 3)
+        {
+            const uint32_t triangle = static_cast<uint32_t>(local_index / 3);
+            assert(triangle <= 0x3fffffffu);
+            for (uint32_t corner = 0; corner < 3; ++corner)
+            {
+                const uint32_t vertex = indices[local_index + corner];
+                if (vertex < incident_triangle_corners.size())
+                    incident_triangle_corners[vertex].push_back((triangle << 2) | corner);
+            }
+        }
+
+        for (const std::vector<uint32_t>& incident : incident_triangle_corners)
+        {
+            normal_adjacency_offsets.push_back(
+                static_cast<uint32_t>(normal_adjacency_triangles.size()));
+            normal_adjacency_triangles.insert(
+                normal_adjacency_triangles.end(), incident.begin(), incident.end());
+        }
+        normal_adjacency_offsets.push_back(
+            static_cast<uint32_t>(normal_adjacency_triangles.size()));
 
         // add geometry to acceleration structure
         part.m_geometry_handle = m_acceleration_structur->add_geometry(
@@ -536,17 +569,46 @@ Mesh::Mesh(
         }
     }
 
+    if (normal_adjacency_offsets.empty())
+        normal_adjacency_offsets.push_back(0);
+    if (normal_adjacency_triangles.empty())
+        normal_adjacency_triangles.push_back(0);
+
+    m_normal_adjacency_offsets_buffer = new Structured_buffer<uint32_t>(
+        app,
+        normal_adjacency_offsets.size(),
+        mesh_desc.name + "_NormalAdjacencyOffsets");
+    m_normal_adjacency_offsets_buffer->set_data(normal_adjacency_offsets);
+
+    m_normal_adjacency_triangles_buffer = new Structured_buffer<uint32_t>(
+        app,
+        normal_adjacency_triangles.size(),
+        mesh_desc.name + "_NormalAdjacencyTriangles");
+    m_normal_adjacency_triangles_buffer->set_data(normal_adjacency_triangles);
+
     // create a SRV for scene data lookups
     assert(!m_first_resource_heap_handle.is_valid());
     Descriptor_heap& resource_heap = *m_app->get_resource_descriptor_heap();
-    m_first_resource_heap_handle = resource_heap.reserve_views(2);
+    m_first_resource_heap_handle = resource_heap.reserve_views(6);
     assert(m_first_resource_heap_handle.is_valid());
 
     bool res = resource_heap.create_shader_resource_view(
         m_vertex_buffer, true, m_first_resource_heap_handle);
     assert(res);
     res = resource_heap.create_shader_resource_view(
-        m_index_buffer, true, m_first_resource_heap_handle.create_offset(1));
+        m_index_buffer, m_first_resource_heap_handle.create_offset(1));
+    assert(res);
+    res = resource_heap.create_shader_resource_view(
+        m_vertex_buffer, true, m_first_resource_heap_handle.create_offset(2));
+    assert(res);
+    res = resource_heap.create_unordered_access_view(
+        m_vertex_buffer, true, m_first_resource_heap_handle.create_offset(3));
+    assert(res);
+    res = resource_heap.create_shader_resource_view(
+        m_normal_adjacency_offsets_buffer, m_first_resource_heap_handle.create_offset(4));
+    assert(res);
+    res = resource_heap.create_shader_resource_view(
+        m_normal_adjacency_triangles_buffer, m_first_resource_heap_handle.create_offset(5));
     assert(res);
 
 }
@@ -560,6 +622,8 @@ Mesh::~Mesh()
 
     delete m_vertex_buffer;
     delete m_index_buffer;
+    delete m_normal_adjacency_offsets_buffer;
+    delete m_normal_adjacency_triangles_buffer;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -571,6 +635,11 @@ Mesh::Instance::Instance(
     , m_mesh(nullptr)
     , m_instance_handle()
     , m_materials()
+    , m_displacement_active(false)
+    , m_displaced_vertex_buffer(nullptr)
+    , m_displaced_resource_heap_handle()
+    , m_displaced_blas()
+    , m_displaced_geometry_handles()
     , m_scene_data_infos(nullptr)
     , m_scene_data(node_desc.scene_data)
     , m_scene_data_buffer(nullptr)
@@ -583,6 +652,10 @@ Mesh::Instance::~Instance()
 {
     // free heap block
     m_app->get_resource_descriptor_heap()->free_views(m_first_resource_heap_handle);
+    m_app->get_resource_descriptor_heap()->free_views(m_displaced_resource_heap_handle);
+
+    if (m_displaced_vertex_buffer)
+        delete m_displaced_vertex_buffer;
 
     if (m_scene_data_infos)
         delete m_scene_data_infos;
@@ -606,6 +679,140 @@ Mesh::Instance* Mesh::create_instance(const IScene_loader::Node& node_desc)
     instance->m_instance_handle = handle;
     instance->m_materials.resize(m_geometries.size(), nullptr);
     return instance;
+}
+
+// ------------------------------------------------------------------------------------------------
+
+bool Mesh::Instance::ensure_displaced_geometry_resources()
+{
+    if (m_displaced_vertex_buffer)
+        return true;
+
+    if (!m_mesh)
+        return false;
+
+    m_displaced_vertex_buffer = new Vertex_buffer<uint8_t>(
+        m_app,
+        m_mesh->m_vertex_buffer->get_size_in_byte(),
+        m_mesh->m_name + "_DisplacedInstanceVertexBuffer",
+        D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+
+    Descriptor_heap& resource_heap = *m_app->get_resource_descriptor_heap();
+    auto cleanup_failed_resources = [&]()
+    {
+        resource_heap.free_views(m_displaced_resource_heap_handle);
+        delete m_displaced_vertex_buffer;
+        m_displaced_vertex_buffer = nullptr;
+        m_displaced_geometry_handles.clear();
+        m_displaced_blas = Raytracing_acceleration_structure::BLAS_handle();
+        return false;
+    };
+
+    m_displaced_resource_heap_handle = resource_heap.reserve_views(6);
+    if (!m_displaced_resource_heap_handle.is_valid())
+        return cleanup_failed_resources();
+
+    if (!resource_heap.create_shader_resource_view(
+            m_displaced_vertex_buffer, true, m_displaced_resource_heap_handle))
+        return cleanup_failed_resources();
+    if (!resource_heap.create_shader_resource_view(
+            m_mesh->m_index_buffer, m_displaced_resource_heap_handle.create_offset(1)))
+        return cleanup_failed_resources();
+    if (!resource_heap.create_shader_resource_view(
+            m_mesh->m_vertex_buffer, true, m_displaced_resource_heap_handle.create_offset(2)))
+        return cleanup_failed_resources();
+    if (!resource_heap.create_unordered_access_view(
+            m_displaced_vertex_buffer, true, m_displaced_resource_heap_handle.create_offset(3)))
+        return cleanup_failed_resources();
+    if (!resource_heap.create_shader_resource_view(
+            m_mesh->m_normal_adjacency_offsets_buffer,
+            m_displaced_resource_heap_handle.create_offset(4)))
+        return cleanup_failed_resources();
+    if (!resource_heap.create_shader_resource_view(
+            m_mesh->m_normal_adjacency_triangles_buffer,
+            m_displaced_resource_heap_handle.create_offset(5)))
+        return cleanup_failed_resources();
+
+    m_displaced_blas = m_mesh->m_acceleration_structur->add_bottom_level_structure(
+        m_mesh->m_name + "_DisplacedInstanceBLAS");
+    if (!m_displaced_blas.is_valid())
+        return cleanup_failed_resources();
+
+    m_displaced_geometry_handles.clear();
+    m_displaced_geometry_handles.reserve(m_mesh->m_geometries.size());
+    for (const Mesh::Geometry& part : m_mesh->m_geometries)
+    {
+        Raytracing_acceleration_structure::Geometry_handle geometry_handle =
+            m_mesh->m_acceleration_structur->add_geometry(
+                m_displaced_blas,
+                m_displaced_vertex_buffer,
+                part.get_vertex_buffer_byte_offset(),
+                part.get_vertex_count(),
+                part.get_vertex_stride(),
+                0 /* vertex byte offset */,
+                m_mesh->m_index_buffer,
+                part.get_index_offset(),
+                part.get_index_count());
+
+        if (!geometry_handle.is_valid())
+            return cleanup_failed_resources();
+
+        m_displaced_geometry_handles.push_back(geometry_handle);
+    }
+
+    return true;
+}
+
+// ------------------------------------------------------------------------------------------------
+
+bool Mesh::Instance::set_displacement_active(bool active)
+{
+    if (active)
+    {
+        if (!ensure_displaced_geometry_resources())
+            return false;
+
+        if (!m_mesh->m_acceleration_structur->set_instance_bottom_level_structure(
+            m_instance_handle, m_displaced_blas))
+            return false;
+    }
+    else
+    {
+        if (!m_mesh->m_acceleration_structur->set_instance_bottom_level_structure(
+            m_instance_handle, m_mesh->m_blas))
+            return false;
+    }
+
+    m_displacement_active = active;
+    return true;
+}
+
+// ------------------------------------------------------------------------------------------------
+
+const Raytracing_acceleration_structure::Geometry_handle& Mesh::Instance::get_geometry_handle(
+    const Mesh::Geometry* geometry) const
+{
+    if (m_displacement_active &&
+        geometry->m_index_in_mesh < m_displaced_geometry_handles.size())
+        return m_displaced_geometry_handles[geometry->m_index_in_mesh];
+
+    return geometry->m_geometry_handle;
+}
+
+// ------------------------------------------------------------------------------------------------
+
+const Vertex_buffer<uint8_t>* Mesh::Instance::get_active_vertex_buffer() const
+{
+    return m_displacement_active ? m_displaced_vertex_buffer : m_mesh->m_vertex_buffer;
+}
+
+// ------------------------------------------------------------------------------------------------
+
+uint32_t Mesh::Instance::get_geometry_resource_heap_index() const
+{
+    return m_displacement_active
+        ? static_cast<uint32_t>(m_displaced_resource_heap_handle.get_heap_index())
+        : m_mesh->get_resource_heap_index();
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -814,6 +1021,8 @@ bool Mesh::upload_buffers(D3DCommandList* command_list)
 {
     if (!m_vertex_buffer->upload(command_list)) return false;
     if (!m_index_buffer->upload(command_list)) return false;
+    if (!m_normal_adjacency_offsets_buffer->upload(command_list)) return false;
+    if (!m_normal_adjacency_triangles_buffer->upload(command_list)) return false;
     return true;
 }
 
@@ -1263,11 +1472,22 @@ bool Scene::build_scene(std::unique_ptr<const IScene_loader::Scene> scene)
     command_queue->execute_command_list(command_list);
     command_queue->flush();
 
-    // build acceleration data structure
+    // update scene transforms and bounds. Acceleration structures are built later,
+    // after MDL target generation selects the displacement-aware build policy.
     // ----------------------------------------------------------------------------------------
     m_root.update(Update_args());
 
-    command_list = command_queue->get_command_list();
+    return true;
+}
+
+// ------------------------------------------------------------------------------------------------
+
+bool Scene::build_acceleration_structure()
+{
+    m_root.update(Update_args());
+
+    Command_queue* command_queue = m_app->get_command_queue(D3D12_COMMAND_LIST_TYPE_DIRECT);
+    D3DCommandList* command_list = command_queue->get_command_list();
 
     if (!m_acceleration_structure->build(command_list)) return false;
 

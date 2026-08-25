@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -43,6 +43,7 @@
 #include "dist_rules.h"
 #include "dist_rules_ue.h"
 #include "dist_rules_transmissive_pbr.h"
+#include "dist_rules_ovrtx.h"
 
 namespace MI {
 namespace DIST {
@@ -54,7 +55,8 @@ static const char* s_targets[] = {
     "diffuse",
     "specular_glossy",
     "ue4",
-    "transmissive_pbr"
+    "transmissive_pbr",
+    "ovrtx"
 };
 
 /// Returns the dimension of an array.
@@ -77,6 +79,27 @@ static bool uses_ternary_df(
 {
     return 0 != (material_instance->get_properties()
         & mi::mdl::IMaterial_instance::IP_USES_TERNARY_OPERATOR_ON_DF);
+}
+
+static bool selected_microflake_sheen(
+    const mi::mdl::IMaterial_instance* material_instance)
+{
+    if (!material_instance)
+        return false;
+
+    const mi::mdl::DAG_call* material = material_instance->get_constructor();
+    if (!material)
+        return false;
+
+    const mi::mdl::DAG_call* surface = mi::mdl::as<mi::mdl::DAG_call>(
+        material->get_argument("surface"));
+    if (!surface)
+        return false;
+
+    const mi::mdl::DAG_call* scattering = mi::mdl::as<mi::mdl::DAG_call>(
+        surface->get_argument("scattering"));
+    return scattering && scattering->get_semantic()
+        == mi::mdl::IDefinition::DS_INTRINSIC_DF_MICROFLAKE_SHEEN_BSDF;
 }
 
 bool Mdl_distiller::init( mi::base::ILogger* logger) {
@@ -467,6 +490,77 @@ const mi::mdl::IMaterial_instance* Mdl_distiller::distill(
 
         res = api.apply_rules( res.get(), fix_backface, event_handler, options, error);
         CHECK_RESULT;
+        break;
+    }
+    case 5: // "ovrtx"
+    {
+        log( mi::base::MESSAGE_SEVERITY_INFO, "Distilling to target 'ovrtx'.");
+
+        // Select the first sheen kind before mixer normalization can change
+        // component order. The selector works on a temporary material; the
+        // actual ovrtx pipeline continues with the original input below.
+        api.set_normalize_mixers(false);
+        Select_sheen_for_ovrtx select_sheen;
+        mi::base::Handle<const mi::mdl::IMaterial_instance> selected_sheen(
+            api.apply_rules(material_instance, select_sheen, event_handler, options, error));
+        CHECK_RESULT;
+        const bool use_microflake_sheen = selected_microflake_sheen(selected_sheen.get());
+
+        api.set_normalize_mixers(true);
+
+        Reduce_1_4_to_1_3_ovrtx_rules make_1_3;
+        res = api.apply_rules( material_instance, make_1_3, event_handler, options, error);
+        CHECK_RESULT;
+
+        Make_simple_for_ovrtx make_simple;
+        res = api.apply_rules( res.get(), make_simple, event_handler, options, error);
+        CHECK_RESULT;
+
+        Elide_tint_for_ovrtx elide_tint;
+        res = api.apply_rules( res.get(), elide_tint, event_handler, options, error);
+        CHECK_RESULT;
+
+        // elide conditionals after tint to keep attributes intact
+        Elide_conditional_operator_ovrtx_rules cond_operator;
+        res = api.apply_rules( res.get(), cond_operator, event_handler, options, error);
+        CHECK_RESULT;
+
+        // detect everything that looks like glass and shape it to be tint(ggx(reflect_transmit))
+        Unify_glass_for_ovrtx make_glass;
+        res = api.apply_rules( res.get(), make_glass, event_handler, options, error);
+        CHECK_RESULT;
+
+        Elide_fresnel_for_ovrtx elide_fresnel;
+        res = api.apply_rules( res.get(), elide_fresnel, event_handler, options, error);
+        CHECK_RESULT;
+
+        Make_for_ovrtx make;
+        res = api.apply_rules( res.get(), make, event_handler, options, error);
+        CHECK_RESULT;
+
+        if (use_microflake_sheen) {
+            Enable_microflake_sheen_base_for_ovrtx enable_microflake_sheen_base;
+            res = api.apply_rules(
+                res.get(), enable_microflake_sheen_base, event_handler, options, error);
+            CHECK_RESULT;
+        } else {
+            Disable_microflake_sheen_base_for_ovrtx disable_microflake_sheen_base;
+            res = api.apply_rules(
+                res.get(), disable_microflake_sheen_base, event_handler, options, error);
+            CHECK_RESULT;
+        }
+
+        // unify structure by inflating to a target model
+        Inflate_for_ovrtx inflate;
+        res = api.apply_rules( res.get(), inflate, event_handler, options, error);
+        CHECK_RESULT;
+
+        if (use_microflake_sheen) {
+            Use_microflake_sheen_for_ovrtx use_microflake_sheen_rules;
+            res = api.apply_rules(
+                res.get(), use_microflake_sheen_rules, event_handler, options, error);
+            CHECK_RESULT;
+        }
         break;
     }
 

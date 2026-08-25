@@ -13,7 +13,7 @@
 #    contributors may be used to endorse or promote products derived
 #    from this software without specific prior written permission.
 #
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
 # EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 # IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
 # PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -61,7 +61,6 @@ if (MDL_BUILD_SDK_EXAMPLES)
     if(MDL_ENABLE_CUDA_EXAMPLES)
         list(APPEND PROJECT_SOURCES
             "example_cuda_shared.h"
-            "texture_support_cuda.h"
             )
     endif()
 
@@ -142,6 +141,7 @@ endif()
 target_include_directories(${PROJECT_NAME}
     INTERFACE
         ${CMAKE_CURRENT_SOURCE_DIR}
+        ${MDL_SRC_FOLDER}/render/baker/baker
     )
 
 # add dependencies

@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -278,6 +278,135 @@ std::vector<Shader_library> Shader_compiler::compile_shader_library_from_string(
     return compile_shader_library_from_string_dxc(
         options, shader_source, debug_name, defines, entry_points, base_file_name);
 }
+
+// ------------------------------------------------------------------------------------------------
+
+ComPtr<IDxcBlob> Shader_compiler::compile_compute_shader_from_string(
+    const Base_options* options,
+    const std::string& shader_source,
+    const std::string& debug_name,
+    const std::map<std::string, std::string>* defines,
+    const std::string& entry_point)
+{
+    std::vector<LPCWSTR> arguments;
+
+    std::wstring inc = mi::examples::strings::str_to_wstr(
+        mi::examples::io::get_executable_folder());
+    arguments.push_back(L"-I");
+    arguments.push_back(inc.c_str());
+
+    LPCWSTR sm_version = L"cs_6_3";
+    if (options->features.HLSL_dynamic_resources)
+    {
+        arguments.push_back(L"-DFEATURE_DYNAMIC_RESOURCES=1");
+        sm_version = L"cs_6_6";
+    }
+    else
+    {
+        arguments.push_back(L"-DFEATURE_DYNAMIC_RESOURCES=0");
+    }
+
+    arguments.push_back(L"-T");
+    arguments.push_back(sm_version);
+
+    std::wstring entry_point_w = mi::examples::strings::str_to_wstr(entry_point);
+    arguments.push_back(L"-E");
+    arguments.push_back(entry_point_w.c_str());
+
+    if (options->gpu_debug)
+        arguments.push_back(DXC_ARG_DEBUG);
+
+    std::wstring optimization = mi::examples::strings::str_to_wstr("/" + options->shader_opt);
+    arguments.push_back(optimization.c_str());
+    arguments.push_back(L"-Qstrip_debug");
+    arguments.push_back(L"-Qstrip_reflect");
+
+    std::vector<std::wstring> wstrings;
+    if (defines)
+    {
+        for (const auto& d : *defines)
+        {
+            arguments.push_back(L"-D");
+            wstrings.push_back(mi::examples::strings::str_to_wstr(d.first + "=" + d.second));
+            arguments.push_back(wstrings.back().c_str());
+        }
+    }
+
+    ComPtr<IDxcCompiler3> compiler = nullptr;
+    if (log_on_failure(DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(compiler.GetAddressOf())),
+        "Failed to create IDxcCompiler", SRC))
+        return nullptr;
+
+    ComPtr<IDxcUtils> utils = nullptr;
+    if (log_on_failure(DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(utils.GetAddressOf())),
+        "Failed to create IDxcUtils", SRC))
+        return nullptr;
+
+    ComPtr<IDxcBlobEncoding> shader_source_blob;
+    if (log_on_failure(utils->CreateBlob(
+        (LPBYTE)shader_source.c_str(), (uint32_t)shader_source.size(), CP_UTF8,
+        shader_source_blob.GetAddressOf()),
+        "Failed to create compute shader source blob: " + debug_name, SRC))
+        return nullptr;
+
+    IDxcIncludeHandler* base_handler;
+    if (log_on_failure(utils->CreateDefaultIncludeHandler(&base_handler),
+        "Failed to create Include Handler.", SRC))
+        return nullptr;
+    ComPtr<IncludeHandler> include_handler = new IncludeHandler(base_handler);
+
+    DxcBuffer sourceBuffer;
+    sourceBuffer.Ptr = shader_source_blob->GetBufferPointer();
+    sourceBuffer.Size = shader_source_blob->GetBufferSize();
+    sourceBuffer.Encoding = 0;
+
+    ComPtr<IDxcResult> result;
+    HRESULT hr;
+    {
+        Timing t("DXC Compile Compute: " + debug_name);
+        auto p = m_app->get_profiling().measure("DXC Compile Compute: " + debug_name);
+        hr = compiler->Compile(&sourceBuffer,
+            arguments.data(), (UINT32)arguments.size(),
+            include_handler.Get(), IID_PPV_ARGS(result.GetAddressOf()));
+    }
+
+    result->GetStatus(&hr);
+    ComPtr<IDxcBlobUtf8> error;
+    if (log_on_failure(result->GetOutput(
+        DXC_OUT_ERRORS, IID_PPV_ARGS(error.GetAddressOf()), nullptr),
+        "Failed to get compute shader compilation errors for source: " + debug_name, SRC))
+        return nullptr;
+
+    if (error && error->GetStringLength())
+    {
+        std::vector<char> infoLog(error->GetBufferSize() + 1);
+        memcpy(infoLog.data(), error->GetBufferPointer(), error->GetBufferSize());
+        infoLog[error->GetBufferSize()] = 0;
+
+        std::string message = SUCCEEDED(hr)
+            ? "Shader Compiler Warning: "
+            : "Shader Compiler Error: ";
+        message += debug_name + "\n";
+        message.append(infoLog.data());
+        if (SUCCEEDED(hr))
+            log_warning(message, SRC);
+        else
+            log_error(message, SRC);
+    }
+
+    if (log_on_failure(hr, "Failed to compile compute shader source: " + debug_name, SRC))
+        return nullptr;
+
+    ComPtr<IDxcBlob> dxil_blob;
+    if (log_on_failure(result->GetOutput(
+        DXC_OUT_OBJECT, IID_PPV_ARGS(dxil_blob.GetAddressOf()), nullptr),
+        "Failed to get compute shader blob for source: " + debug_name, SRC))
+        return nullptr;
+
+    return dxil_blob;
+}
+
+// ------------------------------------------------------------------------------------------------
 
 std::vector<Shader_library> Shader_compiler::compile_shader_library_from_string_dxc(
     const Base_options* options,

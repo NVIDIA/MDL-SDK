@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -190,6 +190,34 @@ void check_texture_call(
     DB::Access<MDL::Mdl_function_call> fc( tag, transaction);
     mi::base::Handle<const MDL::IExpression_list> arguments( fc->get_arguments());
     check_texture( transaction, arguments.get(), arg_name, success, resolve_resources, file_path);
+}
+
+void check_texture_array_def(
+    DB::Transaction* transaction,
+    const char* db_element_name,
+    const char* arg_name,
+    const std::vector<const char*>& file_paths)
+{
+    DB::Tag tag = transaction->name_to_tag( db_element_name);
+    DB::Access<MDL::Mdl_function_definition> fd( tag, transaction);
+    mi::base::Handle<const MDL::IExpression_list> arguments( fd->get_defaults());
+    mi::base::Handle<const MDL::IExpression> expr( arguments->get_expression( arg_name));
+    MI_CHECK( expr);
+    mi::base::Handle<const MDL::IExpression_constant> constant(
+        expr->get_interface<MDL::IExpression_constant>());
+    MI_CHECK( constant);
+    mi::base::Handle<const MDL::IValue_array> array(
+        constant->get_value<MDL::IValue_array>());
+    MI_CHECK( array);
+    MI_CHECK_EQUAL( array->get_size(), file_paths.size());
+
+    for( mi::Size i = 0, n = array->get_size(); i < n; ++i) {
+        mi::base::Handle<const MDL::IValue_texture> texture(
+            array->get_value<MDL::IValue_texture>( i));
+        MI_CHECK( texture);
+        MI_CHECK( texture->get_value().is_valid());
+        MI_CHECK_EQUAL( texture->get_file_path( transaction), file_paths[i]);
+    }
 }
 
 void check_light_profile(
@@ -376,6 +404,11 @@ void test_resources( DB::Transaction* transaction)
     check_bsdf_measurement_call( transaction,
         "mdl::mdl_elements::test_resolver_success::fc_bsdf_measurement",
         "b", true, true, "/mdl_elements/resources/test.mbsdf");
+
+    check_texture_array_def( transaction,
+        "mdl::mdl_elements::test_misc::fd_texture_array(texture_2d[2])",
+        "t",
+        {"/mdl_elements/resources/test.png", "/mdl_elements/resources/test1001.png"});
 }
 
 void test_jitted_environment_function( DB::Transaction* transaction)
@@ -2273,16 +2306,16 @@ void check_resource_map( const T* object, const std::set<std::string> expected[2
     MI_CHECK_EQUAL( expected[index].size(), got.size());
 }
 
-void check_resource_ivalue(
-    DB::Transaction* transaction, const MDL::Mdl_module* module, bool resolve_resources)
+template <class T>
+void check_resource_ivalue( DB::Transaction* transaction, const T* object, bool resolve_resources)
 {
     mi::Size index = resolve_resources ? 0 : 1;
-    mi::Size n = module->get_resources_count();
+    mi::Size n = object->get_resources_count();
 
     std::set<std::string> got;
 
     for( mi::Size i = 0; i < n; ++i) {
-        mi::base::Handle<const MDL::IValue_resource> res( module->get_resource( i));
+        mi::base::Handle<const MDL::IValue_resource> res( object->get_resource( i));
         if( resolve_resources) {
             got.insert( res->get_file_path( transaction));
         } else {
@@ -2345,11 +2378,13 @@ void test_resource_maps( DB::Scope* global_scope, bool resolve_resources)
     std::unique_ptr<MDL::Mdl_compiled_material> cm_i( fc->create_compiled_material(
         transaction, /*class_compilation*/ false, /*target_type*/ nullptr, &context));
     check_resource_map( cm_i.get(), expected, resolve_resources);
+    check_resource_ivalue( transaction, cm_i.get(), resolve_resources);
 
     std::unique_ptr<MDL::Mdl_compiled_material> cm_c( fc->create_compiled_material(
         transaction, /*class_compilation*/ true, /*target_type*/ nullptr, &context));
     // TODO Should resources only used in the arguments show up here (with class compilation)?
     check_resource_map( cm_c.get(), expected, resolve_resources);
+    check_resource_ivalue( transaction, cm_c.get(), resolve_resources);
 
     transaction->commit();
 }

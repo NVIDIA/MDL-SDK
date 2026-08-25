@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -28,6 +28,9 @@
 
 #include "pch.h"
 
+
+// ENABLE_GPU_BAKING_OSS is mapped from the MDL_ENABLE_GPU_BAKER CMake option at the
+// top of baker.h, which is included below before its first use.
 
 #include <iostream>
 #include <string>
@@ -60,15 +63,17 @@
 #include "baker.h"
 
 
+#ifdef ENABLE_GPU_BAKING_OSS
+#include "baker_cuda_oss.h"
+#ifdef ENABLE_GPU_BAKING_OSS
+#  include <cuda.h>
+#endif
+#include <memory>
+#endif
+
 #ifndef M_PI
 #define M_PI            3.14159265358979323846
 #endif
-
-// number of texture supported by the baker
-// MDL code to bake can use an arbitrary number of textures spaces
-// the baker ideally would map all those spaces to a default one that
-// corresponds to the coordinates we are baking to
-constexpr const uint32_t BAKER_TEXTURE_SPACES = 16; // relatively conservative
 
 namespace MI {
 
@@ -180,19 +185,15 @@ protected:
 
     std::atomic_uint32_t m_failure;
 
-    static const mi::Uint32 MAX_FRAGMENT = 256;
+    static constexpr mi::Uint32 MAX_FRAGMENT = 256;
     // Store a flag stating that all pixels are equal per fragment
     bool m_all_pixels_equal[MAX_FRAGMENT];
     // Store the first computed pixel per fragment
     mi::Float32_4 m_first_pixel_color[MAX_FRAGMENT];
-    // Epsilon used to compare baked pixels
-    static const float m_epsilon;
+    // Epsilon used to compare baked pixels; matches the GPU bakers'
+    // constant-detection epsilon.
+    static constexpr float m_epsilon = 1e-7f;
 };
-
-const mi::Uint32 Baker_fragmented_job::MAX_FRAGMENT;
-
-// Same epsilon as in the CUDA baker (see src\render\baker\baker\baker_kernel.cu)
-const float Baker_fragmented_job::m_epsilon(1e-7f);
 
 Baker_fragmented_job::Baker_fragmented_job(
     const mi::neuraylib::ITarget_code* target_code,
@@ -365,25 +366,32 @@ void Baker_fragmented_job::execute_fragment(
                     pixel.y = std::isnan(pixel.y) ? 0.0f : pixel.y;
                     pixel.z = std::isnan(pixel.z) ? 0.0f : pixel.z;
                     pixel.w = std::isnan(pixel.w) ? 0.0f : pixel.w;
+
+                    // For bool (Sint8) targets the MDL lambda writes a raw byte
+                    // (0x00/0x01) into pixel.x.  Lift to 0.0f/1.0f before
+                    // accumulation so float averaging and the > 0.5 majority-vote
+                    // threshold below work correctly, matching the GPU path.
+                    if (m_tex_pixel_type == IMAGE::PT_SINT8) {
+                        unsigned char raw;
+                        memcpy(&raw, &pixel.x, sizeof(raw));
+                        pixel.x = (raw != 0) ? 1.0f : 0.0f;
+                        pixel.y = pixel.z = pixel.w = 0.0f;
+                    }
                 }
                 pixel_data += pixel;
             }
             pixel_data /= m_num_samples;
 
-            // assuming that we use `PT_SINT8` is used for boolean
             bool apply_epsilon_threshold = true;
             if (m_tex_pixel_type == MI::IMAGE::Pixel_type::PT_SINT8) {
-                bool value = *reinterpret_cast<bool*>(&pixel_data[0]);
-                pixel_data.x = value ? (1.0f / 255.0f) : 0.0f;
-                pixel_data.y = value ? (1.0f / 255.0f) : 0.0f;
-                pixel_data.z = value ? (1.0f / 255.0f) : 0.0f;
+                // Majority-vote threshold: more than half the samples returned
+                // true → pixel is true.  pixel_data.x is the average of the
+                // per-sample 0.0f/1.0f values produced in the loop above.
+                const float bv = (pixel_data.x > 0.5f) ? (1.0f / 255.0f) : 0.0f;
+                pixel_data.x = pixel_data.y = pixel_data.z = bv;
                 apply_epsilon_threshold = false;
-                tile->set_pixel(j, i, (mi::Float32*)&pixel_data.x);
             }
-            // all other formats supported by the baker use 32bit formats
-            else {
-                tile->set_pixel(j, i, (mi::Float32*)&pixel_data.x);
-            }
+            tile->set_pixel(j, i, (mi::Float32*)&pixel_data.x);
 
             if (i == start_row && j == start_col) {
                 // this is first pixel, store its color and initialize the constant flag
@@ -413,126 +421,6 @@ void Baker_fragmented_job::execute_fragment(
     }
 }
 
-
-#if 0
-// unused
-static size_t store_value(unsigned char *data, mi::base::Handle<MI::MDL::IValue const> iv)
-{
-    switch (iv->get_kind()) {
-    case MI::MDL::IValue::VK_BOOL:
-        {
-            mi::base::Handle<MI::MDL::IValue_bool const> b(
-                iv->get_interface<MI::MDL::IValue_bool>());
-            *reinterpret_cast<bool *>(data) = b->get_value();
-            return 1;
-        }
-    case MI::MDL::IValue::VK_INT:
-        {
-            mi::base::Handle<MI::MDL::IValue_int const> i(
-                iv->get_interface<MI::MDL::IValue_int>());
-            *reinterpret_cast<mi::Sint32 *>(data) = i->get_value();
-            return 4;
-        }
-    case MI::MDL::IValue::VK_ENUM:
-        {
-            mi::base::Handle<MI::MDL::IValue_enum const> e(
-                iv->get_interface<MI::MDL::IValue_enum>());
-            *reinterpret_cast<mi::Sint32 *>(data) = e->get_value();
-            return 4;
-        }
-    case MI::MDL::IValue::VK_FLOAT:
-        {
-            mi::base::Handle<MI::MDL::IValue_float const> f(
-                iv->get_interface<MI::MDL::IValue_float>());
-            *reinterpret_cast<mi::Float32 *>(data) = f->get_value();
-            return 4;
-        }
-    case MI::MDL::IValue::VK_DOUBLE:
-        {
-            mi::base::Handle<MI::MDL::IValue_double const> d(
-                iv->get_interface<MI::MDL::IValue_double>());
-            *reinterpret_cast<mi::Float64 *>(data) = d->get_value();
-            return 8;
-        }
-    case MI::MDL::IValue::VK_STRING:
-        {
-            ASSERT(M_BAKER, !"unsupported string value");
-            return 8;
-        }
-    case MI::MDL::IValue::VK_VECTOR:
-        {
-            mi::base::Handle<MI::MDL::IValue_vector const> v(
-                iv->get_interface<MI::MDL::IValue_vector>());
-
-            size_t o = 0;
-            for (size_t i = 0, n = v->get_size(); i < n; ++i) {
-                mi::base::Handle<MI::MDL::IValue const> e(v->get_value(i));
-
-                size_t no = store_value(data + o, e);
-                o += no;
-            }
-            return o;
-        }
-    case MI::MDL::IValue::VK_MATRIX:
-        {
-            mi::base::Handle<MI::MDL::IValue_matrix const> m(
-                iv->get_interface<MI::MDL::IValue_matrix>());
-
-            size_t o = 0;
-            for (size_t i = 0, n = m->get_size(); i < n; ++i) {
-                mi::base::Handle<MI::MDL::IValue const> e(m->get_value(i));
-
-                size_t no = store_value(data + o, e);
-                o += no;
-            }
-            return o;
-        }
-    case MI::MDL::IValue::VK_COLOR:
-        {
-            mi::base::Handle<MI::MDL::IValue_color const> c(
-                iv->get_interface<MI::MDL::IValue_color>());
-
-            size_t o = 0;
-            for (size_t i = 0, n = c->get_size(); i < n; ++i) {
-                mi::base::Handle<MI::MDL::IValue const> e(c->get_value(i));
-
-                size_t no = store_value(data + o, e);
-                o += no;
-            }
-            return o;
-        }
-    case MI::MDL::IValue::VK_ARRAY:
-        {
-            mi::base::Handle<MI::MDL::IValue_array const> a(
-                iv->get_interface<MI::MDL::IValue_array>());
-
-            size_t o = 0;
-            for (size_t i = 0, n = a->get_size(); i < n; ++i) {
-                mi::base::Handle<MI::MDL::IValue const> e(a->get_value(i));
-
-                size_t no = store_value(data + o, e);
-                o += no;
-            }
-            return o;
-        }
-    case MI::MDL::IValue::VK_STRUCT:
-        {
-            ASSERT(M_BAKER, !"unsupported struct value");
-            return 0;
-        }
-    case MI::MDL::IValue::VK_INVALID_DF:
-    case MI::MDL::IValue::VK_TEXTURE:
-    case MI::MDL::IValue::VK_LIGHT_PROFILE:
-    case MI::MDL::IValue::VK_BSDF_MEASUREMENT:
-        {
-            ASSERT(M_BAKER, !"unexpected argument type");
-            return 0;
-        }
-    }
-    ASSERT(M_BAKER, !"unsupported value type");
-    return 0;
-}
-#endif
 
 // Constructor.
 Baker_code_impl::Baker_code_impl(
@@ -582,7 +470,17 @@ Baker_module_impl::Baker_module_impl()
 : m_mdlc_module()
 , m_compiler()
 , m_code_generator_jit()
+#ifdef ENABLE_GPU_BAKING_OSS
+, m_dev_ctx_cache_oss_lock()
+, m_dev_ctx_cache_oss()
+#endif
 {
+}
+
+Baker_module_impl::~Baker_module_impl()
+{
+    // Out-of-line definition required for std::unique_ptr<Cuda_dynload> with
+    // an only-forward-declared Cuda_dynload in baker.h.
 }
 
 bool Baker_module_impl::init()
@@ -603,12 +501,64 @@ bool Baker_module_impl::init()
 void Baker_module_impl::exit()
 {
 
+#ifdef ENABLE_GPU_BAKING_OSS
+    for (auto& kv : m_dev_ctx_cache_oss)
+        cuCtxDestroy(kv.second);
+    m_dev_ctx_cache_oss.clear();
+#endif
+
     m_code_generator_jit = nullptr;
     m_compiler = nullptr;
     m_mdlc_module.reset();
 }
 
 
+
+#ifdef ENABLE_GPU_BAKING_OSS
+bool Baker_module_impl::ensure_cuda_loaded_oss(int gpu_dev_id, unsigned& sm) const
+{
+    if (cuInit(0) != CUDA_SUCCESS) return false;
+
+    int dev_count = 0;
+    if (cuDeviceGetCount(&dev_count) != CUDA_SUCCESS || dev_count <= 0 ||
+        gpu_dev_id < 0 || gpu_dev_id >= dev_count) {
+        return false;
+    }
+    int dev = 0;
+    if (cuDeviceGet(&dev, gpu_dev_id) != CUDA_SUCCESS) return false;
+    int major = 0, minor = 0;
+    if (cuDeviceGetAttribute(&major, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, dev)
+            != CUDA_SUCCESS ||
+        cuDeviceGetAttribute(&minor, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR, dev)
+            != CUDA_SUCCESS) {
+        return false;
+    }
+    sm = (unsigned)(major * 10 + minor);
+    // The kernel is compiled for sm_50; require at least that.
+    return sm >= 50;
+}
+
+CUcontext Baker_module_impl::get_dev_context_oss(int gpu_dev_id) const
+{
+    mi::base::Lock::Block block(&m_dev_ctx_cache_oss_lock);
+    auto it = m_dev_ctx_cache_oss.find(gpu_dev_id);
+    if (it != m_dev_ctx_cache_oss.end()) return it->second;
+
+    int dev = 0;
+    if (cuDeviceGet(&dev, gpu_dev_id) != CUDA_SUCCESS) return nullptr;
+
+    CUcontext ctx = nullptr;
+    if (cuCtxCreate(&ctx, /*flags=*/0, dev) != CUDA_SUCCESS || !ctx)
+        return nullptr;
+
+    // cuCtxCreate makes the new context current; pop so we don't leak state.
+    CUcontext popped = nullptr;
+    cuCtxPopCurrent(&popped);
+
+    m_dev_ctx_cache_oss[gpu_dev_id] = ctx;
+    return ctx;
+}
+#endif
 
 const IBaker_code* Baker_module_impl::create_baker_code(
     DB::Transaction* transaction,
@@ -621,7 +571,7 @@ const IBaker_code* Baker_module_impl::create_baker_code(
 {
     return create_baker_code_internal(
         transaction, compiled_material, nullptr, path,
-        resource, gpu_device_id, pixel_type, is_uniform, false);
+        resource, gpu_device_id, pixel_type, is_uniform);
 }
 
 const IBaker_code* Baker_module_impl::create_environment_baker_code(
@@ -634,7 +584,7 @@ const IBaker_code* Baker_module_impl::create_environment_baker_code(
     std::string pixel_type;
     return create_baker_code_internal(
         transaction, nullptr, environment_function, nullptr,
-        resource, gpu_device_id, pixel_type, is_uniform, false);
+        resource, gpu_device_id, pixel_type, is_uniform);
 }
 
 
@@ -646,8 +596,7 @@ const IBaker_code* Baker_module_impl::create_baker_code_internal(
     mi::neuraylib::Baker_resource resource,
     mi::Uint32 gpu_device_id,
     std::string& pixel_type,
-    bool& is_uniform,
-    const bool use_custom_cpu_tex_runtime) const
+    bool& is_uniform) const
 {
     TIME::Stopwatch mdl_time;
     mdl_time.start();
@@ -737,6 +686,34 @@ const IBaker_code* Baker_module_impl::create_baker_code_internal(
         break;
     }
 
+#  if defined(ENABLE_GPU_BAKING_OSS)
+    if (use_gpu) {
+        unsigned probed_sm = 0;
+        if (ensure_cuda_loaded_oss(gpu_device_id, probed_sm)) {
+            sm = probed_sm;
+        } else {
+            if (!use_cpu) {
+                log_error("CUDA driver/runtime not available; GPU baking failed. "
+                          "Use Baker_resource::BAKE_ON_GPU_WITH_CPU_FALLBACK or "
+                          "Baker_resource::BAKE_ON_CPU.");
+            }
+            use_gpu = false;
+        }
+    }
+#  else  // !ENABLE_GPU_BAKING_OSS
+    if (use_gpu) {
+        if (use_cpu) {
+            log_info("GPU baker not available in this build "
+                     "(MDL_ENABLE_GPU_BAKER=OFF); falling back to CPU.");
+        } else {
+            log_error("GPU baker requested but not available: this MDL SDK was built "
+                      "without CUDA support (MDL_ENABLE_GPU_BAKER=OFF). "
+                      "Use Baker_resource::BAKE_ON_CPU or "
+                      "Baker_resource::BAKE_ON_GPU_WITH_CPU_FALLBACK.");
+        }
+        use_gpu = false;
+    }
+#  endif
 
     if (!use_gpu && !use_cpu) {
         // no resource available
@@ -760,6 +737,17 @@ const IBaker_code* Baker_module_impl::create_baker_code_internal(
 
         [[maybe_unused]] mi::Sint32 result = be_ptx.set_option( "num_texture_spaces", std::to_string(BAKER_TEXTURE_SPACES).c_str());
         ASSERT( M_BAKER, result == 0);
+
+#ifdef ENABLE_GPU_BAKING_OSS
+        // The open-source-release GPU baker pairs the generated PTX with the
+        // baker's own device-side texture runtime in texture_support_cuda.h,
+        // whose tex lookups are exposed through a vtable (tex_vtable) and take a
+        // Texture_handler_base*. The generated PTX must therefore dispatch tex
+        // lookups through that vtable. num_texture_results is 0 because the
+        // baker passes no precomputed texture-results array in the shading state.
+        be_ptx.set_option("tex_lookup_call_mode", "vtable");
+        be_ptx.set_option("num_texture_results", "0");
+#endif
 
         if (compiled_material)
             gpu_code = mi::base::make_handle(
@@ -791,11 +779,7 @@ const IBaker_code* Baker_module_impl::create_baker_code_internal(
 
         [[maybe_unused]] mi::Sint32 result = be_native.set_option( "num_texture_spaces", std::to_string(BAKER_TEXTURE_SPACES).c_str());
         ASSERT( M_BAKER, result == 0);
-        if (use_custom_cpu_tex_runtime) {
-            result = be_native.set_option("use_builtin_resource_handler", "off");
-        } else {
-            result = be_native.set_option("use_builtin_resource_handler", "on");
-        }
+        result = be_native.set_option("use_builtin_resource_handler", "on");
         ASSERT( M_BAKER, result == 0);
 
         result = context.set_option("fold_meters_per_scene_unit", true);
@@ -817,10 +801,12 @@ const IBaker_code* Baker_module_impl::create_baker_code_internal(
         }
     }
 
-    mi::neuraylib::ITarget_code::State_usage render_state_usage
-        = cpu_code
-            ? cpu_code->get_render_state_usage()
-            : mi::neuraylib::ITarget_code::State_usage();
+    // Prefer the CPU code's reported state usage; fall back to the GPU code's
+    // when only GPU code was generated. gpu_code is null in CPU-only builds.
+    mi::neuraylib::ITarget_code::State_usage render_state_usage =
+        cpu_code ? cpu_code->get_render_state_usage()
+                 : (gpu_code ? gpu_code->get_render_state_usage()
+                             : mi::neuraylib::ITarget_code::State_usage());
 
     // everything but state::texture_coordinate() and state::position() is constant for baking
     if (compiled_material)
@@ -868,7 +854,12 @@ mi::Sint32 Baker_module_impl::bake_texture(
     Constant_result constant;
     bool is_constant = false;
     bool detect_constant_case = false;
-    const char* pixel_type = NULL;
+    // Derive pixel_type from the canvas so the Sint8 → num_samples=1 guard
+    // in bake_texture_internal fires correctly on this code path.  Without
+    // this the check "(pixel_type && strcmp(pixel_type, "Sint8") == 0)" is
+    // always false (pixel_type was NULL), so multi-sample baking with FTZ
+    // flushes the denormal bool encoding to zero.
+    const char* pixel_type = texture ? texture->get_type() : nullptr;
     return bake_texture_internal(
         transaction,
         baker_code,
@@ -990,8 +981,49 @@ mi::Sint32 Baker_module_impl::bake_texture_internal(
         baker_code->get_cpu_target_code());
 
 
+#ifdef ENABLE_GPU_BAKING_OSS
+    {
+        mi::base::Handle<const mi::neuraylib::ITarget_code> gpu_code_oss(
+            baker_code->get_gpu_target_code());
+        if (gpu_code_oss) {
+            const bool is_env =
+                static_cast<Baker_code_impl const *>(baker_code)->is_environment();
+            log_info("Baking texture on GPU (device %u).",
+                     baker_code->get_used_gpu_device_id());
+            Baker_cuda_oss baker(
+                this,
+                baker_code->get_used_gpu_device_id(),
+                gpu_code_oss.get(),
+                texture,
+                samples,
+                min_u, max_u, min_v, max_v,
+                animation_time,
+                /*constant_target=*/ nullptr,
+                /*constant_target_components=*/ 1,
+                state_flags,
+                is_env,
+                want_constant_detection);
+
+            if (baker.is_ready() && baker.bake_texture(transaction)) {
+                if (want_constant_detection) {
+                    is_constant = baker.are_all_pixels_equal();
+                    if (is_constant) {
+                        return set_constant_from_canvas(texture, pixel_type, constant) ? 0 : -1;
+                    }
+                }
+                return 0;
+            }
+            if (cpu_code) {
+                log_warning("Material expression execution failed on GPU, switching to CPU.");
+                static_cast<Baker_code_impl const *>(baker_code)->gpu_failed();
+            }
+        }
+    }
+#endif
+
     if (cpu_code) {
         const bool is_env = static_cast<Baker_code_impl const *>(baker_code)->is_environment();
+        log_info("Baking texture on CPU.");
         Baker_fragmented_job job(cpu_code.get(), texture, min_u, max_u, min_v, max_v, animation_time, samples, state_flags, is_env);
         transaction->execute_fragmented(&job, job.get_fragment_count());
         if (job.successful()) {
@@ -1018,6 +1050,21 @@ mi::Sint32 Baker_module_impl::bake_constant(
     mi::Uint32        samples,
     const char        *pixel_type) const
 {
+    [[maybe_unused]] unsigned int n_comp = 0;
+    if (strcmp(pixel_type, "Float32") == 0) {
+        n_comp = 1;
+    } else if (strcmp(pixel_type, "Float32<2>") == 0) {
+        n_comp = 2;
+    } else if (strcmp(pixel_type, "Float32<3>") == 0 || strcmp(pixel_type, "Rgb_fp") == 0) {
+        n_comp = 3;
+    } else if (strcmp(pixel_type, "Float32<4>") == 0) {
+        n_comp = 4;
+    } else if (strcmp(pixel_type, "Sint8") == 0) {
+        n_comp = 0;
+    } else {
+        log_error("Material expression execution failed, unsupported constant type.");
+        return -1;
+    }
 
     mi::base::Handle<const mi::neuraylib::ITarget_code> gpu_code(
         baker_code->get_gpu_target_code());
@@ -1060,6 +1107,29 @@ mi::Sint32 Baker_module_impl::bake_constant(
         }
     }
 
+
+#ifdef ENABLE_GPU_BAKING_OSS
+    if (gpu_code) {
+        Baker_cuda_oss baker(
+            this,
+            baker_code->get_used_gpu_device_id(),
+            gpu_code.get(),
+            /*texture=*/nullptr,
+            samples,
+            0, 1, 0, 1,
+            0.0f,
+            &constant.f,
+            n_comp == 0 ? 1 : n_comp,
+            /*state_flags=*/ 0,
+            is_env,
+            /*want_constant_detection*/false);
+
+        if (baker.is_ready() && baker.bake_texture(transaction)) {
+            return 0;
+        }
+        static_cast<Baker_code_impl const *>(baker_code)->gpu_failed();
+    }
+#endif
 
     log_error("Material expression execution failed.");
     return -1;

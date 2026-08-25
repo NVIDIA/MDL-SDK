@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -44,6 +44,8 @@
 //   MDL_HAS_BACKFACE_BSDF               : Only defined if backface.scattering is non-default and different than surface.scattering
 //   MDL_HAS_BACKFACE_EDF                : Only defined if backface.emission.emission is non-default and different than surface.emission.emission
 //   MDL_HAS_BACKFACE_EMISSION_INTENSITY : Only defined if backface.emission.intensity is non-default and different than surface.emission.intensity
+//   MDL_SPECTRAL_RENDERING              : Defined to enable spectral rendering mode
+//   MDL_DF_SPECTRAL_SAMPLES             : Number of spectral samples per path (default: 4)
 
 #version 450
 #extension GL_GOOGLE_include_directive : require
@@ -75,6 +77,10 @@ layout(std140, set = 0, binding = BINDING_RENDER_PARAMS) uniform Render_params
     uint uSamplesPerIteration;
     uint uProgressiveIteration;
     int uBsdfDataFlags;
+
+    // Spectral rendering
+    float uSpectralMinWavelength;
+    float uSpectralMaxWavelength;
 };
 
 layout(set = 0, binding = BINDING_ENV_MAP) uniform sampler2D uEnvironmentMap;
@@ -113,12 +119,16 @@ struct Ray_state
     vec3 aux_albedo_glossy;
     vec3 aux_normal;
     vec2 aux_roughness;
-    vec3 weight;
+    Color_sample weight;
     vec3 origin;
     vec3 dir;
     float last_bsdf_pdf;
     uint aux_num_samples;
     bool is_inside;
+#ifdef MDL_SPECTRAL_RENDERING
+    Spectral_sample spectral_wavelengths;
+    float spectral_pdf_ratios[MDL_DF_SPECTRAL_SAMPLES - 1];
+#endif
 };
 
 struct Ray_hit_info
@@ -137,6 +147,169 @@ const float DIRAC = -1.0;
 
 
 //-------------------------------------------------------------------------------------------------
+// Spectral rendering helpers
+//-------------------------------------------------------------------------------------------------
+
+#ifdef MDL_SPECTRAL_RENDERING
+
+// Convert a spectral sample to RGB.
+vec3 spectral_to_rgb(Spectral_sample values, Spectral_sample lambdas, bool is_reflectivity)
+{
+    vec3 xyz = vec3(0.0);
+
+    // weight by CIE XYZ color matching functions
+    // (using Wyman et al - "Simple Analytic Approximations to the CIE XYZ Color Matching Functions")
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+    {
+        float lambda = lambdas.values[i];
+        if (lambda < 360.0 || lambda > 830.0)
+            continue;
+
+        // for reflectivity values multiply by the spectral whitepoint of the RGB color space
+        // (normalized to luminance 1)
+        const float factor = is_reflectivity ? lookup_d65(lambda) : 1.0;
+        {
+            const float p1 = (lambda - 442.0) * ((lambda < 442.0) ? 0.0624 : 0.0374);
+            const float p2 = (lambda - 599.8) * ((lambda < 599.8) ? 0.0264 : 0.0323);
+            const float p3 = (lambda - 501.1) * ((lambda < 501.1) ? 0.0490 : 0.0382);
+            xyz.x += (0.362 * exp(-0.5 * p1 * p1)
+                    + 1.056 * exp(-0.5 * p2 * p2)
+                    - 0.065 * exp(-0.5 * p3 * p3)) * values.values[i] * factor;
+        }
+        {
+            const float p1 = (lambda - 568.8) * ((lambda < 568.8) ? 0.0213 : 0.0247);
+            const float p2 = (lambda - 530.9) * ((lambda < 530.9) ? 0.0613 : 0.0322);
+            xyz.y += (0.821 * exp(-0.5 * p1 * p1)
+                    + 0.286 * exp(-0.5 * p2 * p2)) * values.values[i] * factor;
+        }
+        {
+            const float p1 = (lambda - 437.0) * ((lambda < 437.0) ? 0.0845 : 0.0278);
+            const float p2 = (lambda - 459.0) * ((lambda < 459.0) ? 0.0385 : 0.0725);
+            xyz.z += (1.217 * exp(-0.5 * p1 * p1)
+                    + 0.681 * exp(-0.5 * p2 * p2)) * values.values[i] * factor;
+        }
+    }
+
+    // apply scaling from radiometric to photometric units
+    xyz *= 683.002;
+
+    // MDL_DF_SPECTRAL_SAMPLES samples uniformly on wavelength range
+    if (uSpectralMaxWavelength != uSpectralMinWavelength)
+        xyz *= (uSpectralMaxWavelength - uSpectralMinWavelength) / float(MDL_DF_SPECTRAL_SAMPLES);
+
+    // convert to linear sRGB
+    return vec3(
+        dot(xyz, vec3( 3.240600, -1.537200, -0.498600)),
+        dot(xyz, vec3(-0.968900,  1.875800,  0.041500)),
+        dot(xyz, vec3( 0.055700, -0.204000,  1.057000)));
+}
+
+// Update spectral PDF ratios after a BSDF sample event and return the MIS weight scaling factor.
+float update_spectral_pdf_ratios(inout Ray_state ray_state, Spectral_sample pdfs,
+                                 bool specular, bool specular_dispersion)
+{
+    // main wavelength has been used for sampling, so MIS weight is
+    // w = p[0] / sum(p) = 1 / (sum(p) / p[0])
+    // for pdf p up to this point in the path
+
+    // here we:
+    // - update the pdf ratios
+    // - compute the new weight
+    // - return factor that changes from old to new weight
+
+    if (specular && !specular_dispersion) // specular without dispersion: nothing to do
+        return 1.0;
+
+    if (!specular_dispersion && pdfs.values[0] <= 0.0) // this really has zero probablity
+        return 0.0;
+
+    float inv_w_old = 1.0;
+    float inv_w_new = 1.0;
+    const float inv_p0 = specular_dispersion ? 0.0 : (1.0 / pdfs.values[0]);
+    for (int i = 1; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+    {
+        inv_w_old += ray_state.spectral_pdf_ratios[i - 1];
+        ray_state.spectral_pdf_ratios[i - 1] *= pdfs.values[i] * inv_p0;
+        inv_w_new += ray_state.spectral_pdf_ratios[i - 1];
+    }
+
+    return inv_w_old / inv_w_new;
+}
+
+// Return a Color_sample with all channels set to v.
+Color_sample make_color_sample(float v)
+{
+    Color_sample s;
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        s.values[i] = v;
+    return s;
+}
+
+Color_sample addcc(Color_sample a, Color_sample b)
+{
+    Color_sample result;
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        result.values[i] = a.values[i] + b.values[i];
+    return result;
+}
+
+Color_sample mulcc(Color_sample a, Color_sample b)
+{
+    Color_sample result;
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        result.values[i] = a.values[i] * b.values[i];
+    return result;
+}
+
+Color_sample mulcf(Color_sample a, float b)
+{
+    Color_sample result;
+    for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+        result.values[i] = a.values[i] * b;
+    return result;
+}
+
+#define rgb_to_color(rgb, is_emission) \
+    rgb_to_spectral((rgb), ray_state.spectral_wavelengths, (is_emission))
+
+#define color_to_rgb(col, is_reflectivity) \
+    spectral_to_rgb((col), ray_state.spectral_wavelengths, (is_reflectivity))
+
+#define get_main_pdf(pdf) ((pdf).values[0])
+
+#else
+
+// Return a Color_sample with all channels set to v.
+Color_sample make_color_sample(float v)
+{
+    return vec3(v);
+}
+
+Color_sample addcc(Color_sample a, Color_sample b)
+{
+    return a + b;
+}
+
+Color_sample mulcc(Color_sample a, Color_sample b)
+{
+    return a * b;
+}
+
+Color_sample mulcf(Color_sample a, float b)
+{
+    return a * b;
+}
+
+#define rgb_to_color(rgb, is_emission) (rgb)
+
+#define color_to_rgb(col, is_reflectivity) (col)
+
+#define get_main_pdf(pdf) (pdf)
+
+#endif // MDL_SPECTRAL_RENDERING
+
+
+//-------------------------------------------------------------------------------------------------
 // MDL function prototypes
 //-------------------------------------------------------------------------------------------------
 void mdl_init(inout State_core state);
@@ -151,7 +324,7 @@ void mdl_edf_sample(inout Edf_sample_data sret_ptr, in State_core state);
 void mdl_edf_evaluate(inout Edf_evaluate_data sret_ptr, in State_core state);
 void mdl_edf_pdf(inout Edf_pdf_data sret_ptr, in State_core state);
 void mdl_edf_auxiliary(inout Edf_auxiliary_data sret_ptr, inout State_core state);
-vec3 mdl_emission_intensity(in State_core state);
+Color_sample mdl_emission_intensity(in State_core state);
 
 #ifdef MDL_HAS_BACKFACE_BSDF
 void mdl_backface_bsdf_sample(inout Bsdf_sample_data sret_ptr, in State_core state);
@@ -178,12 +351,12 @@ void mdl_backface_edf_auxiliary(inout Edf_auxiliary_data sret_ptr, inout State_c
 #endif // HAS_BACKFACE_EDF
 
 #ifdef MDL_HAS_BACKFACE_EMISSION_INTENSITY
-vec3 mdl_backface_emission_intensity(in State_core state);
+Color_sample mdl_backface_emission_intensity(in State_core state);
 #else
 #define mdl_backface_emission_intensity mdl_emission_intensity
 #endif // HAS_BACKFACE_EMISSION_INTENSITY
 
-vec3 mdl_volume_absorption_coefficient(in State_core state);
+Color_sample mdl_volume_absorption_coefficient(in State_core state);
 float mdl_standalone_cutout_opacity(in State_core state);
 
 
@@ -369,32 +542,31 @@ vec3 offset_ray(const vec3 p, const vec3 n)
                 abs(p.z) < origin ? p.z + float_scale * n.z : p_i.z);
 }
 
-State_core make_mdl_state(Ray_hit_info hit_info, bool inside)
+State_core make_mdl_state(Ray_hit_info hit_info, Ray_state ray_state)
 {
-    const vec3 oriented_normal = inside ? -hit_info.normal : hit_info.normal;
+    const vec3 oriented_normal = ray_state.is_inside ? -hit_info.normal : hit_info.normal;
+
+    State_core state;
+    state.normal = oriented_normal;
+    state.geom_normal = oriented_normal;
+    state.position = hit_info.position;
+    state.animation_time = 0.0;
+    state.text_coords[0] = hit_info.tex_coord;
+    state.tangent_u[0] = hit_info.tangent_u;
+    state.tangent_v[0] = hit_info.tangent_v;
 #ifdef NUM_TEX_RESULTS
-    vec4 tex_results[NUM_TEX_RESULTS]; // no need to initialize
+    // text_results is left uninitialized (populated by mdl_init)
 #endif
-
-    return State_core(
-        /*normal=*/                 oriented_normal,
-        /*geom_normal=*/            oriented_normal,
-        /*position=*/               hit_info.position,
-        /*animation_time=*/         0.0,
-        /*text_coords[1]=*/         vec3[1](hit_info.tex_coord),
-        /*tangent_u[1]=*/           vec3[1](hit_info.tangent_u),
-        /*tangent_v[1]=*/           vec3[1](hit_info.tangent_v),
-    #ifdef NUM_TEX_RESULTS
-        /*text_results[NUM_TEX_RESULTS]=*/ tex_results,
-    #endif
-        /*ro_data_segment_offset=*/ 0,
-        /*world_to_object=*/        mat4(1.0),
-        /*object_to_world=*/        mat4(1.0),
-        /*object_id=*/              0,
-        /*meters_per_scene_unit=*/  1.0,
-        /*arg_block_offset=*/       0
-    );
-
+    state.ro_data_segment_offset = 0;
+    state.world_to_object = mat4(1.0);
+    state.object_to_world = mat4(1.0);
+    state.object_id = 0;
+    state.meters_per_scene_unit = 1.0;
+    state.arg_block_offset = 0;
+#ifdef MDL_SPECTRAL_RENDERING
+    state.spectral_wavelengths = ray_state.spectral_wavelengths;
+#endif
+    return state;
 }
 
 
@@ -407,7 +579,8 @@ void trace_path(inout Ray_state ray_state, inout uint seed)
         {
             // Ray missed
             float light_pdf;
-            vec3 light_radiance = environment_evaluate(ray_state.dir, light_pdf);
+            Color_sample light_radiance = rgb_to_color(
+                environment_evaluate(ray_state.dir, light_pdf), true);
 
             // Incorporate point light selection probability
             if (uPointLightIntensity > 0.0)
@@ -417,11 +590,12 @@ void trace_path(inout Ray_state ray_state, inout uint seed)
                 ? 1.0
                 : ray_state.last_bsdf_pdf / (ray_state.last_bsdf_pdf + light_pdf);
 
-            ray_state.contribution += light_radiance * ray_state.weight * mis_weight;
+            ray_state.contribution += color_to_rgb(
+                mulcc(light_radiance, mulcf(ray_state.weight, mis_weight)), false);
             break;
         }
 
-        State_core state = make_mdl_state(hit_info, ray_state.is_inside);
+        State_core state = make_mdl_state(hit_info, ray_state);
 
         // Handle cutout opacity
         float x_anyhit = rnd(seed);
@@ -444,16 +618,22 @@ void trace_path(inout Ray_state ray_state, inout uint seed)
 
         const bool thin_walled = mdl_thin_walled(state);
         const bool is_backface = ray_state.is_inside && thin_walled;
-        const vec3 ior1 = vec3((ray_state.is_inside && !thin_walled) ? BSDF_USE_MATERIAL_IOR : 1.0);
-        const vec3 ior2 = vec3((ray_state.is_inside && !thin_walled) ? 1.0 : BSDF_USE_MATERIAL_IOR);
+        const Color_sample ior1 = make_color_sample((ray_state.is_inside && !thin_walled) ? BSDF_USE_MATERIAL_IOR : 1.0);
+        const Color_sample ior2 = make_color_sample((ray_state.is_inside && !thin_walled) ? 1.0 : BSDF_USE_MATERIAL_IOR);
 
         // Apply volume attenuation
         if (ray_state.is_inside && !thin_walled)
         {
-            const vec3 abs_coeff = mdl_volume_absorption_coefficient(state);
+            const Color_sample abs_coeff = mdl_volume_absorption_coefficient(state);
+#ifdef MDL_SPECTRAL_RENDERING
+            for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+                ray_state.weight.values[i] *= abs_coeff.values[i] > 0.0
+                    ? exp(-abs_coeff.values[i] * hit_info.dist) : 1.0;
+#else
             ray_state.weight.x *= abs_coeff.x > 0.0 ? exp(-abs_coeff.x * hit_info.dist) : 1.0;
             ray_state.weight.y *= abs_coeff.y > 0.0 ? exp(-abs_coeff.y * hit_info.dist) : 1.0;
             ray_state.weight.z *= abs_coeff.z > 0.0 ? exp(-abs_coeff.z * hit_info.dist) : 1.0;
+#endif
         }
 
         // Add emission
@@ -463,14 +643,16 @@ void trace_path(inout Ray_state ray_state, inout uint seed)
         if (is_backface)
         {
             mdl_backface_edf_evaluate(edf_evaluate_data, state);
-            const vec3 emission_intensity = mdl_backface_emission_intensity(state);
-            ray_state.contribution += ray_state.weight * emission_intensity * edf_evaluate_data.edf;
+            const Color_sample emission_intensity = mdl_backface_emission_intensity(state);
+            ray_state.contribution += color_to_rgb(
+                mulcc(ray_state.weight, mulcc(emission_intensity, edf_evaluate_data.edf)), false);
         }
         else if (!ray_state.is_inside)
         {
             mdl_edf_evaluate(edf_evaluate_data, state);
-            const vec3 emission_intensity = mdl_emission_intensity(state);
-            ray_state.contribution += ray_state.weight * emission_intensity * edf_evaluate_data.edf;
+            const Color_sample emission_intensity = mdl_emission_intensity(state);
+            ray_state.contribution += color_to_rgb(
+                mulcc(ray_state.weight, mulcc(emission_intensity, edf_evaluate_data.edf)), false);
         }
 
         // BSDF
@@ -489,8 +671,15 @@ void trace_path(inout Ray_state ray_state, inout uint seed)
             else
                 mdl_bsdf_auxiliary(bsdf_aux_data, state);
 
+#ifdef MDL_SPECTRAL_RENDERING
+            ray_state.aux_albedo_diffuse += spectral_to_rgb(
+                bsdf_aux_data.albedo_diffuse, ray_state.spectral_wavelengths, true);
+            ray_state.aux_albedo_glossy += spectral_to_rgb(
+                bsdf_aux_data.albedo_glossy, ray_state.spectral_wavelengths, true);
+#else
             ray_state.aux_albedo_diffuse += bsdf_aux_data.albedo_diffuse;
             ray_state.aux_albedo_glossy += bsdf_aux_data.albedo_glossy;
+#endif
             ray_state.aux_normal += bsdf_aux_data.normal;
             ray_state.aux_roughness += bsdf_aux_data.roughness.xy;
             ray_state.aux_num_samples++;
@@ -501,7 +690,8 @@ void trace_path(inout Ray_state ray_state, inout uint seed)
         {
             vec3 to_light;
             float light_pdf;
-            vec3 light_radiance_over_pdf = sample_lights(state, seed, to_light, light_pdf);
+            Color_sample light_radiance_over_pdf = rgb_to_color(
+                sample_lights(state, seed, to_light, light_pdf), true);
 
             float offset_dir = sign(dot(state.geom_normal, to_light));
             vec3 shadow_ray_origin = offset_ray(state.position, state.geom_normal * offset_dir);
@@ -511,7 +701,7 @@ void trace_path(inout Ray_state ray_state, inout uint seed)
             float x_light_anyhit = rnd(seed);
             if (shadow_ray_hit)
             {
-                State_core shadow_hit_state = make_mdl_state(shadow_hit, ray_state.is_inside);
+                State_core shadow_hit_state = make_mdl_state(shadow_hit, ray_state);
                 shadow_ray_hit = (x_light_anyhit <= mdl_standalone_cutout_opacity(shadow_hit_state));
             }
 
@@ -529,13 +719,17 @@ void trace_path(inout Ray_state ray_state, inout uint seed)
                 else
                     mdl_bsdf_evaluate(bsdf_eval_data, state);
 
-                if (bsdf_eval_data.pdf > 0.0)
+                const float main_pdf = get_main_pdf(bsdf_eval_data.pdf);
+                if (main_pdf > 0.0)
                 {
-                    const vec3 bsdf = bsdf_eval_data.bsdf_diffuse + bsdf_eval_data.bsdf_glossy;
+                    const Color_sample bsdf = addcc(
+                        bsdf_eval_data.bsdf_diffuse, bsdf_eval_data.bsdf_glossy);
                     const float mis_weight = (light_pdf == DIRAC)
                         ? 1.0
-                        : light_pdf / (light_pdf + bsdf_eval_data.pdf);
-                    ray_state.contribution += ray_state.weight * light_radiance_over_pdf * bsdf * mis_weight;
+                        : light_pdf / (light_pdf + main_pdf);
+                    ray_state.contribution += color_to_rgb(
+                        mulcc(mulcc(ray_state.weight, light_radiance_over_pdf),
+                              mulcf(bsdf, mis_weight)), false);
                 }
             }
         }
@@ -570,9 +764,33 @@ void trace_path(inout Ray_state ray_state, inout uint seed)
             ray_state.origin = offset_ray(state.position, state.geom_normal);
         }
 
+#ifdef MDL_SPECTRAL_RENDERING
+        {
+            bool specular_dispersion = false;
+            if (is_specular && is_transmission && !thin_walled)
+            {
+                for (int si = 1; si < MDL_DF_SPECTRAL_SAMPLES; ++si)
+                {
+                    if (bsdf_sample_data.ior1.values[si] != bsdf_sample_data.ior1.values[0] ||
+                        bsdf_sample_data.ior2.values[si] != bsdf_sample_data.ior2.values[0])
+                    {
+                        specular_dispersion = true;
+                        break;
+                    }
+                }
+            }
+
+            float ratio_factor = update_spectral_pdf_ratios(
+                ray_state, bsdf_sample_data.pdf, is_specular, specular_dispersion);
+            ray_state.weight = mulcf(
+                mulcc(ray_state.weight, bsdf_sample_data.bsdf_over_pdf),
+                ratio_factor);
+        }
+#else
         ray_state.weight *= bsdf_sample_data.bsdf_over_pdf;
+#endif
         ray_state.dir = bsdf_sample_data.k2;
-        ray_state.last_bsdf_pdf = is_specular ? DIRAC : bsdf_sample_data.pdf;
+        ray_state.last_bsdf_pdf = is_specular ? DIRAC : get_main_pdf(bsdf_sample_data.pdf);
     }
 }
 
@@ -582,8 +800,8 @@ void trace_path(inout Ray_state ray_state, inout uint seed)
 //-------------------------------------------------------------------------------------------------
 void main()
 {
-    ivec2 image_size = imageSize(uBeautyBuffer);
-    if (gl_GlobalInvocationID.x > image_size.x || gl_GlobalInvocationID.y > image_size.y)
+    uvec2 image_size = uvec2(imageSize(uBeautyBuffer));
+    if (gl_GlobalInvocationID.x >= image_size.x || gl_GlobalInvocationID.y >= image_size.y)
         return;
 
     vec3 contribution = vec3(0.0);
@@ -597,7 +815,7 @@ void main()
     {
         uint seed = tea(
             16, /*magic (see OptiX path tracing example)*/
-            gl_GlobalInvocationID.y * uint(image_size.x) + gl_GlobalInvocationID.x,
+            gl_GlobalInvocationID.y * image_size.x + gl_GlobalInvocationID.x,
             uProgressiveIteration + iteration);
 
         vec2 resolution = vec2(image_size);
@@ -614,12 +832,29 @@ void main()
         ray_state.aux_albedo_glossy = vec3(0.0);
         ray_state.aux_normal = vec3(0.0);
         ray_state.aux_roughness = vec2(0.0);
-        ray_state.weight = vec3(1.0);
+        ray_state.weight = make_color_sample(1.0);
         ray_state.origin = ray_origin;
         ray_state.dir = ray_dir;
         ray_state.last_bsdf_pdf = DIRAC;
         ray_state.aux_num_samples = 0;
         ray_state.is_inside = dot(ray_origin, ray_origin) < 1.0;
+#ifdef MDL_SPECTRAL_RENDERING
+        {
+            // uniform stratified wavelength sampling across the configured range for this path
+            float xi = rnd(seed);
+            for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES; ++i)
+            {
+                xi += 1.0 / float(MDL_DF_SPECTRAL_SAMPLES);
+                if (xi > 1.0) xi -= 1.0;
+                ray_state.spectral_wavelengths.values[i] =
+                    mix(uSpectralMinWavelength, uSpectralMaxWavelength, xi);
+            }
+
+            // initialize the spectral PDF ratios
+            for (int i = 0; i < MDL_DF_SPECTRAL_SAMPLES - 1; ++i)
+                ray_state.spectral_pdf_ratios[i] = 1.0;
+        }
+#endif
 
         trace_path(ray_state, seed);
 

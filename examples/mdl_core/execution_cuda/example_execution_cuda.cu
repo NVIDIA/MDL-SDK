@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -62,10 +62,15 @@ typedef Texture_handler Tex_handler;
 
 
 // Custom structure representing the resources used by the generated code of a target code object.
+// The layout has to match the host-side struct Target_code_data in example_cuda_shared.h.
 struct Target_code_data
 {
     size_t       num_textures;      // number of elements in the textures field
     Texture     *textures;          // a list of Texture objects, if used
+
+    size_t       num_mbsdfs;        // number of elements in the mbsdfs field
+    Mbsdf       *mbsdfs;            // a list of Mbsdf objects, if used (not used by this example)
+
     char const  *ro_data_segment;   // the read-only data segment, if used
 };
 
@@ -178,6 +183,8 @@ extern "C" __global__ void evaluate_mat_expr(
     tex_handler.vtable       = &TEX_VTABLE;   // only required in 'vtable' mode, otherwise NULL
     tex_handler.num_textures = tc_data_list[tc_idx].num_textures;
     tex_handler.textures     = tc_data_list[tc_idx].textures;
+    tex_handler.num_mbsdfs   = tc_data_list[tc_idx].num_mbsdfs;
+    tex_handler.mbsdfs       = tc_data_list[tc_idx].mbsdfs;
 
     Resource_data res_data_pair = {
         NULL, reinterpret_cast<Texture_handler_base *>(&tex_handler) };

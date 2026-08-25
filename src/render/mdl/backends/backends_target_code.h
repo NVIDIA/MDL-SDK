@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -160,9 +160,12 @@ public:
     ///
     /// \param string_ids  True if string arguments inside target argument blocks
     ///                    are mapped to identifiers
+    /// \param use_builtin_resource_handler True, if the builtin texture runtime is supposed to be
+    ///                         used when running x86 code.
     /// \param be_kind     Kind of back-end that created this target code object.
     Target_code(
         bool string_ids,
+        bool use_builtin_resource_handler,
         mi::neuraylib::IMdl_backend_api::Mdl_backend_kind be_kind);
 
     /// Finalization method for link mode for executable code.
@@ -753,7 +756,9 @@ public:
     ///
     /// \param index                 the texture index as used in compiled code
     /// \param name                  the name of the DB element this index refers to.
-    /// \param mdl_url               the mdl url.
+    /// \param mdl_url               the MDL URL, without owner prefix.
+    /// \param owner_module          the owner module name of the resource (empty for absolute MDL
+    ///                              file paths)
     /// \param gamma                 texture gamma
     /// \param selector              texture selector
     /// \param shape                 the texture shape of the texture
@@ -764,6 +769,7 @@ public:
         size_t index,
         const std::string& name,
         const std::string& mdl_url,
+        const std::string& owner_module,
         float gamma,
         const std::string& selector,
         Texture_shape shape,
@@ -774,24 +780,30 @@ public:
     ///
     /// \param index                 the texture index as used in compiled code
     /// \param name                  the name of the DB element this index refers to.
-    /// \param mdl_url               the mdl url.
+    /// \param mdl_url               the MDL URL, without owner prefix.
+    /// \param owner_module          the owner module name of the resource (empty for absolute MDL
+    ///                              file paths)
     /// \param is_body_resource      true in case the resource is referenced from the body
     void add_light_profile_index(
         size_t index,
         const std::string& name,
         const std::string& mdl_url,
+        const std::string& owner_module,
         bool is_body_resource);
 
     /// Registers a used bsdf measurement index.
     ///
-    /// \param index                the texture index as used in compiled code
-    /// \param name                 the name of the DB element this index refers to.
-    /// \param mdl_url              the mdl url.
-    /// \param is_body_resource     true in case the resource is referenced from the body
+    /// \param index                 the texture index as used in compiled code
+    /// \param name                  the name of the DB element this index refers to.
+    /// \param mdl_url               the MDL URL, without owner prefix.
+    /// \param owner_module          the owner module name of the resource (empty for absolute MDL
+    ///                              file paths)
+    /// \param is_body_resource      true in case the resource is referenced from the body
     void add_bsdf_measurement_index(
         size_t index,
         const std::string& name,
         const std::string& mdl_url,
+        const std::string& owner_module,
         bool is_body_resource);
 
     /// Registers a used string constant index.
@@ -922,7 +934,7 @@ private:
             return m_db_name.c_str();
         }
 
-        /// Get the mdl url of the resource.
+        /// Get the MDL URL of the resource, without owner prefix.
         char const *get_mdl_url() const
         {
             return m_mdl_url.c_str();
@@ -958,7 +970,7 @@ private:
         /// The db name of the resource.
         std::string m_db_name;
 
-        /// The mdl url of the resource.
+        /// The MDL URL of the resource, without owner prefix.
         std::string m_mdl_url;
 
         /// The owner module name of the resource.

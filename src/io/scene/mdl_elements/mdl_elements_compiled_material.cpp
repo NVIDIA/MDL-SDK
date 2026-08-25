@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -380,6 +380,82 @@ const char* Mdl_compiled_material::get_internal_space() const
 mi::Size Mdl_compiled_material::get_resources_count() const
 {
     return m_resources.size();
+}
+
+const IValue_resource* Mdl_compiled_material::get_resource( mi::Size index) const
+{
+    if( index >= m_resources.size())
+        return nullptr;
+
+    const Resource_tag_tuple& rtt = m_resources[index];
+
+    std::string unresolved_file_path, owner;
+    if( !rtt.m_tag) {
+        unresolved_file_path = strip_resource_owner_prefix( rtt.m_mdl_file_path);
+        owner = get_resource_owner_prefix( rtt.m_mdl_file_path);
+    }
+
+    switch( rtt.m_kind) {
+        case mi::mdl::Resource_tag_tuple::RK_TEXTURE_GAMMA_DEFAULT:
+        case mi::mdl::Resource_tag_tuple::RK_TEXTURE_GAMMA_LINEAR:
+        case mi::mdl::Resource_tag_tuple::RK_TEXTURE_GAMMA_SRGB:
+        case mi::mdl::Resource_tag_tuple::RK_SIMPLE_GLOSSY_MULTISCATTER:
+        case mi::mdl::Resource_tag_tuple::RK_BACKSCATTERING_GLOSSY_MULTISCATTER:
+        case mi::mdl::Resource_tag_tuple::RK_BECKMANN_SMITH_MULTISCATTER:
+        case mi::mdl::Resource_tag_tuple::RK_GGX_SMITH_MULTISCATTER:
+        case mi::mdl::Resource_tag_tuple::RK_BECKMANN_VC_MULTISCATTER:
+        case mi::mdl::Resource_tag_tuple::RK_GGX_VC_MULTISCATTER:
+        case mi::mdl::Resource_tag_tuple::RK_WARD_GEISLER_MORODER_MULTISCATTER:
+        case mi::mdl::Resource_tag_tuple::RK_SHEEN_MULTISCATTER:
+        case mi::mdl::Resource_tag_tuple::RK_MICROFLAKE_SHEEN_GENERAL:
+        case mi::mdl::Resource_tag_tuple::RK_MICROFLAKE_SHEEN_MULTISCATTER: {
+
+            const IType_texture::Shape shape = convert_rtt_kind_to_texture_shape( rtt.m_kind);
+            mi::base::Handle<const IType_texture> type(
+                m_tf->create_texture( shape));
+
+            if( rtt.m_tag)
+                return m_vf->create_texture( type.get(), rtt.m_tag);
+
+            ASSERT( M_SCENE, !unresolved_file_path.empty());
+            const mi::Float32 gamma = shape == IType_texture::TS_BSDF_DATA
+                ? 0.0f
+                : convert_rtt_kind_to_gamma( rtt.m_kind);
+            return m_vf->create_texture(
+                type.get(),
+                /*value*/ {},
+                unresolved_file_path.c_str(),
+                owner.c_str(),
+                gamma,
+                rtt.m_selector.c_str());
+        }
+
+        case mi::mdl::Resource_tag_tuple::RK_LIGHT_PROFILE:
+
+            if( rtt.m_tag)
+                return m_vf->create_light_profile( rtt.m_tag);
+
+            ASSERT( M_SCENE, !unresolved_file_path.empty());
+            return m_vf->create_light_profile(
+                {}, unresolved_file_path.c_str(), owner.c_str());
+
+        case mi::mdl::Resource_tag_tuple::RK_BSDF_MEASUREMENT:
+
+            if( rtt.m_tag)
+                return m_vf->create_bsdf_measurement( rtt.m_tag);
+
+            ASSERT( M_SCENE, !unresolved_file_path.empty());
+            return m_vf->create_bsdf_measurement(
+                {}, unresolved_file_path.c_str(), owner.c_str());
+
+        case mi::mdl::Resource_tag_tuple::RK_BAD:
+        case mi::mdl::Resource_tag_tuple::RK_INVALID_REF:
+        case mi::mdl::Resource_tag_tuple::RK_STRING:
+            return nullptr;
+    }
+
+    ASSERT( M_SCENE, false);
+    return nullptr;
 }
 
 const Resource_tag_tuple* Mdl_compiled_material::get_resource_tag_tuple( mi::Size index) const

@@ -1,0 +1,45 @@
+mdl 1.6;
+
+using ::anno import *;
+
+// absolute
+import ::nvidia::sdk_examples::entity_resolver::up1::up1_f;
+import ::nvidia::sdk_examples::entity_resolver::package1::same1::same1_f;
+import ::nvidia::sdk_examples::entity_resolver::package1::package2::down1::down1_f;
+
+// relative (previously strict relative)
+import ..::up2::up2_f;
+import .::same2::same2_f;
+import .::package2::down2::down2_f;
+
+// absolute (previsouly weak relative)
+import ::nvidia::sdk_examples::entity_resolver::up3::up3_f;
+import ::nvidia::sdk_examples::entity_resolver::package1::same3::same3_f;
+import ::nvidia::sdk_examples::entity_resolver::package1::package2::down3::down3_f;
+
+// relative (previously weak relative)
+import same4::same4_f;
+import package2::down4::down4_f;
+
+
+// one level up
+export int f_up_relative( uniform texture_2d t = texture_2d(
+    "../up.png") [[ unused() ]]) { return 0; }
+export int f_up_absolute( uniform texture_2d t = texture_2d(
+    "/nvidia/sdk_examples/entity_resolver/up.png") [[ unused() ]]) { return 0; }
+
+// same level
+export int f_same_relative( uniform texture_2d t = texture_2d(
+    "./same.png") [[ unused() ]]) { return 0; }
+export int f_same_relative2( uniform texture_2d t = texture_2d(
+    "same.png") [[ unused() ]]) { return 0; }
+export int f_same_absolute( uniform texture_2d t = texture_2d(
+    "/nvidia/sdk_examples/entity_resolver/package1/same.png") [[ unused() ]]) { return 0; }
+
+// one level down
+export int f_down_relative( uniform texture_2d t = texture_2d(
+    "./package2/down.png") [[ unused() ]]) { return 0; }
+export int f_down_relative2( uniform texture_2d t = texture_2d(
+    "package2/down.png") [[ unused() ]]) { return 0; }
+export int f_down_absolute( uniform texture_2d t = texture_2d(
+    "/nvidia/sdk_examples/entity_resolver/package1/package2/down.png") [[ unused() ]]) { return 0; }

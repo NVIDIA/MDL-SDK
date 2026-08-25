@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -286,6 +286,19 @@ mi::neuraylib::Material_opacity core_opacity_to_ext_opacity(
 /// Converts mi::neuraylib::Material_slot to core material instance slots.
 mi::mdl::IMaterial_instance::Slot ext_slot_to_core_slot(
     mi::neuraylib::Material_slot slot);
+
+/// Converts a resource table kind to a gamma value.
+///
+/// Returns 0.0 for light profiles and BSDF measurements. Asserts for invalid resource kinds and
+/// BSDF data texture kinds.
+mi::Float32 convert_rtt_kind_to_gamma( mi::mdl::Resource_tag_tuple::Kind kind);
+
+/// Converts a texture resource table kind to a texture shape.
+///
+/// Returns #IType_texture::TS_2D for regular texture kinds (not enough information in the
+/// Resource_tag_tuple kind, see MDL-1503) and IType_texture::TS_BSDF_DATA for BSDF data texture
+/// kinds. Asserts for non-texture kinds.
+IType_texture::Shape convert_rtt_kind_to_texture_shape( mi::mdl::Resource_tag_tuple::Kind kind);
 
 // ********** Conversion from mi::mdl to MI::MDL ***************************************************
 
@@ -830,6 +843,7 @@ private:
     void update_resource_literals( const mi::mdl::DAG_node* node);
     void update_resource_literals( const mi::mdl::IModule* owner, const mi::mdl::IDefinition* def);
     void update_resource_literals( const mi::mdl::IDefinition* def);
+    void update_resource_literals( const mi::mdl::IValue* value);
     void update_resource_literals( const mi::mdl::IValue_resource* resource);
     mi::mdl::IExpression* post_visit( mi::mdl::IExpression_literal* expr);
     mi::mdl::IExpression* post_visit( mi::mdl::IExpression_call* expr);

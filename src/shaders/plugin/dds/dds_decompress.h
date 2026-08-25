@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -103,7 +103,8 @@ public:
 
     /// Returns the buffer of decompressed pixel data in target format for one scanline.
     ///
-    /// The buffer has get_block_dimension() scanlines.
+    /// The buffer has get_block_dimension() scanlines. Scanlines can contain padding for partial
+    /// edge blocks.
     const mi::Uint8* get_scanline( const mi::Uint32 scan_line) const
     {
         assert( scan_line < BLOCK_PIXEL_DIM);

@@ -246,7 +246,12 @@ MCOperand AArch64MCInstLower::lowerSymbolOperandCOFF(const MachineOperand &MO,
 
 MCOperand AArch64MCInstLower::LowerSymbolOperand(const MachineOperand &MO,
                                                  MCSymbol *Sym) const {
-  if (Printer.TM.getTargetTriple().isOSDarwin())
+  // Dispatch on the actual object file format rather than the OS: the neuray
+  // JIT forces ELF output even on an arm64-apple-darwin triple.  Keying off
+  // isOSDarwin() here would emit MachO relocation specifiers (VK_PAGE,
+  // VK_GOTPAGE, ...) into an ELF object, which AArch64ELFObjectWriter and
+  // RuntimeDyldELF cannot handle.
+  if (Printer.TM.getTargetTriple().isOSBinFormatMachO())
     return lowerSymbolOperandDarwin(MO, Sym);
   if (Printer.TM.getTargetTriple().isOSBinFormatCOFF())
     return lowerSymbolOperandCOFF(MO, Sym);

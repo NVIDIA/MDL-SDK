@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -457,6 +457,24 @@ bool MDL_name_mangler::mangle_name(
     // <mangled-name> ::= _Z <encoding>
     m_out.append("_Z");
     mangle_name(prefix, name, NULL);
+    return true;
+}
+
+// Mangle a synthesized MDL function from name + signature, without an IDefinition.
+bool MDL_name_mangler::mangle(
+    char const           *prefix,
+    char const           *name,
+    IType_function const *func_type)
+{
+    // <mangled-name> ::= _Z <encoding>
+    // <encoding>     ::= <function name> <bare-function-type>
+    //
+    // Mirrors mangle_function_decl + mangle_function_encoding, but takes the
+    // name + IType_function directly. Non-template functions don't encode the
+    // return type, so MangleReturnType is false.
+    m_out.append("_Z");
+    mangle_name(prefix, name, /*inst=*/NULL);
+    mangle_bare_function_type(func_type, /*MangleReturnType=*/false, /*inst=*/NULL);
     return true;
 }
 

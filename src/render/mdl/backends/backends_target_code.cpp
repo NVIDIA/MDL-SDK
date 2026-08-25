@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -42,7 +42,6 @@
 #include <mdl/jit/generator_jit/generator_jit_libbsdf_data.h>
 #include <mdl/jit/generator_jit/generator_jit_generated_code_value_layout.h>
 #include <io/scene/mdl_elements/i_mdl_elements_compiled_material.h>
-#include <io/scene/mdl_elements/i_mdl_elements_utilities.h>
 #include <render/mdl/runtime/i_mdlrt_resource_handler.h>
 
 #include <api/api/neuray/neuray_transaction_impl.h> // TODO avoid dependency
@@ -167,12 +166,13 @@ Target_code::Target_code(
 // Constructor for link mode.
 Target_code::Target_code(
     bool string_ids,
+    bool use_builtin_resource_handler,
     mi::neuraylib::IMdl_backend_api::Mdl_backend_kind be_kind)
   : Target_code()
 {
     m_backend_kind = be_kind;
     m_string_args_mapped_to_ids = string_ids;
-    m_use_builtin_resource_handler = true;
+    m_use_builtin_resource_handler = use_builtin_resource_handler;
 }
 
 Target_code::~Target_code()
@@ -859,6 +859,7 @@ void Target_code::add_texture_index(
     size_t index,
     const std::string& name,
     const std::string& mdl_url,
+    const std::string& owner_module,
     float gamma,
     const std::string& selector,
     Texture_shape shape,
@@ -877,10 +878,8 @@ void Target_code::add_texture_index(
             /*is_body_resource=*/false));
     }
 
-    std::string owner = MDL::get_resource_owner_prefix( mdl_url);
-    std::string url   = MDL::strip_resource_owner_prefix( mdl_url);
     m_texture_table[index] = Target_code::Texture_info(
-        name, url, owner, gamma, selector, shape, df_data_kind, is_body_resource);
+        name, mdl_url, owner_module, gamma, selector, shape, df_data_kind, is_body_resource);
 }
 
 // Registers a used light profile index.
@@ -888,6 +887,7 @@ void Target_code::add_light_profile_index(
     size_t index,
     const std::string& name,
     const std::string& mdl_url,
+    const std::string& owner_module,
     bool is_body_resource)
 {
     if( index >= m_light_profile_table.size()) {
@@ -899,10 +899,8 @@ void Target_code::add_light_profile_index(
             /*is_body_resource=*/false));
     }
 
-    std::string owner = MDL::get_resource_owner_prefix( mdl_url);
-    std::string url   = MDL::strip_resource_owner_prefix( mdl_url);
     m_light_profile_table[index] = Target_code::Resource_info(
-        name, url, owner, is_body_resource);
+        name, mdl_url, owner_module, is_body_resource);
 }
 
 // Registers a used bsdf measurement index.
@@ -910,6 +908,7 @@ void Target_code::add_bsdf_measurement_index(
     size_t index,
     const std::string& name,
     const std::string& mdl_url,
+    const std::string& owner_module,
     bool is_body_resource)
 {
     if( index >= m_bsdf_measurement_table.size()) {
@@ -920,10 +919,8 @@ void Target_code::add_bsdf_measurement_index(
             /*is_body_resource=*/false));
     }
 
-    std::string owner = MDL::get_resource_owner_prefix( mdl_url);
-    std::string url   = MDL::strip_resource_owner_prefix( mdl_url);
     m_bsdf_measurement_table[index] =
-        Target_code::Resource_info( name, url, owner, is_body_resource);
+        Target_code::Resource_info( name, mdl_url, owner_module, is_body_resource);
 }
 
 // Registers a used string constant index.

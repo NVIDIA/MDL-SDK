@@ -144,9 +144,9 @@ class MainDistillAndBake(UnittestBase):
             tile: pymdlsdk.ITile = canvas.get_tile()
             self.assertIsValidInterface(tile)
             pixelValue: pymdlsdk.Color_struct = tile.get_pixel(2, 3)
-            self.assertAlmostEqual(pixelValue.r, 0.28088340163230896, places=6)
-            self.assertAlmostEqual(pixelValue.g, 0.27805379033088684, places=6)
-            self.assertAlmostEqual(pixelValue.b, 0.26071646809577940, places=6)
+            self.assertAlmostEqual(pixelValue.r, 0.2821650803089142, places=6)
+            self.assertAlmostEqual(pixelValue.g, 0.27917537093162537, places=6)
+            self.assertAlmostEqual(pixelValue.b, 0.2613004148006439, places=6)
             self.assertEqual(pixelValue.a, 1)
 
             # test the native data pointer access
@@ -168,9 +168,9 @@ class MainDistillAndBake(UnittestBase):
             floatBuffer = None  # (optional)
 
             pixelValue: pymdlsdk.Color_struct = tile.get_pixel(2, 3)
-            self.assertAlmostEqual(pixelValue.r, 2.280883312225342, places=6)
-            self.assertAlmostEqual(pixelValue.g, 2.2780537605285645, places=6)
-            self.assertAlmostEqual(pixelValue.b, 2.260716438293457, places=6)
+            self.assertAlmostEqual(pixelValue.r, 2.282165050506592, places=6)
+            self.assertAlmostEqual(pixelValue.g, 2.279175281524658, places=6)
+            self.assertAlmostEqual(pixelValue.b, 2.261300563812256, places=6)
 
             # try the same with the additional numpy
             imageData: numpy.ndarray = tile.get_data_numpy()
@@ -185,9 +185,9 @@ class MainDistillAndBake(UnittestBase):
             imageData *= 10
 
             pixelValue: pymdlsdk.Color_struct = tile.get_pixel(2, 3)
-            self.assertAlmostEqual(pixelValue.r, 22.808834075927734, places=6)
-            self.assertAlmostEqual(pixelValue.g, 22.780536651611328, places=6)
-            self.assertAlmostEqual(pixelValue.b, 22.60716438293457, places=6)
+            self.assertAlmostEqual(pixelValue.r, 22.821651458740234, places=6)
+            self.assertAlmostEqual(pixelValue.g, 22.791751861572266, places=6)
+            self.assertAlmostEqual(pixelValue.b, 22.613006591796875, places=6)
 
             # test the expected error if numpy is not available
             pymdlsdk._numpyAvailable = False  # DO NOT CHANGE in normal usage

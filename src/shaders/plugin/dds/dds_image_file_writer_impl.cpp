@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -72,7 +72,8 @@ Image_file_writer_impl::Image_file_writer_impl(
         mi::Uint32 width  = std::max( m_resolution_x >> i, 1u);
         mi::Uint32 height = std::max( m_resolution_y >> i, 1u);
         mi::Uint32 depth  = std::max( m_nr_of_layers >> i, 1u);
-        mi::Uint32 bytes_per_level = width * height * depth * get_bytes_per_pixel( m_pixel_type);
+        mi::Size bytes_per_level
+            = mi::Size( width) * height * depth * get_bytes_per_pixel( m_pixel_type);
         m_level[i].resize( bytes_per_level);
     }
 }
@@ -82,7 +83,8 @@ Image_file_writer_impl::~Image_file_writer_impl()
     mi::Uint32 width  = m_resolution_x;
     mi::Uint32 height = m_resolution_y;
     mi::Uint32 depth  = m_nr_of_layers;
-    mi::Uint32 bytes_per_level = width * height * depth * get_bytes_per_pixel( m_pixel_type);
+    mi::Size bytes_per_level
+        = mi::Size( width) * height * depth * get_bytes_per_pixel( m_pixel_type);
 
     Texture texture;
 
@@ -94,7 +96,8 @@ Image_file_writer_impl::~Image_file_writer_impl()
         width  = std::max( width  / 2, 1u);
         height = std::max( height / 2, 1u);
         depth  = std::max( depth  / 2, 1u);
-        bytes_per_level = width * height * depth * get_bytes_per_pixel( m_pixel_type);
+        bytes_per_level
+            = mi::Size( width) * height * depth * get_bytes_per_pixel( m_pixel_type);
     }
 
     Image image;
@@ -182,8 +185,8 @@ bool Image_file_writer_impl::write(
 
     mi::Uint32 image_width     = get_resolution_x( level);
     mi::Uint32 image_height    = get_resolution_y( level);
-    mi::Uint32 bytes_per_pixel = IMAGE::get_bytes_per_pixel( m_pixel_type);
-    mi::Size bytes_per_layer = (mi::Size)image_width * image_height * bytes_per_pixel;
+    mi::Size bytes_per_pixel = IMAGE::get_bytes_per_pixel( m_pixel_type);
+    mi::Size bytes_per_layer = image_width * (image_height * bytes_per_pixel);
 
     copy_from_tile_to_dds(
         tile, m_level[level].data() + z * bytes_per_layer, image_width, image_height);

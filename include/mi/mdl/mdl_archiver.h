@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -48,12 +48,13 @@ class ISemantic_version;
 class IArchive_tool_event {
 public:
     enum Event {
-        EV_COMPILING,   ///< A module is compiled.
-        EV_DISCOVERED,  ///< A file was discovered and will be added.
-        EV_IGNORED,     ///< A File was discovered but will be ignored.
-        EV_COMPRESSING, ///< A file is compressed and stored into the archive.
-        EV_STORING,     ///< A file is stored into the archive.
-        EV_EXTRACTED,   ///< A file was extracted from an archive.
+        EV_COMPILING,     ///< A module is compiled.
+        EV_DISCOVERED,    ///< A file was discovered and will be added.
+        EV_IGNORED,       ///< A File was discovered but will be ignored.
+        EV_COMPRESSING,   ///< A file is compressed and stored into the archive.
+        EV_STORING,       ///< A file is stored into the archive.
+        EV_EXTRACTED,     ///< A file was extracted from an archive.
+        EV_INVALID_PATH,  ///< A file was found but is not extracted due to an invalid path.
     };
 
     /// Called when an event is fired.

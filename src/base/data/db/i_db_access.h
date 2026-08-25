@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -332,8 +332,8 @@ public:
         set_access( name, transaction, T::id);
     }
 
-    /// Resets the access to the default-constructed state with exception of the transaction.
-    void reset() { cleanup(); }
+    /// Resets the access to the default-constructed state.
+    void reset() { cleanup(); clear_transaction(); }
 
     /// Returns the referenced DB element (const).
     ///

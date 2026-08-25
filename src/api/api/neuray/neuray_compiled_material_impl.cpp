@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -171,6 +171,21 @@ const mi::IString* Compiled_material_impl::get_connected_function_db_name(
 
     const char* name = transaction->tag_to_name( result);
     return new String_impl( name);
+}
+
+mi::Size Compiled_material_impl::get_resources_count() const
+{
+    return get_db_element()->get_resources_count();
+}
+
+const mi::neuraylib::IValue_resource* Compiled_material_impl::get_resource( mi::Size index) const
+{
+    mi::base::Handle<const MDL::IValue_resource> int_resource(
+        get_db_element()->get_resource( index));
+
+    mi::base::Handle<Value_factory> vf( get_transaction()->get_value_factory());
+    return vf->create<mi::neuraylib::IValue_resource>(
+        int_resource.get(), this->cast_to_major());
 }
 
 mi::Float32 Compiled_material_impl::get_mdl_meters_per_scene_unit() const

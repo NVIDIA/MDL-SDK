@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -234,6 +234,7 @@ protected:
     VkImageView m_depth_stencil_image_view = nullptr;
 
     std::vector<VkFence> m_frame_inflight_fences;
+    std::vector<VkFence> m_images_inflight_fences;
     VkCommandPool m_command_pool = nullptr;
     std::vector<VkCommandBuffer> m_command_buffers;
     std::vector<VkFramebuffer> m_framebuffers;
@@ -248,10 +249,8 @@ private:
         const std::vector<const char*>& instance_extensions,
         const std::vector<const char*>& validation_layers);
     void pick_physical_device(const std::vector<const char*>& device_extensions);
-    void init_device(
-        const std::vector<const char*>& device_extensions,
-        const std::vector<const char*>& validation_layers);
-    void init_swapchain_for_window();
+    void init_device(const std::vector<const char*>& device_extensions);
+    void init_swapchain_for_window(VkSwapchainKHR old_swapchain = nullptr);
     void init_swapchain_for_headless();
     void init_depth_stencil_buffer();
     void init_render_pass();
@@ -282,7 +281,7 @@ private:
 private:
     Config m_config;
     VkDebugUtilsMessengerEXT m_debug_messenger = nullptr;
-    bool m_framebuffer_resized = false;
+    bool m_swapchain_recreate_requested = false;
     bool m_screenshot_requested = false;
 };
 

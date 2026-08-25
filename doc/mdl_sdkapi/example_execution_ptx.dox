@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -259,14 +259,18 @@ For Linux and Mac OS X, you have to provide the path to the CUDA Toolkit install
 \include execution_cuda/example_execution_cuda.cpp
 
 <b>Source Code Location:</b>
-  <tt>examples/mdl_sdk/shared/texture_support_cuda.h</tt>
+  <tt>texture_support_cuda.h</tt>
 
-  \include shared/texture_support_cuda.h
+\include texture_support_cuda.h
 
 <b>Source Code Location:</b>
   <tt>examples/mdl_sdk/shared/example_cuda_shared.h</tt>
 
-\include shared/example_cuda_shared.h
+\if MDL_BIN_RELEASE
+  <tt>examples/mdl_sdk/shared/texture_support_cuda.h</tt>
+\else
+  <tt>src/render/baker/baker/texture_support_cuda.h</tt>
+\endif
 
 <b>Source Code Location:</b>
   <tt>examples/mdl_sdk/execution_cuda/example_execution_cuda.cu</tt>

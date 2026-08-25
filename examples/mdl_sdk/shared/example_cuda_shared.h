@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -70,6 +70,43 @@ struct Texture
     cudaTextureObject_t  unfiltered_object;  // uses filter mode cudaFilterModePoint
     uint3                size;               // size of the texture, needed for texel access
     float3               inv_size;           // the inverse values of the size of the texture
+};
+
+// UDIM + animation descriptor mirrors of the device-side structures in
+// texture_support_cuda.h. The examples use only single (non-uvtile, non-animated)
+// textures, so each texture is wrapped in a 1-frame, 1-tile descriptor; the
+// structures still carry the full layout so the device runtime is shared verbatim.
+
+// Per-frame uv-tile grid. Tile (u,v) lives at flat index
+// tile_offset + (v-min_v)*count_u + (u-min_u).
+struct Uv_grid
+{
+    int      min_u;
+    int      min_v;
+    unsigned count_u;
+    unsigned count_v;
+    unsigned tile_offset;
+};
+
+// One animation frame: its real MDL frame number plus its uv-tile grid.
+struct Tex_frame
+{
+    unsigned frame_number;
+    Uv_grid  grid;
+};
+
+// Per-MDL-texture descriptor stored in the handler array. The pointers hold
+// device addresses of the per-frame and flat per-tile arrays.
+struct Texture_desc
+{
+    Tex_frame const *frames;
+    Texture   const *tiles;
+    unsigned         is_valid;
+    unsigned         is_uvtile;
+    unsigned         num_frames;
+    unsigned         first_frame;
+    unsigned         last_frame;
+    unsigned         pad;
 };
 
 // Structure representing an MDL bsdf measurement.
@@ -158,14 +195,14 @@ struct Target_code_data
 {
     Target_code_data(
         size_t num_textures,
-        CUdeviceptr textures,
+        CUdeviceptr texture_descs,
         size_t num_mbsdfs,
         CUdeviceptr mbsdfs,
         size_t num_lightprofiles,
         CUdeviceptr lightprofiles,
                      CUdeviceptr ro_data_segment)
         : num_textures(num_textures)
-        , textures(textures)
+        , texture_descs(texture_descs)
         , num_mbsdfs(num_mbsdfs)
         , mbsdfs(mbsdfs)
         , num_lightprofiles(num_lightprofiles)
@@ -173,8 +210,8 @@ struct Target_code_data
         , ro_data_segment(ro_data_segment)
     {}
 
-    size_t      num_textures;           // number of elements in the textures field
-    CUdeviceptr textures;               // a device pointer to a list of Texture objects, if used
+    size_t      num_textures;           // number of elements in the texture_descs field
+    CUdeviceptr texture_descs;          // a device pointer to a list of Texture_desc objects, if used
 
     size_t      num_mbsdfs;             // number of elements in the mbsdfs field
     CUdeviceptr mbsdfs;                 // a device pointer to a list of mbsdfs objects, if used
@@ -288,6 +325,16 @@ private:
 //
 //------------------------------------------------------------------------------
 
+// Return a human-readable description for a CUDA driver or runtime error code.
+inline const char* cuda_error_string(int err)
+{
+    const char* str = nullptr;
+    if (cuGetErrorString(static_cast<CUresult>(err), &str) == CUDA_SUCCESS && str != nullptr) {
+        return str;
+    }
+    return cudaGetErrorString(static_cast<cudaError_t>(err));
+}
+
 // Helper macro. Checks whether the expression is cudaSuccess and if not prints a message and
 // resets the device and exits.
 
@@ -297,8 +344,8 @@ private:
     do { \
         int err = (expr); \
         if (err != 0) { \
-            fprintf(stderr, "CUDA error %d in file %s, line %u: \"%s\".\n", \
-                err, __FILE__, __LINE__, #expr); \
+            fprintf(stderr, "CUDA error %d \"%s\" in file %s, line %u: \"%s\".\n", \
+                err, cuda_error_string(err), __FILE__, __LINE__, #expr); \
             keep_console_open(); \
             cudaDeviceReset(); \
             exit(EXIT_FAILURE); \
@@ -399,8 +446,8 @@ template<> struct Resource_deleter<Lightprofile> {
 
 template<> struct Resource_deleter<Target_code_data> {
     void operator()(Target_code_data &res) {
-        if (res.textures)
-            check_cuda_success(cuMemFree(res.textures));
+        if (res.texture_descs)
+            check_cuda_success(cuMemFree(res.texture_descs));
         if (res.ro_data_segment)
             check_cuda_success(cuMemFree(res.ro_data_segment));
     }
@@ -630,6 +677,9 @@ private:
 
     // List of all Texture objects owned by this context.
     Resource_container<Texture> m_all_textures;
+
+    // Flat per-tile and per-frame device buffers backing the texture descriptors.
+    Resource_container<CUdeviceptr> m_all_texture_descs_data;
 
     // List of all MBSDFs objects owned by this context.
     Resource_container<Mbsdf> m_all_mbsdfs;
@@ -1257,22 +1307,58 @@ bool Material_gpu_context::prepare_target_code_data(
             target_code->get_ro_data_segment_size(0));
     }
 
-    // Copy textures to GPU if the code has more than just the invalid texture
-    CUdeviceptr device_textures = 0;
+    // Copy textures to GPU if the code has more than just the invalid texture.
+    // Each MDL texture is wrapped in a single-frame, single-tile Texture_desc —
+    // the examples do not use uv-tile or animated textures. The descriptors, the
+    // flat per-tile array, and the per-frame array are uploaded separately; the
+    // descriptors then reference the device addresses of the latter two.
+    CUdeviceptr device_texture_descs = 0;
     mi::Size num_textures = target_code->get_texture_count();
     if (num_textures > 1) {
-        std::vector<Texture> textures;
+        std::vector<Texture> tiles;
 
         // Loop over all textures skipping the first texture,
         // which is always the invalid texture
         for (mi::Size i = 1; i < num_textures; ++i) {
             if (!prepare_texture(
-                    transaction, image_api, target_code, i, textures))
+                    transaction, image_api, target_code, i, tiles))
                 return false;
         }
 
-        // Copy texture list to GPU
-        device_textures = gpu_mem_dup(textures);
+        // One frame and one descriptor per texture. Frame k selects tile k of
+        // the flat tile array, so the descriptor sees a single 1x1 uv-tile grid.
+        const size_t count = tiles.size();
+        std::vector<Tex_frame>    frames(count);
+        std::vector<Texture_desc> descs(count);
+        for (size_t k = 0; k < count; ++k) {
+            frames[k].frame_number     = 0;
+            frames[k].grid.min_u       = 0;
+            frames[k].grid.min_v       = 0;
+            frames[k].grid.count_u     = 1;
+            frames[k].grid.count_v     = 1;
+            frames[k].grid.tile_offset = static_cast<unsigned>(k);
+        }
+
+        // Upload the flat tile and frame arrays first, so the descriptors can
+        // point at their device addresses.
+        CUdeviceptr device_tiles  = gpu_mem_dup(tiles);
+        CUdeviceptr device_frames = gpu_mem_dup(frames);
+        (*m_all_texture_descs_data).push_back(device_tiles);
+        (*m_all_texture_descs_data).push_back(device_frames);
+
+        for (size_t k = 0; k < count; ++k) {
+            descs[k].frames      = reinterpret_cast<Tex_frame const *>(device_frames) + k;
+            descs[k].tiles       = reinterpret_cast<Texture const *>(device_tiles);
+            descs[k].is_valid    = 1;
+            descs[k].is_uvtile   = 0;
+            descs[k].num_frames  = 1;
+            descs[k].first_frame = 0;
+            descs[k].last_frame  = 0;
+            descs[k].pad         = 0;
+        }
+
+        // Copy descriptor list to GPU
+        device_texture_descs = gpu_mem_dup(descs);
     }
 
     // Copy MBSDFs to GPU if the code has more than just the invalid mbsdf
@@ -1312,7 +1398,7 @@ bool Material_gpu_context::prepare_target_code_data(
     }
 
     (*m_target_code_data_list).push_back(
-        Target_code_data(num_textures, device_textures,
+        Target_code_data(num_textures, device_texture_descs,
                          num_mbsdfs, device_mbsdfs,
                          num_lightprofiles, device_lightprofiles,
                          device_ro_data));
@@ -1363,6 +1449,7 @@ public:
         mi::neuraylib::ITransaction* transaction,
         unsigned num_texture_results,
         bool enable_derivatives,
+        bool enable_spectral,
         bool fold_ternary_on_df,
         bool enable_auxiliary,
         bool enable_pdf,
@@ -1479,6 +1566,7 @@ Material_compiler::Material_compiler(
         mi::neuraylib::ITransaction* transaction,
         unsigned num_texture_results,
         bool enable_derivatives,
+        bool enable_spectral,
         bool fold_ternary_on_df,
         bool enable_auxiliary,
         bool enable_pdf,
@@ -1504,6 +1592,12 @@ Material_compiler::Material_compiler(
         // Option "texture_runtime_with_derivs": Default is disabled.
         // We enable it to get coordinates with derivatives for texture lookup functions.
         check_success(m_be_cuda_ptx->set_option("texture_runtime_with_derivs", "on") == 0);
+    }
+
+    if (enable_spectral) {
+        // Option "libbsdf_enable_spectral": Default is disabled.
+        // We enable it to generate spectral code for the BSDFs.
+        check_success(m_be_cuda_ptx->set_option("libbsdf_enable_spectral", "on") == 0);
     }
 
     // Option "tex_lookup_call_mode": Default mode is vtable mode.

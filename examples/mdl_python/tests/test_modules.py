@@ -569,6 +569,14 @@ class MainModulesMdl(UnittestBase):
         self.assertIsNotNone(idbname2)
         self.assertNotEqual(errorCode, -1337)
 
+        self.assertLess(compiledMaterial.get_resources_count(), 1337)
+        invalidResource: pymdlsdk.IValue_resource =compiledMaterial.get_resource(1337)
+        self.assertIsNotNone(invalidResource)
+        self.assertFalse(invalidResource.is_valid_interface())
+        for i in range(compiledMaterial.get_resources_count()):
+            resource: pymdlsdk.IValue_resource =compiledMaterial.get_resource(i)
+            self.assertIsValidInterface(resource)
+
     def run_material_test(self, mdlModule: pymdlsdk.IModule, matSpec: MaterialTestSpec):
         qualifiedName: str = mdlModule.get_mdl_name() + "::" + matSpec.simpleName
         idbName: pymdlsdk.IString = self.sdk.mdlFactory.get_db_definition_name(qualifiedName)

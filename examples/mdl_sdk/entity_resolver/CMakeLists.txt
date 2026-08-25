@@ -1,6 +1,5 @@
-#!/usr/bin/env python3
 #*****************************************************************************
-# Copyright (c) 2023-2026, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2026, NVIDIA CORPORATION. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -14,7 +13,7 @@
 #    contributors may be used to endorse or promote products derived
 #    from this software without specific prior written permission.
 #
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
 # EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 # IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
 # PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -27,19 +26,36 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #*****************************************************************************
 
-'''Remove font-related CSS directives such that the directives in
-doxygen_custom_stylesheet_1_9_4.css can take effect.'''
+# name of the target and the resulting example
+set(PROJECT_NAME examples-mdl_sdk-entity_resolver)
 
-import os
-import re
-import sys
+# collect sources
+set(PROJECT_SOURCES
+    "example_entity_resolver.cpp"
+    "entity_resolver.cpp"
+    )
 
+# create target from template
+create_from_base_preset(
+    TARGET ${PROJECT_NAME}
+    TYPE EXECUTABLE
+    OUTPUT_NAME "entity_resolver"
+    SOURCES ${PROJECT_SOURCES}
+    EXAMPLE
+)
 
-for filename in 'html/doxygen.css html/tabs.css html/navtree.css'.split():
-    if os.path.exists(filename):
-        buffer = open(filename, 'r', encoding="utf-8").readlines()
-        text = ''.join(buffer)
-        text = re.compile('font-family:.*?;', re.S|re.M).sub('', text)
-        text = re.compile('font-size:.*?;', re.S|re.M).sub('', text)
-        text = re.compile('font:.*?;', re.S|re.M).sub('', text)
-        open(filename, 'w', encoding="utf-8").write(text)
+# add dependencies
+target_add_dependencies(TARGET ${PROJECT_NAME}
+    DEPENDS
+        mdl::mdl_sdk
+        mdl_sdk::shared
+    )
+
+# creates a user settings file to setup the debugger (visual studio only, otherwise this is a no-op)
+target_create_vs_user_settings(TARGET ${PROJECT_NAME})
+
+# create installation rules
+add_target_install(
+    TARGET ${PROJECT_NAME}
+    DESTINATION "examples/mdl_sdk/entity_resolver"
+    )

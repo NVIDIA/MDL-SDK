@@ -1,6 +1,88 @@
 Change Log
 ==========
 
+MDL SDK 2026.0.2 (391700.2276): 24 Aug 2026
+-----------------------------------------------
+
+ABI compatible with the MDL SDK 2026.0.2 (391700.2276) binary release
+(see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
+
+**Added and Changed Features**
+
+- General
+  - The recommended vcpkg version has been updated to git ID 9d7f79f. This update includes
+    Boost 1.91.0 and OpenImageIO 3.1.14.0, and various security fixes in their dependencies.
+  - The recommended MaterialX version has been updated to 1.39.5.
+  - The recommended Doxygen version has been updated to 1.17.0.
+  - The compiler option `-mtls-dialect=trad` has been added on linux-aarch64 to avoid a
+    problem with `std::call_once` on this platform.
+  - The native texture runtime has been changed to perform gamma correction before
+    filtering.
+  - The OpenImageIO plugin has been configured to clean up its string pool at shutdown. This
+    avoids false positives when memory checkers like valgrind are used.
+  - The OpenImageIO plugin has been configured to ignore errors in corrupt IPTC metadata.
+  - The MDL archiver now refuses to extract files that are stored above the root of an MDL
+    archive. This guards against manipulated MDL archives that could otherwise be used to
+    overwrite arbitrary files with the permissions of the user extracting the archive.
+
+- MDL Distiller and Baker
+  - Added new MDL Distiller target `ovrtx`, supporting the RTX renderer in NVIDIA Omniverse.
+  - Improved distilling of OmniPBR materials with sheen and fractional metalness.
+  - Added a GPU baker based on CUDA. Previously, the source release supported CPU baking
+    only. The baker resources `BAKE_ON_GPU` and `BAKE_ON_GPU_WITH_CPU_FALLBACK` are now
+    supported, including tiled and animated textures.
+  - The new CMake option `MDL_ENABLE_GPU_BAKER` controls whether the GPU baker is built. It
+    is enabled by default, except on macOS. When disabled, the build has no CUDA dependency
+    and `BAKE_ON_GPU` is not available.
+  - The texture runtime is now shared with the CUDA-based SDK examples.
+
+- MDL SDK examples
+  - Example baking:
+    - New example that shows how to bake material sub-expressions to textures or constants
+      without distilling.
+  - Example df_native:
+    - Added support for 3D textures to native custom texture runtime.
+  - Example entity_resolver:
+    - New example that demonstrates how to implement a custom entity resolver.
+  - Example df_cuda:
+    - Added support for spectral rendering.
+  - Example df_vulkan:
+    - Added support for measured BSDFs.
+    - Added options for UV flip, scale, offset, repeat, and clamp.
+  - Example code_gen:
+    - All metadata is now dumped to the output file when requested.
+  - Example DXR:
+    - Added support for the `geometry.displacement` material sub-expression.
+    - Renamed the option `--uv_saturate` to `--uv_clamp` to match MDL terminology.
+
+- MDL Core examples
+  - Example df_cuda:
+    - Added support for spectral rendering.
+    - Added support for measured BSDFs in custom texture runtime.
+  - Example df_vulkan:
+    - Added support for measured BSDFs.
+
+**Fixed Bugs**
+
+- General
+  - Fixed enumeration of resources that appear inside arrays.
+  - Fixed a rare aliasing bug when individual tiles and/or frames of a uvtile set and/or
+    animated texture where also loaded individually.
+  - Fixed various bugs related to parsing of DDS files.
+
+- MDL Compiler and Backends
+  - Fixed handling of weak-relative resource paths with a custom entity resolver. Updated
+    documentation for required error messages.
+  - Fixed generation of nested `?:` operators in target languages.
+  - Fixed an optimization that removed the built-in textures when `multiscatter_tint` is
+    zero for the spectral case.
+  - Fixed the native JIT on macOS aarch64, which was broken due to the switch to ELF.
+
+- MDL SDK examples
+  - Example compilation:
+    - Fixed crash with non-existing expression path.
+
+
 MDL SDK 2026.0.0 (391700.996): 01 Jun 2026
 -----------------------------------------------
 

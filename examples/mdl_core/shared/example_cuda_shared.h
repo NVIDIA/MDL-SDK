@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -73,17 +73,71 @@ struct Texture
     float3               inv_size;           // the inverse values of the size of the texture
 };
 
+// Structure representing an MDL bsdf measurement.
+// The fields must match the device-side counterpart in texture_support_cuda.h, so the data
+// can be copied verbatim to the GPU.
+struct Mbsdf
+{
+    Mbsdf()
+    {
+        for (unsigned i = 0; i < 2; ++i) {
+            has_data[i] = 0u;
+            eval_data[i] = 0;
+            sample_data[i] = nullptr;
+            albedo_data[i] = nullptr;
+            max_albedo[i] = 0.0f;
+            angular_resolution[i] = make_uint2(0u, 0u);
+            inv_angular_resolution[i] = make_float2(0.0f, 0.0f);
+            num_channels[i] = 0;
+        }
+    }
+
+    void add(unsigned                  part_idx,
+             const uint2&              angular_resolution_in,
+             unsigned                  num_channels_in)
+    {
+        has_data[part_idx] = 1u;
+        angular_resolution[part_idx] = angular_resolution_in;
+        inv_angular_resolution[part_idx] = make_float2(
+            1.0f / float(angular_resolution_in.x),
+            1.0f / float(angular_resolution_in.y));
+        num_channels[part_idx] = num_channels_in;
+    }
+
+    unsigned            has_data[2];            // true if there is a measurement for this part
+    cudaTextureObject_t eval_data[2];           // uses filter mode cudaFilterModeLinear
+    float               max_albedo[2];          // max albedo used to limit the multiplier
+    float*              sample_data[2];         // CDFs for sampling a BSDF measurement
+    float*              albedo_data[2];         // max albedo for each theta (isotropic)
+
+    uint2           angular_resolution[2];      // size of the dataset, needed for texel access
+    float2          inv_angular_resolution[2];  // the inverse values of the size of the dataset
+    unsigned        num_channels[2];            // number of color channels (1 or 3)
+};
+
 // Structure representing the resources used by the generated code of a target code.
+// The layout has to match the device-side struct Target_code_data in example_df_cuda.cu.
 struct Target_code_data
 {
-    Target_code_data(size_t num_textures, CUdeviceptr textures, CUdeviceptr ro_data_segment)
+    Target_code_data(
+        size_t      num_textures,
+        CUdeviceptr textures,
+        size_t      num_mbsdfs,
+        CUdeviceptr mbsdfs,
+        CUdeviceptr ro_data_segment)
         : num_textures(num_textures)
         , textures(textures)
+        , num_mbsdfs(num_mbsdfs)
+        , mbsdfs(mbsdfs)
         , ro_data_segment(ro_data_segment)
     {}
 
     size_t      num_textures;      // number of elements in the textures field
     CUdeviceptr textures;          // a device pointer to a list of Texture objects, if used
+
+    size_t      num_mbsdfs;        // number of elements in the mbsdfs field
+    CUdeviceptr mbsdfs;            // a device pointer to a list of Mbsdf objects, if used
+
     CUdeviceptr ro_data_segment;   // a device pointer to the read-only data segment, if used
 };
 
@@ -110,19 +164,60 @@ std::string to_string(T val)
 //
 //------------------------------------------------------------------------------
 
+// Return a human-readable description for a CUDA driver or runtime error code.
+inline const char* cuda_error_string(int err)
+{
+    const char* str = nullptr;
+    if (cuGetErrorString(static_cast<CUresult>(err), &str) == CUDA_SUCCESS && str != nullptr) {
+        return str;
+    }
+    return cudaGetErrorString(static_cast<cudaError_t>(err));
+}
+
+// Return a textual representation of a CUDA version number (e.g. 12060 -> "12.6").
+inline std::string cuda_version_to_string(int version)
+{
+    int minor = version % 100;
+    int major = version / 100;
+    if (major % 10 == 0) {
+        major /= 10;
+    }
+    if (minor % 10 == 0) {
+        minor /= 10;
+    }
+    return to_string(major) + '.' + to_string(minor);
+}
+
 // Helper macro. Checks whether the expression is cudaSuccess and if not prints a message and
 // resets the device and exits.
-#define check_cuda_success(expr)                                            \
-    do {                                                                    \
-        int err = (expr);                                                   \
-        if (err != 0) {                                                     \
-            fprintf(stderr, "CUDA error %d in file %s, line %u: \"%s\".\n", \
-                err, __FILE__, __LINE__, #expr);                            \
-            keep_console_open();                                            \
-            cudaDeviceReset();                                              \
-            exit(EXIT_FAILURE);                                             \
-        }                                                                   \
+#define check_cuda_success(expr)                                                      \
+    do {                                                                              \
+        int err = (expr);                                                             \
+        if (err != 0) {                                                               \
+            fprintf(stderr, "CUDA error %d \"%s\" in file %s, line %u: \"%s\".\n",    \
+                err, cuda_error_string(err), __FILE__, __LINE__, #expr);              \
+            keep_console_open();                                                      \
+            cudaDeviceReset();                                                        \
+            exit(EXIT_FAILURE);                                                       \
+        }                                                                             \
     } while (false)
+
+// Check that the installed CUDA driver supports the CUDA runtime version
+// this example was compiled against.
+inline void check_cuda_driver_version()
+{
+    int driver_version = 0;
+    check_cuda_success(cuDriverGetVersion(&driver_version));
+    if (driver_version < CUDART_VERSION) {
+        fprintf(stderr,
+            "CUDA driver version %s is too old; this example requires at least %s.\n"
+            "Please update your NVIDIA display driver.\n",
+            cuda_version_to_string(driver_version).c_str(),
+            cuda_version_to_string(CUDART_VERSION).c_str());
+        keep_console_open();
+        exit(EXIT_FAILURE);
+    }
+}
 
 
 // Initialize CUDA.
@@ -136,6 +231,7 @@ CUcontext init_cuda(
     CUcontext cu_context;
 
     check_cuda_success(cuInit(0));
+    check_cuda_driver_version();
 #if defined(OPENGL_INTEROP) && !defined(__APPLE__)
     if (opengl_interop) {
         // Use first device used by OpenGL context
@@ -269,6 +365,13 @@ private:
         size_t                texture_index,
         std::vector<Texture> &textures);
 
+    // Prepare the BSDF measurement identified by mbsdf_index for use by the bsdf measurement
+    // access functions on the GPU.
+    bool prepare_mbsdf(
+        Target_code const   *code_ptx,
+        size_t               mbsdf_index,
+        std::vector<Mbsdf>  &mbsdfs);
+
     // If true, mipmaps will be generated for all 2D textures.
     bool m_enable_derivatives;
 
@@ -301,6 +404,9 @@ private:
 
     // List of all CUDA mipmapped arrays owned by this context.
     std::vector<cudaMipmappedArray_t> m_all_texture_mipmapped_arrays;
+
+    // List of all Mbsdf objects owned by this context (used for CUDA resource cleanup).
+    std::vector<Mbsdf> m_all_mbsdfs;
 };
 
 // Free all acquired resources.
@@ -319,10 +425,26 @@ Material_gpu_context::~Material_gpu_context()
         check_cuda_success(cudaDestroyTextureObject(it->filtered_object));
         check_cuda_success(cudaDestroyTextureObject(it->unfiltered_object));
     }
+    for (std::vector<Mbsdf>::iterator it = m_all_mbsdfs.begin(),
+            end = m_all_mbsdfs.end(); it != end; ++it) {
+        for (unsigned p = 0; p < 2; ++p) {
+            if (it->has_data[p] != 0u) {
+                check_cuda_success(cudaDestroyTextureObject(it->eval_data[p]));
+                if (it->sample_data[p])
+                    check_cuda_success(cuMemFree(
+                        reinterpret_cast<CUdeviceptr>(it->sample_data[p])));
+                if (it->albedo_data[p])
+                    check_cuda_success(cuMemFree(
+                        reinterpret_cast<CUdeviceptr>(it->albedo_data[p])));
+            }
+        }
+    }
     for (std::vector<Target_code_data>::iterator it = m_target_code_data_list.begin(),
             end = m_target_code_data_list.end(); it != end; ++it) {
         if (it->textures)
             check_cuda_success(cuMemFree(it->textures));
+        if (it->mbsdfs)
+            check_cuda_success(cuMemFree(it->mbsdfs));
         if (it->ro_data_segment)
             check_cuda_success(cuMemFree(it->ro_data_segment));
     }
@@ -623,6 +745,255 @@ bool Material_gpu_context::prepare_texture(
     return true;
 }
 
+namespace
+{
+    // Build the CDFs / albedo / volume texture for one part (reflection or transmission)
+    // of an MDL Core Bsdf_measurement_data and fill the corresponding fields of mbsdf_cuda.
+    //
+    // The math mirrors mdl_sdk/shared/example_cuda_shared.h::prepare_mbsdfs_part().
+    bool prepare_core_mbsdf_part(
+        unsigned                          part_idx,
+        Mbsdf&                            mbsdf_cuda,
+        const Bsdf_measurement_data&      bsdf_measurement,
+        std::vector<cudaArray_t>&         tracked_arrays)
+    {
+        Bsdf_measurement_data::Part const part_enum = part_idx == 0
+            ? Bsdf_measurement_data::PART_REFLECTION
+            : Bsdf_measurement_data::PART_TRANSMISSION;
+
+        if (!bsdf_measurement.has_part(part_enum))
+            return true; // nothing to do
+
+        Bsdf_measurement_data::Part_data const& dataset = bsdf_measurement.get_part(part_enum);
+
+        // get dimensions
+        uint2 res = make_uint2(dataset.resolution_theta, dataset.resolution_phi);
+        unsigned num_channels =
+            dataset.type == Bsdf_measurement_data::BDT_SCALAR ? 1u : 3u;
+        mbsdf_cuda.add(part_idx, res, num_channels);
+
+        // get data
+        // layout: {1,3} * (index_theta_in * (res_phi * res_theta) +
+        //                  index_theta_out * res_phi + index_phi)
+        const float* src_data = dataset.data.data();
+
+        // ----------------------------------------------------------------------------------------
+        // prepare importance sampling data:
+        // - for theta_in we will be able to perform a two stage CDF, first to select theta_out,
+        //   and second to select phi_out
+        // - maximum component is used to "probability" in case of colored measurements
+
+        // CDF of the probability to select a certain theta_out for a given theta_in
+        const unsigned int cdf_theta_size = res.x * res.x;
+
+        // for each of theta_in x theta_out combination, a CDF of the probabilities to select a
+        // a certain theta_out is stored
+        const unsigned sample_data_size = cdf_theta_size + cdf_theta_size * res.y;
+        std::vector<float> sample_data(sample_data_size);
+
+        std::vector<float> albedo_data(res.x); // albedo for sampling refl. and transm.
+
+        float* sample_data_theta = sample_data.data();                // first (theta) CDF
+        float* sample_data_phi   = sample_data.data() + cdf_theta_size; // second (phi) CDFs
+
+        const float s_theta = float(M_PI * 0.5) / float(res.x);  // step size
+        const float s_phi   = float(M_PI)       / float(res.y);  // step size
+
+        float max_albedo = 0.0f;
+        for (unsigned int t_in = 0; t_in < res.x; ++t_in)
+        {
+            float sum_theta = 0.0f;
+            float sintheta0_sqd = 0.0f;
+            for (unsigned int t_out = 0; t_out < res.x; ++t_out)
+            {
+                const float sintheta1 = sinf(float(t_out + 1) * s_theta);
+                const float sintheta1_sqd = sintheta1 * sintheta1;
+
+                // BSDFs are symmetric: f(w_in, w_out) = f(w_out, w_in)
+                // take the average of both measurements
+
+                // area of two the surface elements (the ones we are averaging)
+                const float mu = (sintheta1_sqd - sintheta0_sqd) * s_phi * 0.5f;
+                sintheta0_sqd = sintheta1_sqd;
+
+                // offset for both the thetas into the measurement data (select row in volume)
+                const unsigned int offset_phi  = (t_in * res.x + t_out) * res.y;
+                const unsigned int offset_phi2 = (t_out * res.x + t_in) * res.y;
+
+                // build CDF for phi
+                float sum_phi = 0.0f;
+                for (unsigned int p_out = 0; p_out < res.y; ++p_out)
+                {
+                    const unsigned int idx  = offset_phi  + p_out;
+                    const unsigned int idx2 = offset_phi2 + p_out;
+
+                    float value = 0.0f;
+                    if (num_channels == 3)
+                    {
+                        value = fmaxf(fmaxf(src_data[3 * idx  + 0], src_data[3 * idx  + 1]),
+                                      fmaxf(src_data[3 * idx  + 2], 0.0f))
+                              + fmaxf(fmaxf(src_data[3 * idx2 + 0], src_data[3 * idx2 + 1]),
+                                      fmaxf(src_data[3 * idx2 + 2], 0.0f));
+                    }
+                    else /* num_channels == 1 */
+                    {
+                        value = fmaxf(src_data[idx], 0.0f) + fmaxf(src_data[idx2], 0.0f);
+                    }
+
+                    sum_phi += value * mu;
+                    sample_data_phi[idx] = sum_phi;
+                }
+
+                // normalize CDF for phi
+                for (unsigned int p_out = 0; p_out < res.y; ++p_out)
+                {
+                    const unsigned int idx = offset_phi + p_out;
+                    sample_data_phi[idx] = (sum_phi > 0.0f) ? (sample_data_phi[idx] / sum_phi)
+                                                           : 0.0f;
+                }
+
+                // build CDF for theta
+                sum_theta += sum_phi;
+                sample_data_theta[t_in * res.x + t_out] = sum_theta;
+            }
+
+            if (sum_theta > max_albedo)
+                max_albedo = sum_theta;
+
+            albedo_data[t_in] = sum_theta;
+
+            // normalize CDF for theta
+            for (unsigned int t_out = 0; t_out < res.x; ++t_out)
+            {
+                const unsigned int idx = t_in * res.x + t_out;
+                sample_data_theta[idx] = (sum_theta > 0.0f) ? (sample_data_theta[idx] / sum_theta)
+                                                            : 0.0f;
+            }
+        }
+
+        // copy entire CDF data buffer to GPU
+        CUdeviceptr sample_obj = 0;
+        check_cuda_success(cuMemAlloc(&sample_obj, sample_data_size * sizeof(float)));
+        check_cuda_success(cuMemcpyHtoD(
+            sample_obj, sample_data.data(), sample_data_size * sizeof(float)));
+
+        CUdeviceptr albedo_obj = 0;
+        check_cuda_success(cuMemAlloc(&albedo_obj, res.x * sizeof(float)));
+        check_cuda_success(cuMemcpyHtoD(albedo_obj, albedo_data.data(), res.x * sizeof(float)));
+
+        mbsdf_cuda.sample_data[part_idx] = reinterpret_cast<float*>(sample_obj);
+        mbsdf_cuda.albedo_data[part_idx] = reinterpret_cast<float*>(albedo_obj);
+        mbsdf_cuda.max_albedo[part_idx]  = max_albedo;
+
+        // ----------------------------------------------------------------------------------------
+        // prepare evaluation data:
+        // - simply store the measured data in a volume texture
+        // - in case of color data, we store each sample in a vector4 to get texture support
+        unsigned lookup_channels = (num_channels == 3) ? 4u : 1u;
+
+        // make lookup data symmetric
+        std::vector<float> lookup_data(size_t(lookup_channels) * res.y * res.x * res.x);
+        for (unsigned int t_in = 0; t_in < res.x; ++t_in)
+        {
+            for (unsigned int t_out = 0; t_out < res.x; ++t_out)
+            {
+                const unsigned int offset_phi  = (t_in * res.x + t_out) * res.y;
+                const unsigned int offset_phi2 = (t_out * res.x + t_in) * res.y;
+                for (unsigned int p_out = 0; p_out < res.y; ++p_out)
+                {
+                    const unsigned int idx  = offset_phi  + p_out;
+                    const unsigned int idx2 = offset_phi2 + p_out;
+
+                    if (num_channels == 3)
+                    {
+                        lookup_data[4*idx+0] = (src_data[3*idx+0] + src_data[3*idx2+0]) * 0.5f;
+                        lookup_data[4*idx+1] = (src_data[3*idx+1] + src_data[3*idx2+1]) * 0.5f;
+                        lookup_data[4*idx+2] = (src_data[3*idx+2] + src_data[3*idx2+2]) * 0.5f;
+                        lookup_data[4*idx+3] = 1.0f;
+                    }
+                    else
+                    {
+                        lookup_data[idx] = (src_data[idx] + src_data[idx2]) * 0.5f;
+                    }
+                }
+            }
+        }
+
+        // Copy data to GPU array
+        cudaArray_t device_mbsdf_data;
+        cudaChannelFormatDesc channel_desc = (num_channels == 3)
+            ? cudaCreateChannelDesc<float4>()    // float3 is not supported
+            : cudaCreateChannelDesc<float>();
+
+        // Allocate a 3D array on the GPU (phi_delta x theta_out x theta_in)
+        cudaExtent extent = make_cudaExtent(res.y, res.x, res.x);
+        check_cuda_success(cudaMalloc3DArray(&device_mbsdf_data, &channel_desc, extent, 0));
+
+        // prepare and copy
+        cudaMemcpy3DParms copy_params;
+        memset(&copy_params, 0, sizeof(copy_params));
+        copy_params.srcPtr = make_cudaPitchedPtr(
+            (void*)(lookup_data.data()),                            // base pointer
+            res.y * lookup_channels * sizeof(float),                // row pitch
+            res.y,                                                  // width of slice
+            res.x);                                                 // height of slice
+        copy_params.dstArray = device_mbsdf_data;
+        copy_params.extent   = extent;
+        copy_params.kind     = cudaMemcpyHostToDevice;
+        check_cuda_success(cudaMemcpy3D(&copy_params));
+
+        tracked_arrays.push_back(device_mbsdf_data);
+
+        cudaResourceDesc texRes;
+        memset(&texRes, 0, sizeof(cudaResourceDesc));
+        texRes.resType = cudaResourceTypeArray;
+        texRes.res.array.array = device_mbsdf_data;
+
+        cudaTextureDesc texDescr;
+        memset(&texDescr, 0, sizeof(cudaTextureDesc));
+        texDescr.normalizedCoords = 1;
+        texDescr.filterMode       = cudaFilterModeLinear;
+        texDescr.addressMode[0]   = cudaAddressModeClamp;
+        texDescr.addressMode[1]   = cudaAddressModeClamp;
+        texDescr.addressMode[2]   = cudaAddressModeClamp;
+        texDescr.readMode         = cudaReadModeElementType;
+
+        cudaTextureObject_t eval_tex_obj;
+        check_cuda_success(cudaCreateTextureObject(&eval_tex_obj, &texRes, &texDescr, nullptr));
+        mbsdf_cuda.eval_data[part_idx] = eval_tex_obj;
+
+        return true;
+    }
+}
+
+// Prepare the BSDF measurement identified by mbsdf_index for use by the BSDF measurement
+// access functions on the GPU.
+bool Material_gpu_context::prepare_mbsdf(
+    Target_code const   *code_ptx,
+    size_t               mbsdf_index,
+    std::vector<Mbsdf>  &mbsdfs)
+{
+    Bsdf_measurement_data const *bm = code_ptx->get_bsdf_measurement(mbsdf_index);
+    if (!bm) {
+        fprintf(stderr, "Error: Requested BSDF measurement is missing\n");
+        return false;
+    }
+
+    Mbsdf mbsdf_cuda;
+
+    // skip invalid measurements (e.g. the slot 0 placeholder or files that could not be loaded)
+    if (bm->is_valid()) {
+        if (!prepare_core_mbsdf_part(0, mbsdf_cuda, *bm, m_all_texture_arrays))
+            return false;
+        if (!prepare_core_mbsdf_part(1, mbsdf_cuda, *bm, m_all_texture_arrays))
+            return false;
+    }
+
+    mbsdfs.push_back(mbsdf_cuda);
+    m_all_mbsdfs.push_back(mbsdfs.back());
+    return true;
+}
+
 // Prepare the needed target code data of the given target code.
 bool Material_gpu_context::prepare_target_code_data(Target_code const *target_code)
 {
@@ -654,8 +1025,27 @@ bool Material_gpu_context::prepare_target_code_data(Target_code const *target_co
         device_textures = gpu_mem_dup(textures);
     }
 
+    // Copy BSDF measurements to GPU if the code has more than just the invalid measurement
+    CUdeviceptr device_mbsdfs = 0;
+    size_t num_mbsdfs = target_code->get_bsdf_measurement_count();
+    if (num_mbsdfs > 1) {
+        std::vector<Mbsdf> mbsdfs;
+
+        // Loop over all measurements skipping the first one,
+        // which is always the invalid measurement
+        for (size_t i = 1; i < num_mbsdfs; ++i) {
+            if (!prepare_mbsdf(target_code, i, mbsdfs))
+                return false;
+        }
+
+        // Copy mbsdf list to GPU
+        device_mbsdfs = gpu_mem_dup(mbsdfs);
+    }
+
     m_target_code_data_list.push_back(
-        Target_code_data(num_textures, device_textures, device_ro_data));
+        Target_code_data(num_textures, device_textures,
+                         num_mbsdfs,   device_mbsdfs,
+                         device_ro_data));
 
     for (size_t i = 0, num = target_code->get_argument_block_count(); i < num; ++i) {
         Argument_block const *arg_block = target_code->get_argument_block(i);

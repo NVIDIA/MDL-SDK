@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -97,7 +97,7 @@
 #endif // MI_NEURAYLIB_VERSION_QUALIFIER_EMPTY
 
 /// \NeurayProductName product version number in a string representation, such as \c "2.0".
-#define MI_NEURAYLIB_PRODUCT_VERSION_STRING  "2026.0.0"
+#define MI_NEURAYLIB_PRODUCT_VERSION_STRING  "2026.0.2"
 
 /// Type of plugins for the \NeurayApiName.
 /// \see #mi::base::Plugin::get_type().

@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -71,7 +71,12 @@ public:
     ///                          available).
     /// \param pos_column        The column of the corresponding source code location (or 0 if not
     ///                          available).
-    /// \param context           The execution context which can be used to retrieve messages.
+    /// \param context           The execution context which can be used to pass options. For
+    ///                          support of weak-relative module names: If a relative module name
+    ///                          is not found, no error message \em must be generated for correct
+    ///                          operation. In case of a failed shadowing check (see "Check 1"
+    ///                          in section 2.2 of [\ref MDLLS]), a single error message
+    ///                          \em must be generated for correct operation.
     /// \return                  A description of the resolved module, or \c nullptr in case of
     ///                          errors.
     virtual IMdl_resolved_module* resolve_module(
@@ -102,7 +107,12 @@ public:
     ///                          available).
     /// \param pos_column        The column of the corresponding source code location (or 0 if not
     ///                          available).
-    /// \param context           The execution context which can be used to retrieve messages.
+    /// \param context           The execution context which can be used to pass options. For
+    ///                          support of weak-relative file paths: If a relative file path is
+    ///                          not found, a single error message \em must be generated for correct
+    ///                          operation. In case of a shadowing consistency check (see "Check 1"
+    ///                          in section 2.2 of [\ref MDLLS]), two (or more) error messages
+    ///                          \em must be generated for correct operation.
     /// \return                  A description of the resolved resource, or \c nullptr in case of
     ///                          errors.
     virtual IMdl_resolved_resource* resolve_resource(

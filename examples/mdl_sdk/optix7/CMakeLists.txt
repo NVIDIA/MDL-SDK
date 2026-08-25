@@ -13,7 +13,7 @@
 #    contributors may be used to endorse or promote products derived
 #    from this software without specific prior written permission.
 #
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
 # EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 # IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
 # PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -114,6 +114,7 @@ add_custom_command(
     COMMAND ${clang_PATH}
         -I ${OPTIX7_DIR}/include -I ${MDL_INCLUDE_FOLDER}
         -I ${CMAKE_CURRENT_SOURCE_DIR}/../shared
+        -I ${MDL_SRC_FOLDER}/render/baker/baker
         ${_CLANG_FLAGS}
         -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH
         -emit-llvm -c -O3 -ffast-math -fcuda-flush-denormals-to-zero -fno-vectorize

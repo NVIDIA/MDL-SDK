@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -111,6 +111,9 @@ const mi::Uint32 DDSF_CUBEMAP_POSITIVEZ = 0x00004000l;
 const mi::Uint32 DDSF_CUBEMAP_NEGATIVEZ = 0x00008000l;
 const mi::Uint32 DDSF_CUBEMAP_ALL_FACES = 0x0000FC00l;
 const mi::Uint32 DDSF_VOLUME            = 0x00200000l;
+
+// Header_dx10::m_misc_flag flags
+const mi::Uint32 DDS_RESOURCE_MISC_TEXTURECUBE = 0x00000004u;
 
 enum Dxgi_format : mi::Uint32 {
     DXGI_FORMAT_UNKNOWN                                 =   0,

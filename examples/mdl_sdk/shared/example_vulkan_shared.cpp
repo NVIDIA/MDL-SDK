@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -246,8 +246,6 @@ void Vulkan_example_app::run(const Config& config)
             // Wait for the GPU to finish the current command buffer
             VK_CHECK(vkWaitForFences(
                 m_device, 1, &m_frame_inflight_fences[frame_index], true, UINT64_MAX));
-            VK_CHECK(vkResetFences(
-                m_device, 1, &m_frame_inflight_fences[frame_index]));
 
             uint32_t image_index;
             VkResult result = vkAcquireNextImageKHR(m_device, m_swapchain, UINT64_MAX,
@@ -255,10 +253,24 @@ void Vulkan_example_app::run(const Config& config)
             if (result == VK_ERROR_OUT_OF_DATE_KHR)
             {
                 recreate_swapchain_or_framebuffer_image();
+                m_swapchain_recreate_requested = false;
                 continue;
             }
             else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
                 VK_CHECK(result); // This will output the error
+
+            // The frame fence above protects per-frame resources. This waits
+            // for prior GPU work that used the acquired swapchain image.
+            if (m_images_inflight_fences[image_index] != nullptr)
+            {
+                VK_CHECK(vkWaitForFences(
+                    m_device, 1, &m_images_inflight_fences[image_index], true, UINT64_MAX));
+            }
+
+            // Reset the frame fence only after acquiring an image, so
+            // there is work queued that will signal it again.
+            VK_CHECK(vkResetFences(
+                m_device, 1, &m_frame_inflight_fences[frame_index]));
 
             render_loop_iteration(frame_index, image_index, last_frame_time);
 
@@ -280,10 +292,10 @@ void Vulkan_example_app::run(const Config& config)
             result = vkQueuePresentKHR(m_present_queue, &present_info);
             if (result == VK_ERROR_OUT_OF_DATE_KHR
                 || result == VK_SUBOPTIMAL_KHR
-                || m_framebuffer_resized)
+                || m_swapchain_recreate_requested)
             {
                 recreate_swapchain_or_framebuffer_image();
-                m_framebuffer_resized = false;
+                m_swapchain_recreate_requested = false;
                 continue;
             }
             else if (result != VK_SUCCESS)
@@ -347,7 +359,7 @@ void Vulkan_example_app::set_vsync_enabled(bool vsync_enabled)
     if (vsync_enabled != m_config.vsync)
     {
         m_config.vsync = vsync_enabled;
-        m_framebuffer_resized = true;
+        m_swapchain_recreate_requested = true;
     }
 }
 
@@ -430,7 +442,7 @@ void Vulkan_example_app::init(const Config& config)
         VK_CHECK(glfwCreateWindowSurface(m_instance, m_window, nullptr, &m_surface));
 
     pick_physical_device(device_extensions);
-    init_device(device_extensions, validation_layers);
+    init_device(device_extensions);
 
     vkGetDeviceQueue(m_device, m_graphics_queue_family_index, 0, &m_graphics_queue);
     vkGetDeviceQueue(m_device, m_present_queue_family_index, 0, &m_present_queue);
@@ -721,9 +733,7 @@ void Vulkan_example_app::pick_physical_device(
     print_message(mi::base::MESSAGE_SEVERITY_INFO, s.str());
 }
 
-void Vulkan_example_app::init_device(
-    const std::vector<const char*>& device_extensions,
-    const std::vector<const char*>& validation_layers)
+void Vulkan_example_app::init_device(const std::vector<const char*>& device_extensions)
 {
     std::unordered_set<uint32_t> unique_queue_families = {
         m_graphics_queue_family_index,
@@ -745,11 +755,6 @@ void Vulkan_example_app::init_device(
     device_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
     device_create_info.queueCreateInfoCount = static_cast<uint32_t>(queue_create_infos.size());
     device_create_info.pQueueCreateInfos = queue_create_infos.data();
-    if (!validation_layers.empty())
-    {
-        device_create_info.ppEnabledLayerNames = validation_layers.data();
-        device_create_info.enabledLayerCount = static_cast<uint32_t>(validation_layers.size());
-    }
     device_create_info.ppEnabledExtensionNames = device_extensions.data();
     device_create_info.enabledExtensionCount = static_cast<uint32_t>(device_extensions.size());
 
@@ -768,7 +773,7 @@ void Vulkan_example_app::init_device(
     volkLoadDevice(m_device);
 }
 
-void Vulkan_example_app::init_swapchain_for_window()
+void Vulkan_example_app::init_swapchain_for_window(VkSwapchainKHR old_swapchain)
 {
     VkSurfaceCapabilitiesKHR surface_caps;
     VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
@@ -904,6 +909,7 @@ void Vulkan_example_app::init_swapchain_for_window()
     swapchain_create_info.compositeAlpha = composite_alpha;
     swapchain_create_info.presentMode = present_mode;
     swapchain_create_info.clipped = VK_TRUE;
+    swapchain_create_info.oldSwapchain = old_swapchain;
 
     VK_CHECK(vkCreateSwapchainKHR(m_device, &swapchain_create_info, nullptr, &m_swapchain));
 
@@ -1153,7 +1159,8 @@ void Vulkan_example_app::init_command_pool_and_buffers()
 
 void Vulkan_example_app::init_synchronization_objects()
 {
-    // If called in recreate_swapchain only the fences need to be created
+    // Semaphores are created only when needed; fences are recreated on every
+    // swapchain recreation because they are destroyed with the old frame state.
     if (m_image_available_semaphores.empty())
     {
         m_image_available_semaphores.resize(m_image_count);
@@ -1172,6 +1179,7 @@ void Vulkan_example_app::init_synchronization_objects()
     }
 
     m_frame_inflight_fences.resize(m_image_count);
+    m_images_inflight_fences.assign(m_image_count, nullptr);
     for (size_t i = 0; i < m_image_count; i++)
     {
         VkFenceCreateInfo fence_create_info = {};
@@ -1200,6 +1208,8 @@ void Vulkan_example_app::recreate_swapchain_or_framebuffer_image()
 
     VK_CHECK(vkDeviceWaitIdle(m_device));
 
+    VkSwapchainKHR old_swapchain = m_config.headless ? nullptr : m_swapchain;
+
     // Cleanup swapchain related resources
     vkDestroyImageView(m_device, m_depth_stencil_image_view, nullptr);
     vkDestroyImage(m_device, m_depth_stencil_image, nullptr);
@@ -1214,8 +1224,6 @@ void Vulkan_example_app::recreate_swapchain_or_framebuffer_image()
         for (VkDeviceMemory device_memory : m_swapchain_device_memories)
             vkFreeMemory(m_device, device_memory, nullptr);
     }
-    else
-        vkDestroySwapchainKHR(m_device, m_swapchain, nullptr);
 
     for (VkFramebuffer framebuffer : m_framebuffers)
         vkDestroyFramebuffer(m_device, framebuffer, nullptr);
@@ -1236,7 +1244,11 @@ void Vulkan_example_app::recreate_swapchain_or_framebuffer_image()
     if (m_config.headless)
         init_swapchain_for_headless();
     else
-        init_swapchain_for_window();
+        init_swapchain_for_window(old_swapchain);
+
+    if (old_swapchain)
+        vkDestroySwapchainKHR(m_device, old_swapchain, nullptr);
+
     init_depth_stencil_buffer();
     init_render_pass();
     init_framebuffers();
@@ -1288,6 +1300,11 @@ void Vulkan_example_app::render_loop_iteration(uint32_t frame_index, uint32_t im
 
     VK_CHECK(vkQueueSubmit(
         m_graphics_queue, 1, &submit_info, m_frame_inflight_fences[frame_index]));
+
+    // Track which frame fence owns the acquired swapchain image. The next
+    // acquire of this image must wait for that fence before reusing it.
+    if (!m_config.headless)
+        m_images_inflight_fences[image_index] = m_frame_inflight_fences[frame_index];
 }
 
 void Vulkan_example_app::internal_key_callback(
@@ -1328,7 +1345,7 @@ void Vulkan_example_app::internal_resize_callback(GLFWwindow* window, int width,
         app->recreate_swapchain_or_framebuffer_image();
 
     app->resized_callback(static_cast<uint32_t>(width), static_cast<uint32_t>(height));
-    app->m_framebuffer_resized = true;
+    app->m_swapchain_recreate_requested = true;
 }
 
 void Vulkan_example_app::glfw_error_callback(int error_code, const char* description)

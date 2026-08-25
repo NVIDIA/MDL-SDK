@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -253,6 +253,10 @@ bool Image_file_reader_impl::setup_image_input( bool from_constructor) const
 
     OIIO::ImageSpec config;
     config["oiio:UnassociatedAlpha"] = 1;
+    
+    // Ignore corrupt metadata. Note that this setting does not help for corrupt IPTC metadata in
+    // JPEGs with OIIO versions [3.1.12.0, 3.1.13.1).
+    config["imageinput:strict"] = 0;
 
     if( from_constructor) {
         // Enable header-only mode for libjpeg. Large speedup for progressive JPEGs.

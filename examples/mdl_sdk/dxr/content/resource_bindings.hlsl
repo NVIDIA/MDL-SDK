@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -42,6 +42,7 @@
 
     // UAVs can be overlapping but we need only one at this point.
     RWTexture2D<float4> Global_UAVs_Texture2D_float4[]                  : register(u0, space100);
+    RWByteAddressBuffer Global_UAVs_ByteAddressBuffer[]                 : register(u0, space100);
 
     // All SRVs are overlapping to handle the different types.
     // In order for this to work, different spaces are used.

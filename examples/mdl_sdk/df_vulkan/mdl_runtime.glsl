@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -33,12 +33,19 @@
 //   MDL_SET_MATERIAL_TEXTURES_3D         : The set index for the array of material 3D textures
 //   MDL_SET_MATERIAL_ARGUMENT_BLOCK      : The set index for the material argument block buffer
 //   MDL_SET_MATERIAL_RO_DATA_SEGMENT     : The set index for the material read-only data segment buffer
+//   MDL_SET_MBSDF_DATA                   : The set index for the measured BSDF resources
 //   MDL_BINDING_MATERIAL_TEXTURES_2D     : The binding index for the array of material 2D textures
 //   MDL_BINDING_MATERIAL_TEXTURES_3D     : The binding index for the array of material 3D textures
 //   MDL_BINDING_MATERIAL_ARGUMENT_BLOCK  : The binding index for the material argument block buffer
 //   MDL_BINDING_MATERIAL_RO_DATA_SEGMENT : The binding index for the material read-only data segment buffer
+//   MDL_BINDING_MBSDF_PART_DATA          : The binding index for the per-(mbsdf,part) metadata SSBO
+//   MDL_BINDING_MBSDF_EVAL_DATA          : The binding index for the array of measured-BSDF 3D eval volumes
+//   MDL_BINDING_MBSDF_SAMPLE_DATA        : The binding index for the array of measured-BSDF CDF SSBOs
+//   MDL_BINDING_MBSDF_ALBEDO_DATA        : The binding index for the array of measured-BSDF albedo SSBOs
 //   NUM_TEX_RESULTS                      : The size of the texture results cache (only defined if size > 0)
 //   USE_RO_DATA_SEGMENT                  : Defined if the read-only data segment is enabled
+//   MDL_NUM_MBSDFS                       : Number of measured-BSDF resources, excluding slot 0 (invalid).
+//                                          Defaults to 0 if not provided by the host.
 
 #ifndef MDL_RUNTIME_GLSL
 #define MDL_RUNTIME_GLSL
@@ -46,6 +53,14 @@
 #extension GL_EXT_nonuniform_qualifier : require
 
 #include "mdl_target_code_types.glsl"
+
+#ifndef MDL_NUM_MBSDFS
+#define MDL_NUM_MBSDFS 0
+#endif
+
+// Mathematical constants used by the runtime helpers below.
+#define MDL_PI          3.14159265358979323846
+#define MDL_ONE_OVER_PI 0.318309886183790671538
 
 // The arrays of material textures used in the texturing functions
 layout(set = MDL_SET_MATERIAL_TEXTURES_2D, binding = MDL_BINDING_MATERIAL_TEXTURES_2D)
@@ -69,6 +84,41 @@ readonly restrict buffer RODataSegmentBuffer
     uint uMaterialRODataSegment[];
 };
 #endif // USE_RO_DATA_SEGMENT
+
+struct MbsdfPartData
+{
+    uvec2 angular_resolution;     // (theta count, phi count); zero if !has_data
+    vec2  inv_angular_resolution; // (1/theta, 1/phi); zero if !has_data
+    uint  num_channels;           // 1 or 3 (0 if !has_data)
+    uint  has_data;               // 0 or 1
+    float max_albedo;
+    float _pad;
+};
+
+// The per-(measured BSDF, part) metadata used to validate resources and resolve resolutions
+layout(std430, set = MDL_SET_MBSDF_DATA, binding = MDL_BINDING_MBSDF_PART_DATA)
+readonly restrict buffer MbsdfPartDataBuffer
+{
+    MbsdfPartData uMbsdfPartData[];
+};
+
+// The measured BSDF evaluation volumes, indexed by the same slot as the metadata buffer
+layout(set = MDL_SET_MBSDF_DATA, binding = MDL_BINDING_MBSDF_EVAL_DATA)
+uniform sampler3D uMbsdfEvalData[];
+
+// The measured BSDF CDF buffers used for importance sampling
+layout(std430, set = MDL_SET_MBSDF_DATA, binding = MDL_BINDING_MBSDF_SAMPLE_DATA)
+readonly restrict buffer MbsdfSampleDataBuffer
+{
+    float data[];
+} uMbsdfSampleData[];
+
+// The measured BSDF directional albedo buffers
+layout(std430, set = MDL_SET_MBSDF_DATA, binding = MDL_BINDING_MBSDF_ALBEDO_DATA)
+readonly restrict buffer MbsdfAlbedoDataBuffer
+{
+    float data[];
+} uMbsdfAlbedoData[];
 
 
 // ------------------------------------------------------------------------------------------------
@@ -515,37 +565,231 @@ float df_light_profile_pdf(int lp_idx, vec2 theta_phi)
 
 
 // ------------------------------------------------------------------------------------------------
-// Measured BSDFs function implementations (not supported by this example)
+// Measured BSDFs function implementations
 // ------------------------------------------------------------------------------------------------
+
+// Compute the slot index for a given measurement / part pair. Slot 0 is the "invalid"
+// measurement (i.e. bm_idx == 0) which is never bound; valid measurements start at bm_idx == 1.
+int mbsdf_part_slot(int bm_idx, int part)
+{
+    return 2 * (bm_idx - 1) + part;
+}
+
+// Compute the 3D lookup coordinate (phi_delta, theta_out, theta_in) in normalized space.
+// Mirrors bsdf_compute_uvw() in texture_support_cuda.h.
+vec3 mbsdf_compute_uvw(vec2 theta_phi_in, vec2 theta_phi_out)
+{
+    // assuming each phi is between -pi and pi
+    float u = theta_phi_out.y - theta_phi_in.y;
+    if (u < 0.0) u += 2.0 * MDL_PI;
+    if (u > MDL_PI) u = 2.0 * MDL_PI - u;
+    u *= MDL_ONE_OVER_PI;
+
+    float v = theta_phi_out.x * (2.0 * MDL_ONE_OVER_PI);
+    float w = theta_phi_in.x  * (2.0 * MDL_ONE_OVER_PI);
+    return vec3(u, v, w);
+}
+
+// Binary search for the smallest index m with cdf[m] >= xi within a buffer slice.
+// Mirrors sample_cdf() in texture_support_cuda.h, but operates on an SSBO slice
+// defined by [base_offset, base_offset + cdf_size).
+uint mbsdf_sample_cdf(int slot, uint base_offset, uint cdf_size, float xi)
+{
+    uint li = 0u;
+    uint ri = cdf_size - 1u;
+    uint m = (li + ri) / 2u;
+    while (ri > li)
+    {
+        if (xi < uMbsdfSampleData[nonuniformEXT(slot)].data[base_offset + m])
+            ri = m;
+        else
+            li = m + 1u;
+        m = (li + ri) / 2u;
+    }
+    return m;
+}
 
 bool df_bsdf_measurement_isvalid(int bm_idx)
 {
-    return false;
+    // assuming that there is no indexing out of bounds of the mbsdf parts array
+    return bm_idx != 0; // 0 is the invalid bsdf measurement
 }
 
 ivec3 df_bsdf_measurement_resolution(int bm_idx, int part)
 {
-    return ivec3(0);
+    if (bm_idx == 0) return ivec3(0); // invalid bsdf measurement
+
+    int slot = mbsdf_part_slot(bm_idx, part);
+    MbsdfPartData pd = uMbsdfPartData[slot];
+    if (pd.has_data == 0u)
+        return ivec3(0);
+
+    return ivec3(pd.angular_resolution.x, pd.angular_resolution.y, pd.num_channels);
 }
 
 vec3 df_bsdf_measurement_evaluate(int bm_idx, vec2 theta_phi_in, vec2 theta_phi_out, int part)
 {
-    return vec3(0.0);
+    if (bm_idx == 0) return vec3(0.0); // invalid bsdf measurement
+
+    int slot = mbsdf_part_slot(bm_idx, part);
+    if (uMbsdfPartData[slot].has_data == 0u)
+        return vec3(0.0);
+
+    vec3 uvw = mbsdf_compute_uvw(theta_phi_in, theta_phi_out);
+    // 1-channel measurements are uploaded with their value replicated into RGBA so the
+    // same sampler is used for both cases (see prepare_mbsdf_part on the host).
+    return texture(uMbsdfEvalData[nonuniformEXT(slot)], uvw).rgb;
 }
 
 vec3 df_bsdf_measurement_sample(int bm_idx, vec2 theta_phi_out, vec3 xi, int part)
 {
-    return vec3(0.0);
+    vec3 result = vec3(
+        -1.0, // negative theta (x value) means absorption
+        -1.0,
+         0.0); 
+    if (bm_idx == 0) return result; // invalid measured bsdf
+
+    int slot = mbsdf_part_slot(bm_idx, part);
+    MbsdfPartData pd = uMbsdfPartData[slot];
+    if (pd.has_data == 0u)
+        return result;
+
+    uvec2 res = pd.angular_resolution;
+    if (res.x < 1u || res.y < 1u)
+        return result;
+
+    uint idx_theta_out = uint(theta_phi_out.x * (2.0 * MDL_ONE_OVER_PI) * float(res.x));
+    idx_theta_out = min(idx_theta_out, res.x - 1u);
+
+    // sample theta_in
+    float xi0 = xi.x;
+    uint cdf_theta_base = idx_theta_out * res.x; // first block holds res.x*res.x values
+    uint idx_theta_in = mbsdf_sample_cdf(slot, cdf_theta_base, res.x, xi0);
+
+    float prob_theta = uMbsdfSampleData[nonuniformEXT(slot)].data[cdf_theta_base + idx_theta_in];
+    if (idx_theta_in > 0u)
+    {
+        float tmp = uMbsdfSampleData[nonuniformEXT(slot)].data[cdf_theta_base + idx_theta_in - 1u];
+        prob_theta -= tmp;
+        xi0 -= tmp;
+    }
+    xi0 /= prob_theta;
+
+    // sample phi
+    float xi1 = xi.y;
+    uint cdf_phi_base = (res.x * res.x) +
+                       (idx_theta_out * res.x + idx_theta_in) * res.y;
+
+    bool flip = (xi1 > 0.5);
+    if (flip)
+        xi1 = 1.0 - xi1;
+    xi1 *= 2.0;
+
+    uint idx_phi = mbsdf_sample_cdf(slot, cdf_phi_base, res.y, xi1);
+    float prob_phi = uMbsdfSampleData[nonuniformEXT(slot)].data[cdf_phi_base + idx_phi];
+    if (idx_phi > 0u)
+    {
+        float tmp = uMbsdfSampleData[nonuniformEXT(slot)].data[cdf_phi_base + idx_phi - 1u];
+        prob_phi -= tmp;
+        xi1 -= tmp;
+    }
+    xi1 /= prob_phi;
+
+    // compute direction
+    vec2 inv_res = pd.inv_angular_resolution;
+    float s_theta = 0.5 * MDL_PI * inv_res.x;
+    float s_phi   = MDL_PI      * inv_res.y;
+
+    float cos_theta_0 = cos(float(idx_theta_in)      * s_theta);
+    float cos_theta_1 = cos(float(idx_theta_in + 1u) * s_theta);
+
+    float cos_theta = cos_theta_0 * (1.0 - xi1) + cos_theta_1 * xi1;
+    result.x = acos(cos_theta);
+    result.y = (float(idx_phi) + xi0) * s_phi;
+
+    if (flip)
+        result.y = 2.0 * MDL_PI - result.y;
+
+    // align phi
+    result.y += (theta_phi_out.y > 0.0) ? theta_phi_out.y : (2.0 * MDL_PI + theta_phi_out.y);
+    if (result.y > 2.0 * MDL_PI) result.y -= 2.0 * MDL_PI;
+    if (result.y > MDL_PI)       result.y = -2.0 * MDL_PI + result.y; // to [-pi, pi]
+
+    result.z = prob_theta * prob_phi * 0.5
+             / (s_phi * (cos_theta_0 - cos_theta_1));
+
+    return result;
 }
 
 float df_bsdf_measurement_pdf(int bm_idx, vec2 theta_phi_in, vec2 theta_phi_out, int part)
 {
-    return 0.0;
+    if (bm_idx == 0) return 0.0; // invalid measured bsdf
+
+    int slot = mbsdf_part_slot(bm_idx, part);
+    MbsdfPartData pd = uMbsdfPartData[slot];
+    if (pd.has_data == 0u)
+        return 0.0;
+
+    uvec2 res = pd.angular_resolution;
+
+    vec3 uvw = mbsdf_compute_uvw(theta_phi_in, theta_phi_out); // phi_delta, theta_out, theta_in
+    uint idx_theta_in  = uint(uvw.z * float(res.x));
+    uint idx_theta_out = uint(uvw.y * float(res.x));
+    uint idx_phi       = uint(uvw.x * float(res.y));
+    idx_theta_in  = min(idx_theta_in,  res.x - 1u);
+    idx_theta_out = min(idx_theta_out, res.x - 1u);
+    idx_phi       = min(idx_phi,       res.y - 1u);
+
+    uint cdf_theta_base = idx_theta_out * res.x;
+    float prob_theta = uMbsdfSampleData[nonuniformEXT(slot)].data[cdf_theta_base + idx_theta_in];
+    if (idx_theta_in > 0u)
+        prob_theta -= uMbsdfSampleData[nonuniformEXT(slot)].data[cdf_theta_base + idx_theta_in - 1u];
+
+    uint cdf_phi_base = (res.x * res.x) +
+                       (idx_theta_out * res.x + idx_theta_in) * res.y;
+    float prob_phi = uMbsdfSampleData[nonuniformEXT(slot)].data[cdf_phi_base + idx_phi];
+    if (idx_phi > 0u)
+        prob_phi -= uMbsdfSampleData[nonuniformEXT(slot)].data[cdf_phi_base + idx_phi - 1u];
+
+    vec2 inv_res = pd.inv_angular_resolution;
+    float s_theta = 0.5 * MDL_PI * inv_res.x;
+    float s_phi   = MDL_PI      * inv_res.y;
+
+    float cos_theta_0 = cos(float(idx_theta_in)      * s_theta);
+    float cos_theta_1 = cos(float(idx_theta_in + 1u) * s_theta);
+
+    return prob_theta * prob_phi * 0.5 / (s_phi * (cos_theta_0 - cos_theta_1));
+}
+
+// Helper for df_bsdf_measurement_albedos(): fills the per-direction and the global max
+// albedo for a single part. Mirrors df_bsdf_measurement_albedo() in texture_support_cuda.h.
+void mbsdf_albedo_for_part(int slot, vec2 theta_phi, out float albedo_dir, out float albedo_max)
+{
+    albedo_dir = 0.0;
+    albedo_max = 0.0;
+
+    MbsdfPartData pd = uMbsdfPartData[slot];
+    if (pd.has_data == 0u)
+        return;
+
+    uvec2 res = pd.angular_resolution;
+    if (res.x < 1u)
+        return;
+
+    uint idx_theta = uint(theta_phi.x * (2.0 * MDL_ONE_OVER_PI) * float(res.x));
+    idx_theta = min(idx_theta, res.x - 1u);
+    albedo_dir = uMbsdfAlbedoData[nonuniformEXT(slot)].data[idx_theta];
+    albedo_max = pd.max_albedo;
 }
 
 vec4 df_bsdf_measurement_albedos(int bm_idx, vec2 theta_phi)
 {
-    return vec4(0.0);
+    if (bm_idx == 0) return vec4(0.0); // invalid measured bsdf
+
+    vec4 result = vec4(0.0);
+    mbsdf_albedo_for_part(mbsdf_part_slot(bm_idx, 0), theta_phi, result.x, result.y);
+    mbsdf_albedo_for_part(mbsdf_part_slot(bm_idx, 1), theta_phi, result.z, result.w);
+    return result;
 }
 
 

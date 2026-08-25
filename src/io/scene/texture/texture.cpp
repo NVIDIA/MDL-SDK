@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -222,11 +222,12 @@ DB::Tag load_mdl_texture(
         }
 
     std::string identifier;
+    bool is_animated_or_uvtile = image_set->is_animated() || image_set->is_uvtile();
     const std::string& resolved_filename = image_set->get_resolved_filename( 0, 0);
     const std::string& mdl_file_path = image_set->get_mdl_file_path();
-    if( !resolved_filename.empty()) {
+    if( !resolved_filename.empty() && !is_animated_or_uvtile) {
         identifier = resolved_filename;
-    } else if( image_set->is_mdl_container()) {
+    } else if( image_set->is_mdl_container() && !is_animated_or_uvtile) {
         identifier = image_set->get_container_filename() + std::string( "_")
             + image_set->get_container_membername( 0, 0);
     } else if( !mdl_file_path.empty()) {

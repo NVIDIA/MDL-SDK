@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -256,8 +256,9 @@ public:
 /// expressions). See #mi::neuraylib::IExpression_call for of comparison of direct and indirect call
 /// expressions.
 ///
-/// Direct call expressions appear in fields and temporaries of compiled materials, in the bodies
-/// of function and material definitions, and in bodies in the module builder.
+/// Direct call expressions appear in the bodies (and temporaries) of compiled materials, in the
+/// bodies (and temporaries) of function and material definitions, and in bodies (and temporaries)
+/// in the module builder.
 class IExpression_direct_call : public
     mi::base::Interface_declare<0x9253c9d6,0xe162,0x4234,0xab,0x91,0x54,0xc1,0xe4,0x87,0x39,0x66,
                                 neuraylib::IExpression>
@@ -314,7 +315,7 @@ public:
 /// i.e., a temporary with index i might contain temporary references for other temporaries with
 /// indices up to i-1.
 ///
-/// Temporary reference expressions appear in fields (and temporaries) of compiled materials, and in
+/// Temporary reference expressions appear in bodies (and temporaries) of compiled materials, and in
 /// the bodies (and temporaries) of function and material definitions,  and in bodies (and
 /// temporaries) in the module builder.
 class IExpression_temporary : public

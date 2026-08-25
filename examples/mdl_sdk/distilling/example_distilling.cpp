@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -894,9 +894,16 @@ void process_target_material(
     const Material& material,
     bool save_baked_textures,
     bool parallel,
-    mi::neuraylib::IMdl_impexp_api* mdl_impexp_api)
+    mi::neuraylib::IMdl_impexp_api* mdl_impexp_api,
+    const std::string& output_dir = ".")
 {
     Timing timing("Saving");
+
+    // Build a slash-terminated prefix so output filenames land in output_dir.
+    std::string dir_prefix = output_dir;
+    if (!dir_prefix.empty() && dir_prefix.back() != '/' && dir_prefix.back() != '\\')
+        dir_prefix += '/';
+
     std::cout << "--------------------------------------------------------------------------------"
         << std::endl;
     std::cout << "Material model: " << target_model << std::endl;
@@ -948,7 +955,7 @@ void process_target_material(
                         // these filenames match the UVTILE0 convention (independent of the convention used for the input)
                         // 0-based uv-tileset, expands to "_u"u"_v"v
                         std::stringstream file_name;
-                        file_name << material_name << "-" << param_name;
+                        file_name << dir_prefix << material_name << "-" << param_name;
                         if(multiple_frames)
                             file_name << "_frame" << frame_number;
                         if (multiple_uvtiles)
@@ -972,7 +979,7 @@ void process_target_material(
             {
                 // write texture to disc
                 std::stringstream file_name;
-                file_name << material_name << "-" << param_name << ".png";
+                file_name << dir_prefix << material_name << "-" << param_name << ".png";
                 canvas_exporter.add_canvas(file_name.str(), param.texture.get());
                 std::cout << file_name.str() << std::endl;
             }
@@ -1033,6 +1040,7 @@ static void usage(const char *name)
         << "--resolution            baking resolution (default: 1024)\n"
         << "--uv_range              baking UV range: min_u max_u min_v max_v (default: 0.0f 1.0f 0.0f 1.0f)\n"
         << "--material_file <file>  file containing fully qualified names of materials to distill\n"
+        << "--output_dir <dir>      directory where baked textures are written (default: .)\n"
         << "--do_not_save_textures  if set, avoid saving baked textures to file\n"
         << "--no_constant_detection if set, do not perform constant detection optimization when baking textures\n"
         << "--module <module_name>  distill all materials from the module, can occur multiple times\n"
@@ -1106,6 +1114,7 @@ int MAIN_UTF8(int argc, char* argv[])
     mi::Float32                     min_v = 0;
     mi::Float32                     max_v = 1;
     bool                            parallel = true;
+    std::string                     output_dir = ".";
     std::vector<std::string>        material_names;
     std::vector<std::string>        module_names;
     std::string material_file;
@@ -1206,6 +1215,12 @@ int MAIN_UTF8(int argc, char* argv[])
             else if (strcmp(opt, "--material_file") == 0) {
                 if (i < argc - 1)
                     material_file = argv[++i];
+                else
+                    usage(argv[0]);
+            }
+            else if (strcmp(opt, "--output_dir") == 0) {
+                if (i < argc - 1)
+                    output_dir = argv[++i];
                 else
                     usage(argv[0]);
             }
@@ -1387,7 +1402,8 @@ int MAIN_UTF8(int argc, char* argv[])
                 out_material,
                 save_baked_textures,
                 parallel,
-                mdl_impexp_api.get());
+                mdl_impexp_api.get(),
+                output_dir);
         }
         transaction->commit();
     }

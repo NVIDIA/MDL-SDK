@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -32,6 +32,7 @@
 #include "example_dxr_gui.h"
 
 #include "mdl_d3d12/mdl_d3d12.h"
+#include "mdl_d3d12/buffer.h"
 #include "mdl_d3d12/camera_controls.h"
 #include "mdl_d3d12/mdl_material_description.h"
 #include "mdl_d3d12/texture.h"
@@ -39,6 +40,10 @@
 
 #include <wrl.h>
 #include <algorithm>
+#include <execution>
+#include <map>
+#include <unordered_map>
+#include <unordered_set>
 #include <imgui.h>
 #include <gui/gui.h>
 #include <gui/gui_api_interface_dx12.h>
@@ -80,7 +85,7 @@ struct Hit_record_root_arguments
     // mesh data
     D3D12_GPU_VIRTUAL_ADDRESS vbv_address;  // vertex buffer
     D3D12_GPU_VIRTUAL_ADDRESS ibv_address;  // index buffer
-    uint32_t geomerty_mesh_resource_heap_index; // vertex and index buffers in the heap
+    uint32_t geometry_mesh_resource_heap_index; // vertex and index buffers in the heap
 
     // instance/object scene data
     // - scene data info
@@ -96,6 +101,35 @@ struct Hit_record_root_arguments
     // material data
     uint32_t target_resource_heap_index;    // first resource view of material target
     uint32_t material_resource_heap_index;  // first resource view of the individual material
+};
+
+struct Displacement_constants
+{
+    uint32_t mesh_resource_heap_index;
+    uint32_t instance_resource_heap_index;
+    uint32_t material_target_heap_index;
+    uint32_t material_instance_heap_index;
+
+    uint32_t vertex_buffer_byte_offset;
+    uint32_t vertex_stride;
+    uint32_t vertex_count;
+    uint32_t scene_data_info_offset;
+
+    DirectX::XMFLOAT4X4 object_to_world;
+    DirectX::XMFLOAT4X4 world_to_object;
+};
+
+struct Normal_generation_constants
+{
+    uint32_t mesh_resource_heap_index;
+    uint32_t vertex_buffer_byte_offset;
+    uint32_t vertex_stride;
+    uint32_t index_offset;
+
+    uint32_t vertex_count;
+    uint32_t index_count;
+    uint32_t normal_adjacency_offset;
+    uint32_t face_normal_buffer_uav_heap_index;
 };
 
 // ------------------------------------------------------------------------------------------------
@@ -146,6 +180,21 @@ Example_dxr::Example_dxr()
     , m_shader_binding_table{ nullptr, nullptr }
     , m_active_pipeline_index(0)
     , m_swap_next_frame(false)
+    , m_displacement_root_signature(nullptr)
+    , m_displacement_pipeline_states()
+    , m_displacement_resource_heap_slot(static_cast<uint32_t>(-1))
+    , m_displacement_scene_constants_slot(static_cast<uint32_t>(-1))
+    , m_displacement_constants_slot(static_cast<uint32_t>(-1))
+    , m_normal_generation_root_signature(nullptr)
+    , m_normal_generation_face_pipeline_state(nullptr)
+    , m_normal_generation_pipeline_state(nullptr)
+    , m_normal_generation_resource_heap_slot(static_cast<uint32_t>(-1))
+    , m_normal_generation_constants_slot(static_cast<uint32_t>(-1))
+    , m_normal_generation_face_normal_buffer(nullptr)
+    , m_normal_generation_face_normal_uav()
+    , m_normal_generation_face_normal_capacity(0)
+    , m_displacement_capable_instances()
+    , m_displacement_geometry_dirty(true)
     , m_scene(nullptr)
     , m_scene_constants(nullptr)
     , m_camera_controls(nullptr)
@@ -477,7 +526,7 @@ bool Example_dxr::load()
     scene_data.uv_scale = options->uv_scale;
     scene_data.uv_offset = options->uv_offset;
     scene_data.uv_repeat = options->uv_repeat;
-    scene_data.uv_saturate = options->uv_saturate;
+    scene_data.uv_clamp = options->uv_clamp;
 
     // apply the dynamic options
     apply_dynamic_options();
@@ -499,7 +548,6 @@ bool Example_dxr::load()
             scene_data.output_gamma_correction = 1.0f / 2.2f;
             break;
     }
-
 
     // load environment
     // ------------------------------------------------------------------------
@@ -538,7 +586,8 @@ bool Example_dxr::load()
 
     // build the ray tracing pipeline
     // ------------------------------------------------------------------------
-    if (!update_rendering_pipeline())
+    if (!update_rendering_pipeline(
+        /*skip_update_scene_data_infos=*/has_displacement_capability()))
     {
         log_error("updating the rendering pipeline failed after reload.", SRC);
         return false;
@@ -593,6 +642,67 @@ bool Example_dxr::load()
 
 // ------------------------------------------------------------------------------------------------
 
+void Example_dxr::mark_active_displacement_dirty()
+{
+    m_displacement_geometry_dirty = true;
+}
+
+bool Example_dxr::has_active_displacement()
+{
+    bool has_displacement = false;
+    if (!m_scene)
+        return false;
+
+    m_scene->visit(Scene_node::Kind::Mesh, [&](Scene_node* node)
+    {
+        Mesh::Instance* instance = node->get_mesh_instance();
+        return instance->get_mesh()->visit_geometries([&](Mesh::Geometry* part)
+        {
+            IMaterial* material_base = instance->get_material(part);
+            Mdl_material* material = dynamic_cast<Mdl_material*>(material_base);
+            Mdl_material_target* target = material ? material->get_target_code() : nullptr;
+            if (target && target->has_displacement() &&
+                material->has_active_displacement())
+            {
+                has_displacement = true;
+                return false;
+            }
+            return true;
+        });
+    });
+
+    return has_displacement;
+}
+
+// ------------------------------------------------------------------------------------------------
+
+bool Example_dxr::has_displacement_capability()
+{
+    bool has_displacement = false;
+    if (!m_scene)
+        return false;
+
+    m_scene->visit(Scene_node::Kind::Mesh, [&](Scene_node* node)
+    {
+        Mesh::Instance* instance = node->get_mesh_instance();
+        return instance->get_mesh()->visit_geometries([&](Mesh::Geometry* part)
+        {
+            Mdl_material* material = dynamic_cast<Mdl_material*>(instance->get_material(part));
+            Mdl_material_target* target = material ? material->get_target_code() : nullptr;
+            if (target && target->has_displacement())
+            {
+                has_displacement = true;
+                return false;
+            }
+            return true;
+        });
+    });
+
+    return has_displacement;
+}
+
+// ------------------------------------------------------------------------------------------------
+
 bool Example_dxr::load_scene(
     const std::string& scene_path,
     bool skip_pipeline_update)
@@ -624,6 +734,7 @@ bool Example_dxr::load_scene(
     IScene_loader::Scene_options scene_options;
     scene_options.handle_z_axis_up = options->handle_z_axis_up;
     scene_options.uv_flip = options->uv_flip;
+    scene_options.displacement_subdivision = options->displacement_subdivision;
 
     if (!loader.load(get_mdl_sdk(), scene_path, scene_options))
     {
@@ -704,6 +815,7 @@ bool Example_dxr::load_scene(
     // replace the current with the new one
     Scene* old_scene = m_scene;
     m_scene = new_scene;
+    m_displacement_capable_instances.clear();
     if (old_scene)
         delete old_scene;
 
@@ -780,10 +892,59 @@ bool Example_dxr::load_scene(
         set_scene_is_updating(false);
         return false;
     }
+    if (!update_displacement_compute_pipelines())
+    {
+        set_scene_is_updating(false);
+        return false;
+    }
+
+    const bool scene_has_active_displacement = has_active_displacement();
+    const bool scene_has_displacement_capability = has_displacement_capability();
+    m_scene->get_acceleration_structure()->set_build_policy(
+        scene_has_displacement_capability
+            ? Raytracing_acceleration_structure::Build_policy::Fast_build_allow_update
+            : Raytracing_acceleration_structure::Build_policy::Fast_trace);
+
+    if (scene_has_displacement_capability)
+    {
+        if (scene_has_active_displacement)
+            log_info("Active displacement detected. Running displacement before initial AS build.");
+        m_displacement_geometry_dirty = true;
+
+        Command_queue* command_queue = get_command_queue(D3D12_COMMAND_LIST_TYPE_DIRECT);
+        D3DCommandList* command_list = command_queue->get_command_list();
+
+        if (!update_scene_data_infos(command_list))
+        {
+            set_scene_is_updating(false);
+            return false;
+        }
+
+        if (!run_displacement_pass(
+            command_list, /*args=*/{}, /*update_acceleration_structures=*/false))
+        {
+            set_scene_is_updating(false);
+            return false;
+        }
+        command_queue->execute_command_list(command_list);
+        command_queue->flush();
+    }
+    else
+    {
+        m_displacement_capable_instances.clear();
+        m_displacement_geometry_dirty = false;
+    }
+
+    if (!m_scene->build_acceleration_structure())
+    {
+        set_scene_is_updating(false);
+        return false;
+    }
 
     // create ray tracing pipeline, shader binding table
     // ----------------------------------------------------------------------------------------
-    if (!skip_pipeline_update && !update_rendering_pipeline())
+    if (!skip_pipeline_update && !update_rendering_pipeline(
+        /*skip_update_scene_data_infos=*/scene_has_displacement_capability))
     {
         set_scene_is_updating(false);
         return false;
@@ -924,6 +1085,7 @@ void Example_dxr::reload_material(
             material->get_name());
 
         // continue updates and rendering in the next frame
+        mark_active_displacement_dirty();
         m_scene_constants->data().restart_progressive_rendering();
         set_scene_is_updating(false);
 
@@ -981,6 +1143,7 @@ void Example_dxr::replace_material(
             material->get_name());
 
         // continue updates and rendering in the next frame
+        mark_active_displacement_dirty();
         m_scene_constants->data().restart_progressive_rendering();
         set_scene_is_updating(false);
 
@@ -1072,6 +1235,7 @@ void Example_dxr::recompile_materials(
                 log_info("Materials have been recompiled successfully.");
 
             // continue updates and rendering in the next frame
+            mark_active_displacement_dirty();
             m_scene_constants->data().restart_progressive_rendering();
             set_scene_is_updating(false);
 
@@ -1080,7 +1244,89 @@ void Example_dxr::recompile_materials(
 
 // ------------------------------------------------------------------------------------------------
 
-bool Example_dxr::update_rendering_pipeline()
+bool Example_dxr::update_scene_data_infos(D3DCommandList* command_list)
+{
+    if (!m_scene)
+        return true;
+
+    // update scene data of the instance along with per vertex data of the geometry
+    // of this instance, it also involves the scene data name that appear in the
+    // material assigned to the geometry, so afterwards, material assignments
+    // are not possible or require another update of the scene data infos.
+    return m_scene->visit(Scene_node::Kind::Mesh, [&](Scene_node* node)
+    {
+        return node->get_mesh_instance()->update_scene_data_infos(command_list);
+    });
+}
+
+// ------------------------------------------------------------------------------------------------
+
+bool Example_dxr::update_displacement_instance_activation()
+{
+    if (!m_scene)
+        return true;
+
+    std::unordered_set<Mesh::Instance*> current_displacement_capable_instances;
+    if (!m_scene->visit(Scene_node::Kind::Mesh, [&](Scene_node* node)
+    {
+        Mesh::Instance* instance = node->get_mesh_instance();
+        Mesh* mesh = instance->get_mesh();
+
+        bool instance_has_displacement_capability = false;
+        mesh->visit_geometries([&](Mesh::Geometry* part)
+        {
+            IMaterial* material_base = instance->get_material(part);
+            Mdl_material* material = dynamic_cast<Mdl_material*>(material_base);
+            if (!material)
+                return true;
+
+            Mdl_material_target* target = material->get_target_code();
+            if (target && target->has_displacement())
+                instance_has_displacement_capability = true;
+
+            return true;
+        });
+
+        if (instance_has_displacement_capability)
+            current_displacement_capable_instances.insert(instance);
+
+        return true;
+    }))
+    {
+        return false;
+    }
+
+    const bool displacement_capability_set_changed =
+        current_displacement_capable_instances != m_displacement_capable_instances;
+
+    for (Mesh::Instance* instance : m_displacement_capable_instances)
+    {
+        if (current_displacement_capable_instances.count(instance) == 0 &&
+            !instance->set_displacement_active(false))
+            return false;
+    }
+
+    for (Mesh::Instance* instance : current_displacement_capable_instances)
+    {
+        if (!instance->set_displacement_active(true))
+            return false;
+    }
+
+    m_scene->get_acceleration_structure()->set_build_policy(
+        current_displacement_capable_instances.empty()
+            ? Raytracing_acceleration_structure::Build_policy::Fast_trace
+            : Raytracing_acceleration_structure::Build_policy::Fast_build_allow_update);
+
+    if (displacement_capability_set_changed)
+        m_displacement_geometry_dirty = true;
+
+    m_displacement_capable_instances = current_displacement_capable_instances;
+    return true;
+}
+
+// ------------------------------------------------------------------------------------------------
+
+bool Example_dxr::update_rendering_pipeline(bool skip_update_scene_data_infos)
 {
     const Example_dxr_options* options = static_cast<const Example_dxr_options*>(get_options());
     Mdl_material_library& mat_library = *get_mdl_sdk().get_library();
@@ -1117,6 +1363,15 @@ bool Example_dxr::update_rendering_pipeline()
     // get command list to upload data to the GPU
     Command_queue* command_queue = get_command_queue(D3D12_COMMAND_LIST_TYPE_DIRECT);
     D3DCommandList* command_list = command_queue->get_command_list();
+
+    if (!update_displacement_compute_pipelines())
+        return after_cleanup();
+
+    if (!skip_update_scene_data_infos && !update_scene_data_infos(command_list))
+        return after_cleanup();
+
+    if (!update_displacement_instance_activation())
+        return after_cleanup();
 
     // Compile and libraries (and lists of symbols) to the pipeline
     // (since this is the only pipeline, ownership is passed too)
@@ -1353,20 +1608,11 @@ bool Example_dxr::update_rendering_pipeline()
             return true; // continue visit
         });
 
-
         // iterate over all scene nodes and create local root parameters
         // for each geometry instance
         if (!m_scene->visit(Scene_node::Kind::Mesh, [&](Scene_node* node)
         {
             Mesh::Instance* instance = node->get_mesh_instance();
-
-            // update scene data of the instance along with per vertex data of the geometry
-            // of this instance, it also involves the scene data name that appear in the
-            // material assigned to the geometry, so afterwards, material assignments
-            // are not possible or require another update of the scene data infos.
-            if (!instance->update_scene_data_infos(command_list))
-                return false;
-
             Mesh* mesh = instance->get_mesh();
 
             // set mesh parameters for all parts
@@ -1374,11 +1620,11 @@ bool Example_dxr::update_rendering_pipeline()
 
             // vertex and index buffer
             local_root_arguments.vbv_address =
-                mesh->get_vertex_buffer()->get_resource()->GetGPUVirtualAddress();
+                instance->get_active_vertex_buffer()->get_resource()->GetGPUVirtualAddress();
             local_root_arguments.ibv_address =
                 mesh->get_index_buffer()->get_resource()->GetGPUVirtualAddress();
-            local_root_arguments.geomerty_mesh_resource_heap_index =
-                mesh->get_resource_heap_index();
+            local_root_arguments.geometry_mesh_resource_heap_index =
+                instance->get_geometry_resource_heap_index();
 
             // geometry and scene data resources
             local_root_arguments.geometry_instance_resource_heap_index =
@@ -1418,7 +1664,7 @@ bool Example_dxr::update_rendering_pipeline()
                     m_scene->get_acceleration_structure()->compute_hit_record_index(
                         static_cast<size_t>(Ray_type::Radiance),
                         instance->get_instance_handle(),
-                        part->get_geometry_handle());
+                        instance->get_geometry_handle(part));
 
                 // set data for this part
                 if (!binding_table->set_shader_record(
@@ -1431,7 +1677,7 @@ bool Example_dxr::update_rendering_pipeline()
                     m_scene->get_acceleration_structure()->compute_hit_record_index(
                         static_cast<size_t>(Ray_type::Shadow),
                         instance->get_instance_handle(),
-                        part->get_geometry_handle());
+                        instance->get_geometry_handle(part));
 
                 if (!binding_table->set_shader_record(
                     hit_record_index, shadow_hit_handles[hash], &local_root_arguments))
@@ -1440,7 +1686,7 @@ bool Example_dxr::update_rendering_pipeline()
                 return true; // continue traversal
             });
 
-        })) return false; // failure in traversal action (returned false)
+        })) return after_cleanup(); // failure in traversal action (returned false)
 
         // complete the table, no more new elements can be added
         // (but existing could be changed though /* not implemented */)
@@ -1477,6 +1723,494 @@ bool Example_dxr::update_rendering_pipeline()
 
 // ------------------------------------------------------------------------------------------------
 
+bool Example_dxr::update_displacement_compute_pipelines()
+{
+    if (!m_scene)
+        return true;
+
+    // gather all material targets that have displacement
+    std::unordered_map<std::string, Mdl_material_target*> targets;
+    m_scene->visit(Scene_node::Kind::Mesh, [&](Scene_node* node)
+    {
+        Mesh::Instance* instance = node->get_mesh_instance();
+        return instance->get_mesh()->visit_geometries([&](Mesh::Geometry* part)
+        {
+            IMaterial* material_base = instance->get_material(part);
+            Mdl_material* material = dynamic_cast<Mdl_material*>(material_base);
+            Mdl_material_target* target = material ? material->get_target_code() : nullptr;
+            if (target && target->has_displacement())
+                targets[target->get_compiled_material_hash()] = target;
+
+            return true;
+        });
+    });
+
+    if (targets.empty())
+        return true;
+
+    // create the normal-generation compute pipeline used after displacement
+    if (!create_normal_generation_pipeline())
+        return false;
+
+    // build displacement root signature
+    if (!m_displacement_root_signature)
+    {
+        m_displacement_root_signature =
+            std::make_unique<Root_signature>(this, "MdlDisplacementSignature");
+
+        if (get_options()->features.HLSL_dynamic_resources)
+        {
+    #ifdef NTDDI_WIN10_FE
+            m_displacement_root_signature->add_flag(
+                D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED);
+    #endif
+        }
+        else
+        {
+            m_displacement_resource_heap_slot =
+                m_displacement_root_signature->register_unbounded_descriptor_ranges();
+        }
+
+        m_displacement_scene_constants_slot =
+            m_displacement_root_signature->register_cbv(1, 0);
+        m_displacement_constants_slot =
+            m_displacement_root_signature->register_constants<Displacement_constants>(10, 0);
+
+        auto mdl_samplers = Mdl_material::get_sampler_descriptions();
+        for (const auto& s : mdl_samplers)
+            m_displacement_root_signature->register_static_sampler(s);
+
+        if (!m_displacement_root_signature->finalize())
+            return false;
+    }
+
+    // create the displacement compute pipeline states for each material target
+    struct Displacement_pipeline_build_entry
+    {
+        std::string target_hash;
+        IDxcBlob* compute_shader;
+        ComPtr<ID3D12PipelineState> pipeline_state;
+        HRESULT result;
+    };
+
+    std::vector<Displacement_pipeline_build_entry> pipeline_build_entries;
+    pipeline_build_entries.reserve(targets.size());
+    for (const auto& target_entry : targets)
+    {
+        if (m_displacement_pipeline_states.find(target_entry.first) !=
+            m_displacement_pipeline_states.end())
+            continue;
+
+        Mdl_material_target* target = target_entry.second;
+        IDxcBlob* compute_shader = target->get_displacement_compute_shader();
+        if (!compute_shader)
+        {
+            log_error("Displacement compute shader missing for target: " +
+                target->get_compiled_material_hash(), SRC);
+            return false;
+        }
+
+        pipeline_build_entries.push_back(
+            {target_entry.first, compute_shader, nullptr, S_OK});
+    }
+
+    if (pipeline_build_entries.empty())
+        return true;
+
+    std::for_each(
+        std::execution::par,
+        pipeline_build_entries.begin(),
+        pipeline_build_entries.end(),
+        [&](Displacement_pipeline_build_entry& entry)
+        {
+            D3D12_COMPUTE_PIPELINE_STATE_DESC desc = {};
+            desc.pRootSignature = m_displacement_root_signature->get_signature();
+            desc.CS.pShaderBytecode = entry.compute_shader->GetBufferPointer();
+            desc.CS.BytecodeLength = entry.compute_shader->GetBufferSize();
+
+            entry.result = get_device()->CreateComputePipelineState(
+                &desc, IID_PPV_ARGS(entry.pipeline_state.GetAddressOf()));
+        });
+
+    for (const auto& entry : pipeline_build_entries)
+    {
+        if (log_on_failure(entry.result,
+            "Failed to create displacement compute pipeline: " + entry.target_hash, SRC))
+            return false;
+
+        m_displacement_pipeline_states[entry.target_hash] = entry.pipeline_state;
+    }
+
+    return true;
+}
+
+// ------------------------------------------------------------------------------------------------
+
+bool Example_dxr::create_normal_generation_pipeline()
+{
+    if (m_normal_generation_pipeline_state && m_normal_generation_face_pipeline_state)
+        return true;
+
+    m_normal_generation_root_signature =
+        std::make_unique<Root_signature>(this, "NormalGenerationSignature");
+
+    if (get_options()->features.HLSL_dynamic_resources)
+    {
+#ifdef NTDDI_WIN10_FE
+        m_normal_generation_root_signature->add_flag(
+            D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED);
+#endif
+    }
+    else
+    {
+        m_normal_generation_resource_heap_slot =
+            m_normal_generation_root_signature->register_unbounded_descriptor_ranges();
+    }
+
+    m_normal_generation_constants_slot =
+        m_normal_generation_root_signature->register_constants<Normal_generation_constants>(10, 0);
+
+    if (!m_normal_generation_root_signature->finalize())
+        return false;
+
+    const std::string shader_source = mi::examples::mdl::read_resource_file(
+        MDL_EXAMPLE_RELATIVE_DIRECTORY, "content/normal_generation_compute.hlsl");
+    if (shader_source.empty())
+    {
+        log_error("Failed to read normal generation compute shader.", SRC);
+        return false;
+    }
+
+    Shader_compiler compiler(this);
+    ComPtr<IDxcBlob> face_normal_shader = compiler.compile_compute_shader_from_string(
+        get_options(),
+        shader_source,
+        "normal_generation_face_compute",
+        nullptr,
+        "ComputeFaceNormals");
+    if (!face_normal_shader)
+        return false;
+
+    ComPtr<IDxcBlob> vertex_normal_shader = compiler.compile_compute_shader_from_string(
+        get_options(),
+        shader_source,
+        "normal_generation_vertex_compute",
+        nullptr,
+        "AccumulateVertexNormals");
+    if (!vertex_normal_shader)
+        return false;
+
+    D3D12_COMPUTE_PIPELINE_STATE_DESC desc = {};
+    desc.pRootSignature = m_normal_generation_root_signature->get_signature();
+    desc.CS.pShaderBytecode = face_normal_shader->GetBufferPointer();
+    desc.CS.BytecodeLength = face_normal_shader->GetBufferSize();
+    if (log_on_failure(get_device()->CreateComputePipelineState(
+        &desc, IID_PPV_ARGS(m_normal_generation_face_pipeline_state.GetAddressOf())),
+        "Failed to create face normal generation compute pipeline.", SRC))
+        return false;
+
+    desc.CS.pShaderBytecode = vertex_normal_shader->GetBufferPointer();
+    desc.CS.BytecodeLength = vertex_normal_shader->GetBufferSize();
+
+    return !log_on_failure(get_device()->CreateComputePipelineState(
+        &desc, IID_PPV_ARGS(m_normal_generation_pipeline_state.GetAddressOf())),
+        "Failed to create vertex normal generation compute pipeline.", SRC);
+}
+
+// ------------------------------------------------------------------------------------------------
+
+bool Example_dxr::ensure_normal_generation_face_normal_buffer(size_t triangle_count)
+{
+    if (triangle_count == 0)
+        return true;
+
+    if (m_normal_generation_face_normal_buffer &&
+        m_normal_generation_face_normal_capacity >= triangle_count)
+        return true;
+
+    if (m_normal_generation_face_normal_buffer)
+    {
+        flush_command_queues();
+        m_normal_generation_face_normal_buffer.reset();
+    }
+
+    m_normal_generation_face_normal_buffer = std::make_unique<Buffer>(
+        this,
+        triangle_count * sizeof(float) * 4,
+        "DisplacementFaceNormals",
+        D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+    m_normal_generation_face_normal_capacity = triangle_count;
+
+    if (!m_normal_generation_face_normal_uav.is_valid())
+    {
+        m_normal_generation_face_normal_uav =
+            get_resource_descriptor_heap()->reserve_views(1);
+        if (!m_normal_generation_face_normal_uav.is_valid())
+            return false;
+    }
+
+    return get_resource_descriptor_heap()->create_unordered_access_view(
+        m_normal_generation_face_normal_buffer.get(),
+        true,
+        m_normal_generation_face_normal_uav);
+}
+
+// ------------------------------------------------------------------------------------------------
+
+// Displacement pass sequence:
+// 1. keep displacement-capable instances bound to stable instance-local geometry,
+// 2. restore those instances from the original mesh vertices,
+// 3. run the MDL displacement compute shader only for currently active materials,
+// 4. regenerate normals only for those active materials, and
+// 5. update acceleration structures when requested.
+//
+// This is intentionally a simple example of vertex displacement, not a production tessellation
+// system. Limitations include:
+// - Topological seams are not welded or stitched. Coincident vertices split at primitive or
+//   material boundaries, hard normals, or UV seams are evaluated independently and can crack.
+// - Displacement is evaluated only at existing vertices or vertices created by the optional
+//   load-time glTF subdivision. Subdivision is not adaptive to the material or camera.
+// - Normals are regenerated from index adjacency, while tangents are only made orthogonal to the
+//   new normal. This does not recover crease intent or the exact displaced UV tangent frame.
+// - Large displacements can create self-intersections, foldovers, or inverted triangles.
+bool Example_dxr::run_displacement_pass(
+    D3DCommandList* command_list,
+    const Render_args& args,
+    bool update_acceleration_structures)
+{
+    const bool animation_enabled =
+        m_scene_constants->data().enable_animiation != 0;
+    const bool needs_run_displacement =
+        m_displacement_geometry_dirty ||
+        (animation_enabled && has_active_displacement());
+
+    // Material target changes refresh the displacement-capable-instance set and mark the
+    // geometry dirty.
+    // A clean static scene therefore does not require displacement discovery every frame.
+    if (!needs_run_displacement)
+        return true;
+
+    struct Work_item
+    {
+        Mesh* mesh;
+        Mesh::Instance* instance;
+        Mesh::Geometry* part;
+        Mdl_material* material;
+        Mdl_material_target* target;
+        DirectX::XMFLOAT4X4 object_to_world;
+        DirectX::XMFLOAT4X4 world_to_object;
+    };
+
+    // Keep resource and SBT bindings stable for every instance whose target can displace.
+    // The per-material activity flag only determines which compute work is dispatched.
+    std::vector<Work_item> work_items;
+    std::unordered_set<Mesh::Instance*> current_displacement_capable_instances;
+    m_scene->visit(Scene_node::Kind::Mesh, [&](Scene_node* node)
+    {
+        Mesh::Instance* instance = node->get_mesh_instance();
+        Mesh* mesh = instance->get_mesh();
+        const DirectX::XMMATRIX object_to_world_matrix = node->get_global_transformation();
+        const DirectX::XMMATRIX world_to_object_matrix =
+            DirectX::XMMatrixInverse(nullptr, object_to_world_matrix);
+
+        DirectX::XMFLOAT4X4 object_to_world;
+        DirectX::XMStoreFloat4x4(
+            &object_to_world,
+            DirectX::XMMatrixTranspose(object_to_world_matrix));
+
+        DirectX::XMFLOAT4X4 world_to_object;
+        DirectX::XMStoreFloat4x4(
+            &world_to_object,
+            DirectX::XMMatrixTranspose(world_to_object_matrix));
+
+        bool instance_has_displacement_capability = false;
+        const bool success = mesh->visit_geometries([&](Mesh::Geometry* part)
+        {
+            IMaterial* material_base = instance->get_material(part);
+            Mdl_material* material = dynamic_cast<Mdl_material*>(material_base);
+            if (!material)
+                return true;
+
+            Mdl_material_target* target = material->get_target_code();
+            if (target && target->has_displacement())
+            {
+                instance_has_displacement_capability = true;
+                if (material->has_active_displacement())
+                {
+                    work_items.push_back({
+                        mesh, instance, part, material, target,
+                        object_to_world, world_to_object });
+                }
+            }
+
+            return true;
+        });
+
+        if (instance_has_displacement_capability)
+            current_displacement_capable_instances.insert(instance);
+        return success;
+    });
+
+    // if we don't have any displacement-capable instances then we don't need the AS to be updateable
+    m_scene->get_acceleration_structure()->set_build_policy(
+        current_displacement_capable_instances.empty()
+            ? Raytracing_acceleration_structure::Build_policy::Fast_trace
+            : Raytracing_acceleration_structure::Build_policy::Fast_build_allow_update);
+
+    for (Mesh::Instance* instance : m_displacement_capable_instances)
+    {
+        if (current_displacement_capable_instances.count(instance) == 0 &&
+            !instance->set_displacement_active(false))
+            return false;
+    }
+
+    for (Mesh::Instance* instance : current_displacement_capable_instances)
+    {
+        if (!instance->set_displacement_active(true))
+            return false;
+    }
+
+    // ensure that the face normal buffer exists and is large enough
+    size_t max_triangle_count = 0;
+    for (const Work_item& item : work_items)
+        max_triangle_count = std::max(max_triangle_count, item.part->get_index_count() / 3);
+
+    if (max_triangle_count > 0 && !ensure_normal_generation_face_normal_buffer(max_triangle_count))
+        return false;
+
+    ID3D12DescriptorHeap* heaps[] = { get_resource_descriptor_heap()->get_heap() };
+    command_list->SetDescriptorHeaps(1, heaps);
+    const D3D12_GPU_DESCRIPTOR_HANDLE heap_start =
+        heaps[0]->GetGPUDescriptorHandleForHeapStart();
+
+    // Restore each displacement-capable instance from the original shared mesh vertices before
+    // displacing again.
+    std::unordered_set<Mesh::Instance*> restored_instances;
+    for (Mesh::Instance* instance : current_displacement_capable_instances)
+    {
+        if (!restored_instances.insert(instance).second)
+            continue;
+
+        Mesh* mesh = instance->get_mesh();
+        Vertex_buffer<uint8_t>* original_vertices = mesh->get_vertex_buffer();
+        Vertex_buffer<uint8_t>* displaced_vertices = instance->get_displaced_vertex_buffer();
+        if (!displaced_vertices)
+            return false;
+
+        original_vertices->transition_to(command_list, D3D12_RESOURCE_STATE_COPY_SOURCE);
+        displaced_vertices->transition_to(command_list, D3D12_RESOURCE_STATE_COPY_DEST);
+        command_list->CopyResource(
+            displaced_vertices->get_resource(),
+            original_vertices->get_resource());
+        original_vertices->transition_to(command_list, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        displaced_vertices->transition_to(command_list, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    }
+
+    if (!work_items.empty())
+    {
+        // run the displacement compute shader for each active displacement work item
+        const D3D12_GPU_VIRTUAL_ADDRESS scene_constants = m_scene_constants->bind(args);
+
+        command_list->SetComputeRootSignature(m_displacement_root_signature->get_signature());
+        if (m_displacement_resource_heap_slot != static_cast<uint32_t>(-1))
+            command_list->SetComputeRootDescriptorTable(
+                m_displacement_resource_heap_slot,
+                heap_start);
+        command_list->SetComputeRootConstantBufferView(
+            m_displacement_scene_constants_slot,
+            scene_constants);
+
+        for (const Work_item& item : work_items)
+        {
+            Displacement_constants constants = {};
+            constants.mesh_resource_heap_index = item.instance->get_geometry_resource_heap_index();
+            constants.instance_resource_heap_index = item.instance->get_resource_heap_index();
+            constants.material_target_heap_index = item.material->get_target_resource_heap_index();
+            constants.material_instance_heap_index = item.material->get_material_resource_heap_index();
+            constants.vertex_buffer_byte_offset =
+                static_cast<uint32_t>(item.part->get_vertex_buffer_byte_offset());
+            constants.vertex_stride = static_cast<uint32_t>(item.part->get_vertex_stride());
+            constants.vertex_count = static_cast<uint32_t>(item.part->get_vertex_count());
+            constants.scene_data_info_offset =
+                static_cast<uint32_t>(item.part->get_scene_data_info_buffer_offset());
+            constants.object_to_world = item.object_to_world;
+            constants.world_to_object = item.world_to_object;
+
+            command_list->SetComputeRoot32BitConstants(
+                m_displacement_constants_slot,
+                sizeof(constants) / sizeof(uint32_t),
+                &constants,
+                0);
+            command_list->SetPipelineState(
+                m_displacement_pipeline_states.at(item.target->get_compiled_material_hash()).Get());
+            command_list->Dispatch((constants.vertex_count + 127) / 128, 1, 1);
+
+            auto barrier = CD3DX12_RESOURCE_BARRIER::UAV(
+                item.instance->get_displaced_vertex_buffer()->get_resource());
+            command_list->ResourceBarrier(1, &barrier);
+        }
+
+        // generate new normals after displacement
+        command_list->SetComputeRootSignature(m_normal_generation_root_signature->get_signature());
+        if (m_normal_generation_resource_heap_slot != static_cast<uint32_t>(-1))
+            command_list->SetComputeRootDescriptorTable(
+                m_normal_generation_resource_heap_slot,
+                heap_start);
+        m_normal_generation_face_normal_buffer->transition_to(
+            command_list, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+        for (const Work_item& item : work_items)
+        {
+            Normal_generation_constants constants = {};
+            constants.mesh_resource_heap_index =
+                item.instance->get_geometry_resource_heap_index();
+            constants.vertex_buffer_byte_offset =
+                static_cast<uint32_t>(item.part->get_vertex_buffer_byte_offset());
+            constants.vertex_stride = static_cast<uint32_t>(item.part->get_vertex_stride());
+            constants.index_offset = static_cast<uint32_t>(item.part->get_index_offset());
+            constants.vertex_count = static_cast<uint32_t>(item.part->get_vertex_count());
+            constants.index_count = static_cast<uint32_t>(item.part->get_index_count());
+            constants.normal_adjacency_offset =
+                static_cast<uint32_t>(item.part->get_normal_adjacency_offset());
+            constants.face_normal_buffer_uav_heap_index =
+                static_cast<uint32_t>(m_normal_generation_face_normal_uav.get_heap_index());
+            
+            command_list->SetComputeRoot32BitConstants(
+                m_normal_generation_constants_slot,
+                sizeof(constants) / sizeof(uint32_t),
+                &constants,
+                0);
+            command_list->SetPipelineState(m_normal_generation_face_pipeline_state.Get());
+            command_list->Dispatch(((constants.index_count / 3) + 127) / 128, 1, 1);
+
+            auto face_normal_barrier = CD3DX12_RESOURCE_BARRIER::UAV(
+                m_normal_generation_face_normal_buffer->get_resource());
+            command_list->ResourceBarrier(1, &face_normal_barrier);
+
+            command_list->SetPipelineState(m_normal_generation_pipeline_state.Get());
+            command_list->Dispatch((constants.vertex_count + 127) / 128, 1, 1);
+
+            auto barrier = CD3DX12_RESOURCE_BARRIER::UAV(
+                item.instance->get_displaced_vertex_buffer()->get_resource());
+            command_list->ResourceBarrier(1, &barrier);
+        }
+    }
+
+    for (Mesh::Instance* instance : restored_instances)
+        instance->get_displaced_vertex_buffer()->transition_to(
+            command_list, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+
+    if (update_acceleration_structures &&
+        !m_scene->get_acceleration_structure()->update_bottom_level_structures(command_list))
+        return false;
+
+    m_displacement_capable_instances = current_displacement_capable_instances;
+    m_displacement_geometry_dirty = false;
+    return true;
+}
+
+// ------------------------------------------------------------------------------------------------
+
 bool Example_dxr::unload()
 {
     m_main_window_performance_overlay.reset();
@@ -1495,6 +2229,12 @@ bool Example_dxr::unload()
     if (m_pipeline[1]) delete m_pipeline[1];
     if (m_shader_binding_table[0]) delete m_shader_binding_table[0];
     if (m_shader_binding_table[1]) delete m_shader_binding_table[1];
+    m_displacement_pipeline_states.clear();
+    m_displacement_root_signature.reset();
+    m_normal_generation_face_normal_buffer.reset();
+    m_normal_generation_face_pipeline_state.Reset();
+    m_normal_generation_pipeline_state.Reset();
+    m_normal_generation_root_signature.reset();
     return true;
 }
 
@@ -1631,6 +2371,10 @@ void Example_dxr::update(const Update_args& args)
                     break;
                 }
 
+                case Example_dxr_gui_event::Invalidate_displacement_geometry:
+                    mark_active_displacement_dirty();
+                    break;
+
                 case Example_dxr_gui_event::Menu_file_open_scene:
                     std::thread([&]()
                     {
@@ -1733,48 +2477,56 @@ void Example_dxr::render(const Render_args& args)
             PIXScopedEvent(command_queue->get_queue(), PIX_COLOR_INDEX(0), "Trace");
         #endif
 
-        // for dynamic resources, the heaps need to be set first
-        ID3D12DescriptorHeap* heaps[] = {get_resource_descriptor_heap()->get_heap()};
-        command_list->SetDescriptorHeaps(1, heaps);
+        if (!run_displacement_pass(
+            command_list, args, /*update_acceleration_structures=*/true))
+        {
+            log_error("Failed to update displaced geometry. Skipping trace for this frame.", SRC);
+        }
+        else
+        {
+            // for dynamic resources, the heaps need to be set first
+            ID3D12DescriptorHeap* heaps[] = {get_resource_descriptor_heap()->get_heap()};
+            command_list->SetDescriptorHeaps(1, heaps);
 
-        // resources references in global root signature
-        command_list->SetComputeRootSignature(
-            m_pipeline[m_active_pipeline_index]->get_global_root_signature()->get_signature());
+            // resources references in global root signature
+            command_list->SetComputeRootSignature(
+                m_pipeline[m_active_pipeline_index]->get_global_root_signature()->get_signature());
 
-        // global root signature
+            // global root signature
 
-        // - the global resource descriptor heap
-        if (m_global_root_signature_resource_heap_slot != -1)
-            command_list->SetComputeRootDescriptorTable(
-                m_global_root_signature_resource_heap_slot,
-                heaps[0]->GetGPUDescriptorHandleForHeapStart());
+            // - the global resource descriptor heap
+            if (m_global_root_signature_resource_heap_slot != -1)
+                command_list->SetComputeRootDescriptorTable(
+                    m_global_root_signature_resource_heap_slot,
+                    heaps[0]->GetGPUDescriptorHandleForHeapStart());
 
-        // - direct entries for camera and scene constants
-        command_list->SetComputeRootConstantBufferView(
-            m_global_root_signature_camera_constants_slot,
-            m_camera_controls->get_target()->get_camera()->get_constants()->bind(args));
-        command_list->SetComputeRootConstantBufferView(
-            m_global_root_signature_scene_constants_slot,
-            m_scene_constants->bind(args));
+            // - direct entries for camera and scene constants
+            command_list->SetComputeRootConstantBufferView(
+                m_global_root_signature_camera_constants_slot,
+                m_camera_controls->get_target()->get_camera()->get_constants()->bind(args));
+            command_list->SetComputeRootConstantBufferView(
+                m_global_root_signature_scene_constants_slot,
+                m_scene_constants->bind(args));
 
-        // - top-level acceleration structure
-        command_list->SetComputeRootShaderResourceView(
-            m_global_root_signature_bvh_slot,
-            m_scene->get_acceleration_structure()->get_resource()->GetGPUVirtualAddress());
+            // - top-level acceleration structure
+            command_list->SetComputeRootShaderResourceView(
+                m_global_root_signature_bvh_slot,
+                m_scene->get_acceleration_structure()->get_resource()->GetGPUVirtualAddress());
 
-        // - environment, heap index of first resource
-        command_list->SetComputeRoot32BitConstant(
-            m_global_root_signature_environment_slot,
-            m_environment->get_resource_heap_index(), 0);
+            // - environment, heap index of first resource
+            command_list->SetComputeRoot32BitConstant(
+                m_global_root_signature_environment_slot,
+                m_environment->get_resource_heap_index(), 0);
 
 
-        // dispatch rays
-        D3D12_DISPATCH_RAYS_DESC desc =
-            m_shader_binding_table[m_active_pipeline_index]->get_dispatch_description();
-        desc.Width = static_cast<UINT>(args.back_buffer->get_width());
-        desc.Height = static_cast<UINT>(args.back_buffer->get_height());
-        command_list->SetPipelineState1(m_pipeline[m_active_pipeline_index]->get_state());
-        command_list->DispatchRays(&desc);
+            // dispatch rays
+            D3D12_DISPATCH_RAYS_DESC desc =
+                m_shader_binding_table[m_active_pipeline_index]->get_dispatch_description();
+            desc.Width = static_cast<UINT>(args.back_buffer->get_width());
+            desc.Height = static_cast<UINT>(args.back_buffer->get_height());
+            command_list->SetPipelineState1(m_pipeline[m_active_pipeline_index]->get_state());
+            command_list->DispatchRays(&desc);
+        }
     }
 
     // copy the ray-tracing buffer to the back buffer

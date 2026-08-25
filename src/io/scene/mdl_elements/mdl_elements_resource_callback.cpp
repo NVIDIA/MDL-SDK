@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -56,6 +56,7 @@
 #include <io/scene/lightprofile/i_lightprofile.h>
 #include <io/scene/mdl_elements/i_mdl_elements_utilities.h>
 #include <io/scene/mdl_elements/i_mdl_elements_module.h>
+#include <io/scene/mdl_elements/mdl_elements_utilities.h>
 #include <io/scene/texture/i_texture.h>
 
 namespace fs = std::filesystem;
@@ -123,40 +124,6 @@ Resource_callback::~Resource_callback()
 {
     m_transaction->unpin();
 }
-
-namespace {
-
-mi::Float32 convert_rtt_kind_to_gamma( mi::mdl::Resource_tag_tuple::Kind kind)
-{
-    switch( kind) {
-        case mi::mdl::Resource_tag_tuple::RK_TEXTURE_GAMMA_DEFAULT: return 0.0f;
-        case mi::mdl::Resource_tag_tuple::RK_TEXTURE_GAMMA_LINEAR:  return 1.0f;
-        case mi::mdl::Resource_tag_tuple::RK_TEXTURE_GAMMA_SRGB:    return 2.2f;
-        case mi::mdl::Resource_tag_tuple::RK_LIGHT_PROFILE:         return 0.0f;
-        case mi::mdl::Resource_tag_tuple::RK_BSDF_MEASUREMENT:      return 0.0f;
-
-        case mi::mdl::Resource_tag_tuple::RK_BAD:
-        case mi::mdl::Resource_tag_tuple::RK_INVALID_REF:
-        case mi::mdl::Resource_tag_tuple::RK_STRING:
-        case mi::mdl::Resource_tag_tuple::RK_SIMPLE_GLOSSY_MULTISCATTER:
-        case mi::mdl::Resource_tag_tuple::RK_BACKSCATTERING_GLOSSY_MULTISCATTER:
-        case mi::mdl::Resource_tag_tuple::RK_BECKMANN_SMITH_MULTISCATTER:
-        case mi::mdl::Resource_tag_tuple::RK_GGX_SMITH_MULTISCATTER:
-        case mi::mdl::Resource_tag_tuple::RK_BECKMANN_VC_MULTISCATTER:
-        case mi::mdl::Resource_tag_tuple::RK_GGX_VC_MULTISCATTER:
-        case mi::mdl::Resource_tag_tuple::RK_WARD_GEISLER_MORODER_MULTISCATTER:
-        case mi::mdl::Resource_tag_tuple::RK_SHEEN_MULTISCATTER:
-        case mi::mdl::Resource_tag_tuple::RK_MICROFLAKE_SHEEN_GENERAL:
-        case mi::mdl::Resource_tag_tuple::RK_MICROFLAKE_SHEEN_MULTISCATTER:
-            ASSERT( M_SCENE, false);
-            return 0.0f;
-    }
-
-    ASSERT( M_SCENE, false);
-    return 0.0f;
-}
-
-} // namespace
 
 const char* Resource_callback::get_resource_name(
     const mi::mdl::IValue_resource* resource,

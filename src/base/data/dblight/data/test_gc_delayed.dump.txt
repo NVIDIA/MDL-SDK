@@ -23,7 +23,7 @@ Index 0: name = (null), pin count = 4, level = 0, parent ID = (null), removed = 
 Count of all transactions: 3
 Index 0: scope ID = 0, pin count = 1, state = COMMITTED, next sequence number = 1, visibility ID = 1
 Index 1: scope ID = 0, pin count = 2, state = OPEN, next sequence number = 0, visibility ID = 4294967295
-Index 2: scope ID = 0, pin count = 2, state = COMMITTED, next sequence number = 1, visibility ID = 3
+Index 2: scope ID = 0, pin count = 1, state = COMMITTED, next sequence number = 1, visibility ID = 3
 
 Count of infos by distinct names: 1
 Index 0: name = "foo", count = 2
@@ -46,9 +46,9 @@ Index 0: name = (null), pin count = 6, level = 0, parent ID = (null), removed = 
 Count of all transactions: 5
 Index 0: scope ID = 0, pin count = 1, state = COMMITTED, next sequence number = 1, visibility ID = 1
 Index 1: scope ID = 0, pin count = 2, state = OPEN, next sequence number = 0, visibility ID = 4294967295
-Index 2: scope ID = 0, pin count = 2, state = COMMITTED, next sequence number = 1, visibility ID = 3
+Index 2: scope ID = 0, pin count = 1, state = COMMITTED, next sequence number = 1, visibility ID = 3
 Index 3: scope ID = 0, pin count = 2, state = OPEN, next sequence number = 0, visibility ID = 4294967295
-Index 4: scope ID = 0, pin count = 2, state = COMMITTED, next sequence number = 1, visibility ID = 5
+Index 4: scope ID = 0, pin count = 1, state = COMMITTED, next sequence number = 1, visibility ID = 5
 
 Count of infos by distinct names: 1
 Index 0: name = "foo", count = 3
@@ -73,9 +73,9 @@ Index 0: name = (null), pin count = 6, level = 0, parent ID = (null), removed = 
 Count of all transactions: 5
 Index 0: scope ID = 0, pin count = 1, state = COMMITTED, next sequence number = 1, visibility ID = 1
 Index 1: scope ID = 0, pin count = 1, state = COMMITTED, next sequence number = 0, visibility ID = 5
-Index 2: scope ID = 0, pin count = 2, state = COMMITTED, next sequence number = 1, visibility ID = 3
+Index 2: scope ID = 0, pin count = 1, state = COMMITTED, next sequence number = 1, visibility ID = 3
 Index 3: scope ID = 0, pin count = 2, state = OPEN, next sequence number = 0, visibility ID = 4294967295
-Index 4: scope ID = 0, pin count = 2, state = COMMITTED, next sequence number = 1, visibility ID = 5
+Index 4: scope ID = 0, pin count = 1, state = COMMITTED, next sequence number = 1, visibility ID = 5
 
 Count of infos by distinct names: 1
 Index 0: name = "foo", count = 2
@@ -98,9 +98,9 @@ Index 0: name = (null), pin count = 6, level = 0, parent ID = (null), removed = 
 Count of all transactions: 5
 Index 0: scope ID = 0, pin count = 1, state = COMMITTED, next sequence number = 1, visibility ID = 1
 Index 1: scope ID = 0, pin count = 1, state = COMMITTED, next sequence number = 0, visibility ID = 5
-Index 2: scope ID = 0, pin count = 2, state = COMMITTED, next sequence number = 1, visibility ID = 3
+Index 2: scope ID = 0, pin count = 1, state = COMMITTED, next sequence number = 1, visibility ID = 3
 Index 3: scope ID = 0, pin count = 1, state = COMMITTED, next sequence number = 0, visibility ID = 5
-Index 4: scope ID = 0, pin count = 2, state = COMMITTED, next sequence number = 1, visibility ID = 5
+Index 4: scope ID = 0, pin count = 1, state = COMMITTED, next sequence number = 1, visibility ID = 5
 
 Count of infos by distinct names: 1
 Index 0: name = "foo", count = 1

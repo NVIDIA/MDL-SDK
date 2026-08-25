@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -573,6 +573,8 @@ rules Elide_tint_for_tpbr topdown {
     //bsdf_tint( c, simple_glossy_bsdf(ru,rv,tint,_,t)) --> simple_glossy_bsdf( ru,rv,c * tint,color(0.0),t) skip_recursion;
     bsdf_tint( c, bsdf_tint(tint,base)) --> bsdf_tint( c * tint, base) repeat_rules;
     bsdf_tint( c, bsdf_tint_ex(tint,tintt,base)) --> bsdf_tint_ex( c * tint, c * tintt, base) repeat_rules;
+    bsdf_tint( c, bsdf_conditional_operator(cond, bsdf1, bsdf2))
+        --> bsdf_conditional_operator(cond, bsdf_tint(c, bsdf1), bsdf_tint(c, bsdf2)) repeat_rules;
     bsdf_tint( c, bsdf_mix_2(w1,df1,w2,df2))
         --> bsdf_mix_2( w1, bsdf_tint( c, df1), w2, bsdf_tint( c, df2));
     bsdf_tint( c, custom_curve_layer(f0,f90,e,w,layer,base,n))

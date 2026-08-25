@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -36,6 +36,7 @@
 #include <string>
 
 #include "example_shared.h"
+#include "example_shared_dump.h"
 
 // Command line options structure.
 struct Options {
@@ -50,58 +51,6 @@ struct Options {
     // Will be set to false if the material name or expression path is changed.
     bool change_arguments = true;
 };
-
-// Utility function to dump the hash, arguments, temporaries, and fields of a compiled material.
-void dump_compiled_material(
-    mi::neuraylib::ITransaction* transaction,
-    mi::neuraylib::IMdl_factory* mdl_factory,
-    const mi::neuraylib::ICompiled_material* cm,
-    std::ostream& s)
-{
-    mi::base::Handle<mi::neuraylib::IValue_factory> value_factory(
-        mdl_factory->create_value_factory( transaction));
-    mi::base::Handle<mi::neuraylib::IExpression_factory> expression_factory(
-        mdl_factory->create_expression_factory( transaction));
-
-    mi::base::Uuid hash = cm->get_hash();
-    char buffer[36];
-    snprintf( buffer, sizeof( buffer),
-        "%08x %08x %08x %08x", hash.m_id1, hash.m_id2, hash.m_id3, hash.m_id4);
-    s << "    hash overall = " << buffer << std::endl;
-
-    for( mi::Uint32 i = mi::neuraylib::SLOT_FIRST; i <= mi::neuraylib::SLOT_LAST; ++i) {
-        hash = cm->get_slot_hash( mi::neuraylib::Material_slot( i));
-        snprintf( buffer, sizeof( buffer),
-            "%08x %08x %08x %08x", hash.m_id1, hash.m_id2, hash.m_id3, hash.m_id4);
-        s << "    hash slot " << std::setw( 2) << i << " = " << buffer << std::endl;
-    }
-
-    mi::Size parameter_count = cm->get_parameter_count();
-    for( mi::Size i = 0; i < parameter_count; ++i) {
-        mi::base::Handle<const mi::neuraylib::IValue> argument( cm->get_argument( i));
-        std::stringstream name;
-        name << i;
-        mi::base::Handle<const mi::IString> result(
-            value_factory->dump( argument.get(), name.str().c_str(), 1));
-        s << "    argument " << result->get_c_str() << std::endl;
-    }
-
-    mi::Size temporary_count = cm->get_temporary_count();
-    for( mi::Size i = 0; i < temporary_count; ++i) {
-        mi::base::Handle<const mi::neuraylib::IExpression> temporary( cm->get_temporary( i));
-        std::stringstream name;
-        name << i;
-        mi::base::Handle<const mi::IString> result(
-            expression_factory->dump( temporary.get(), name.str().c_str(), 1));
-        s << "    temporary " << result->get_c_str() << std::endl;
-    }
-
-    mi::base::Handle<const mi::neuraylib::IExpression> body( cm->get_body());
-    mi::base::Handle<const mi::IString> result( expression_factory->dump( body.get(), 0, 1));
-    s << "    body " << result->get_c_str() << std::endl;
-
-    s << std::endl;
-}
 
 // Creates an instance of the given material definition and stores it in the DB.
 void create_material_instance(
@@ -184,7 +133,8 @@ void compile_material_instance(
 
     std::cout << "Dumping compiled material (" << ( class_compilation ? "class" : "instance")
               << " compilation) for \"" << instance_name << "\":" << std::endl << std::endl;
-    dump_compiled_material( transaction, mdl_factory, compiled_material.get(), std::cout);
+    mi::examples::mdl::dump_compiled_material(
+        transaction, mdl_factory, compiled_material.get(), std::cout);
     std::cout << std::endl;
     transaction->store( compiled_material.get(), compiled_material_name);
 }
@@ -226,6 +176,14 @@ void generate_llvm_ir(
         transaction->access<mi::neuraylib::ICompiled_material>( compiled_material_name));
     check_success(compiled_material.is_valid_interface());
 
+    mi::base::Handle<const mi::neuraylib::IExpression> expr(
+        compiled_material->lookup_sub_expression(path));
+    if (!expr) {
+        std::cout << "Skipping generation of LLVM IR code for non-existing \"" << path
+                  << "\" of \"" << compiled_material_name << "\"." << std::endl << std::endl;
+        return;
+    }
+
     mi::base::Handle<mi::neuraylib::IMdl_backend> be_llvm_ir(
         mdl_backend_api->get_backend(mi::neuraylib::IMdl_backend_api::MB_LLVM_IR));
     check_success(be_llvm_ir.is_valid_interface());
@@ -256,6 +214,14 @@ void generate_cuda_ptx(
     mi::base::Handle<const mi::neuraylib::ICompiled_material> compiled_material(
         transaction->access<mi::neuraylib::ICompiled_material>( compiled_material_name));
     check_success(compiled_material.is_valid_interface());
+
+    mi::base::Handle<const mi::neuraylib::IExpression> expr(
+        compiled_material->lookup_sub_expression(path));
+    if (!expr) {
+        std::cout << "Skipping generation of CUDA PTX code for non-existing \"" << path
+                  << "\" of \"" << compiled_material_name << "\"." << std::endl << std::endl;
+        return;
+    }
 
     mi::base::Handle<mi::neuraylib::IMdl_backend> be_cuda_ptx(
         mdl_backend_api->get_backend(mi::neuraylib::IMdl_backend_api::MB_CUDA_PTX));
@@ -288,6 +254,14 @@ void generate_hlsl(
         transaction->access<mi::neuraylib::ICompiled_material>( compiled_material_name));
     check_success(compiled_material.is_valid_interface());
 
+    mi::base::Handle<const mi::neuraylib::IExpression> expr(
+        compiled_material->lookup_sub_expression(path));
+    if (!expr) {
+        std::cout << "Skipping generation of HLSL code for non-existing \"" << path
+                  << "\" of \"" << compiled_material_name << "\"." << std::endl << std::endl;
+        return;
+    }
+
     mi::base::Handle<mi::neuraylib::IMdl_backend> be_hlsl(
         mdl_backend_api->get_backend(mi::neuraylib::IMdl_backend_api::MB_HLSL));
     check_success(be_hlsl.is_valid_interface());
@@ -317,6 +291,14 @@ void generate_glsl(
     mi::base::Handle<const mi::neuraylib::ICompiled_material> compiled_material(
         transaction->access<mi::neuraylib::ICompiled_material>( compiled_material_name));
     check_success(compiled_material.is_valid_interface());
+
+    mi::base::Handle<const mi::neuraylib::IExpression> expr(
+        compiled_material->lookup_sub_expression(path));
+    if (!expr) {
+        std::cout << "Skipping generation of GLSL code for non-existing \"" << path
+                  << "\" of \"" << compiled_material_name << "\"." << std::endl << std::endl;
+        return;
+    }
 
     mi::base::Handle<mi::neuraylib::IMdl_backend> be_glsl(
         mdl_backend_api->get_backend( mi::neuraylib::IMdl_backend_api::MB_GLSL));

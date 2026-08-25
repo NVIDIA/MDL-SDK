@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -42,7 +42,43 @@
 namespace mi { namespace examples { namespace mdl_d3d12
 {
 
-std::string compute_shader_cache_filename(
+bool compiled_material_contains_displacement(
+    mi::neuraylib::ITransaction*,
+    const mi::neuraylib::ICompiled_material* compiled_material)
+{
+    mi::base::Handle<const mi::neuraylib::IExpression> displacement_expr(
+        compiled_material->lookup_sub_expression("geometry.displacement"));
+    if (!displacement_expr)
+        return true;
+
+    // Only an exact, well-formed constant float3(0) proves that displacement is inactive.
+    // Calls, parameters, temporaries and malformed/unexpected values fail open so that a real
+    // displacement can never be hidden by this optimization.
+    if (displacement_expr->get_kind() != mi::neuraylib::IExpression::EK_CONSTANT)
+        return true;
+
+    mi::base::Handle<const mi::neuraylib::IExpression_constant> displacement_constant(
+        displacement_expr->get_interface<mi::neuraylib::IExpression_constant>());
+    if (!displacement_constant)
+        return true;
+
+    mi::base::Handle<const mi::neuraylib::IValue_vector> displacement_vector(
+        displacement_constant->get_value<mi::neuraylib::IValue_vector>());
+    if (!displacement_vector || displacement_vector->get_size() != 3)
+        return true;
+
+    for (mi::Size i = 0; i < 3; ++i)
+    {
+        mi::base::Handle<const mi::neuraylib::IValue_float> element(
+            displacement_vector->get_value<mi::neuraylib::IValue_float>(i));
+        if (!element || element->get_value() != 0.0f)
+            return true;
+    }
+
+    return false;
+}
+
+static std::string compute_shader_cache_filename(
     const Base_options& options,
     const std::string& material_hash,
     bool create_parent_folders = false)
@@ -224,6 +260,8 @@ Mdl_material_target::Mdl_material_target(
     , m_hlsl_source_code("")
     , m_compilation_required(true)
     , m_dxil_compiled_libraries()
+    , m_has_displacement(false)
+    , m_displacement_compute_shader(nullptr)
     , m_read_only_data_segment(nullptr)
     , m_target_resources()
     , m_target_string_constants()
@@ -353,24 +391,24 @@ bool Mdl_material_target::add_material_to_link_unit(
     // helper function to check if a float function needs to be evaluated
     // returns true if the expression value is constant 0.0f, otherwise false
     auto is_constant_0f = [&compiled_material](const char* expression_path)
-        {
-            // fetch the constant expression
-            mi::base::Handle<const mi::neuraylib::IExpression> expr(
-                compiled_material->lookup_sub_expression(expression_path));
-            if (expr->get_kind() != mi::neuraylib::IExpression::EK_CONSTANT)
-                return false;
+    {
+        // fetch the constant expression
+        mi::base::Handle<const mi::neuraylib::IExpression> expr(
+            compiled_material->lookup_sub_expression(expression_path));
+        if (expr->get_kind() != mi::neuraylib::IExpression::EK_CONSTANT)
+            return false;
 
-            // get the constant value
-            mi::base::Handle<const mi::neuraylib::IExpression_constant> expr_constant(
-                expr->get_interface<mi::neuraylib::IExpression_constant>());
-            mi::base::Handle<const mi::neuraylib::IValue_float> value(
-                expr_constant->get_value<mi::neuraylib::IValue_float>());
-            if (!value)
-                return false;
+        // get the constant value
+        mi::base::Handle<const mi::neuraylib::IExpression_constant> expr_constant(
+            expr->get_interface<mi::neuraylib::IExpression_constant>());
+        mi::base::Handle<const mi::neuraylib::IValue_float> value(
+            expr_constant->get_value<mi::neuraylib::IValue_float>());
+        if (!value)
+            return false;
 
-            // check for "false"
-            return value->get_value() == 0.0f;
-        };
+        // check for "false"
+        return value->get_value() == 0.0f;
+    };
 
     // helper function to check if a bool function needs to be evaluated
     // returns true if the expression value is constant false, otherwise false
@@ -606,6 +644,29 @@ bool Mdl_material_target::add_material_to_link_unit(
             return false;
     }
 
+    if (exists("geometry.displacement") &&
+        m_sdk->get_transaction().execute<bool>([&](mi::neuraylib::ITransaction* transaction)
+        {
+            return compiled_material_contains_displacement(
+                transaction, compiled_material.get());
+        }))
+    {
+        interface_data.add_code_feature(Material_code_feature::DISPLACEMENT);
+
+        // Request geometry.displacement as a standalone MDL function. The DXR sample
+        // evaluates it from a compute shader before ray tracing builds/updates AS data.
+        mi::neuraylib::Target_function_description standalone_displacement(
+            "geometry.displacement", "mdl_standalone_geometry_displacement");
+
+        link_unit->add_material(
+            compiled_material.get(),
+            &standalone_displacement, 1,
+            context);
+
+        if (!m_sdk->log_messages("Failed to add displacement for code generation.", context, SRC))
+            return false;
+    }
+
     // get the resulting target code information
     // constant for the entire material, for one material per link unit 0
     interface_data.argument_layout_index = selected_functions[0].argument_block_index;
@@ -705,6 +766,8 @@ bool Mdl_material_target::generate()
         return true;
     }
 
+    m_displacement_compute_shader.Reset();
+
     // since this method can be called from multiple threads simultaneously
     // a new context for is created
     mi::base::Handle<mi::neuraylib::IMdl_execution_context> context(m_sdk->create_context());
@@ -712,6 +775,7 @@ bool Mdl_material_target::generate()
     // use shader caching if enabled
     bool loaded_from_shader_cache = false;
     Mdl_material_target_interface interface_data;
+    m_has_displacement = false;
     if (m_sdk->get_options().enable_shader_cache)
     {
         auto p = m_app->get_profiling().measure("loading from shader cache");
@@ -798,6 +862,29 @@ bool Mdl_material_target::generate()
                     offset += dxil_blob_size;
                 }
 
+                m_has_displacement =
+                    interface_data.has_code_feature(Material_code_feature::DISPLACEMENT);
+                if (m_has_displacement)
+                {
+                    if (cache_buffer_size < (offset + sizeof(size_t)))
+                        break;
+
+                    size_t displacement_compute_blob_size =
+                        *(reinterpret_cast<size_t*>(cache_buffer + offset));
+                    offset += sizeof(size_t);
+
+                    if (displacement_compute_blob_size == 0 ||
+                        cache_buffer_size < (offset + displacement_compute_blob_size))
+                        break;
+
+                    ComPtr<IDxcBlob> displacement_compute_shader = new DxcBlobFromMemory(
+                        cache_buffer + offset, displacement_compute_blob_size);
+                    if (!compile_displacement_compute_shader(displacement_compute_shader.Get()))
+                        break;
+
+                    offset += displacement_compute_blob_size;
+                }
+
                 loaded_from_shader_cache = true;
                 break;
             }
@@ -857,6 +944,7 @@ bool Mdl_material_target::generate()
         // pass target information to the material
         pair.second->set_target_interface(this, interface_data);
     }
+    m_has_displacement = interface_data.has_code_feature(Material_code_feature::DISPLACEMENT);
 
     // generate HLSL code
     if (!loaded_from_shader_cache && interface_data.material_code_paths != 0)
@@ -1143,6 +1231,10 @@ bool Mdl_material_target::generate()
             interface_data.has_code_feature(Material_code_feature::HAS_AOVS)
             ? "#define MDL_HAS_AOVS 1\n"
             : "#define MDL_HAS_AOVS 0\n";
+        m_hlsl_source_code +=
+            interface_data.has_code_feature(Material_code_feature::DISPLACEMENT)
+            ? "#define MDL_HAS_DISPLACEMENT 1\n"
+            : "#define MDL_HAS_DISPLACEMENT 0\n";
     }
 
     m_hlsl_source_code += "\n";
@@ -1264,6 +1356,9 @@ bool Mdl_material_target::generate()
     if (!interface_data.has_code_feature(Material_code_feature::CUTOUT_OPACITY))
         m_hlsl_source_code +=
         "float mdl_standalone_geometry_cutout_opacity(const Shading_state_material) { return 1.0; }\n";
+    if (!interface_data.has_code_feature(Material_code_feature::DISPLACEMENT))
+        m_hlsl_source_code +=
+        "float3 mdl_standalone_geometry_displacement(const Shading_state_material) { return float3(0.0f, 0.0f, 0.0f); }\n";
     if (!interface_data.has_code_feature(Material_code_feature::CAN_BE_THIN_WALLED))
         m_hlsl_source_code += "bool mdl_thin_walled(const Shading_state_material) { return false; }\n";
 
@@ -1382,6 +1477,9 @@ bool Mdl_material_target::compile()
     }
 
     bool success = !m_dxil_compiled_libraries.empty();
+    if (success && m_has_displacement)
+        success = compile_displacement_compute_shader();
+
     m_compilation_required = !success;
 
     // write the shader cache if enabled
@@ -1462,11 +1560,77 @@ bool Mdl_material_target::compile()
             file.write(reinterpret_cast<const char*>(dxil_blob_buffer), dxil_blob_buffer_size);
         }
 
+        size_t displacement_compute_blob_size =
+            (m_has_displacement && m_displacement_compute_shader)
+            ? m_displacement_compute_shader->GetBufferSize()
+            : 0;
+        file.write(reinterpret_cast<const char*>(
+            &displacement_compute_blob_size), sizeof(size_t));
+        if (displacement_compute_blob_size > 0)
+        {
+            file.write(reinterpret_cast<const char*>(
+                m_displacement_compute_shader->GetBufferPointer()),
+                displacement_compute_blob_size);
+        }
+
         file.close();
         break;
     }
 
     return success;
+}
+
+// ------------------------------------------------------------------------------------------------
+
+bool Mdl_material_target::compile_displacement_compute_shader(IDxcBlob* cached_compute_shader)
+{
+    if (!m_has_displacement)
+        return true;
+
+    if (m_displacement_compute_shader)
+        return true;
+
+    if (!cached_compute_shader && m_hlsl_source_code.empty())
+    {
+        log_error("Displacement compute shader requested before target HLSL was generated: " +
+            m_compiled_material_hash, SRC);
+        return false;
+    }
+
+    ComPtr<IDxcBlob> compute_shader = cached_compute_shader;
+    if (!compute_shader)
+    {
+        // Reuse the generated MDL target HLSL so displacement uses the same resource
+        // access, argument blocks, texture handlers, and scene-data lookup as the hit
+        // shaders, but with a compute entry point that writes displaced vertices.
+        std::string displacement_source = m_hlsl_source_code;
+        const std::string hit_shader_include = "#include \"content/mdl_hit_programs.hlsl\"";
+        const size_t hit_shader_include_pos = displacement_source.find(hit_shader_include);
+        if (hit_shader_include_pos == std::string::npos)
+        {
+            log_error("Failed to find hit shader include while creating displacement shader: " +
+                m_compiled_material_hash, SRC);
+            return false;
+        }
+
+        displacement_source.replace(
+            hit_shader_include_pos,
+            hit_shader_include.size(),
+            "#include \"content/mdl_displacement_compute.hlsl\"");
+
+        Shader_compiler compiler(m_app);
+        compute_shader = compiler.compile_compute_shader_from_string(
+            m_app->get_options(),
+            displacement_source,
+            "mdl_displacement_" + get_shader_name_suffix(),
+            &m_hlsl_compilation_defines,
+            "MdlDisplaceVertices");
+    }
+    if (!compute_shader)
+        return false;
+
+    m_displacement_compute_shader = compute_shader;
+    return true;
 }
 
 }}} // mi::examples::mdl_d3d12

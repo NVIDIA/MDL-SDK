@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -546,6 +546,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
 
             bool handle_z_axis_up = false;
             bool uv_flip = false;
+            uint32_t displacement_subdivision = 0;
         };
 
         // --------------------------------------------------------------------
@@ -593,6 +594,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
             size_t get_vertex_count() const { return m_vertex_count; }
             size_t get_index_offset() const { return m_index_offset; }
             size_t get_index_count() const { return m_index_count; }
+            size_t get_normal_adjacency_offset() const { return m_normal_adjacency_offset; }
 
             /// index of the first info in the scene data info buffer
             size_t get_scene_data_info_buffer_offset() const { return m_scene_data_info_offset; }
@@ -618,6 +620,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
             size_t m_vertex_count;
             size_t m_index_offset;
             size_t m_index_count;
+            size_t m_normal_adjacency_offset;
             size_t m_scene_data_info_offset;
 
             std::vector<IScene_loader::Vertex_element> m_vertex_layout;
@@ -654,6 +657,24 @@ namespace mi { namespace examples { namespace mdl_d3d12
                 return m_instance_handle;
             }
 
+            const Raytracing_acceleration_structure::Geometry_handle& get_geometry_handle(
+                const Mesh::Geometry* geometry) const;
+
+            // Returns the vertex buffer currently used to render this instance.
+            const Vertex_buffer<uint8_t>* get_active_vertex_buffer() const;
+
+            const Vertex_buffer<uint8_t>* get_displaced_vertex_buffer() const {
+                return m_displaced_vertex_buffer;
+            }
+
+            Vertex_buffer<uint8_t>* get_displaced_vertex_buffer() {
+                return m_displaced_vertex_buffer;
+            }
+
+            uint32_t get_geometry_resource_heap_index() const;
+            bool set_displacement_active(bool active);
+            bool is_displacement_active() const { return m_displacement_active; }
+
             /// Get the start index of the resources belonging to this instance.
             /// The index can be used directly in the shader code.
             /// The returned index corresponds to the scene data buffer.
@@ -675,10 +696,23 @@ namespace mi { namespace examples { namespace mdl_d3d12
             //}
 
         private:
+            bool ensure_displaced_geometry_resources();
+
             Base_application* m_app;
             Mesh* m_mesh;
             Raytracing_acceleration_structure::Instance_handle m_instance_handle;
             std::vector<IMaterial*> m_materials; // materials for each geometry
+
+            // Displacement output is instance-local; shared mesh vertices remain unchanged.
+            // Different instances of the same mesh can evaluate different displacement, so
+            // each displaced instance uses its own vertex buffer and BLAS.
+            // These resources are created lazily only when displacement is active.
+            bool m_displacement_active;
+            Vertex_buffer<uint8_t>* m_displaced_vertex_buffer;
+            Descriptor_heap_handle m_displaced_resource_heap_handle;
+            Raytracing_acceleration_structure::BLAS_handle m_displaced_blas;
+            std::vector<Raytracing_acceleration_structure::Geometry_handle>
+                m_displaced_geometry_handles;
 
             // contains scene data infos on a per object base and vertex (of the meshes geometry)
             Structured_buffer<Scene_data::Info>* m_scene_data_infos;
@@ -714,6 +748,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
         bool visit_geometries(std::function<bool(Geometry*)> action);
 
         const Vertex_buffer<uint8_t>* get_vertex_buffer() const { return m_vertex_buffer; }
+        Vertex_buffer<uint8_t>* get_vertex_buffer() { return m_vertex_buffer; }
 
         /// Get the start index of the resources belonging to material mesh.
         /// The index can be used directly in the shader code.
@@ -722,6 +757,24 @@ namespace mi { namespace examples { namespace mdl_d3d12
         uint32_t get_resource_heap_index() const
         {
             return static_cast<uint32_t>(m_first_resource_heap_handle.get_heap_index());
+        }
+
+        uint32_t get_vertex_buffer_uav_heap_index() const
+        {
+            return static_cast<uint32_t>(
+                m_first_resource_heap_handle.create_offset(3).get_heap_index());
+        }
+
+        uint32_t get_normal_adjacency_offsets_heap_index() const
+        {
+            return static_cast<uint32_t>(
+                m_first_resource_heap_handle.create_offset(4).get_heap_index());
+        }
+
+        uint32_t get_normal_adjacency_triangles_heap_index() const
+        {
+            return static_cast<uint32_t>(
+                m_first_resource_heap_handle.create_offset(5).get_heap_index());
         }
 
         const Index_buffer* get_index_buffer() const { return m_index_buffer; }
@@ -734,6 +787,8 @@ namespace mi { namespace examples { namespace mdl_d3d12
         std::string m_name;
         Vertex_buffer<uint8_t>* m_vertex_buffer;
         Index_buffer* m_index_buffer;
+        Structured_buffer<uint32_t>* m_normal_adjacency_offsets_buffer;
+        Structured_buffer<uint32_t>* m_normal_adjacency_triangles_buffer;
         Descriptor_heap_handle m_first_resource_heap_handle;
 
         Raytracing_acceleration_structure* m_acceleration_structur;
@@ -960,6 +1015,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
         virtual ~Scene();
 
         bool build_scene(std::unique_ptr<const IScene_loader::Scene> scene);
+        bool build_acceleration_structure();
 
         Raytracing_acceleration_structure* get_acceleration_structure() const {
             return m_acceleration_structure;

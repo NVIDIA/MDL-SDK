@@ -13,7 +13,7 @@
 #    contributors may be used to endorse or promote products derived
 #    from this software without specific prior written permission.
 #
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
 # EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 # IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
 # PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -133,10 +133,13 @@ target_add_content(TARGET ${PROJECT_NAME}
     FILES
         "content/common.hlsl"
         "content/environment.hlsl"
+        "content/displacement_common.hlsl"
         "content/mdl_renderer_runtime.hlsl"
         "content/mdl_target_code_types.hlsl"
         "content/mdl_hit_programs.hlsl"
+        "content/mdl_displacement_compute.hlsl"
         "content/miss_programs.hlsl"
+        "content/normal_generation_compute.hlsl"
         "content/ray_gen_program.hlsl"
         "content/resource_bindings.hlsl"
         "content/gltf/sphere/sphere.bin"
@@ -192,7 +195,6 @@ if(AGILITY_SDK_ENABLED)
             "AGILITY_SDK_ENABLED"
         )
 endif()
-
 
 # creates a user settings file to setup the debugger (visual studio only, otherwise this is a no-op)
 target_create_vs_user_settings(TARGET ${PROJECT_NAME})

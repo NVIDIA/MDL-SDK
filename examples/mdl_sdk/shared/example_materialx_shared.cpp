@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -333,6 +333,7 @@ bool Mdl_generator::generate(
     generator_context.getOptions().targetColorSpaceOverride = "lin_rec709";
 
 
+#if MATERIALX_VERSION_INDEX <= MATERIALX_GENERATE_INDEX(1, 39, 5)
     // Flipping the texture lookups for the test renderer only.
     // This is because OSL testrender does not allow to change the UV layout of their sphere (yet)
     // and the MaterialX test suite adopts the OSL behavior in order to produce comparable results.
@@ -345,6 +346,7 @@ bool Mdl_generator::generate(
     // apply `fileTextureVerticalFlip`. In regular MDL integrations this is not needed because MDL
     // and MaterialX define the texture space equally with the origin at the bottom left.
     generator_context.getOptions().fileTextureVerticalFlip = m_materialxtest_mode;
+#endif // MATERIALX_VERSION_INDEX <= MATERIALX_GENERATE_INDEX(1, 39, 5)
 
     // Initialize unit management.
     mx::UnitSystemPtr unit_system = mx::UnitSystem::create(
@@ -382,10 +384,8 @@ bool Mdl_generator::generate(
     // Clear user data on the generator.
     generator_context.clearUserData();
 
-#define MATERIALX_VERSION (10000*MATERIALX_MAJOR_VERSION + 100*MATERIALX_MINOR_VERSION + MATERIALX_BUILD_VERSION)
-
     // Specify the MDL target version, for MaterialX 1.38.9 and later.
-#if MATERIALX_VERSION >= 13809
+#if MATERIALX_VERSION_INDEX >= MATERIALX_GENERATE_INDEX(1, 38, 9)
     mx::GenMdlOptionsPtr gen_mdl_options = std::make_shared<mx::GenMdlOptions>();
 
     if (m_mdl_version == mi::neuraylib::MDL_VERSION_1_6)
@@ -394,14 +394,14 @@ bool Mdl_generator::generate(
         gen_mdl_options->targetVersion = mx::GenMdlOptions::MdlVersion::MDL_1_7;
     else if (m_mdl_version == mi::neuraylib::MDL_VERSION_1_8)
         gen_mdl_options->targetVersion = mx::GenMdlOptions::MdlVersion::MDL_1_8;
-#if MATERIALX_VERSION >= 13902
+#if MATERIALX_VERSION_INDEX >= MATERIALX_GENERATE_INDEX(1, 39, 2)
     else if (m_mdl_version == mi::neuraylib::MDL_VERSION_1_9)
         gen_mdl_options->targetVersion = mx::GenMdlOptions::MdlVersion::MDL_1_9;
-#if MATERIALX_VERSION >= 13903
+#if MATERIALX_VERSION_INDEX >= MATERIALX_GENERATE_INDEX(1, 39, 3)
     else if (m_mdl_version == mi::neuraylib::MDL_VERSION_1_10)
         gen_mdl_options->targetVersion = mx::GenMdlOptions::MdlVersion::MDL_1_10;
-#endif // 13903
-#endif // 13902
+#endif // MATERIALX_VERSION_INDEX >= MATERIALX_GENERATE_INDEX(1, 39, 3)
+#endif // MATERIALX_VERSION_INDEX >= MATERIALX_GENERATE_INDEX(1, 39, 2)
     else if (m_mdl_version == mi::neuraylib::MDL_VERSION_LATEST)
         gen_mdl_options->targetVersion = mx::GenMdlOptions::MdlVersion::MDL_LATEST;
     else
@@ -409,7 +409,7 @@ bool Mdl_generator::generate(
             "Ignoring unexpected MDL version.", __FILE__, __LINE__);
 
     generator_context.pushUserData(mx::GenMdlOptions::GEN_CONTEXT_USER_DATA_KEY, gen_mdl_options);
-#endif // 13809
+#endif // MATERIALX_VERSION_INDEX >= MATERIALX_GENERATE_INDEX(1, 38, 9)
 
     // Load source document.
     mx::DocumentPtr material_document = mx::createDocument();
@@ -504,9 +504,9 @@ bool Mdl_generator::generate(
     mx::ShaderPtr shader = nullptr;
     try
     {
-#if MATERIALX_VERSION >= 13903
+#if MATERIALX_VERSION_INDEX >= MATERIALX_GENERATE_INDEX(1, 39, 3)
         generator_context.getShaderGenerator().registerTypeDefs(material_document);
-#endif // 13903
+#endif // MATERIALX_VERSION_INDEX >= MATERIALX_GENERATE_INDEX(1, 39, 3)
         shader = generator_context.getShaderGenerator().generate(
             material_name, element_to_generate_code_for, generator_context);
     }

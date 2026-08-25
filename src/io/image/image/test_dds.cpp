@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -47,6 +47,8 @@
 #include <base/lib/log/i_log_module.h>
 #include <base/lib/plug/i_plug.h>
 #include <base/data/serial/i_serial_buffer_serializer.h>
+
+#include <fstream>
 
 #include "test_shared.h"
 #include <prod/lib/neuray/test_shared.h>
@@ -267,6 +269,59 @@ void test_dds_miplevels(
     }
 }
 
+void check_rgba_pixel(
+    const mi::Uint8* buffer,
+    mi::Uint32 width,
+    mi::Uint32 x,
+    mi::Uint32 y,
+    mi::Uint8 red,
+    mi::Uint8 green,
+    mi::Uint8 blue,
+    mi::Uint8 alpha)
+{
+    const mi::Uint8* pixel = buffer + (mi::Size( y) * width + x) * 4;
+    MI_CHECK_EQUAL( static_cast<unsigned>( red  ), static_cast<unsigned>( pixel[0]));
+    MI_CHECK_EQUAL( static_cast<unsigned>( green), static_cast<unsigned>( pixel[1]));
+    MI_CHECK_EQUAL( static_cast<unsigned>( blue ), static_cast<unsigned>( pixel[2]));
+    MI_CHECK_EQUAL( static_cast<unsigned>( alpha), static_cast<unsigned>( pixel[3]));
+}
+
+void test_dds_unaligned_compressed()
+{
+    std::cout << "testing unaligned compressed DDS" << std::endl;
+
+    std::string root_path = TEST::mi_src_path( "io/image/image/tests/");
+    std::string input_path = root_path + "test_dds_unaligned_dxt1.dds";
+
+    mi::base::Handle<mi::neuraylib::ICanvas> canvas(
+        g_image_module->create_canvas( IMAGE::File_based(), input_path, /*selector*/ nullptr));
+    MI_CHECK( canvas);
+    if( !canvas)
+        return;
+
+    MI_CHECK_EQUAL( 5, canvas->get_resolution_x());
+    MI_CHECK_EQUAL( 7, canvas->get_resolution_y());
+
+    auto buffer = std::make_unique<mi::Uint8[]>( 4 * 5 * 7);
+    IMAGE::Access_canvas access_canvas( canvas.get());
+    bool result = access_canvas.read_rect(
+        buffer.get(), false, IMAGE::PT_RGBA, 0, 0, 5, 7);
+    MI_CHECK( result);
+    if( !result)
+        return;
+
+    for( mi::Uint32 y = 0; y < 3; ++y) {
+        for( mi::Uint32 x = 0; x < 4; ++x)
+            check_rgba_pixel( buffer.get(), 5, x, y, 0, 0, 255, 255); // blue
+        check_rgba_pixel( buffer.get(), 5, 4, y, 255, 255, 255, 255); // white
+    }
+    for( mi::Uint32 y = 3; y < 7; ++y) {
+        for( mi::Uint32 x = 0; x < 4; ++x)
+            check_rgba_pixel( buffer.get(), 5, x, y, 255, 0, 0, 255); // red
+        check_rgba_pixel( buffer.get(), 5, 4, y, 0, 255, 0, 255);     // green
+    }
+}
+
 MI_TEST_AUTO_FUNCTION( test_dds )
 {
     SYSTEM::Access_module<MEM::Mem_module> mem_module( false);
@@ -279,6 +334,7 @@ MI_TEST_AUTO_FUNCTION( test_dds )
     g_image_module.set();
 
     test_dds_cubemap( "test_dds_cubemap1.dds");
+    test_dds_unaligned_compressed();
 
     g_image_module.reset();
 }

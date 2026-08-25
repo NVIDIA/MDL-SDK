@@ -13,7 +13,7 @@
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
@@ -90,7 +90,7 @@ The following third-party dependencies are used by several and/or major
 examples. Installation is strongly recommended unless the corresponding group
 of examples is of no interest to you.
 
--   <a name="vcpkg">**vcpkg**</a> *(git commit ID 7853666)*
+-   <a name="vcpkg">**vcpkg**</a> *(git commit Tag 9d7f79f)*
     [Vcpkg](https://vcpkg.io/en/getting-started.html) is the recommended way to
     install other dependencies like GLEW and GLFW. The
     vcpkg version mentioned above corresponds to the versions mentioned for
@@ -119,7 +119,7 @@ of examples is of no interest to you.
     Installation via [vcpkg](#vcpkg) is strongly recommended. Install the vcpkg
     package *glew*.
 
--   **GLFW** *(3.4)* \n
+-   **GLFW3** *(3.4)* \n
     This dependency is required for all OpenGL- and Vulkan-based examples. \n
     Installation via [vcpkg](#vcpkg) is strongly recommended. Install the vcpkg
     package *glfw3*.
@@ -146,7 +146,7 @@ features.
     Pre-compiled binaries can be found on
     [llvm.org](http://releases.llvm.org/download.html#12.0.1).
 
--   **MaterialX** (github repository, tag: v1.39.4) \n
+-   **MaterialX** (github repository, tag: v1.39.5) \n
     This dependency adds MaterialX support to the DXR example. \n
     Note that the pre-build packages for Windows from
     [github](https://github.com/AcademySoftwareFoundation/MaterialX/releases)
@@ -247,7 +247,7 @@ features.
         for example: *C:/Qt/5.10.1/msvc2017_64*
 
     -   **PANTORA_AXF_DIR** in Ungrouped Entries \n
-        for example: *C:/projects/thirdparty/pantora-axf-1.9.0*
+        for example: *C:/projects/thirdparty/pantora-axf-1.9.2*
 
     Note: when you installed a new Visual Studio version after installing CUDA,
     you may have to reinstall CUDA to register it correctly with Visual Studio.
